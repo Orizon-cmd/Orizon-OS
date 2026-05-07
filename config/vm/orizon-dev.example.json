@@ -1,0 +1,16 @@
+{
+  "name": "orizon-dev",
+  "title": "Orizon OS Dev VM",
+  "remote_disk_path": "/DATA/VM/orizon-dev.img",
+  "disk_format": "raw",
+  "disk_size": "8G",
+  "memory_mib": 4096,
+  "vcpu_count": 4,
+  "bridge_device": "eth0",
+  "network_model": "e1000e",
+  "video_model": "virtio",
+  "video_width": 1280,
+  "video_height": 800,
+  "firmware_loader": "/usr/share/qemu/edk2-x86_64-code.fd",
+  "firmware_nvram_template": "/usr/share/qemu/edk2-i386-vars.fd"
+}
