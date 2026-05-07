@@ -46,17 +46,20 @@ def connect_ssh(config: Dict[str, str]) -> paramiko.SSHClient:
     return client
 
 
-def run_command(client: paramiko.SSHClient, command: str) -> str:
+def run_command(client: paramiko.SSHClient, command: str, check: bool = True) -> str:
     _stdin, stdout, stderr = client.exec_command(command)
+    exit_status = stdout.channel.recv_exit_status()
     output = stdout.read().decode("utf-8", errors="replace").strip()
     error = stderr.read().decode("utf-8", errors="replace").strip()
+    if check and exit_status != 0:
+        raise RuntimeError(error or output or f"Command failed: {command}")
     if error and not output:
         return error
     return output
 
 
 def run_sudo_command(
-    client: paramiko.SSHClient, sudo_password: str, command: str
+    client: paramiko.SSHClient, sudo_password: str, command: str, check: bool = True
 ) -> str:
     stdin, stdout, stderr = client.exec_command(
         f"sudo -S -p '' {command}", get_pty=True
@@ -64,10 +67,13 @@ def run_sudo_command(
     stdin.write(sudo_password + "\n")
     stdin.flush()
 
+    exit_status = stdout.channel.recv_exit_status()
     output = stdout.read().decode("utf-8", errors="replace")
     error = stderr.read().decode("utf-8", errors="replace")
     output = output.replace(sudo_password, "").strip()
     error = error.replace(sudo_password, "").strip()
+    if check and exit_status != 0:
+        raise RuntimeError(error or output or f"sudo command failed: {command}")
     if error and not output:
         return error
     return output

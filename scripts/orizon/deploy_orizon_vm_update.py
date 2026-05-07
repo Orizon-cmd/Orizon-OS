@@ -44,9 +44,8 @@ def main() -> int:
 
     try:
         sftp = client.open_sftp()
-        remote_home = run_command(client, "pwd")
         remote_disk = vm_config["remote_disk_path"]
-        remote_upload = f"{remote_home}/{local_artifact.name}.upload"
+        remote_upload = f"/tmp/{local_artifact.name}.upload"
         vm_name = vm_config["name"]
 
         state = run_sudo_command(client, sudo_password, f"virsh domstate {vm_name} || true").strip().lower()

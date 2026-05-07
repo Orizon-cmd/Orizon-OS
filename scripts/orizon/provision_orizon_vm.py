@@ -143,15 +143,15 @@ def main() -> int:
 
     try:
         sftp = client.open_sftp()
-        remote_home = run_command(client, "pwd")
+        remote_upload_dir = "/tmp"
         remote_disk = vm_config["remote_disk_path"]
-        remote_temp_xml = f"{remote_home}/{vm_config['name']}.xml"
+        remote_temp_xml = f"{remote_upload_dir}/{vm_config['name']}.xml"
 
         if args.artifact:
             local_artifact = Path(args.artifact)
             if not local_artifact.exists():
                 raise FileNotFoundError(f"Artifact not found: {local_artifact}")
-            remote_upload = f"{remote_home}/{local_artifact.name}"
+            remote_upload = f"{remote_upload_dir}/{local_artifact.name}"
             sftp.put(str(local_artifact), remote_upload)
             run_sudo_command(
                 client,
@@ -162,8 +162,11 @@ def main() -> int:
             run_sudo_command(
                 client,
                 sudo_password,
-                f"install -d -m 0755 /DATA/VM && "
-                f"if [ ! -f {json.dumps(remote_disk)} ]; then truncate -s {vm_config.get('disk_size', '8G')} {json.dumps(remote_disk)}; fi",
+                "sh -lc "
+                + json.dumps(
+                    f"install -d -m 0755 /DATA/VM && "
+                    f"if [ ! -f {remote_disk} ]; then truncate -s {vm_config.get('disk_size', '8G')} {remote_disk}; fi"
+                ),
             )
 
         xml_text = build_domain_xml(vm_config)
@@ -181,6 +184,7 @@ def main() -> int:
             run_sudo_command(client, sudo_password, f"virsh undefine {vm_config['name']} --nvram || true")
 
         run_sudo_command(client, sudo_password, f"virsh define {json.dumps(remote_temp_xml)}")
+        run_command(client, f"rm -f {json.dumps(remote_temp_xml)}")
         if args.start:
             run_sudo_command(client, sudo_password, f"virsh start {vm_config['name']}")
 
