@@ -10,7 +10,7 @@
 ## Near-Term Engineering
 
 1. Audit the `orizon-os-x86_64/` path as the fastest route to a bootable Orizon VM.
-2. Identify where boot labels, terminal banners, and desktop text are hardcoded.
+2. Identify where boot labels, terminal banners, and interface text are hardcoded.
 3. Add a small release or artifact layout for test ISOs and kernels.
 4. Define the first Orizon OS versioning and release naming scheme.
 

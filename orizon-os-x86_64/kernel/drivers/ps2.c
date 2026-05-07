@@ -1,6 +1,6 @@
 /*
  * PS/2 Keyboard and Mouse Driver
- * For x86_64 Orizon OS Desktop Environment
+ * For x86_64 Orizon OS input handling
  */
 
 #include "../include/types.h"

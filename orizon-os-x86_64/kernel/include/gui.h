@@ -38,14 +38,6 @@ typedef struct window_t {
   void (*on_draw)(struct window_t *win);
 } window_t;
 
-/* ========== Desktop Icon Type ========== */
-typedef struct {
-  const char *name;
-  int x;
-  int y;
-  int is_dir;
-} desktop_icon_t;
-
 /* Screen dimensions (set by framebuffer) */
 extern uint32_t screen_width;
 extern uint32_t screen_height;

@@ -1,17 +1,23 @@
 # Orizon OS x86_64
 
-A bare-metal x86_64 OS that boots from UEFI and shows a graphical desktop. 
+This target is the active personal `x86_64` development base for `Orizon OS`.
+It boots fast, stays stable, and intentionally starts from a minimal shell
+with a restrained, development-first interface.
 
-## Current Status
+## Current Shape
 
-**What works:**
-- Boots on real hardware and QEMU
-- Framebuffer graphics
-- GUI with windows and desktop
-- JPEG wallpapers
+- Boots on the ZimaOS VM target and on UEFI-capable `x86_64` hardware
+- Uses a simple framebuffer UI with an `Orizon OS` splash and one core console
+- Keeps a tiny RAM-backed workspace for development commands
+- Stays intentionally small so new features can be added deliberately
 
-**What doesn't work:**
-- **Keyboard input is broken** - PS/2 and USB HID drivers exist but aren't receiving input properly. IDT/interrupt handling probably needs debugging.
+## Why it is minimal
+
+The goal is to give `Orizon OS` a clean foundation that is fully yours:
+
+- fewer moving parts while iterating on the kernel
+- less inherited UX to unwind later
+- a stable place to rebuild features on your own terms
 
 ## Building
 
@@ -34,16 +40,12 @@ Using Make:
 make
 ```
 
-Or the shell script (handles Limine download):
+Or the shell script:
 ```bash
 ./build.sh
 ```
 
 This creates `orizonos-x86_64.iso`.
-
-### First build notes
-
-First build downloads Limine 8.6.0 (~2MB). Takes a minute.
 
 ## Running
 
@@ -59,62 +61,25 @@ qemu-system-x86_64 -M q35 -m 512M -cdrom orizonos-x86_64.iso \
     -bios /opt/homebrew/share/qemu/edk2-x86_64-code.fd -serial stdio
 ```
 
-Linux OVMF path is usually `/usr/share/OVMF/OVMF_CODE.fd`
-
-### QEMU (BIOS fallback)
-
-```bash
-make run-bios
-```
-
-### Real Hardware (USB)
-
-**Find your USB device first** (don't nuke your main drive):
-```bash
-# macOS
-diskutil list
-
-# Linux  
-lsblk
-```
-
-Flash it:
-```bash
-# macOS (unmount first)
-diskutil unmountDisk /dev/diskN
-sudo dd if=orizonos-x86_64.iso of=/dev/rdiskN bs=4m status=progress
-
-# Linux
-sudo dd if=orizonos-x86_64.iso of=/dev/sdX bs=4M status=progress
-```
-
-Boot from USB in UEFI mode. Legacy/CSM boot should work too.
+Linux OVMF path is usually `/usr/share/OVMF/OVMF_CODE.fd`.
 
 ## Project Structure
 
-```
+```text
 kernel/
-├── boot/         # Limine entry point
-├── drivers/      # framebuffer, ps2, usb, acpi, pci
-├── gui/          # window manager, compositor, font rendering
-├── media/        # jpeg decoder, wallpapers
-├── mm/           # memory allocation
-└── include/      # headers
+|- boot/         # Limine entry point
+|- drivers/      # framebuffer, ps2, usb, acpi, pci
+|- fs/           # minimal RAM-backed workspace
+|- gui/          # console compositor and terminal
+|- mm/           # memory allocation
+`- include/      # headers
 
-limine.conf       # bootloader config
-Makefile          # main build
-build.sh          # alternative build script
+limine.conf      # bootloader config
+Makefile         # main build
+build.sh         # alternative build script
 ```
 
-## Known Issues
+## Notes
 
-1. **No keyboard** - the interrupt handler isn't wired up correctly. Check `drivers/idt.c` and `drivers/ps2.c`.
-
-2. **Build requires LLVM** - cross-compilation with x86_64-elf-gcc works but Makefile prefers clang.
-
-## Cleaning
-
-```bash
-make clean      # remove build artifacts
-make distclean  # also remove downloaded Limine
-```
+- The active VM build is intentionally console-first.
+- New features should be reintroduced deliberately from this minimal base.

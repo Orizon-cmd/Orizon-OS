@@ -21,3 +21,4 @@ working-os/
 config/hosts/*.local.env
 config/hosts/*.local.json
 config/vm/*.local.json
+logs/

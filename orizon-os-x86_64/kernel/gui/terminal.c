@@ -276,7 +276,7 @@ void term_execute(terminal_t *term, const char *cmd) {
   term_puts_t(term, "\n");
   
   if (strncmp(cmd, "help", 4) == 0) {
-    term_puts_t(term, "\033[1;36mOrizon OS Terminal v2.0\033[0m\n");
+    term_puts_t(term, "\033[1;36mOrizon OS Core Console\033[0m\n");
     term_puts_t(term, "\033[33mFile Commands:\033[0m\n");
     term_puts_t(term, "  ls        - List directory contents\n");
     term_puts_t(term, "  cd <dir>  - Change directory\n");
@@ -295,6 +295,9 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  ps        - Process list\n");
     term_puts_t(term, "  clear     - Clear screen\n");
     term_puts_t(term, "  help      - This help message\n");
+    term_puts_t(term, "\n");
+    term_puts_t(term, "This build intentionally starts from a minimal core shell.\n");
+    term_puts_t(term, "Add new tools only when they belong in Orizon OS.\n");
   } else if (strncmp(cmd, "clear", 5) == 0) {
     for (int row = 0; row < TERM_ROWS; row++) term_clear_line(term, row);
     term->cursor_x = 0;
@@ -418,16 +421,17 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  \\ V /| || |_) |  | |_| |___) |\n");
     term_puts_t(term, "   \\_/ |_||_.__/    \\___/|____/ \n");
     term_puts_t(term, "\033[0m\n");
-    term_puts_t(term, "\033[33mOS:\033[0m      Orizon OS 0.5.0\n");
-    term_puts_t(term, "\033[33mHost:\033[0m    Bare Metal x86_64\n");
-    term_puts_t(term, "\033[33mKernel:\033[0m  0.5.0-x86_64\n");
+    term_puts_t(term, "\033[33mOS:\033[0m      Orizon OS Core\n");
+    term_puts_t(term, "\033[33mHost:\033[0m    Personal x86_64 base\n");
+    term_puts_t(term, "\033[33mKernel:\033[0m  core-x86_64\n");
     term_puts_t(term, "\033[33mUptime:\033[0m  0 mins\n");
-    term_puts_t(term, "\033[33mShell:\033[0m   vsh 1.0\n");
+    term_puts_t(term, "\033[33mShell:\033[0m   Orizon console\n");
     term_puts_t(term, "\033[33mMemory:\033[0m  64 MB heap\n");
     term_puts_t(term, "\033[33mCPU:\033[0m     x86_64\n");
+    term_puts_t(term, "\033[33mProfile:\033[0m Minimal development base\n");
   } else if (strncmp(cmd, "uname", 5) == 0) {
     if (strstr(cmd, "-a")) {
-      term_puts_t(term, "Orizon OS 1.0.0 x86_64\n");
+      term_puts_t(term, "Orizon OS core-x86_64 x86_64\n");
     } else {
       term_puts_t(term, "Orizon OS\n");
     }
@@ -469,7 +473,11 @@ void term_execute(terminal_t *term, const char *cmd) {
 
 /* Print prompt */
 void term_prompt(terminal_t *term) {
-  term_puts_t(term, "\033[32morizon-os\033[0m:\033[34m~\033[0m$ ");
+  const char *cwd = (term && term->cwd[0]) ? term->cwd : "/";
+  term_puts_t(term, "\033[32morizon-os\033[0m:");
+  term_puts_t(term, "\033[34m");
+  term_puts_t(term, cwd);
+  term_puts_t(term, "\033[0m$ ");
 }
 
 /* Handle keyboard input */
@@ -505,7 +513,7 @@ terminal_t *term_create(int x, int y) {
   term->current_fg = 7;
   term->current_bg = 0;
   term->visible = 1;
-  strcpy(term->cwd, "/home/user");
+  strcpy(term->cwd, "/workspace");
   
   for (int i = 0; i < TERM_ROWS * TERM_COLS; i++) {
     term->chars[i] = ' ';
@@ -514,10 +522,12 @@ terminal_t *term_create(int x, int y) {
   }
   
   /* Welcome message (matching test version) */
-  term_puts_t(term, "\033[1;36mOrizon OS Terminal v1.0\033[0m\n");
-  term_puts_t(term, "Type '\033[33mhelp\033[0m' for commands, "
-                    "'\033[33mneofetch\033[0m' for system info.\n\n");
-  term_puts_t(term, "\033[32morizon-os\033[0m:\033[34m~\033[0m$ ");
+  term_puts_t(term, "\033[1;36mOrizon OS Core Console\033[0m\n");
+  term_puts_t(term,
+              "Type '\033[33mhelp\033[0m' for commands or '\033[33mneofetch\033[0m' for system info.\n");
+  term_puts_t(term,
+              "This VM boots into a clean personal base with the console ready first.\n\n");
+  term_prompt(term);
   
   return term;
 }

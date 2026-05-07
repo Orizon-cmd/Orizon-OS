@@ -87,14 +87,7 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/drivers/usb_ehci.c \
            $(KERNEL_DIR)/gui/font.c \
            $(KERNEL_DIR)/gui/terminal.c \
-           $(KERNEL_DIR)/gui/desktop_mgr.c \
-           $(KERNEL_DIR)/gui/window.c \
-           $(KERNEL_DIR)/gui/compositor.c \
-           $(KERNEL_DIR)/media/media.c \
-           $(KERNEL_DIR)/media/picojpeg.c \
-           $(KERNEL_DIR)/media/hd_wallpaper_landscape.c \
-           $(KERNEL_DIR)/media/hd_wallpaper_nature.c \
-           $(KERNEL_DIR)/media/hd_wallpaper_city.c
+           $(KERNEL_DIR)/gui/compositor.c
 
 # Object files
 OBJECTS := $(patsubst $(KERNEL_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
@@ -116,7 +109,6 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/fs
 	mkdir -p $(BUILD_DIR)/drivers
 	mkdir -p $(BUILD_DIR)/gui
-	mkdir -p $(BUILD_DIR)/media
 
 # Compile C files
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c | $(BUILD_DIR)

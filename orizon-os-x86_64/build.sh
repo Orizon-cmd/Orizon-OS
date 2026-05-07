@@ -14,7 +14,7 @@ echo "=== Orizon OS x86_64 Build Script ==="
 echo ""
 
 # Create build directories
-mkdir -p "$BUILD_DIR"/{boot,lib,drivers,gui}
+mkdir -p "$BUILD_DIR"/{boot,lib,drivers,gui,fs,mm}
 
 # Compile kernel
 echo "[1/5] Compiling kernel..."
@@ -27,20 +27,42 @@ CFLAGS="-target x86_64-unknown-none-elf -ffreestanding -fno-stack-protector \
 
 $CC $CFLAGS -c kernel/boot/limine_boot.c -o $BUILD_DIR/boot/limine_boot.o 2>/dev/null
 $CC $CFLAGS -c kernel/lib/string.c -o $BUILD_DIR/lib/string.o 2>/dev/null
+$CC $CFLAGS -c kernel/mm/kmalloc.c -o $BUILD_DIR/mm/kmalloc.o 2>/dev/null
+$CC $CFLAGS -c kernel/mm/mmio.c -o $BUILD_DIR/mm/mmio.o 2>/dev/null
+$CC $CFLAGS -c kernel/fs/vfs.c -o $BUILD_DIR/fs/vfs.o 2>/dev/null
 $CC $CFLAGS -c kernel/drivers/framebuffer.c -o $BUILD_DIR/drivers/framebuffer.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/idt.c -o $BUILD_DIR/drivers/idt.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/wc.c -o $BUILD_DIR/drivers/wc.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/ps2.c -o $BUILD_DIR/drivers/ps2.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/pci.c -o $BUILD_DIR/drivers/pci.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/acpi.c -o $BUILD_DIR/drivers/acpi.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/usb.c -o $BUILD_DIR/drivers/usb.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/usb_hid.c -o $BUILD_DIR/drivers/usb_hid.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/usb_xhci.c -o $BUILD_DIR/drivers/usb_xhci.o 2>/dev/null
+$CC $CFLAGS -c kernel/drivers/usb_ehci.c -o $BUILD_DIR/drivers/usb_ehci.o 2>/dev/null
 $CC $CFLAGS -c kernel/gui/font.c -o $BUILD_DIR/gui/font.o 2>/dev/null
-$CC $CFLAGS -c kernel/gui/desktop.c -o $BUILD_DIR/gui/desktop.o 2>/dev/null
-$CC $CFLAGS -c kernel/gui/window.c -o $BUILD_DIR/gui/window.o 2>/dev/null
+$CC $CFLAGS -c kernel/gui/terminal.c -o $BUILD_DIR/gui/terminal.o 2>/dev/null
 $CC $CFLAGS -c kernel/gui/compositor.c -o $BUILD_DIR/gui/compositor.o 2>/dev/null
 
 echo "[2/5] Linking kernel..."
 ld.lld -nostdlib -static -z max-page-size=0x1000 -T kernel/linker.ld \
     $BUILD_DIR/boot/limine_boot.o \
     $BUILD_DIR/lib/string.o \
+    $BUILD_DIR/mm/kmalloc.o \
+    $BUILD_DIR/mm/mmio.o \
+    $BUILD_DIR/fs/vfs.o \
     $BUILD_DIR/drivers/framebuffer.o \
+    $BUILD_DIR/drivers/idt.o \
+    $BUILD_DIR/drivers/wc.o \
+    $BUILD_DIR/drivers/ps2.o \
+    $BUILD_DIR/drivers/pci.o \
+    $BUILD_DIR/drivers/acpi.o \
+    $BUILD_DIR/drivers/usb.o \
+    $BUILD_DIR/drivers/usb_hid.o \
+    $BUILD_DIR/drivers/usb_xhci.o \
+    $BUILD_DIR/drivers/usb_ehci.o \
     $BUILD_DIR/gui/font.o \
-    $BUILD_DIR/gui/desktop.o \
-    $BUILD_DIR/gui/window.o \
+    $BUILD_DIR/gui/terminal.o \
     $BUILD_DIR/gui/compositor.o \
     -o $BUILD_DIR/kernel.elf
 

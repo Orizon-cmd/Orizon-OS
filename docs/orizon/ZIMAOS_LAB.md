@@ -68,6 +68,7 @@ should be checked to avoid broken updates or failed provisioning.
 
 - `ssh zimaos-orizon`
 - `powershell -File scripts/orizon/test_zimaos.ps1`
+- `powershell -File scripts/orizon/open_orizon_vnc.ps1`
 - `powershell -File scripts/orizon/open_zimaos_vnc_tunnel.ps1`
 - `python scripts/orizon/setup_zimaos_access.py`
 - `python scripts/orizon/inventory_zimaos_vms.py`
@@ -81,7 +82,8 @@ should be checked to avoid broken updates or failed provisioning.
 While `orizon-dev` is running, the libvirt display on ZimaOS is currently
 `vnc://localhost:0`, which maps to port `5900` on the host.
 
-To expose it locally from this Windows machine:
+To open it from this Windows machine:
 
-- Run `powershell -File scripts/orizon/open_zimaos_vnc_tunnel.ps1`
-- Then open your VNC client against `127.0.0.1:5900`
+- Preferred: run `powershell -File scripts/orizon/open_orizon_vnc.ps1`
+- Manual tunnel fallback: run `powershell -File scripts/orizon/open_zimaos_vnc_tunnel.ps1`
+- If a tunnel is used, connect your VNC client to `127.0.0.1::5900`

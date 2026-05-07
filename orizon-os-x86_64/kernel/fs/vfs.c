@@ -133,42 +133,44 @@ void vfs_init(void) {
 
 /* Seed initial filesystem content */
 void vfs_seed_content(void) {
-  /* Create directory structure */
-  vfs_mkdir("/home");
-  vfs_mkdir("/home/user");
-  vfs_mkdir("/Desktop");
-  vfs_mkdir("/Documents");
-  vfs_mkdir("/Pictures");
-  vfs_mkdir("/Downloads");
-  vfs_mkdir("/bin");
-  vfs_mkdir("/etc");
-  
-  /* Create some files */
+  /* Create a small, stable workspace for iterative development. */
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/system");
+  vfs_mkdir("/tmp");
+
   file_t *f;
-  
-  f = vfs_open("/Desktop/readme.txt", O_CREAT | O_WRONLY);
+
+  f = vfs_open("/workspace/README.txt", O_CREAT | O_WRONLY);
   if (f) {
-    const char *txt = "Welcome to Orizon OS!\n\nThis is a demo operating system.\n";
+    const char *txt =
+        "Orizon OS\n"
+        "\n"
+        "This x86_64 target is a clean development base.\n"
+        "Use /workspace for experiments, notes and small tests.\n";
     vfs_write(f, txt, strlen(txt));
     vfs_close(f);
   }
-  
-  f = vfs_open("/Desktop/todo.txt", O_CREAT | O_WRONLY);
+
+  f = vfs_open("/workspace/ROADMAP.txt", O_CREAT | O_WRONLY);
   if (f) {
-    const char *txt = "TODO List:\n- Learn OS development\n- Build cool apps\n- Have fun!\n";
+    const char *txt =
+        "Next ideas:\n"
+        "- grow the scheduler and memory layers\n"
+        "- harden drivers one by one\n"
+        "- add only the tools you really want to own\n";
     vfs_write(f, txt, strlen(txt));
     vfs_close(f);
   }
-  
-  f = vfs_open("/etc/hostname", O_CREAT | O_WRONLY);
+
+  f = vfs_open("/system/hostname", O_CREAT | O_WRONLY);
   if (f) {
-    vfs_write(f, "vibcode", 7);
+    vfs_write(f, "orizon-os", 9);
     vfs_close(f);
   }
-  
-  f = vfs_open("/etc/version", O_CREAT | O_WRONLY);
+
+  f = vfs_open("/system/version", O_CREAT | O_WRONLY);
   if (f) {
-    vfs_write(f, "1.0.0", 5);
+    vfs_write(f, "core-x86_64", 11);
     vfs_close(f);
   }
 }
