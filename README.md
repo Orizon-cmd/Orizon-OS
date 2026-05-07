@@ -9,6 +9,19 @@ Orizon OS is maintained as its own standalone project and repository.
 - ZimaOS lab scripts: `scripts/orizon/`
 - Local machine secrets: `config/hosts/*.local.*` and ignored by Git
 
+## Daily x86_64 VM Loop
+
+The fastest current workflow for Orizon OS on the ZimaOS lab is:
+
+```powershell
+python scripts/orizon/build_x86_64_on_zimaos.py --deploy-vm
+powershell -File scripts/orizon/open_zimaos_vnc_tunnel.ps1
+```
+
+This rebuilds the `orizon-os-x86_64` tree inside Docker on the ZimaOS host,
+deploys it onto the `orizon-dev` VM disk without reinstalling the OS, and then
+opens a local tunnel to the VM VNC console.
+
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-ARM64%20%7C%20x86__64-blue)
 ![Apple Silicon](https://img.shields.io/badge/Apple%20Silicon-M1%20%7C%20M2%20%7C%20M3%20%7C%20M4-orange)
