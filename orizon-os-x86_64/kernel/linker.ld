@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - Linker Script
+ * Orizon OS x86_64 - Linker Script
  * Higher-half kernel for x86_64 with Limine bootloader
  */
 

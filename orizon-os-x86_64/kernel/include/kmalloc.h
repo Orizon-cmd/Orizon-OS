@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Simple Kernel Memory Allocator
+ * Orizon OS x86_64 - Simple Kernel Memory Allocator
  */
 
 #ifndef _KMALLOC_H

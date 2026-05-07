@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - Window Manager
+ * Orizon OS x86_64 - Window Manager
  * macOS-style windows with traffic light buttons
  */
 

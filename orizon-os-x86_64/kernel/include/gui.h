@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - GUI System Header
+ * Orizon OS x86_64 - GUI System Header
  */
 
 #ifndef _GUI_H

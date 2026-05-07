@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - System Call Interface
+ * Orizon OS Kernel - System Call Interface
  */
 
 #ifndef _SYSCALL_SYSCALL_H

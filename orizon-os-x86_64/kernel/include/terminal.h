@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Terminal Header
+ * Orizon OS x86_64 - Terminal Header
  */
 
 #ifndef _TERMINAL_H

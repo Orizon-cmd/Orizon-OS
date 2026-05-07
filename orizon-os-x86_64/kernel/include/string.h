@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - String Functions
+ * Orizon OS x86_64 - String Functions
  */
 
 #ifndef _STRING_H

@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Physical Memory Manager Header
+ * Orizon OS Kernel - Physical Memory Manager Header
  */
 
 #ifndef _MM_PMM_H

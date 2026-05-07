@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - stdarg.h for freestanding
+ * Orizon OS Kernel - stdarg.h for freestanding
  */
 
 #ifndef _KERNEL_STDARG_H

@@ -32,14 +32,14 @@ jobs:
       
       - name: Check build artifacts
         run: |
-          ls -lh build/kernel/unixos.elf
-          file build/kernel/unixos.elf
+          ls -lh build/kernel/orizonos.elf
+          file build/kernel/orizonos.elf
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: orizonos-arm64-ci
-          path: build/kernel/unixos.elf
+          path: build/kernel/orizonos.elf
           retention-days: 7
 
   test-arm64:

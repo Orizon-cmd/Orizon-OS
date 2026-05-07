@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Pipe Implementation
+ * Orizon OS Kernel - Pipe Implementation
  */
 
 #include "fs/vfs.h"

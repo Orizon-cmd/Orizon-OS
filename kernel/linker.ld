@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel Linker Script
+ * Orizon OS Kernel Linker Script
  * ARM64 (AArch64) kernel linking configuration
  */
 

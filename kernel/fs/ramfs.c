@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Ramfs (RAM Filesystem)
+ * Orizon OS Kernel - Ramfs (RAM Filesystem)
  *
  * Simple in-memory filesystem for initial root filesystem.
  */

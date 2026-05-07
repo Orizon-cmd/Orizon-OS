@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Complete GUI Compositor
+ * Orizon OS x86_64 - Complete GUI Compositor
  * Desktop, Dock, Context Menu, Terminal, File Manager, Windows
  * With HD Wallpaper support and real dock icons
  */

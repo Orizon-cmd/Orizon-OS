@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Virtual Filesystem (VFS) Header
+ * Orizon OS Kernel - Virtual Filesystem (VFS) Header
  */
 
 #ifndef _FS_VFS_H

@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Timer Implementation
+ * Orizon OS Kernel - Timer Implementation
  * 
  * ARM Generic Timer using virtual timer for OS timing.
  */

@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Virtual Filesystem Implementation
+ * Orizon OS Kernel - Virtual Filesystem Implementation
  */
 
 #include "fs/vfs.h"

@@ -1,4 +1,4 @@
-# UnixOS Userspace Makefile
+# Orizon OS Userspace Makefile
 
 CC = clang
 CFLAGS = -target aarch64-unknown-none-elf \

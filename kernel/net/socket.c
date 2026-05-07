@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Network Stack Implementation
+ * Orizon OS Kernel - Network Stack Implementation
  */
 
 #include "fs/vfs.h"

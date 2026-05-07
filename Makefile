@@ -78,7 +78,7 @@ QEMU_CPU := max
 QEMU_MEMORY := 4G
 QEMU_FLAGS := -M $(QEMU_MACHINE) -cpu $(QEMU_CPU) -m $(QEMU_MEMORY) \
               -nographic -serial mon:stdio \
-              -drive if=none,id=hd0,format=raw,file=$(IMAGE_DIR)/unixos.img \
+              -drive if=none,id=hd0,format=raw,file=$(IMAGE_DIR)/orizonos.img \
               -device virtio-blk-device,drive=hd0
 
 # ============================================================================
@@ -89,13 +89,13 @@ QEMU_FLAGS := -M $(QEMU_MACHINE) -cpu $(QEMU_CPU) -m $(QEMU_MEMORY) \
 
 all: kernel drivers libc userspace runtimes image
 	@echo "=========================================="
-	@echo "UnixOS build complete!"
+	@echo "Orizon OS build complete!"
 	@echo "=========================================="
-	@echo "Boot image: $(IMAGE_DIR)/unixos.img"
+	@echo "Boot image: $(IMAGE_DIR)/orizonos.img"
 	@echo "Run 'make qemu' to test in emulator"
 
 help:
-	@echo "UnixOS Build System"
+	@echo "Orizon OS Build System"
 	@echo "==================="
 	@echo ""
 	@echo "Build targets:"
@@ -150,7 +150,7 @@ DRIVER_SOURCES := $(shell find $(DRIVERS_DIR) -name '*.c' 2>/dev/null)
 DRIVER_OBJECTS := $(patsubst $(DRIVERS_DIR)/%.c,$(BUILD_DIR)/drivers/%.o,$(DRIVER_SOURCES))
 
 ALL_KERNEL_OBJECTS := $(KERNEL_OBJECTS) $(DRIVER_OBJECTS)
-KERNEL_BINARY := $(BUILD_DIR)/kernel/unixos.elf
+KERNEL_BINARY := $(BUILD_DIR)/kernel/orizonos.elf
 
 kernel: $(BUILD_DIR) $(ALL_KERNEL_OBJECTS) $(KERNEL_BINARY)
 	@echo "[KERNEL] Build complete: $(KERNEL_BINARY)"
@@ -237,20 +237,20 @@ runtimes: $(BUILD_DIR) libc
 image: $(IMAGE_DIR) kernel drivers
 	@echo "[IMAGE] Creating bootable disk image..."
 	@./scripts/create-boot-image.sh $(BUILD_DIR) $(IMAGE_DIR)
-	@echo "[IMAGE] Created: $(IMAGE_DIR)/unixos.img"
+	@echo "[IMAGE] Created: $(IMAGE_DIR)/orizonos.img"
 
 # ============================================================================
 # QEMU Testing
 # ============================================================================
 
 qemu: kernel
-	@echo "[QEMU] Starting UnixOS in emulator (direct kernel boot)..."
+	@echo "[QEMU] Starting Orizon OS in emulator (direct kernel boot)..."
 	@$(QEMU) -M virt,gic-version=3 -cpu max -m 4G \
 		-nographic \
-		-kernel $(BUILD_DIR)/kernel/unixos.elf
+		-kernel $(BUILD_DIR)/kernel/orizonos.elf
 
 qemu-uefi: image
-	@echo "[QEMU] Starting UnixOS with UEFI boot..."
+	@echo "[QEMU] Starting Orizon OS with UEFI boot..."
 	@echo "[QEMU] Note: Requires UEFI firmware (AAVMF)"
 	@if [ ! -f /usr/share/qemu-efi-aarch64/QEMU_EFI.fd ]; then \
 		echo "[ERROR] UEFI firmware not found. Install qemu-efi-aarch64 package."; \
@@ -260,14 +260,14 @@ qemu-uefi: image
 	@$(QEMU) -M virt,gic-version=3 -cpu max -m 4G \
 		-nographic \
 		-drive if=pflash,format=raw,readonly=on,file=/usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
-		-drive if=none,id=hd0,format=raw,file=$(IMAGE_DIR)/unixos.img \
+		-drive if=none,id=hd0,format=raw,file=$(IMAGE_DIR)/orizonos.img \
 		-device virtio-blk-device,drive=hd0
 
 qemu-debug: kernel
-	@echo "[QEMU] Starting UnixOS with GDB server on port 1234..."
+	@echo "[QEMU] Starting Orizon OS with GDB server on port 1234..."
 	@$(QEMU) -M virt,gic-version=3 -cpu max -m 4G \
 		-nographic \
-		-kernel $(BUILD_DIR)/kernel/unixos.elf \
+		-kernel $(BUILD_DIR)/kernel/orizonos.elf \
 		-s -S
 
 # ============================================================================

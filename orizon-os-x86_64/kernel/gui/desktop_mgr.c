@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Desktop Manager
+ * Orizon OS x86_64 - Desktop Manager
  * Desktop icons, right-click menus, file operations
  */
 

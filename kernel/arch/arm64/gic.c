@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - GIC (Generic Interrupt Controller) Implementation
+ * Orizon OS Kernel - GIC (Generic Interrupt Controller) Implementation
  */
 
 #include "arch/arm64/gic.h"

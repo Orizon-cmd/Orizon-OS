@@ -1,4 +1,4 @@
-# UEFI Demo OS
+# Orizon OS x86_64
 
 A bare-metal x86_64 OS that boots from UEFI and shows a graphical desktop. 
 
@@ -39,7 +39,7 @@ Or the shell script (handles Limine download):
 ./build.sh
 ```
 
-This creates `uefi-demo.iso`.
+This creates `orizonos-x86_64.iso`.
 
 ### First build notes
 
@@ -55,7 +55,7 @@ make run
 
 Or manually:
 ```bash
-qemu-system-x86_64 -M q35 -m 512M -cdrom uefi-demo.iso \
+qemu-system-x86_64 -M q35 -m 512M -cdrom orizonos-x86_64.iso \
     -bios /opt/homebrew/share/qemu/edk2-x86_64-code.fd -serial stdio
 ```
 
@@ -82,10 +82,10 @@ Flash it:
 ```bash
 # macOS (unmount first)
 diskutil unmountDisk /dev/diskN
-sudo dd if=uefi-demo.iso of=/dev/rdiskN bs=4m status=progress
+sudo dd if=orizonos-x86_64.iso of=/dev/rdiskN bs=4m status=progress
 
 # Linux
-sudo dd if=uefi-demo.iso of=/dev/sdX bs=4M status=progress
+sudo dd if=orizonos-x86_64.iso of=/dev/sdX bs=4M status=progress
 ```
 
 Boot from USB in UEFI mode. Legacy/CSM boot should work too.

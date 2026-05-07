@@ -43,9 +43,9 @@ jobs:
       - name: Package ARM64 artifacts
         run: |
           mkdir -p release/arm64
-          cp build/kernel/unixos.elf release/arm64/orizonos-arm64.elf
-          if [ -f image/unixos.img ]; then
-            cp image/unixos.img release/arm64/orizonos-arm64.img
+          cp build/kernel/orizonos.elf release/arm64/orizonos-arm64.elf
+          if [ -f image/orizonos.img ]; then
+            cp image/orizonos.img release/arm64/orizonos-arm64.img
           fi
           
           # Create checksums

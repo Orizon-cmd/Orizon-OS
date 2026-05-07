@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - UART Driver Implementation
+ * Orizon OS Kernel - UART Driver Implementation
  * 
  * Supports:
  * - Apple Silicon UART (Samsung S5L UART compatible)

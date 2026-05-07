@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - EFI Stub Boot
+ * Orizon OS Kernel - EFI Stub Boot
  * 
  * UEFI boot stub that initializes hardware via EFI services
  * and then jumps to the main kernel.
@@ -217,7 +217,7 @@ EFI_STATUS efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         gST->ConOut->OutputString(gST->ConOut, (uint16_t *)L"\r\n");
     }
     
-    efi_print("UnixOS EFI Boot Stub\r\n");
+    efi_print("Orizon OS EFI Boot Stub\r\n");
     efi_print("====================\r\n\r\n");
     
     /* Print firmware info */

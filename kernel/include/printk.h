@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Kernel Print Functions
+ * Orizon OS Kernel - Kernel Print Functions
  */
 
 #ifndef _KERNEL_PRINTK_H

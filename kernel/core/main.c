@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Main Entry Point
+ * Orizon OS Kernel - Main Entry Point
  *
  * This is the C entry point called from boot.S after basic
  * hardware initialization is complete.

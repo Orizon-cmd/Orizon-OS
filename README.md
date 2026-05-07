@@ -343,10 +343,10 @@ make image
 
 # Write to SD card (replace diskX with your SD card)
 # macOS
-sudo dd if=image/unixos.img of=/dev/rdiskX bs=4m status=progress
+sudo dd if=image/orizonos.img of=/dev/rdiskX bs=4m status=progress
 
 # Linux
-sudo dd if=image/unixos.img of=/dev/sdX bs=4M status=progress && sync
+sudo dd if=image/orizonos.img of=/dev/sdX bs=4M status=progress && sync
 ```
 
 ### For x86_64 PC
@@ -375,7 +375,7 @@ make -f Makefile.multiarch ARCH=x86_64 qemu
 
 #### Raspberry Pi 4/5
 1. Build image: `make image`
-2. Write to SD card: `sudo dd if=image/unixos.img of=/dev/sdX bs=4M`
+2. Write to SD card: `sudo dd if=image/orizonos.img of=/dev/sdX bs=4M`
 3. Insert SD card and power on
 
 #### x86_64 PC

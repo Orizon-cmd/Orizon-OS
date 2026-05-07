@@ -38,6 +38,15 @@
 - CasaOS VM helper state: `/DATA/.casaos/virt`
 - Existing domains seen: `86b337c6`, `8a194dcc`, `fbcb0022`
 - Existing domains use file-backed disks stored directly in `/DATA/VM`
+- Dedicated Orizon test VM created: `orizon-dev`
+- Current Orizon display endpoint while running: `vnc://localhost:0`
+
+## Current Bootstrap Mode
+
+The Windows machine does not currently have the local `x86_64` build toolchain
+installed, and ZimaOS itself also lacks the compiler stack. For now, the first
+VM boot path uses the tracked `orizon-os-x86_64/iso_root` UEFI tree and writes
+it directly onto the VM disk with `scripts/orizon/deploy_x86_64_tree_vm.py`.
 
 ## GitHub Access On ZimaOS
 
@@ -63,3 +72,4 @@ should be checked to avoid broken updates or failed provisioning.
 - `python scripts/orizon/inventory_zimaos_vms.py`
 - `python scripts/orizon/provision_orizon_vm.py --artifact image/orizonos-x86_64.img`
 - `python scripts/orizon/deploy_orizon_vm_update.py --artifact image/orizonos-x86_64.img`
+- `python scripts/orizon/deploy_x86_64_tree_vm.py`

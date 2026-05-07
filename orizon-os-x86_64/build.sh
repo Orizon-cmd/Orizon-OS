@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build script for UEFI Demo OS
+# Build script for Orizon OS x86_64
 # Uses pre-built Limine binaries for macOS compatibility
 
 set -e
@@ -8,9 +8,9 @@ set -e
 LIMINE_VERSION="8.6.0"
 BUILD_DIR="build"
 ISO_ROOT="iso_root"
-ISO_NAME="uefi-demo.iso"
+ISO_NAME="orizonos-x86_64.iso"
 
-echo "=== UEFI Demo OS Build Script ==="
+echo "=== Orizon OS x86_64 Build Script ==="
 echo ""
 
 # Create build directories

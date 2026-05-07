@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - GIC (Generic Interrupt Controller) Header
+ * Orizon OS Kernel - GIC (Generic Interrupt Controller) Header
  * 
  * ARM GICv3 support for Apple Silicon and QEMU virt.
  */

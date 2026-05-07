@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Network Stack Header
+ * Orizon OS Kernel - Network Stack Header
  */
 
 #ifndef _NET_NET_H

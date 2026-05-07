@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Basic Type Definitions
+ * Orizon OS Kernel - Basic Type Definitions
  */
 
 #ifndef _KERNEL_TYPES_H

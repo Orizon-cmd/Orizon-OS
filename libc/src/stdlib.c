@@ -1,5 +1,5 @@
 /*
- * UnixOS - Minimal C Library Implementation
+ * Orizon OS - Minimal C Library Implementation
  * Standard Library Functions
  */
 

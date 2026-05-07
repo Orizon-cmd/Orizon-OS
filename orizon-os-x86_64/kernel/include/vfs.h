@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Simple Virtual Filesystem
+ * Orizon OS x86_64 - Simple Virtual Filesystem
  */
 
 #ifndef _VFS_H

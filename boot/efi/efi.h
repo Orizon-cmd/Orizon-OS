@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - EFI Stub Header
+ * Orizon OS Kernel - EFI Stub Header
  * 
  * UEFI boot support for ARM64 Apple Silicon
  */

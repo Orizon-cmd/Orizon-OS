@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - UART Driver Header
+ * Orizon OS Kernel - UART Driver Header
  * Serial console for debugging and early boot output
  */
 

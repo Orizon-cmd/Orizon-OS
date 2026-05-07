@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Kernel Heap Allocator Implementation
+ * Orizon OS Kernel - Kernel Heap Allocator Implementation
  *
  * A simple bucket-based allocator for kernel memory.
  * Fixed to use direct memory region like OrizonOS for reliability.

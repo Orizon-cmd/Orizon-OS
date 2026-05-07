@@ -1,8 +1,8 @@
 #!/bin/bash
 # ============================================================================
-# UnixOS - musl libc Cross-Compilation Script
+# Orizon OS - musl libc Cross-Compilation Script
 # ============================================================================
-# This script cross-compiles musl libc for ARM64 UnixOS.
+# This script cross-compiles musl libc for ARM64 Orizon OS.
 # musl is a lightweight, standards-compliant C library.
 #
 # Prerequisites:
@@ -33,7 +33,7 @@ export CFLAGS="-target aarch64-linux-musl -O2 -g -mcpu=apple-m2"
 export LDFLAGS="-target aarch64-linux-musl"
 
 echo "============================================"
-echo "UnixOS musl libc Cross-Compilation"
+echo "Orizon OS musl libc Cross-Compilation"
 echo "============================================"
 echo "Version: ${MUSL_VERSION}"
 echo "Build Directory: ${BUILD_DIR}"
@@ -88,6 +88,6 @@ echo "Contents:"
 ls -la "${INSTALL_PREFIX}/lib/"*.a 2>/dev/null | head -10 || echo "  (no libraries yet)"
 ls -la "${INSTALL_PREFIX}/include/" 2>/dev/null | head -10 || echo "  (no headers yet)"
 echo ""
-echo "To use in UnixOS builds:"
+echo "To use in Orizon OS builds:"
 echo "  export CFLAGS=\"-target aarch64-linux-musl --sysroot=${INSTALL_PREFIX}\""
 echo ""

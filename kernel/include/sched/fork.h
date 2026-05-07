@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Fork/Exec Header
+ * Orizon OS Kernel - Fork/Exec Header
  */
 
 #ifndef _SCHED_FORK_H

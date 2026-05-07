@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Timer Header
+ * Orizon OS Kernel - Timer Header
  */
 
 #ifndef _ARCH_ARM64_TIMER_H

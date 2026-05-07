@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Framebuffer Driver with Double Buffering
+ * Orizon OS x86_64 - Framebuffer Driver with Double Buffering
  * Eliminates flashing by rendering to backbuffer first
  * Uses Write-Combining (WC) for fast framebuffer access on real hardware
  */

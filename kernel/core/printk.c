@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Kernel Print Implementation
+ * Orizon OS Kernel - Kernel Print Implementation
  */
 
 #include "printk.h"

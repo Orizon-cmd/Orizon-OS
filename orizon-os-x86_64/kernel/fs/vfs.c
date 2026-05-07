@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Simple RAM-based Virtual Filesystem
+ * Orizon OS x86_64 - Simple RAM-based Virtual Filesystem
  */
 
 #include "../include/vfs.h"

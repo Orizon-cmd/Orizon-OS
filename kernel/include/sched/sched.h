@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Scheduler Header
+ * Orizon OS Kernel - Scheduler Header
  */
 
 #ifndef _SCHED_SCHED_H

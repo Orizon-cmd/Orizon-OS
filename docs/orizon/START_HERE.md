@@ -19,6 +19,7 @@
 
 1. Set `origin` to `https://github.com/Orizon-cmd/Orizon-OS.git`.
 2. Decide the first supported target: `x86_64` UEFI or `ARM64` QEMU/Raspberry Pi.
-3. Build the first Orizon OS boot artifact locally.
+3. Build the first Orizon OS boot artifact locally, or use the tracked
+   `orizon-os-x86_64/iso_root` tree for immediate VM bootstrapping.
 4. Provision a dedicated Orizon VM on the ZimaOS host.
 5. Use the update scripts to refresh the VM artifact instead of reinstalling.

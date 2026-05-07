@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Desktop Manager Header
+ * Orizon OS x86_64 - Desktop Manager Header
  */
 
 #ifndef _DESKTOP_H

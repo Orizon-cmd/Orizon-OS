@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - Desktop Environment
+ * Orizon OS x86_64 - Desktop Environment
  * Draws the desktop background, icons, and dock
  */
 

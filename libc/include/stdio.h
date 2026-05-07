@@ -1,5 +1,5 @@
 /*
- * UnixOS - Minimal C Library (libc)
+ * Orizon OS - Minimal C Library (libc)
  * Standard I/O Header
  */
 

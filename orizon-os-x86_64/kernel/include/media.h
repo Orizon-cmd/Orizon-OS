@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Media Library Header
+ * Orizon OS x86_64 - Media Library Header
  * JPEG decoding support for wallpapers
  */
 

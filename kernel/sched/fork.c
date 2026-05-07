@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Fork and Exec Implementation
+ * Orizon OS Kernel - Fork and Exec Implementation
  *
  * Implements process creation (fork) and program loading (exec).
  */

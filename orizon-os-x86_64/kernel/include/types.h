@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - Type Definitions
+ * Orizon OS x86_64 - Type Definitions
  * Freestanding type definitions for kernel development
  */
 

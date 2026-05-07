@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Kernel Heap Allocator (kmalloc)
+ * Orizon OS Kernel - Kernel Heap Allocator (kmalloc)
  * 
  * Simple SLUB-like allocator for kernel dynamic memory.
  */

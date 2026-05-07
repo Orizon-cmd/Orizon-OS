@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Signal Handling
+ * Orizon OS Kernel - Signal Handling
  */
 
 #ifndef _KERNEL_SIGNAL_H

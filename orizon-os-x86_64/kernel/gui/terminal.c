@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - VT100 Terminal Emulator
+ * Orizon OS x86_64 - VT100 Terminal Emulator
  */
 
 #include "../include/gui.h"

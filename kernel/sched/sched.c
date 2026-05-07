@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Scheduler Implementation
+ * Orizon OS Kernel - Scheduler Implementation
  */
 
 #include "sched/sched.h"

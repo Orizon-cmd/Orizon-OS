@@ -1,5 +1,5 @@
 /*
- * UnixOS - C Runtime Startup Code (crt0)
+ * Orizon OS - C Runtime Startup Code (crt0)
  * 
  * Entry point for userspace programs.
  */

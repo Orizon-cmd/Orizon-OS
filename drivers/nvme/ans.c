@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Apple NVMe Driver (ANS)
+ * Orizon OS Kernel - Apple NVMe Driver (ANS)
  *
  * Based on Asahi Linux apple_nvme driver.
  * Supports Apple's proprietary NVMe implementation on M-series chips.

@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - Simple Kernel Memory Allocator
+ * Orizon OS x86_64 - Simple Kernel Memory Allocator
  * 
  * A simple first-fit allocator using a static heap.
  */

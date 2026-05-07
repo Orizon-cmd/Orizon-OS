@@ -1,10 +1,10 @@
 #!/bin/bash
-# Run UnixOS tests
+# Run Orizon OS tests
 
 set -e
 
 echo "========================================"
-echo "UnixOS Test Suite"
+echo "Orizon OS Test Suite"
 echo "========================================"
 
 # Colors
@@ -51,9 +51,9 @@ echo ""
 echo "Kernel Tests"
 echo "------------"
 
-if [ -f build/kernel/unixos.elf ]; then
-    run_test "Kernel binary exists" "[ -f build/kernel/unixos.elf ]"
-    run_test "Kernel is ARM64" "file build/kernel/unixos.elf | grep -q 'ARM aarch64'"
+if [ -f build/kernel/orizonos.elf ]; then
+    run_test "Kernel binary exists" "[ -f build/kernel/orizonos.elf ]"
+    run_test "Kernel is ARM64" "file build/kernel/orizonos.elf | grep -q 'ARM aarch64'"
 else
     echo -e "  ${YELLOW}Kernel not yet built, skipping...${NC}"
 fi

@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - Kernel Entry Point
+ * Orizon OS x86_64 - Kernel Entry Point
  * Uses the Limine Boot Protocol for clean 64-bit entry
  */
 
@@ -235,7 +235,7 @@ static void direct_screen_test(void *fb_addr, uint64_t width, uint64_t height,
 void _start(void) {
   /* Initialize serial for debug output */
   serial_init();
-  serial_puts("\n\n=== UEFI Demo OS ===\n");
+  serial_puts("\n\n=== Orizon OS x86_64 ===\n");
   serial_puts("Kernel entry point reached!\n");
 
   /* Initialize IDT/PIC (interrupts still disabled by default) */

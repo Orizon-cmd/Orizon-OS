@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Virtual Memory Manager Header
+ * Orizon OS Kernel - Virtual Memory Manager Header
  */
 
 #ifndef _MM_VMM_H

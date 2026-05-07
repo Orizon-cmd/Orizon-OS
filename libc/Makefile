@@ -1,4 +1,4 @@
-# UnixOS libc Makefile
+# Orizon OS libc Makefile
 
 CC = clang
 AS = clang

@@ -1,5 +1,5 @@
 /*
- * UEFI Demo OS - String and Memory Functions
+ * Orizon OS x86_64 - String and Memory Functions
  */
 
 #include "../include/string.h"

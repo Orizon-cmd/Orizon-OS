@@ -1,4 +1,4 @@
-# UEFI Demo OS Makefile
+# Orizon OS x86_64 Makefile
 # Builds a bootable x86_64 kernel using Limine bootloader
 
 # Toolchain - use cross compiler if available, otherwise try clang
@@ -20,7 +20,7 @@ ISO_ROOT := iso_root
 
 # Output files
 KERNEL := $(BUILD_DIR)/kernel.elf
-ISO := uefi-demo.iso
+ISO := orizonos-x86_64.iso
 
 # Compiler flags
 CFLAGS := -target x86_64-unknown-none-elf \
@@ -216,7 +216,7 @@ distclean: clean
 # Help
 .PHONY: help
 help:
-	@echo "UEFI Demo OS Build System"
+	@echo "Orizon OS x86_64 Build System"
 	@echo ""
 	@echo "Targets:"
 	@echo "  all       - Build the bootable ISO (default)"

@@ -1,11 +1,11 @@
 #!/bin/bash
-# UnixOS Toolchain Setup Script
-# Installs all dependencies required to build UnixOS on macOS
+# Orizon OS Toolchain Setup Script
+# Installs all dependencies required to build Orizon OS on macOS
 
 set -e
 
 echo "========================================"
-echo "UnixOS Toolchain Setup"
+echo "Orizon OS Toolchain Setup"
 echo "========================================"
 echo ""
 

@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Virtual Memory Manager Implementation
+ * Orizon OS Kernel - Virtual Memory Manager Implementation
  */
 
 #include "mm/vmm.h"

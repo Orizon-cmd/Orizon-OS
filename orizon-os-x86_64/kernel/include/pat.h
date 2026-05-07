@@ -1,5 +1,5 @@
 /*
- * VibCode x64 - PAT (Page Attribute Table) Header
+ * Orizon OS x86_64 - PAT (Page Attribute Table) Header
  */
 
 #ifndef _PAT_H

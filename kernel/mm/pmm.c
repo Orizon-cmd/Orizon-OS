@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - Physical Memory Manager Implementation
+ * Orizon OS Kernel - Physical Memory Manager Implementation
  * 
  * Buddy allocator for physical page allocation.
  */

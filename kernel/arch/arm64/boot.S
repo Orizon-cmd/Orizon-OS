@@ -1,5 +1,5 @@
 /*
- * UnixOS Kernel - ARM64 Boot Assembly
+ * Orizon OS Kernel - ARM64 Boot Assembly
  * Entry point for the kernel after UEFI bootloader
  * 
  * This file handles:

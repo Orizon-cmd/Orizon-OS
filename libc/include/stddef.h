@@ -1,5 +1,5 @@
 /*
- * UnixOS - Minimal C Library
+ * Orizon OS - Minimal C Library
  * Standard Definitions
  */
 

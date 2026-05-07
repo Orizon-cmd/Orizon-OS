@@ -1,5 +1,5 @@
 /*
- * UnixOS - Minimal C Library (libc)
+ * Orizon OS - Minimal C Library (libc)
  * 
  * Provides basic C runtime support for userspace programs.
  * Based on musl libc design.
