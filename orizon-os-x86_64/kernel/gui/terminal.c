@@ -28,6 +28,8 @@ static const uint32_t term_colors[16] = {
     0xFFFFFF, /* 15 - Bright White */
 };
 
+#define TERM_EDIT_MAX 2048
+
 /* Terminal state */
 typedef struct terminal {
   char chars[TERM_ROWS * TERM_COLS];
@@ -48,6 +50,12 @@ typedef struct terminal {
   char input_buf[256];
   int input_len;
   char cwd[256];
+
+  /* Line editor */
+  int edit_mode;
+  char edit_path[MAX_PATH];
+  char edit_buf[TERM_EDIT_MAX];
+  size_t edit_len;
   
   /* History */
   char history[16][256];
@@ -366,6 +374,232 @@ static int term_split_path_and_text(const char *args, char *path_arg,
   return 0;
 }
 
+static int term_split_two_paths(const char *args, char *first, char *second,
+                                size_t path_size) {
+  size_t len = 0;
+
+  args = term_skip_spaces(args);
+  if (*args == '\0') {
+    return -1;
+  }
+
+  while (args[len] && args[len] != ' ') {
+    len++;
+  }
+  if (len == 0 || len >= path_size) {
+    return -1;
+  }
+  for (size_t i = 0; i < len; i++) {
+    first[i] = args[i];
+  }
+  first[len] = '\0';
+
+  args = term_skip_spaces(args + len);
+  len = 0;
+  while (args[len] && args[len] != ' ') {
+    len++;
+  }
+  if (len == 0 || len >= path_size) {
+    return -1;
+  }
+  for (size_t i = 0; i < len; i++) {
+    second[i] = args[i];
+  }
+  second[len] = '\0';
+
+  return *term_skip_spaces(args + len) == '\0' ? 0 : -1;
+}
+
+static const char *term_basename(const char *path) {
+  const char *name = path;
+  while (*path) {
+    if (*path == '/' && path[1]) {
+      name = path + 1;
+    }
+    path++;
+  }
+  return name;
+}
+
+static int term_join_path(char *out, size_t out_size, const char *dir,
+                          const char *name) {
+  if (strcmp(dir, "/") == 0) {
+    return snprintf(out, out_size, "/%s", name) < (int)out_size ? 0 : -1;
+  }
+  return snprintf(out, out_size, "%s/%s", dir, name) < (int)out_size ? 0 : -1;
+}
+
+static int term_path_is_inside(const char *path, const char *prefix) {
+  size_t len = strlen(prefix);
+  return strncmp(path, prefix, len) == 0 &&
+         (path[len] == '\0' || path[len] == '/');
+}
+
+static void term_rewrite_cwd_after_move(terminal_t *term, const char *old_path,
+                                        const char *new_path) {
+  size_t old_len = strlen(old_path);
+  char updated[MAX_PATH];
+
+  if (!term_path_is_inside(term->cwd, old_path)) {
+    return;
+  }
+
+  if (strcmp(term->cwd, old_path) == 0) {
+    snprintf(term->cwd, sizeof(term->cwd), "%s", new_path);
+    return;
+  }
+
+  if (snprintf(updated, sizeof(updated), "%s%s", new_path,
+               term->cwd + old_len) < (int)sizeof(updated)) {
+    snprintf(term->cwd, sizeof(term->cwd), "%s", updated);
+  }
+}
+
+static int term_resolve_target_path(const char *cwd, const char *src_path,
+                                    const char *dst_arg, char *dst_path,
+                                    size_t dst_size) {
+  int is_dir = 0;
+  char resolved[MAX_PATH];
+
+  if (resolve_path(cwd, dst_arg, resolved, sizeof(resolved)) < 0) {
+    return -1;
+  }
+
+  if (vfs_stat(resolved, NULL, &is_dir) >= 0 && is_dir) {
+    if (term_join_path(dst_path, dst_size, resolved,
+                       term_basename(src_path)) < 0) {
+      return -1;
+    }
+  } else {
+    snprintf(dst_path, dst_size, "%s", resolved);
+  }
+
+  return 0;
+}
+
+static int term_copy_file(const char *src_path, const char *dst_path) {
+  file_t *src = vfs_open(src_path, O_RDONLY);
+  if (!src) {
+    return -1;
+  }
+
+  file_t *dst = vfs_open(dst_path, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!dst) {
+    vfs_close(src);
+    return -1;
+  }
+
+  char buf[256];
+  ssize_t n;
+  while ((n = vfs_read(src, buf, sizeof(buf))) > 0) {
+    if (vfs_write(dst, buf, (size_t)n) != n) {
+      vfs_close(src);
+      vfs_close(dst);
+      return -1;
+    }
+  }
+
+  vfs_close(src);
+  vfs_close(dst);
+  return n < 0 ? -1 : 0;
+}
+
+static void term_editor_prompt(terminal_t *term) {
+  term_puts_t(term, "\033[33medit>\033[0m ");
+}
+
+static void term_start_editor(terminal_t *term, const char *display,
+                              const char *path) {
+  size_t size = 0;
+  int is_dir = 0;
+
+  if (vfs_stat(path, &size, &is_dir) >= 0 && is_dir) {
+    term_puts_t(term, "edit: ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": Is a directory\n");
+    return;
+  }
+
+  term->edit_len = 0;
+  term->edit_buf[0] = '\0';
+  snprintf(term->edit_path, sizeof(term->edit_path), "%s", path);
+
+  file_t *f = vfs_open(path, O_RDONLY);
+  if (f) {
+    ssize_t n;
+    while (term->edit_len < TERM_EDIT_MAX - 1 &&
+           (n = vfs_read(f, term->edit_buf + term->edit_len,
+                         (TERM_EDIT_MAX - 1) - term->edit_len)) > 0) {
+      term->edit_len += (size_t)n;
+    }
+    vfs_close(f);
+    term->edit_buf[term->edit_len] = '\0';
+  }
+
+  term->edit_mode = 1;
+  term_puts_t(term, "Editing: ");
+  term_puts_t(term, path);
+  term_puts_t(term, "\n");
+  term_puts_t(term, "Type lines to append. Commands: .save, .q, .clear\n");
+  if (term->edit_len > 0) {
+    term_puts_t(term, "Loaded existing file; new lines append at the end.\n");
+  }
+  term_editor_prompt(term);
+}
+
+static void term_editor_submit(terminal_t *term, const char *line) {
+  term_puts_t(term, "\n");
+
+  if (strcmp(line, ".q") == 0) {
+    term->edit_mode = 0;
+    term_puts_t(term, "Editor closed without saving.\n");
+    return;
+  }
+
+  if (strcmp(line, ".clear") == 0) {
+    term->edit_len = 0;
+    term->edit_buf[0] = '\0';
+    term_puts_t(term, "Buffer cleared.\n");
+    term_editor_prompt(term);
+    return;
+  }
+
+  if (strcmp(line, ".save") == 0) {
+    file_t *f = vfs_open(term->edit_path, O_CREAT | O_WRONLY | O_TRUNC);
+    if (!f) {
+      term_puts_t(term, "edit: save failed\n");
+      term_editor_prompt(term);
+      return;
+    }
+    if (term->edit_len > 0 &&
+        vfs_write(f, term->edit_buf, term->edit_len) < 0) {
+      term_puts_t(term, "edit: write error\n");
+      vfs_close(f);
+      term_editor_prompt(term);
+      return;
+    }
+    vfs_close(f);
+    term->edit_mode = 0;
+    term_puts_t(term, "Saved: ");
+    term_puts_t(term, term->edit_path);
+    term_puts_t(term, "\n");
+    return;
+  }
+
+  size_t len = strlen(line);
+  if (term->edit_len + len + 1 >= TERM_EDIT_MAX) {
+    term_puts_t(term, "edit: buffer full\n");
+    term_editor_prompt(term);
+    return;
+  }
+
+  memcpy(term->edit_buf + term->edit_len, line, len);
+  term->edit_len += len;
+  term->edit_buf[term->edit_len++] = '\n';
+  term->edit_buf[term->edit_len] = '\0';
+  term_editor_prompt(term);
+}
+
 static void term_print_version(terminal_t *term) {
   term_puts_t(term, "Orizon OS core-x86_64\n");
   term_puts_t(term, "Built: " __DATE__ " " __TIME__ "\n");
@@ -525,6 +759,9 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  cat <f>   - Display file contents\n");
     term_puts_t(term, "  stat <p>  - Show file or directory info\n");
     term_puts_t(term, "  tree [p]  - Show a small directory tree\n");
+    term_puts_t(term, "  cp <s> <d> - Copy a file\n");
+    term_puts_t(term, "  mv <s> <d> - Move or rename a file/dir\n");
+    term_puts_t(term, "  edit <f>  - Open the line editor\n");
     term_puts_t(term, "  touch <f> - Create empty file\n");
     term_puts_t(term, "  write <f> <text>  - Replace file text\n");
     term_puts_t(term, "  append <f> <text> - Append file text\n");
@@ -676,6 +913,78 @@ void term_execute(terminal_t *term, const char *cmd) {
       return;
     }
     term_print_tree(term, requested, path);
+  } else if (term_command_is(cmd, "cp")) {
+    char src_arg[MAX_PATH];
+    char dst_arg[MAX_PATH];
+    char src_path[MAX_PATH];
+    char dst_path[MAX_PATH];
+    int is_dir = 0;
+
+    if (term_split_two_paths(cmd + 2, src_arg, dst_arg, sizeof(src_arg)) < 0) {
+      term_puts_t(term, "usage: cp <source> <dest>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, src_arg, src_path, sizeof(src_path)) < 0 ||
+        term_resolve_target_path(term->cwd, src_path, dst_arg, dst_path,
+                                 sizeof(dst_path)) < 0) {
+      term_puts_t(term, "cp: invalid path\n");
+      return;
+    }
+    if (vfs_stat(src_path, NULL, &is_dir) < 0) {
+      term_puts_t(term, "cp: source not found\n");
+      return;
+    }
+    if (is_dir) {
+      term_puts_t(term, "cp: directories are not supported yet\n");
+      return;
+    }
+    if (strcmp(src_path, dst_path) == 0) {
+      term_puts_t(term, "cp: source and destination are the same\n");
+      return;
+    }
+    if (term_copy_file(src_path, dst_path) < 0) {
+      term_puts_t(term, "cp: failed\n");
+      return;
+    }
+    term_puts_t(term, "Copied: ");
+    term_puts_t(term, dst_path);
+    term_puts_t(term, "\n");
+  } else if (term_command_is(cmd, "mv")) {
+    char src_arg[MAX_PATH];
+    char dst_arg[MAX_PATH];
+    char src_path[MAX_PATH];
+    char dst_path[MAX_PATH];
+
+    if (term_split_two_paths(cmd + 2, src_arg, dst_arg, sizeof(src_arg)) < 0) {
+      term_puts_t(term, "usage: mv <source> <dest>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, src_arg, src_path, sizeof(src_path)) < 0 ||
+        term_resolve_target_path(term->cwd, src_path, dst_arg, dst_path,
+                                 sizeof(dst_path)) < 0) {
+      term_puts_t(term, "mv: invalid path\n");
+      return;
+    }
+    if (vfs_rename(src_path, dst_path) < 0) {
+      term_puts_t(term, "mv: failed\n");
+      return;
+    }
+    term_rewrite_cwd_after_move(term, src_path, dst_path);
+    term_puts_t(term, "Moved: ");
+    term_puts_t(term, dst_path);
+    term_puts_t(term, "\n");
+  } else if (term_command_is(cmd, "edit")) {
+    char path[MAX_PATH];
+    const char *requested = term_skip_spaces(cmd + 4);
+    if (*requested == '\0') {
+      term_puts_t(term, "usage: edit <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "edit: invalid path\n");
+      return;
+    }
+    term_start_editor(term, requested, path);
   } else if (strncmp(cmd, "touch ", 6) == 0) {
     const char *filename = cmd + 6;
     char path[256];
@@ -829,9 +1138,15 @@ void term_handle_key(terminal_t *term, int key) {
   
   if (key == '\n' || key == '\r') {
     term->input_buf[term->input_len] = '\0';
-    term_execute(term, term->input_buf);
+    if (term->edit_mode) {
+      term_editor_submit(term, term->input_buf);
+    } else {
+      term_execute(term, term->input_buf);
+    }
     term->input_len = 0;
-    term_prompt(term);
+    if (!term->edit_mode) {
+      term_prompt(term);
+    }
   } else if (key == '\b' || key == 127) {
     if (term->input_len > 0) {
       term->input_len--;

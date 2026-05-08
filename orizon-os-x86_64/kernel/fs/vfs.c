@@ -91,6 +91,12 @@ static void get_filename(const char *path, char *name) {
   }
 }
 
+static int path_is_inside(const char *path, const char *prefix) {
+  int len = strlen(prefix);
+  return strncmp(path, prefix, (size_t)len) == 0 &&
+         (path[len] == '\0' || path[len] == '/');
+}
+
 /* Create inode */
 static int create_inode(const char *path, int type) {
   if (inode_count >= MAX_FILES) return -ENOSPC;
@@ -265,6 +271,7 @@ ssize_t vfs_read(file_t *file, void *buf, size_t count) {
 /* Write to file */
 ssize_t vfs_write(file_t *file, const void *buf, size_t count) {
   if (!file || !file->valid) return -EBADF;
+  if (count == 0) return 0;
   
   inode_t *node = &inodes[file->inode];
   if (node->type == 1) return -EISDIR;
@@ -403,12 +410,42 @@ int vfs_delete(const char *path) {
 int vfs_rename(const char *oldpath, const char *newpath) {
   int idx = find_inode(oldpath);
   if (idx < 0) return -ENOENT;
+  if (idx == 0) return -EINVAL; /* Can't rename root */
   if (find_inode(newpath) >= 0) return -EEXIST;
 
   char parent_path[MAX_PATH];
   get_parent_path(newpath, parent_path);
   int parent = find_inode(parent_path);
   if (parent < 0) return -ENOENT;
+  if (inodes[parent].type != 1) return -ENOTDIR;
+  if (inodes[idx].type == 1 && path_is_inside(newpath, oldpath)) {
+    return -EINVAL;
+  }
+
+  int old_len = strlen(oldpath);
+  int new_len = strlen(newpath);
+
+  if (inodes[idx].type == 1) {
+    for (int i = 0; i < inode_count; i++) {
+      if (i != idx && path_is_inside(inodes[i].path, oldpath)) {
+        int suffix_len = strlen(inodes[i].path + old_len);
+        if (new_len + suffix_len >= MAX_PATH) {
+          return -ENAMETOOLONG;
+        }
+      }
+    }
+  }
+
+  if (inodes[idx].type == 1) {
+    for (int i = 0; i < inode_count; i++) {
+      if (i != idx && path_is_inside(inodes[i].path, oldpath)) {
+        char updated[MAX_PATH];
+        snprintf(updated, sizeof(updated), "%s%s", newpath,
+                 inodes[i].path + old_len);
+        str_cpy(inodes[i].path, updated, MAX_PATH);
+      }
+    }
+  }
   
   str_cpy(inodes[idx].path, newpath, MAX_PATH);
   get_filename(newpath, inodes[idx].name);
