@@ -5,14 +5,8 @@
 #include "../include/gui.h"
 #include "../include/kmalloc.h"
 #include "../include/string.h"
+#include "../include/terminal.h"
 #include "../include/vfs.h"
-
-/* Terminal configuration */
-#define TERM_COLS 80
-#define TERM_ROWS 24
-#define TERM_CHAR_W 8
-#define TERM_CHAR_H 16
-#define TERM_PADDING 4
 
 /* Terminal colors (ANSI) */
 static const uint32_t term_colors[16] = {
@@ -67,6 +61,107 @@ static terminal_t *active_term = NULL;
 extern void fb_fill_rect(int x, int y, int w, int h, uint32_t color);
 extern void fb_put_pixel(int x, int y, uint32_t color);
 extern const uint8_t font_data[256][16];
+
+static void path_pop_component(char *path) {
+  int len = strlen(path);
+
+  if (len <= 1) {
+    strcpy(path, "/");
+    return;
+  }
+
+  while (len > 1 && path[len - 1] != '/') {
+    len--;
+  }
+
+  if (len <= 1) {
+    strcpy(path, "/");
+  } else {
+    path[len - 1] = '\0';
+  }
+}
+
+static int path_append_component(char *path, size_t size, const char *component,
+                                 size_t component_len) {
+  size_t path_len = strlen(path);
+
+  if (component_len == 0 ||
+      (component_len == 1 && component[0] == '.')) {
+    return 0;
+  }
+
+  if (component_len == 2 && component[0] == '.' && component[1] == '.') {
+    path_pop_component(path);
+    return 0;
+  }
+
+  if (path_len > 1) {
+    if (path_len + 1 >= size) {
+      return -1;
+    }
+    path[path_len++] = '/';
+    path[path_len] = '\0';
+  }
+
+  if (path_len + component_len >= size) {
+    return -1;
+  }
+
+  for (size_t i = 0; i < component_len; i++) {
+    path[path_len + i] = component[i];
+  }
+  path[path_len + component_len] = '\0';
+  return 0;
+}
+
+static int resolve_path(const char *cwd, const char *input, char *out,
+                        size_t out_size) {
+  char raw[MAX_PATH];
+  const char *p;
+
+  if (!input || out_size < 2) {
+    return -1;
+  }
+
+  while (*input == ' ') {
+    input++;
+  }
+  if (*input == '\0') {
+    return -1;
+  }
+
+  if (input[0] == '/') {
+    snprintf(raw, sizeof(raw), "%s", input);
+  } else if (cwd && cwd[0] && strcmp(cwd, "/") != 0) {
+    snprintf(raw, sizeof(raw), "%s/%s", cwd, input);
+  } else {
+    snprintf(raw, sizeof(raw), "/%s", input);
+  }
+
+  out[0] = '/';
+  out[1] = '\0';
+  p = raw;
+
+  while (*p) {
+    const char *component;
+    size_t component_len = 0;
+
+    while (*p == '/') {
+      p++;
+    }
+    component = p;
+    while (*p && *p != '/') {
+      component_len++;
+      p++;
+    }
+
+    if (path_append_component(out, out_size, component, component_len) < 0) {
+      return -1;
+    }
+  }
+
+  return 0;
+}
 
 /* Draw character */
 static void term_draw_char(int x, int y, char c, uint32_t fg, uint32_t bg) {
@@ -303,8 +398,14 @@ void term_execute(terminal_t *term, const char *cmd) {
     term->cursor_x = 0;
     term->cursor_y = 0;
   } else if (strncmp(cmd, "ls", 2) == 0) {
-    const char *path = term->cwd[0] ? term->cwd : "/";
-    if (cmd[2] == ' ' && cmd[3]) path = cmd + 3;
+    char path[MAX_PATH];
+    const char *requested = term->cwd[0] ? term->cwd : "/";
+    if (cmd[2] == ' ' && cmd[3]) requested = cmd + 3;
+
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "ls: invalid path\n");
+      return;
+    }
     
     dirent_t entries[32];
     int count = vfs_readdir(path, entries, 32);
@@ -331,35 +432,49 @@ void term_execute(terminal_t *term, const char *cmd) {
     while (*path == ' ') path++;
     
     char target[256];
-    if (path[0] == '/') {
-      strncpy(target, path, 255);
-    } else if (strcmp(path, "..") == 0) {
-      strncpy(target, term->cwd, 255);
-      int len = strlen(target);
-      while (len > 1 && target[len-1] != '/') len--;
-      if (len > 1) len--;
-      target[len] = '\0';
-      if (target[0] == '\0') strcpy(target, "/");
-    } else {
-      snprintf(target, 256, "%s/%s", term->cwd[0] ? term->cwd : "", path);
+    int is_dir = 0;
+
+    if (resolve_path(term->cwd, path, target, sizeof(target)) < 0) {
+      term_puts_t(term, "cd: invalid path\n");
+      return;
     }
-    
-    if (vfs_exists(target)) {
+
+    if (vfs_stat(target, NULL, &is_dir) >= 0 && is_dir) {
       strncpy(term->cwd, target, 255);
+      term->cwd[255] = '\0';
     } else {
       term_puts_t(term, "cd: no such directory: ");
       term_puts_t(term, path);
       term_puts_t(term, "\n");
     }
-  } else if (strncmp(cmd, "cat ", 4) == 0) {
-    const char *filename = cmd + 4;
+  } else if (strncmp(cmd, "cat", 3) == 0 &&
+             (cmd[3] == '\0' || cmd[3] == ' ')) {
+    const char *filename = cmd + 3;
     while (*filename == ' ') filename++;
+
+    if (*filename == '\0') {
+      term_puts_t(term, "cat: missing file operand\n");
+      return;
+    }
     
     char path[256];
-    if (filename[0] == '/') {
-      strncpy(path, filename, 255);
-    } else {
-      snprintf(path, 256, "%s/%s", term->cwd[0] ? term->cwd : "", filename);
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "cat: invalid path\n");
+      return;
+    }
+
+    int is_dir = 0;
+    if (vfs_stat(path, NULL, &is_dir) < 0) {
+      term_puts_t(term, "cat: ");
+      term_puts_t(term, filename);
+      term_puts_t(term, ": No such file\n");
+      return;
+    }
+    if (is_dir) {
+      term_puts_t(term, "cat: ");
+      term_puts_t(term, filename);
+      term_puts_t(term, ": Is a directory\n");
+      return;
     }
     
     file_t *f = vfs_open(path, O_RDONLY);
@@ -371,6 +486,10 @@ void term_execute(terminal_t *term, const char *cmd) {
         term_puts_t(term, buf);
       }
       vfs_close(f);
+      if (n < 0) {
+        term_puts_t(term, "\ncat: read error\n");
+        return;
+      }
       term_puts_t(term, "\n");
     } else {
       term_puts_t(term, "cat: ");
@@ -380,7 +499,10 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (strncmp(cmd, "touch ", 6) == 0) {
     const char *filename = cmd + 6;
     char path[256];
-    snprintf(path, 256, "%s/%s", term->cwd[0] ? term->cwd : "", filename);
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "touch: invalid path\n");
+      return;
+    }
     if (vfs_create(path) >= 0) {
       term_puts_t(term, "Created: ");
       term_puts_t(term, filename);
@@ -391,7 +513,10 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (strncmp(cmd, "mkdir ", 6) == 0) {
     const char *dirname = cmd + 6;
     char path[256];
-    snprintf(path, 256, "%s/%s", term->cwd[0] ? term->cwd : "", dirname);
+    if (resolve_path(term->cwd, dirname, path, sizeof(path)) < 0) {
+      term_puts_t(term, "mkdir: invalid path\n");
+      return;
+    }
     if (vfs_mkdir(path) >= 0) {
       term_puts_t(term, "Created directory: ");
       term_puts_t(term, dirname);
@@ -402,7 +527,10 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (strncmp(cmd, "rm ", 3) == 0) {
     const char *filename = cmd + 3;
     char path[256];
-    snprintf(path, 256, "%s/%s", term->cwd[0] ? term->cwd : "", filename);
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "rm: invalid path\n");
+      return;
+    }
     if (vfs_delete(path) >= 0) {
       term_puts_t(term, "Removed: ");
       term_puts_t(term, filename);
@@ -415,11 +543,11 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\n");
   } else if (strncmp(cmd, "neofetch", 8) == 0) {
     term_puts_t(term, "\033[36m");
-    term_puts_t(term, "       _  _         ___  ____  \n");
-    term_puts_t(term, " __   _(_)| |__     / _ \\/ ___| \n");
-    term_puts_t(term, " \\ \\ / / || '_ \\   | | | \\___ \\ \n");
-    term_puts_t(term, "  \\ V /| || |_) |  | |_| |___) |\n");
-    term_puts_t(term, "   \\_/ |_||_.__/    \\___/|____/ \n");
+    term_puts_t(term, "   ___  ____  ___ _____ ___  _   _      ___  ____ \n");
+    term_puts_t(term, "  / _ \\|  _ \\|_ _|__  / / _ \\| \\ | |    / _ \\/ ___|\n");
+    term_puts_t(term, " | | | | |_) || |  / / | | | |  \\| |   | | | \\___ \\\n");
+    term_puts_t(term, " | |_| |  _ < | | / /_ | |_| | |\\  |   | |_| |___) |\n");
+    term_puts_t(term, "  \\___/|_| \\_\\___/____| \\___/|_| \\_|    \\___/|____/\n");
     term_puts_t(term, "\033[0m\n");
     term_puts_t(term, "\033[33mOS:\033[0m      Orizon OS Core\n");
     term_puts_t(term, "\033[33mHost:\033[0m    Personal x86_64 base\n");

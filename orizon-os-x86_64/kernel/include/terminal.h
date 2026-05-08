@@ -7,6 +7,12 @@
 
 #include "types.h"
 
+#define TERM_COLS 112
+#define TERM_ROWS 32
+#define TERM_CHAR_W 8
+#define TERM_CHAR_H 16
+#define TERM_PADDING 4
+
 /* Forward declaration */
 typedef struct terminal terminal_t;
 
