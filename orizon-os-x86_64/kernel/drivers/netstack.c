@@ -7,6 +7,7 @@
 
 #include "../include/netstack.h"
 #include "../include/net.h"
+#include "../include/sha256.h"
 #include "../include/string.h"
 #include "../include/timer.h"
 
@@ -56,7 +57,7 @@ static uint8_t packet_buf[NETSTACK_MTU];
 static uint8_t transport_buf[NETSTACK_MTU];
 static uint8_t checksum_buf[NETSTACK_MTU + 16];
 static uint8_t tls_tx_buf[512];
-static uint8_t tls_rx_buf[4096];
+static uint8_t tls_rx_buf[16384];
 
 static uint16_t get_be16(const uint8_t *p) {
   return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -65,6 +66,10 @@ static uint16_t get_be16(const uint8_t *p) {
 static uint32_t get_be32(const uint8_t *p) {
   return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
          ((uint32_t)p[2] << 8) | p[3];
+}
+
+static uint32_t get_be24(const uint8_t *p) {
+  return ((uint32_t)p[0] << 16) | ((uint32_t)p[1] << 8) | p[2];
 }
 
 static void put_be16(uint8_t *p, uint16_t v) {
@@ -903,6 +908,42 @@ static int tcp_recv_all(tcp_conn_t *conn, char *out, size_t out_cap,
   return used > 0 ? 0 : -1;
 }
 
+static int tls_records_have_message(const uint8_t *rx, size_t rx_len,
+                                    uint8_t wanted_type) {
+  size_t off = 0;
+
+  while (off + 5 <= rx_len) {
+    uint8_t record_type = rx[off];
+    uint16_t record_len = get_be16(rx + off + 3);
+    size_t record_end = off + 5 + record_len;
+
+    if (record_end > rx_len) {
+      return 0;
+    }
+    if (record_type == 21) {
+      return 1;
+    }
+    if (record_type == 22) {
+      size_t p = off + 5;
+      while (p + 4 <= record_end) {
+        uint8_t hs_type = rx[p];
+        uint32_t hs_len = ((uint32_t)rx[p + 1] << 16) |
+                          ((uint32_t)rx[p + 2] << 8) | rx[p + 3];
+        if (p + 4 + hs_len > record_end) {
+          break;
+        }
+        if (hs_type == wanted_type) {
+          return 1;
+        }
+        p += 4 + hs_len;
+      }
+    }
+    off = record_end;
+  }
+
+  return 0;
+}
+
 static int tcp_recv_bytes(tcp_conn_t *conn, uint8_t *out, size_t out_cap,
                           size_t *out_len, uint64_t wait_ms) {
   size_t used = 0;
@@ -960,11 +1001,8 @@ static int tcp_recv_bytes(tcp_conn_t *conn, uint8_t *out, size_t out_cap,
         }
         conn->ack += (uint32_t)payload_len;
         send_tcp(conn, TCP_ACK, NULL, 0);
-        if (used >= 5) {
-          size_t first_record = 5 + get_be16(out + 3);
-          if (used >= first_record || used == out_cap) {
-            break;
-          }
+        if (used == out_cap || tls_records_have_message(out, used, 14)) {
+          break;
         }
         deadline = deadline_from_ms(1000);
       } else {
@@ -1143,52 +1181,330 @@ static int build_tls_client_hello(const char *host, uint8_t *out,
   return 0;
 }
 
-static void summarize_tls_response(const char *host, const uint8_t *rx,
-                                   size_t rx_len, char *out, size_t out_cap) {
-  char line[160];
-  out[0] = '\0';
-  snprintf(line, sizeof(line), "tls host=%s port=443 bytes=%lu\n", host,
-           (unsigned long)rx_len);
-  append_text(out, out_cap, line);
+typedef struct {
+  size_t records;
+  size_t handshake_records;
+  size_t alerts;
+  size_t handshake_messages;
+  int partial_record;
+  int partial_handshake;
+  int server_hello_seen;
+  int certificate_seen;
+  int server_key_exchange_seen;
+  int server_hello_done_seen;
+  int extended_master_secret;
+  uint16_t server_version;
+  uint16_t cipher;
+  uint16_t key_exchange_group;
+  uint16_t key_signature_alg;
+  size_t key_public_len;
+  size_t certificate_count;
+  size_t certificate_chain_len;
+  size_t leaf_certificate_len;
+  char leaf_certificate_sha256[SHA256_HEX_SIZE];
+  char alpn[16];
+  uint8_t alert_level;
+  uint8_t alert_description;
+} tls_parse_info_t;
 
-  if (rx_len < 5) {
-    append_text(out, out_cap, "tls record=incomplete\n");
+static const char *tls_cipher_name(uint16_t cipher) {
+  switch (cipher) {
+  case 0xc02f:
+    return "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256";
+  case 0xc02b:
+    return "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256";
+  case 0xc030:
+    return "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384";
+  case 0xc02c:
+    return "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384";
+  case 0xcca8:
+    return "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256";
+  case 0xcca9:
+    return "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256";
+  case 0x009e:
+    return "TLS_DHE_RSA_WITH_AES_128_GCM_SHA256";
+  case 0x009c:
+    return "TLS_RSA_WITH_AES_128_GCM_SHA256";
+  default:
+    return "unknown";
+  }
+}
+
+static const char *tls_group_name(uint16_t group) {
+  switch (group) {
+  case 0x001d:
+    return "x25519";
+  case 0x0017:
+    return "secp256r1";
+  case 0x0018:
+    return "secp384r1";
+  default:
+    return "unknown";
+  }
+}
+
+static const char *tls_signature_name(uint16_t sig) {
+  switch (sig) {
+  case 0x0401:
+    return "rsa_pkcs1_sha256";
+  case 0x0501:
+    return "rsa_pkcs1_sha384";
+  case 0x0403:
+    return "ecdsa_secp256r1_sha256";
+  case 0x0503:
+    return "ecdsa_secp384r1_sha384";
+  case 0x0804:
+    return "rsa_pss_rsae_sha256";
+  case 0x0805:
+    return "rsa_pss_rsae_sha384";
+  default:
+    return "unknown";
+  }
+}
+
+static void tls_parse_server_hello(const uint8_t *body, size_t len,
+                                   tls_parse_info_t *info) {
+  if (len < 38) {
     return;
   }
 
-  uint8_t record_type = rx[0];
-  uint16_t record_version = get_be16(rx + 1);
-  uint16_t record_len = get_be16(rx + 3);
-  snprintf(line, sizeof(line), "tls record type=%lu version=%04x len=%lu\n",
-           (unsigned long)record_type, (unsigned int)record_version,
-           (unsigned long)record_len);
-  append_text(out, out_cap, line);
+  size_t sid_len = body[34];
+  size_t cipher_pos = 35 + sid_len;
+  if (cipher_pos + 3 > len) {
+    return;
+  }
 
-  if (record_type == 22 && rx_len >= 9) {
-    uint8_t hs_type = rx[5];
-    uint32_t hs_len = ((uint32_t)rx[6] << 16) | ((uint32_t)rx[7] << 8) | rx[8];
-    snprintf(line, sizeof(line), "tls handshake type=%lu len=%lu\n",
-             (unsigned long)hs_type, (unsigned long)hs_len);
-    append_text(out, out_cap, line);
-    if (hs_type == 2 && rx_len >= 49) {
-      uint16_t server_version = get_be16(rx + 9);
-      size_t sid_len_pos = 43;
-      size_t sid_len = rx[sid_len_pos];
-      size_t cipher_pos = sid_len_pos + 1 + sid_len;
-      if (cipher_pos + 1 < rx_len) {
-        uint16_t cipher = get_be16(rx + cipher_pos);
-        snprintf(line, sizeof(line),
-                 "tls server-hello version=%04x cipher=%04x\n",
-                 (unsigned int)server_version, (unsigned int)cipher);
-        append_text(out, out_cap, line);
+  info->server_hello_seen = 1;
+  info->server_version = get_be16(body);
+  info->cipher = get_be16(body + cipher_pos);
+
+  size_t ext_pos = cipher_pos + 3;
+  if (ext_pos + 2 > len) {
+    return;
+  }
+
+  size_t ext_total = get_be16(body + ext_pos);
+  ext_pos += 2;
+  if (ext_pos + ext_total > len) {
+    return;
+  }
+
+  size_t ext_end = ext_pos + ext_total;
+  while (ext_pos + 4 <= ext_end) {
+    uint16_t type = get_be16(body + ext_pos);
+    uint16_t ext_len = get_be16(body + ext_pos + 2);
+    const uint8_t *ext = body + ext_pos + 4;
+    ext_pos += 4;
+    if (ext_pos + ext_len > ext_end) {
+      break;
+    }
+    if (type == 0x0017 && ext_len == 0) {
+      info->extended_master_secret = 1;
+    } else if (type == 0x0010 && ext_len >= 3) {
+      size_t list_len = get_be16(ext);
+      size_t alpn_len = ext[2];
+      if (list_len + 2 <= ext_len && alpn_len + 3 <= ext_len &&
+          alpn_len < sizeof(info->alpn)) {
+        memcpy(info->alpn, ext + 3, alpn_len);
+        info->alpn[alpn_len] = '\0';
       }
     }
-  } else if (record_type == 21 && rx_len >= 7) {
-    snprintf(line, sizeof(line), "tls alert level=%lu description=%lu\n",
-             (unsigned long)rx[5], (unsigned long)rx[6]);
+    ext_pos += ext_len;
+  }
+}
+
+static void tls_parse_certificate(const uint8_t *body, size_t len,
+                                  tls_parse_info_t *info) {
+  if (len < 3) {
+    return;
+  }
+
+  size_t chain_len = get_be24(body);
+  size_t p = 3;
+  size_t end = p + chain_len;
+  if (end > len) {
+    return;
+  }
+
+  info->certificate_chain_len = chain_len;
+  while (p + 3 <= end) {
+    size_t cert_len = get_be24(body + p);
+    p += 3;
+    if (p + cert_len > end) {
+      break;
+    }
+    if (info->certificate_count == 0) {
+      info->leaf_certificate_len = cert_len;
+      sha256_buffer_hex(body + p, cert_len, info->leaf_certificate_sha256);
+    }
+    info->certificate_count++;
+    p += cert_len;
+  }
+
+  if (info->certificate_count > 0) {
+    info->certificate_seen = 1;
+  }
+}
+
+static void tls_parse_server_key_exchange(const uint8_t *body, size_t len,
+                                          tls_parse_info_t *info) {
+  if (len < 4 || body[0] != 3) {
+    return;
+  }
+
+  size_t pub_len = body[3];
+  size_t sig_pos = 4 + pub_len;
+  if (sig_pos > len) {
+    return;
+  }
+
+  info->server_key_exchange_seen = 1;
+  info->key_exchange_group = get_be16(body + 1);
+  info->key_public_len = pub_len;
+  if (sig_pos + 2 <= len) {
+    info->key_signature_alg = get_be16(body + sig_pos);
+  }
+}
+
+static void tls_parse_handshake_message(uint8_t hs_type, const uint8_t *body,
+                                        size_t len, tls_parse_info_t *info) {
+  info->handshake_messages++;
+  switch (hs_type) {
+  case 2:
+    tls_parse_server_hello(body, len, info);
+    break;
+  case 11:
+    tls_parse_certificate(body, len, info);
+    break;
+  case 12:
+    tls_parse_server_key_exchange(body, len, info);
+    break;
+  case 14:
+    info->server_hello_done_seen = 1;
+    break;
+  default:
+    break;
+  }
+}
+
+static void tls_parse_records(const uint8_t *rx, size_t rx_len,
+                              tls_parse_info_t *info) {
+  size_t off = 0;
+
+  memset(info, 0, sizeof(*info));
+  while (off + 5 <= rx_len) {
+    uint8_t record_type = rx[off];
+    size_t record_len = get_be16(rx + off + 3);
+    size_t record_end = off + 5 + record_len;
+
+    if (record_end > rx_len) {
+      info->partial_record = 1;
+      return;
+    }
+
+    info->records++;
+    if (record_type == 21) {
+      info->alerts++;
+      if (record_len >= 2) {
+        info->alert_level = rx[off + 5];
+        info->alert_description = rx[off + 6];
+      }
+    } else if (record_type == 22) {
+      size_t p = off + 5;
+      info->handshake_records++;
+      while (p + 4 <= record_end) {
+        uint8_t hs_type = rx[p];
+        size_t hs_len = get_be24(rx + p + 1);
+        p += 4;
+        if (p + hs_len > record_end) {
+          info->partial_handshake = 1;
+          break;
+        }
+        tls_parse_handshake_message(hs_type, rx + p, hs_len, info);
+        p += hs_len;
+      }
+    }
+
+    off = record_end;
+  }
+
+  if (off < rx_len) {
+    info->partial_record = 1;
+  }
+}
+
+static void summarize_tls_response(const char *host, const uint8_t *rx,
+                                   size_t rx_len, char *out, size_t out_cap) {
+  tls_parse_info_t info;
+  char line[192];
+
+  out[0] = '\0';
+  tls_parse_records(rx, rx_len, &info);
+
+  snprintf(line, sizeof(line), "tls host=%s port=443 bytes=%lu\n", host,
+           (unsigned long)rx_len);
+  append_text(out, out_cap, line);
+  snprintf(line, sizeof(line),
+           "tls records total=%lu handshake=%lu alerts=%lu messages=%lu\n",
+           (unsigned long)info.records, (unsigned long)info.handshake_records,
+           (unsigned long)info.alerts, (unsigned long)info.handshake_messages);
+  append_text(out, out_cap, line);
+
+  if (info.server_hello_seen) {
+    snprintf(line, sizeof(line),
+             "tls server-hello version=%04x cipher=%04x %s\n",
+             (unsigned int)info.server_version, (unsigned int)info.cipher,
+             tls_cipher_name(info.cipher));
+    append_text(out, out_cap, line);
+    if (info.alpn[0]) {
+      snprintf(line, sizeof(line), "tls alpn %s\n", info.alpn);
+      append_text(out, out_cap, line);
+    }
+    snprintf(line, sizeof(line), "tls extended-master-secret %s\n",
+             info.extended_master_secret ? "yes" : "no");
     append_text(out, out_cap, line);
   }
 
+  if (info.certificate_seen) {
+    snprintf(line, sizeof(line),
+             "tls certificate certs=%lu chain-bytes=%lu leaf-bytes=%lu\n",
+             (unsigned long)info.certificate_count,
+             (unsigned long)info.certificate_chain_len,
+             (unsigned long)info.leaf_certificate_len);
+    append_text(out, out_cap, line);
+    snprintf(line, sizeof(line), "tls leaf-sha256 %s\n",
+             info.leaf_certificate_sha256);
+    append_text(out, out_cap, line);
+  }
+
+  if (info.server_key_exchange_seen) {
+    snprintf(line, sizeof(line),
+             "tls server-key-exchange group=%04x %s public-key-bytes=%lu signature=%04x %s\n",
+             (unsigned int)info.key_exchange_group,
+             tls_group_name(info.key_exchange_group),
+             (unsigned long)info.key_public_len,
+             (unsigned int)info.key_signature_alg,
+             tls_signature_name(info.key_signature_alg));
+    append_text(out, out_cap, line);
+  }
+
+  if (info.alerts > 0) {
+    snprintf(line, sizeof(line), "tls alert level=%lu description=%lu\n",
+             (unsigned long)info.alert_level,
+             (unsigned long)info.alert_description);
+    append_text(out, out_cap, line);
+  }
+
+  snprintf(line, sizeof(line), "tls server-hello-done %s\n",
+           info.server_hello_done_seen ? "yes" : "no");
+  append_text(out, out_cap, line);
+  if (info.partial_record || info.partial_handshake) {
+    snprintf(line, sizeof(line), "tls parse partial-record=%s partial-handshake=%s\n",
+             info.partial_record ? "yes" : "no",
+             info.partial_handshake ? "yes" : "no");
+    append_text(out, out_cap, line);
+  }
+  append_text(out, out_cap, "tls next certificate-validation-and-key-schedule\n");
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");

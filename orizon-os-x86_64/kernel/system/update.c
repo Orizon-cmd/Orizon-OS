@@ -40,7 +40,7 @@ static const update_package_t base_packages[] = {
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
-    {"orizon-tls", "clienthello-serverhello-probe"},
+    {"orizon-tls", "server-handshake-certificate-probe"},
     {"orizon-sha256", "manifest-verification"},
     {"orizon-manifest", "staged-update-plan"},
     {"orizon-timer", "pit-100hz"},
@@ -59,7 +59,7 @@ static const char update_manifest[] =
     "package orizon-vfs workspace-persistence required\n"
     "package orizon-net ethernet-e1000 required\n"
     "package orizon-ipv4 dhcp-dns-tcp-bootstrap required\n"
-    "package orizon-tls clienthello-serverhello-probe required\n"
+    "package orizon-tls server-handshake-certificate-probe required\n"
     "package orizon-sha256 manifest-verification required\n"
     "package orizon-manifest staged-update-plan required\n"
     "package orizon-timer pit-100hz required\n"
@@ -146,7 +146,8 @@ static void update_write_plan(const char *phase, const char *network,
     snprintf(line, sizeof(line), "proof-sha256 %s\n", proof_hash);
     update_write_file(UPDATE_PLAN_PATH, line, 1);
   }
-  update_write_file(UPDATE_PLAN_PATH, "next tls-crypto-and-https-download\n", 1);
+  update_write_file(UPDATE_PLAN_PATH,
+                    "next certificate-validation-and-key-schedule\n", 1);
   update_write_file(UPDATE_PLAN_PATH, "install staged-boot-writer\n", 1);
 }
 
@@ -304,11 +305,11 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     update_append_log(pkg_line);
     netstack_format_status(stack_line, sizeof(stack_line));
     update_write_plan("tls-handshake", stack_line, tls_hash, tls_len);
-    append_report(report, report_size, "[6/8] TLS ClientHello response saved");
+    append_report(report, report_size, "[6/8] TLS server handshake saved");
     append_report(report, report_size, tls_response);
     append_report(report, report_size, pkg_line);
     append_report(report, report_size,
-                  "[7/8] TLS crypto and certificate validation pending");
+                  "[7/8] Certificate validation and TLS key schedule pending");
     append_report(report, report_size,
                   "[8/8] Full package install paused before encrypted HTTP and boot writer");
     append_report(report, report_size,
