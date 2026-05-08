@@ -40,7 +40,7 @@ static const update_package_t base_packages[] = {
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
-    {"orizon-tls", "rsa-certificate-signature-verify"},
+    {"orizon-tls", "x25519-key-agreement-bootstrap"},
     {"orizon-sha256", "manifest-verification"},
     {"orizon-manifest", "staged-update-plan"},
     {"orizon-timer", "pit-100hz"},
@@ -59,7 +59,7 @@ static const char update_manifest[] =
     "package orizon-vfs workspace-persistence required\n"
     "package orizon-net ethernet-e1000 required\n"
     "package orizon-ipv4 dhcp-dns-tcp-bootstrap required\n"
-    "package orizon-tls rsa-certificate-signature-verify required\n"
+    "package orizon-tls x25519-key-agreement-bootstrap required\n"
     "package orizon-sha256 manifest-verification required\n"
     "package orizon-manifest staged-update-plan required\n"
     "package orizon-timer pit-100hz required\n"
@@ -147,7 +147,7 @@ static void update_write_plan(const char *phase, const char *network,
     update_write_file(UPDATE_PLAN_PATH, line, 1);
   }
   update_write_file(UPDATE_PLAN_PATH,
-                    "next tls-key-agreement-and-record-crypto\n", 1);
+                    "next tls-client-keyexchange-and-record-crypto\n", 1);
   update_write_file(UPDATE_PLAN_PATH, "install staged-boot-writer\n", 1);
 }
 

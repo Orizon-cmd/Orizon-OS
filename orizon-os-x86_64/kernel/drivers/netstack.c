@@ -58,6 +58,7 @@ static uint8_t transport_buf[NETSTACK_MTU];
 static uint8_t checksum_buf[NETSTACK_MTU + 16];
 static uint8_t tls_tx_buf[512];
 static uint8_t tls_rx_buf[16384];
+static uint8_t tls_client_random[32];
 
 static uint16_t get_be16(const uint8_t *p) {
   return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -1118,7 +1119,8 @@ static int build_tls_client_hello(const char *host, uint8_t *out,
   uint32_t seed = 0x4f5a544cU ^ (uint32_t)timer_ticks();
   for (int i = 0; i < 32; i++) {
     seed = seed * 1664525U + 1013904223U;
-    tls_put(out, out_cap, &off, (uint8_t)(seed >> 24));
+    tls_client_random[i] = (uint8_t)(seed >> 24);
+    tls_put(out, out_cap, &off, tls_client_random[i]);
   }
   tls_put(out, out_cap, &off, 0); /* no session id */
 
@@ -1221,11 +1223,18 @@ typedef struct {
   int server_key_exchange_seen;
   int server_hello_done_seen;
   int extended_master_secret;
+  int key_agreement_ready;
+  int key_agreement_x25519;
+  int client_key_bootstrap;
   uint16_t server_version;
   uint16_t cipher;
   uint16_t key_exchange_group;
   uint16_t key_signature_alg;
   size_t key_public_len;
+  char client_public_sha256[SHA256_HEX_SIZE];
+  char shared_secret_sha256[SHA256_HEX_SIZE];
+  uint8_t server_random[32];
+  uint8_t server_key_public[32];
   size_t certificate_count;
   size_t certificate_chain_len;
   size_t cert_summaries;
@@ -1844,6 +1853,307 @@ static int tls_verify_leaf_signature(tls_parse_info_t *info) {
   return 0;
 }
 
+#define FE51_MASK ((uint64_t)((1ULL << 51) - 1ULL))
+
+typedef uint64_t fe51[5];
+
+static uint64_t load_le64(const uint8_t *p) {
+  uint64_t v = 0;
+  for (int i = 7; i >= 0; i--) {
+    v = (v << 8) | p[i];
+  }
+  return v;
+}
+
+static void fe51_reduce(fe51 h) {
+  for (int round = 0; round < 2; round++) {
+    uint64_t c;
+    c = h[0] >> 51;
+    h[0] &= FE51_MASK;
+    h[1] += c;
+    c = h[1] >> 51;
+    h[1] &= FE51_MASK;
+    h[2] += c;
+    c = h[2] >> 51;
+    h[2] &= FE51_MASK;
+    h[3] += c;
+    c = h[3] >> 51;
+    h[3] &= FE51_MASK;
+    h[4] += c;
+    c = h[4] >> 51;
+    h[4] &= FE51_MASK;
+    h[0] += c * 19;
+  }
+}
+
+static void fe51_copy(fe51 out, const fe51 in) {
+  for (int i = 0; i < 5; i++) {
+    out[i] = in[i];
+  }
+}
+
+static void fe51_1(fe51 out) {
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+  out[4] = 0;
+}
+
+static void fe51_0(fe51 out) {
+  memset(out, 0, sizeof(fe51));
+}
+
+static void fe51_frombytes(fe51 out, const uint8_t in[32]) {
+  out[0] = load_le64(in) & FE51_MASK;
+  out[1] = (load_le64(in + 6) >> 3) & FE51_MASK;
+  out[2] = (load_le64(in + 12) >> 6) & FE51_MASK;
+  out[3] = (load_le64(in + 19) >> 1) & FE51_MASK;
+  out[4] = (load_le64(in + 24) >> 12) & FE51_MASK;
+}
+
+static int fe51_ge_p(const fe51 h) {
+  static const uint64_t p[5] = {FE51_MASK - 18, FE51_MASK, FE51_MASK,
+                                FE51_MASK, FE51_MASK};
+  for (int i = 4; i >= 0; i--) {
+    if (h[i] > p[i]) {
+      return 1;
+    }
+    if (h[i] < p[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void fe51_sub_p(fe51 h) {
+  static const uint64_t p[5] = {FE51_MASK - 18, FE51_MASK, FE51_MASK,
+                                FE51_MASK, FE51_MASK};
+  uint64_t borrow = 0;
+  for (int i = 0; i < 5; i++) {
+    uint64_t sub = p[i] + borrow;
+    uint64_t old = h[i];
+    h[i] = old - sub;
+    borrow = old < sub;
+  }
+}
+
+static void store_le64(uint8_t *p, uint64_t v) {
+  for (int i = 0; i < 8; i++) {
+    p[i] = (uint8_t)(v >> (8 * i));
+  }
+}
+
+static void fe51_tobytes(uint8_t out[32], const fe51 in) {
+  fe51 h;
+  fe51_copy(h, in);
+  fe51_reduce(h);
+  if (fe51_ge_p(h)) {
+    fe51_sub_p(h);
+  }
+
+  uint64_t q0 = h[0] | (h[1] << 51);
+  uint64_t q1 = (h[1] >> 13) | (h[2] << 38);
+  uint64_t q2 = (h[2] >> 26) | (h[3] << 25);
+  uint64_t q3 = (h[3] >> 39) | (h[4] << 12);
+  store_le64(out, q0);
+  store_le64(out + 8, q1);
+  store_le64(out + 16, q2);
+  store_le64(out + 24, q3);
+  out[31] &= 0x7f;
+}
+
+static void fe51_add(fe51 out, const fe51 a, const fe51 b) {
+  for (int i = 0; i < 5; i++) {
+    out[i] = a[i] + b[i];
+  }
+  fe51_reduce(out);
+}
+
+static void fe51_sub(fe51 out, const fe51 a, const fe51 b) {
+  static const uint64_t p4[5] = {(FE51_MASK - 18) * 4, FE51_MASK * 4,
+                                 FE51_MASK * 4, FE51_MASK * 4,
+                                 FE51_MASK * 4};
+  for (int i = 0; i < 5; i++) {
+    out[i] = a[i] + p4[i] - b[i];
+  }
+  fe51_reduce(out);
+}
+
+static void fe51_mul(fe51 out, const fe51 f, const fe51 g) {
+  unsigned __int128 h0 =
+      (unsigned __int128)f[0] * g[0] +
+      (unsigned __int128)19 * (f[1] * (unsigned __int128)g[4] +
+                               f[2] * (unsigned __int128)g[3] +
+                               f[3] * (unsigned __int128)g[2] +
+                               f[4] * (unsigned __int128)g[1]);
+  unsigned __int128 h1 =
+      (unsigned __int128)f[0] * g[1] + (unsigned __int128)f[1] * g[0] +
+      (unsigned __int128)19 * (f[2] * (unsigned __int128)g[4] +
+                               f[3] * (unsigned __int128)g[3] +
+                               f[4] * (unsigned __int128)g[2]);
+  unsigned __int128 h2 =
+      (unsigned __int128)f[0] * g[2] + (unsigned __int128)f[1] * g[1] +
+      (unsigned __int128)f[2] * g[0] +
+      (unsigned __int128)19 * (f[3] * (unsigned __int128)g[4] +
+                               f[4] * (unsigned __int128)g[3]);
+  unsigned __int128 h3 =
+      (unsigned __int128)f[0] * g[3] + (unsigned __int128)f[1] * g[2] +
+      (unsigned __int128)f[2] * g[1] + (unsigned __int128)f[3] * g[0] +
+      (unsigned __int128)19 * f[4] * g[4];
+  unsigned __int128 h4 =
+      (unsigned __int128)f[0] * g[4] + (unsigned __int128)f[1] * g[3] +
+      (unsigned __int128)f[2] * g[2] + (unsigned __int128)f[3] * g[1] +
+      (unsigned __int128)f[4] * g[0];
+
+  out[0] = (uint64_t)h0 & FE51_MASK;
+  h1 += h0 >> 51;
+  out[1] = (uint64_t)h1 & FE51_MASK;
+  h2 += h1 >> 51;
+  out[2] = (uint64_t)h2 & FE51_MASK;
+  h3 += h2 >> 51;
+  out[3] = (uint64_t)h3 & FE51_MASK;
+  h4 += h3 >> 51;
+  out[4] = (uint64_t)h4 & FE51_MASK;
+  out[0] += (uint64_t)(h4 >> 51) * 19;
+  fe51_reduce(out);
+}
+
+static void fe51_sq(fe51 out, const fe51 a) {
+  fe51_mul(out, a, a);
+}
+
+static int exponent_pminus2_bit(int bit) {
+  if (bit == 2 || bit == 4 || bit >= 255) {
+    return 0;
+  }
+  return 1;
+}
+
+static void fe51_inv(fe51 out, const fe51 z) {
+  fe51 result;
+  fe51 base;
+  fe51 scratch;
+  fe51_1(result);
+  fe51_copy(base, z);
+  for (int bit = 254; bit >= 0; bit--) {
+    fe51_sq(scratch, result);
+    fe51_copy(result, scratch);
+    if (exponent_pminus2_bit(bit)) {
+      fe51_mul(scratch, result, base);
+      fe51_copy(result, scratch);
+    }
+  }
+  fe51_copy(out, result);
+}
+
+static void fe51_cswap(fe51 a, fe51 b, uint8_t swap) {
+  uint64_t mask = 0 - (uint64_t)swap;
+  for (int i = 0; i < 5; i++) {
+    uint64_t t = mask & (a[i] ^ b[i]);
+    a[i] ^= t;
+    b[i] ^= t;
+  }
+}
+
+static void x25519_clamp(uint8_t scalar[32]) {
+  scalar[0] &= 248;
+  scalar[31] &= 127;
+  scalar[31] |= 64;
+}
+
+static void x25519_scalar_mult(uint8_t out[32], const uint8_t scalar_in[32],
+                               const uint8_t point_in[32]) {
+  static const fe51 a24 = {121665, 0, 0, 0, 0};
+  uint8_t scalar[32];
+  uint8_t point[32];
+  fe51 x1, x2, z2, x3, z3;
+  fe51 a, aa, b, bb, e, c, d, da, cb, tmp0, tmp1;
+  uint8_t swap = 0;
+
+  memcpy(scalar, scalar_in, sizeof(scalar));
+  memcpy(point, point_in, sizeof(point));
+  x25519_clamp(scalar);
+  point[31] &= 0x7f;
+
+  fe51_frombytes(x1, point);
+  fe51_1(x2);
+  fe51_0(z2);
+  fe51_copy(x3, x1);
+  fe51_1(z3);
+
+  for (int t = 254; t >= 0; t--) {
+    uint8_t kt = (uint8_t)((scalar[t >> 3] >> (t & 7)) & 1);
+    swap ^= kt;
+    fe51_cswap(x2, x3, swap);
+    fe51_cswap(z2, z3, swap);
+    swap = kt;
+
+    fe51_add(a, x2, z2);
+    fe51_sq(aa, a);
+    fe51_sub(b, x2, z2);
+    fe51_sq(bb, b);
+    fe51_sub(e, aa, bb);
+    fe51_add(c, x3, z3);
+    fe51_sub(d, x3, z3);
+    fe51_mul(da, d, a);
+    fe51_mul(cb, c, b);
+    fe51_add(tmp0, da, cb);
+    fe51_sq(x3, tmp0);
+    fe51_sub(tmp0, da, cb);
+    fe51_sq(tmp1, tmp0);
+    fe51_mul(z3, tmp1, x1);
+    fe51_mul(x2, aa, bb);
+    fe51_mul(tmp0, e, a24);
+    fe51_add(tmp0, aa, tmp0);
+    fe51_mul(z2, e, tmp0);
+  }
+
+  fe51_cswap(x2, x3, swap);
+  fe51_cswap(z2, z3, swap);
+  fe51_inv(z2, z2);
+  fe51_mul(x2, x2, z2);
+  fe51_tobytes(out, x2);
+}
+
+static void tls_make_x25519_scalar(const tls_parse_info_t *info,
+                                   uint8_t scalar[32]) {
+  sha256_ctx_t ctx;
+  uint64_t ticks = timer_ticks();
+  const char domain[] = "orizon-tls-x25519-bootstrap";
+  sha256_init(&ctx);
+  sha256_update(&ctx, domain, sizeof(domain) - 1);
+  sha256_update(&ctx, tls_client_random, sizeof(tls_client_random));
+  sha256_update(&ctx, info->server_random, sizeof(info->server_random));
+  sha256_update(&ctx, info->server_key_public, info->key_public_len);
+  sha256_update(&ctx, &ticks, sizeof(ticks));
+  sha256_final(&ctx, scalar);
+  x25519_clamp(scalar);
+}
+
+static void tls_prepare_x25519_key_agreement(tls_parse_info_t *info) {
+  static const uint8_t basepoint[32] = {9};
+  uint8_t scalar[32];
+  uint8_t client_public[32];
+  uint8_t shared_secret[32];
+
+  if (!info || info->key_exchange_group != 0x001d ||
+      info->key_public_len != 32) {
+    return;
+  }
+
+  tls_make_x25519_scalar(info, scalar);
+  x25519_scalar_mult(client_public, scalar, basepoint);
+  x25519_scalar_mult(shared_secret, scalar, info->server_key_public);
+  sha256_buffer_hex(client_public, sizeof(client_public),
+                    info->client_public_sha256);
+  sha256_buffer_hex(shared_secret, sizeof(shared_secret),
+                    info->shared_secret_sha256);
+  info->key_agreement_x25519 = 1;
+  info->key_agreement_ready = 1;
+  info->client_key_bootstrap = 1;
+}
+
 static void tls_copy_asn1_time(const uint8_t *value, size_t len, char *out,
                                size_t out_cap) {
   copy_ascii_limited(out, out_cap, value, len);
@@ -2135,6 +2445,7 @@ static void tls_parse_server_hello(const uint8_t *body, size_t len,
 
   info->server_hello_seen = 1;
   info->server_version = get_be16(body);
+  memcpy(info->server_random, body + 2, sizeof(info->server_random));
   info->cipher = get_be16(body + cipher_pos);
 
   size_t ext_pos = cipher_pos + 3;
@@ -2235,9 +2546,13 @@ static void tls_parse_server_key_exchange(const uint8_t *body, size_t len,
   info->server_key_exchange_seen = 1;
   info->key_exchange_group = get_be16(body + 1);
   info->key_public_len = pub_len;
+  if (info->key_exchange_group == 0x001d && pub_len == 32) {
+    memcpy(info->server_key_public, body + 4, 32);
+  }
   if (sig_pos + 2 <= len) {
     info->key_signature_alg = get_be16(body + sig_pos);
   }
+  tls_prepare_x25519_key_agreement(info);
 }
 
 static void tls_parse_handshake_message(uint8_t hs_type, const uint8_t *body,
@@ -2431,6 +2746,19 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
     append_text(out, out_cap, line);
   }
 
+  if (info.key_agreement_ready) {
+    snprintf(line, sizeof(line),
+             "tls key-agreement group=x25519 ready=yes rng=bootstrap-not-secure client-key=%s\n",
+             info.client_key_bootstrap ? "generated" : "unknown");
+    append_text(out, out_cap, line);
+    snprintf(line, sizeof(line), "tls client-public-sha256 %s\n",
+             info.client_public_sha256);
+    append_text(out, out_cap, line);
+    snprintf(line, sizeof(line), "tls shared-secret-sha256 %s\n",
+             info.shared_secret_sha256);
+    append_text(out, out_cap, line);
+  }
+
   if (info.alerts > 0) {
     snprintf(line, sizeof(line), "tls alert level=%lu description=%lu\n",
              (unsigned long)info.alert_level,
@@ -2447,7 +2775,8 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
              info.partial_handshake ? "yes" : "no");
     append_text(out, out_cap, line);
   }
-  append_text(out, out_cap, "tls next tls-key-agreement-and-record-crypto\n");
+  append_text(out, out_cap,
+              "tls next tls-client-keyexchange-and-record-crypto\n");
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");
