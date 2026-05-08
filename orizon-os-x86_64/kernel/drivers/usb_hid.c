@@ -10,7 +10,6 @@ void usb_hid_handle_key(int key);
 
 static uint8_t prev_keys[6] = {0};
 static int caps_lock = 0;
-static int report_blink = 0;
 
 static const char hid_to_ascii[128] = {
     0,  0,  0,  0, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',

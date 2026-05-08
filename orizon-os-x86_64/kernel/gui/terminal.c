@@ -324,6 +324,152 @@ void term_puts_t(terminal_t *term, const char *str) {
   while (*str) term_putc(term, *str++);
 }
 
+static const char *term_skip_spaces(const char *s) {
+  while (s && *s == ' ') {
+    s++;
+  }
+  return s ? s : "";
+}
+
+static int term_command_is(const char *cmd, const char *name) {
+  size_t len = strlen(name);
+  return strncmp(cmd, name, len) == 0 && (cmd[len] == '\0' || cmd[len] == ' ');
+}
+
+static int term_split_path_and_text(const char *args, char *path_arg,
+                                    size_t path_size, const char **text) {
+  size_t len = 0;
+
+  args = term_skip_spaces(args);
+  if (*args == '\0') {
+    return -1;
+  }
+
+  while (args[len] && args[len] != ' ') {
+    len++;
+  }
+  if (len == 0 || len >= path_size) {
+    return -1;
+  }
+
+  for (size_t i = 0; i < len; i++) {
+    path_arg[i] = args[i];
+  }
+  path_arg[len] = '\0';
+
+  args = term_skip_spaces(args + len);
+  if (*args == '\0') {
+    return -1;
+  }
+
+  *text = args;
+  return 0;
+}
+
+static void term_print_version(terminal_t *term) {
+  term_puts_t(term, "Orizon OS core-x86_64\n");
+  term_puts_t(term, "Built: " __DATE__ " " __TIME__ "\n");
+}
+
+static void term_print_about(terminal_t *term) {
+  char line[128];
+
+  term_puts_t(term, "\033[1;36mOrizon OS\033[0m\n");
+  term_puts_t(term, "Profile: Minimal development base\n");
+  term_puts_t(term, "Kernel: core-x86_64\n");
+  snprintf(line, sizeof(line), "Console: %dx%d\n", TERM_COLS, TERM_ROWS);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Display: %lux%lu\n",
+           (unsigned long)screen_width, (unsigned long)screen_height);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Heap used: %lu bytes\n",
+           (unsigned long)kmalloc_get_used());
+  term_puts_t(term, line);
+  term_puts_t(term, "Built: " __DATE__ " " __TIME__ "\n");
+}
+
+static void term_print_stat(terminal_t *term, const char *display,
+                            const char *path) {
+  size_t size = 0;
+  int is_dir = 0;
+  char line[128];
+
+  if (vfs_stat(path, &size, &is_dir) < 0) {
+    term_puts_t(term, "stat: cannot access ");
+    term_puts_t(term, display);
+    term_puts_t(term, "\n");
+    return;
+  }
+
+  term_puts_t(term, "Path: ");
+  term_puts_t(term, path);
+  term_puts_t(term, "\n");
+  term_puts_t(term, "Type: ");
+  term_puts_t(term, is_dir ? "directory\n" : "file\n");
+  snprintf(line, sizeof(line), "Size: %lu bytes\n", (unsigned long)size);
+  term_puts_t(term, line);
+}
+
+static void term_print_tree_recursive(terminal_t *term, const char *path,
+                                      int depth) {
+  dirent_t entries[16];
+  int count;
+
+  if (depth > 5) {
+    term_puts_t(term, "  ...\n");
+    return;
+  }
+
+  count = vfs_readdir(path, entries, 16);
+  if (count < 0) {
+    return;
+  }
+
+  for (int i = 0; i < count; i++) {
+    for (int d = 0; d < depth; d++) {
+      term_puts_t(term, "  ");
+    }
+    term_puts_t(term, "|- ");
+    term_puts_t(term, entries[i].name);
+    if (entries[i].type == 1) {
+      term_puts_t(term, "/");
+    }
+    term_puts_t(term, "\n");
+
+    if (entries[i].type == 1) {
+      char child[MAX_PATH];
+      if (strcmp(path, "/") == 0) {
+        snprintf(child, sizeof(child), "/%s", entries[i].name);
+      } else {
+        snprintf(child, sizeof(child), "%s/%s", path, entries[i].name);
+      }
+      term_print_tree_recursive(term, child, depth + 1);
+    }
+  }
+}
+
+static void term_print_tree(terminal_t *term, const char *display,
+                            const char *path) {
+  int is_dir = 0;
+
+  if (vfs_stat(path, NULL, &is_dir) < 0) {
+    term_puts_t(term, "tree: cannot access ");
+    term_puts_t(term, display);
+    term_puts_t(term, "\n");
+    return;
+  }
+  if (!is_dir) {
+    term_puts_t(term, "tree: ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": Not a directory\n");
+    return;
+  }
+
+  term_puts_t(term, path);
+  term_puts_t(term, "\n");
+  term_print_tree_recursive(term, path, 1);
+}
+
 /* Render terminal */
 void term_render(terminal_t *term) {
   if (!term || !term->visible) return;
@@ -377,10 +523,16 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  cd <dir>  - Change directory\n");
     term_puts_t(term, "  pwd       - Print working directory\n");
     term_puts_t(term, "  cat <f>   - Display file contents\n");
+    term_puts_t(term, "  stat <p>  - Show file or directory info\n");
+    term_puts_t(term, "  tree [p]  - Show a small directory tree\n");
     term_puts_t(term, "  touch <f> - Create empty file\n");
+    term_puts_t(term, "  write <f> <text>  - Replace file text\n");
+    term_puts_t(term, "  append <f> <text> - Append file text\n");
     term_puts_t(term, "  mkdir <d> - Create directory\n");
     term_puts_t(term, "  rm <f>    - Remove file\n");
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
+    term_puts_t(term, "  about     - Show Orizon build details\n");
+    term_puts_t(term, "  version   - Show kernel build version\n");
     term_puts_t(term, "  neofetch  - System info\n");
     term_puts_t(term, "  uname     - Show OS info\n");
     term_puts_t(term, "  id        - Show user/group info\n");
@@ -397,6 +549,10 @@ void term_execute(terminal_t *term, const char *cmd) {
     for (int row = 0; row < TERM_ROWS; row++) term_clear_line(term, row);
     term->cursor_x = 0;
     term->cursor_y = 0;
+  } else if (term_command_is(cmd, "about")) {
+    term_print_about(term);
+  } else if (term_command_is(cmd, "version")) {
+    term_print_version(term);
   } else if (strncmp(cmd, "ls", 2) == 0) {
     char path[MAX_PATH];
     const char *requested = term->cwd[0] ? term->cwd : "/";
@@ -496,6 +652,30 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, filename);
       term_puts_t(term, ": No such file\n");
     }
+  } else if (term_command_is(cmd, "stat")) {
+    char path[MAX_PATH];
+    const char *requested = term_skip_spaces(cmd + 4);
+    if (*requested == '\0') {
+      requested = term->cwd[0] ? term->cwd : "/";
+    }
+
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "stat: invalid path\n");
+      return;
+    }
+    term_print_stat(term, requested, path);
+  } else if (term_command_is(cmd, "tree")) {
+    char path[MAX_PATH];
+    const char *requested = term_skip_spaces(cmd + 4);
+    if (*requested == '\0') {
+      requested = term->cwd[0] ? term->cwd : "/";
+    }
+
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "tree: invalid path\n");
+      return;
+    }
+    term_print_tree(term, requested, path);
   } else if (strncmp(cmd, "touch ", 6) == 0) {
     const char *filename = cmd + 6;
     char path[256];
@@ -510,6 +690,41 @@ void term_execute(terminal_t *term, const char *cmd) {
     } else {
       term_puts_t(term, "touch: failed\n");
     }
+  } else if (term_command_is(cmd, "write") || term_command_is(cmd, "append")) {
+    int append = term_command_is(cmd, "append");
+    const char *args = cmd + (append ? 6 : 5);
+    const char *text = NULL;
+    char filename[MAX_PATH];
+    char path[MAX_PATH];
+
+    if (term_split_path_and_text(args, filename, sizeof(filename), &text) < 0) {
+      term_puts_t(term, append ? "usage: append <file> <text>\n"
+                               : "usage: write <file> <text>\n");
+      return;
+    }
+
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, append ? "append: invalid path\n" : "write: invalid path\n");
+      return;
+    }
+
+    file_t *f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
+    if (!f) {
+      term_puts_t(term, append ? "append: failed\n" : "write: failed\n");
+      return;
+    }
+
+    if (vfs_write(f, text, strlen(text)) < 0 ||
+        vfs_write(f, "\n", 1) < 0) {
+      term_puts_t(term, append ? "append: write error\n" : "write: write error\n");
+      vfs_close(f);
+      return;
+    }
+
+    vfs_close(f);
+    term_puts_t(term, append ? "Appended: " : "Wrote: ");
+    term_puts_t(term, path);
+    term_puts_t(term, "\n");
   } else if (strncmp(cmd, "mkdir ", 6) == 0) {
     const char *dirname = cmd + 6;
     char path[256];

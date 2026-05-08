@@ -110,12 +110,6 @@ static inline void xhci_write64(uint32_t off, uint64_t val) {
   xhci_write32(off + 4, (uint32_t)(val >> 32));
 }
 
-static inline uint64_t xhci_read64(uint32_t off) {
-  uint64_t lo = xhci_read32(off + 0);
-  uint64_t hi = xhci_read32(off + 4);
-  return lo | (hi << 32);
-}
-
 static void *xhci_alloc_aligned(size_t size, size_t align) {
   size_t total = size + align;
   uint8_t *raw = (uint8_t *)kzalloc(total);
@@ -466,7 +460,6 @@ static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
       cur_cfg = buf[i + 5];
     } else if (dtype == 4 && dlen >= 9) {
       uint8_t cls = buf[i + 5];
-      uint8_t sub = buf[i + 6];
       uint8_t proto = buf[i + 7];
       /* Relaxed check: Accept any HID Keyboard (Proto 1) or just HID (Class 3) */
       if (cls == 3 && (proto == 1 || proto == 0)) {
@@ -987,14 +980,12 @@ void usb_xhci_poll(void) {
   }
 
   static int event_count = 0;
-  int events_this_poll = 0;
   
   while (1) {
     xhci_trb_t evt;
     if (xhci_pop_event(&evt) != 0) {
       break;
     }
-    events_this_poll++;
     event_count++;
     xhci_handle_event(&evt);
     

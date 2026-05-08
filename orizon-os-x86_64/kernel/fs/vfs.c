@@ -95,6 +95,13 @@ static void get_filename(const char *path, char *name) {
 static int create_inode(const char *path, int type) {
   if (inode_count >= MAX_FILES) return -ENOSPC;
   if (find_inode(path) >= 0) return -EEXIST;
+
+  char parent_path[MAX_PATH];
+  get_parent_path(path, parent_path);
+  int parent = find_inode(parent_path);
+  if (!str_eq(path, "/") && parent < 0) {
+    return -ENOENT;
+  }
   
   int idx = inode_count++;
   inode_t *node = &inodes[idx];
@@ -106,10 +113,7 @@ static int create_inode(const char *path, int type) {
   node->size = 0;
   node->capacity = 0;
   
-  /* Find parent */
-  char parent_path[MAX_PATH];
-  get_parent_path(path, parent_path);
-  node->parent = find_inode(parent_path);
+  node->parent = parent;
   
   return idx;
 }
@@ -171,6 +175,13 @@ void vfs_seed_content(void) {
   f = vfs_open("/system/version", O_CREAT | O_WRONLY);
   if (f) {
     vfs_write(f, "core-x86_64", 11);
+    vfs_close(f);
+  }
+
+  f = vfs_open("/system/profile", O_CREAT | O_WRONLY);
+  if (f) {
+    const char *txt = "minimal-development\n";
+    vfs_write(f, txt, strlen(txt));
     vfs_close(f);
   }
 }
@@ -393,13 +404,15 @@ int vfs_rename(const char *oldpath, const char *newpath) {
   int idx = find_inode(oldpath);
   if (idx < 0) return -ENOENT;
   if (find_inode(newpath) >= 0) return -EEXIST;
+
+  char parent_path[MAX_PATH];
+  get_parent_path(newpath, parent_path);
+  int parent = find_inode(parent_path);
+  if (parent < 0) return -ENOENT;
   
   str_cpy(inodes[idx].path, newpath, MAX_PATH);
   get_filename(newpath, inodes[idx].name);
-  
-  char parent_path[MAX_PATH];
-  get_parent_path(newpath, parent_path);
-  inodes[idx].parent = find_inode(parent_path);
+  inodes[idx].parent = parent;
   
   return 0;
 }

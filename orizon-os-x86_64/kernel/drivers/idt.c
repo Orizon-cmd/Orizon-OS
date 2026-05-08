@@ -86,9 +86,7 @@ __attribute__((interrupt)) static void isr_default(interrupt_frame_t *frame) {
 }
 
 void idt_register_handler(uint8_t vector, isr_handler_t handler) {
-  if (vector < 256) {
-    isr_handlers[vector] = handler;
-  }
+  isr_handlers[vector] = handler;
 }
 
 void idt_init(void) {
