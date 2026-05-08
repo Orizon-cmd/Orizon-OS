@@ -8,6 +8,7 @@
 #include "../include/netstack.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
+#include "../include/storage.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
 #include "../include/timer.h"
@@ -35,12 +36,18 @@ static const uint32_t term_colors[16] = {
 };
 
 #define TERM_EDIT_MAX 2048
+#define TERM_SCROLLBACK_LINES 256
 
 /* Terminal state */
 typedef struct terminal {
   char chars[TERM_ROWS * TERM_COLS];
   uint8_t fg_colors[TERM_ROWS * TERM_COLS];
   uint8_t bg_colors[TERM_ROWS * TERM_COLS];
+  char scroll_chars[TERM_SCROLLBACK_LINES * TERM_COLS];
+  uint8_t scroll_fg[TERM_SCROLLBACK_LINES * TERM_COLS];
+  uint8_t scroll_bg[TERM_SCROLLBACK_LINES * TERM_COLS];
+  int scroll_count;
+  int scroll_offset;
   int cursor_x, cursor_y;
   int visible;
   int content_x, content_y;
@@ -64,6 +71,14 @@ typedef struct terminal {
   char edit_path[MAX_PATH];
   char edit_buf[TERM_EDIT_MAX];
   size_t edit_len;
+
+  /* Guided disk installer */
+  int install_mode;
+  int install_step;
+  char install_language[16];
+  char install_keyboard[24];
+  char install_disk_mode[24];
+  char install_hostname[64];
   
   /* History */
   char history[16][256];
@@ -204,14 +219,54 @@ static void term_clear_line(terminal_t *term, int row) {
   }
 }
 
+static void term_push_scrollback_line(terminal_t *term, int row) {
+  int dst = term->scroll_count;
+
+  if (row < 0 || row >= TERM_ROWS) {
+    return;
+  }
+  if (term->scroll_count >= TERM_SCROLLBACK_LINES) {
+    memmove(term->scroll_chars, term->scroll_chars + TERM_COLS,
+            (TERM_SCROLLBACK_LINES - 1) * TERM_COLS);
+    memmove(term->scroll_fg, term->scroll_fg + TERM_COLS,
+            (TERM_SCROLLBACK_LINES - 1) * TERM_COLS);
+    memmove(term->scroll_bg, term->scroll_bg + TERM_COLS,
+            (TERM_SCROLLBACK_LINES - 1) * TERM_COLS);
+    dst = TERM_SCROLLBACK_LINES - 1;
+  } else {
+    term->scroll_count++;
+  }
+
+  memcpy(term->scroll_chars + dst * TERM_COLS, term->chars + row * TERM_COLS,
+         TERM_COLS);
+  memcpy(term->scroll_fg + dst * TERM_COLS, term->fg_colors + row * TERM_COLS,
+         TERM_COLS);
+  memcpy(term->scroll_bg + dst * TERM_COLS, term->bg_colors + row * TERM_COLS,
+         TERM_COLS);
+}
+
 /* Scroll up */
 static void term_scroll_up(terminal_t *term) {
+  term_push_scrollback_line(term, 0);
   for (int row = 0; row < TERM_ROWS - 1; row++) {
     memcpy(&term->chars[row * TERM_COLS], &term->chars[(row + 1) * TERM_COLS], TERM_COLS);
     memcpy(&term->fg_colors[row * TERM_COLS], &term->fg_colors[(row + 1) * TERM_COLS], TERM_COLS);
     memcpy(&term->bg_colors[row * TERM_COLS], &term->bg_colors[(row + 1) * TERM_COLS], TERM_COLS);
   }
   term_clear_line(term, TERM_ROWS - 1);
+}
+
+void term_scroll_view(terminal_t *term, int lines) {
+  if (!term || lines == 0) {
+    return;
+  }
+  term->scroll_offset += lines;
+  if (term->scroll_offset < 0) {
+    term->scroll_offset = 0;
+  }
+  if (term->scroll_offset > term->scroll_count) {
+    term->scroll_offset = term->scroll_count;
+  }
 }
 
 /* Newline */
@@ -303,6 +358,8 @@ static void term_process_escape(terminal_t *term) {
 /* Put character */
 void term_putc(terminal_t *term, char c) {
   if (!term) return;
+
+  term->scroll_offset = 0;
   
   if (term->in_escape) {
     term->escape_buf[term->escape_len++] = c;
@@ -1013,6 +1070,239 @@ static void term_print_net_status(terminal_t *term) {
   term_puts_t(term, "\n");
 }
 
+static int term_write_text_file(const char *path, const char *text) {
+  file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return -1;
+  }
+  if (text && vfs_write(f, text, strlen(text)) < 0) {
+    vfs_close(f);
+    return -1;
+  }
+  vfs_close(f);
+  return 0;
+}
+
+static int term_install_value_is(const char *value, const char *a,
+                                 const char *b, const char *c) {
+  return strcmp(value, a) == 0 || (b && strcmp(value, b) == 0) ||
+         (c && strcmp(value, c) == 0);
+}
+
+static void term_install_prompt(terminal_t *term) {
+  switch (term->install_step) {
+  case 0:
+    term_puts_t(term, "\033[1;36mOrizon OS Installer\033[0m\n");
+    term_puts_t(term, "This guided installer prepares a disk install plan.\n");
+    term_puts_t(term,
+                "Boot writing is locked until GPT/FAT/A-B slots are implemented.\n\n");
+    term_puts_t(term, "[1/5] Language\n");
+    term_puts_t(term, "  1. Francais\n");
+    term_puts_t(term, "  2. English\n");
+    term_puts_t(term, "Choice: ");
+    break;
+  case 1:
+    term_puts_t(term, "[2/5] Keyboard layout\n");
+    term_puts_t(term, "  1. fr-azerty\n");
+    term_puts_t(term, "  2. us-qwerty\n");
+    term_puts_t(term, "Choice: ");
+    break;
+  case 2:
+    term_puts_t(term, "[3/5] Disk configuration\n");
+    term_puts_t(term, "Detected storage: ");
+    term_puts_t(term, storage_available() ? storage_status()
+                                          : "no writable AHCI disk");
+    term_puts_t(term, "\n");
+    term_puts_t(term, "  1. guided-full-disk-a-b\n");
+    term_puts_t(term, "  2. manual-later\n");
+    term_puts_t(term, "Choice: ");
+    break;
+  case 3:
+    term_puts_t(term, "[4/5] Hostname\n");
+    term_puts_t(term, "Hostname [orizon-os]: ");
+    break;
+  case 4: {
+    char line[160];
+    term_puts_t(term, "[5/5] Summary\n");
+    snprintf(line, sizeof(line), "  Language: %s\n", term->install_language);
+    term_puts_t(term, line);
+    snprintf(line, sizeof(line), "  Keyboard: %s\n", term->install_keyboard);
+    term_puts_t(term, line);
+    snprintf(line, sizeof(line), "  Disk:     %s\n", term->install_disk_mode);
+    term_puts_t(term, line);
+    snprintf(line, sizeof(line), "  Hostname: %s\n", term->install_hostname);
+    term_puts_t(term, line);
+    term_puts_t(term,
+                "Type INSTALL to write the staging plan, or cancel to abort: ");
+    break;
+  }
+  default:
+    break;
+  }
+  term_prepare_input(term);
+}
+
+static void term_install_finish(terminal_t *term, int success) {
+  term->install_mode = 0;
+  term->install_step = 0;
+  if (success) {
+    term_puts_t(term, "\nInstaller plan saved.\n");
+    term_puts_t(term, "Next kernel layer: GPT/FAT boot writer and A/B slots.\n");
+  } else {
+    term_puts_t(term, "\nInstaller cancelled.\n");
+  }
+}
+
+static void term_install_write_plan(terminal_t *term) {
+  char plan[2048];
+  char state[256];
+
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  vfs_mkdir("/system");
+
+  snprintf(plan, sizeof(plan),
+           "installer-version 1\n"
+           "os Orizon OS\n"
+           "source live-iso\n"
+           "language %s\n"
+           "keyboard %s\n"
+           "hostname %s\n"
+           "disk-mode %s\n"
+           "disk-status %s\n"
+           "boot-strategy pending-a-b-slots\n"
+           "write-mode safe-staging-only\n"
+           "next gpt-fat32-esp-writer\n",
+           term->install_language, term->install_keyboard,
+           term->install_hostname, term->install_disk_mode,
+           storage_available() ? storage_status() : "unavailable");
+
+  snprintf(state, sizeof(state),
+           "install staged: language=%s keyboard=%s disk=%s hostname=%s\n",
+           term->install_language, term->install_keyboard,
+           term->install_disk_mode, term->install_hostname);
+
+  if (term_write_text_file("/workspace/.orizon/install-plan", plan) < 0 ||
+      term_write_text_file("/workspace/.orizon/install-state", state) < 0 ||
+      term_write_text_file("/system/install-state", state) < 0 ||
+      term_write_text_file("/system/locale", term->install_language) < 0 ||
+      term_write_text_file("/system/keyboard", term->install_keyboard) < 0) {
+    term_puts_t(term, "\ninstall: failed to write staging files\n");
+    term_install_finish(term, 0);
+    return;
+  }
+  vfs_persist_save();
+  term_install_finish(term, 1);
+}
+
+static void term_install_submit(terminal_t *term, const char *line) {
+  const char *value = term_skip_spaces(line);
+
+  if (term_install_value_is(value, "cancel", "quit", "q")) {
+    term_install_finish(term, 0);
+    return;
+  }
+
+  switch (term->install_step) {
+  case 0:
+    if (term_install_value_is(value, "1", "fr", "francais")) {
+      strcpy(term->install_language, "fr_FR");
+    } else if (term_install_value_is(value, "2", "en", "english")) {
+      strcpy(term->install_language, "en_US");
+    } else {
+      term_puts_t(term, "Choose 1 or 2.\n");
+      term_install_prompt(term);
+      return;
+    }
+    term->install_step++;
+    term_install_prompt(term);
+    return;
+  case 1:
+    if (term_install_value_is(value, "1", "fr", "azerty")) {
+      strcpy(term->install_keyboard, "fr-azerty");
+    } else if (term_install_value_is(value, "2", "us", "qwerty")) {
+      strcpy(term->install_keyboard, "us-qwerty");
+    } else {
+      term_puts_t(term, "Choose 1 or 2.\n");
+      term_install_prompt(term);
+      return;
+    }
+    term->install_step++;
+    term_install_prompt(term);
+    return;
+  case 2:
+    if (term_install_value_is(value, "1", "guided", "full")) {
+      strcpy(term->install_disk_mode, "guided-full-disk-a-b");
+    } else if (term_install_value_is(value, "2", "manual", "later")) {
+      strcpy(term->install_disk_mode, "manual-later");
+    } else {
+      term_puts_t(term, "Choose 1 or 2.\n");
+      term_install_prompt(term);
+      return;
+    }
+    term->install_step++;
+    term_install_prompt(term);
+    return;
+  case 3:
+    if (*value == '\0') {
+      strcpy(term->install_hostname, "orizon-os");
+    } else {
+      strncpy(term->install_hostname, value,
+              sizeof(term->install_hostname) - 1);
+      term->install_hostname[sizeof(term->install_hostname) - 1] = '\0';
+    }
+    term->install_step++;
+    term_install_prompt(term);
+    return;
+  case 4:
+    if (strcmp(value, "INSTALL") == 0 || strcmp(value, "install") == 0) {
+      term_install_write_plan(term);
+    } else {
+      term_puts_t(term, "Confirmation refused. Type INSTALL exactly.\n");
+      term_install_prompt(term);
+    }
+    return;
+  default:
+    term_install_finish(term, 0);
+    return;
+  }
+}
+
+static void term_start_installer(terminal_t *term) {
+  term->install_mode = 1;
+  term->install_step = 0;
+  term->install_language[0] = '\0';
+  term->install_keyboard[0] = '\0';
+  term->install_disk_mode[0] = '\0';
+  strcpy(term->install_hostname, "orizon-os");
+  term_puts_t(term, "\n");
+  term_install_prompt(term);
+}
+
+static void term_get_render_cell(terminal_t *term, int row, int col, char *ch,
+                                 uint8_t *fg, uint8_t *bg) {
+  int total = term->scroll_count + TERM_ROWS;
+  int start = total - TERM_ROWS - term->scroll_offset;
+  int line;
+  int idx;
+
+  if (start < 0) {
+    start = 0;
+  }
+  line = start + row;
+  if (line < term->scroll_count) {
+    idx = line * TERM_COLS + col;
+    *ch = term->scroll_chars[idx];
+    *fg = term->scroll_fg[idx];
+    *bg = term->scroll_bg[idx];
+  } else {
+    idx = (line - term->scroll_count) * TERM_COLS + col;
+    *ch = term->chars[idx];
+    *fg = term->fg_colors[idx];
+    *bg = term->bg_colors[idx];
+  }
+}
+
 /* Render terminal */
 void term_render(terminal_t *term) {
   if (!term || !term->visible) return;
@@ -1028,18 +1318,19 @@ void term_render(terminal_t *term) {
   /* Characters */
   for (int row = 0; row < TERM_ROWS; row++) {
     for (int col = 0; col < TERM_COLS; col++) {
-      int idx = row * TERM_COLS + col;
+      char ch;
+      uint8_t fg;
+      uint8_t bg;
+      term_get_render_cell(term, row, col, &ch, &fg, &bg);
       term_draw_char(base_x + col * TERM_CHAR_W, base_y + row * TERM_CHAR_H,
-                     term->chars[idx],
-                     term_colors[term->fg_colors[idx] & 0xF],
-                     term_colors[term->bg_colors[idx] & 0xF]);
+                     ch, term_colors[fg & 0xF], term_colors[bg & 0xF]);
     }
   }
   
   /* Cursor */
   static int blink = 0;
   blink++;
-  if ((blink / 15) % 2 == 0) {
+  if (term->scroll_offset == 0 && (blink / 15) % 2 == 0) {
     int cx = base_x + term->cursor_x * TERM_CHAR_W;
     int cy = base_y + term->cursor_y * TERM_CHAR_H;
     fb_fill_rect(cx, cy + TERM_CHAR_H - 2, TERM_CHAR_W, 2, term_colors[7]);
@@ -1080,6 +1371,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  storage   - Show persistence state\n");
     term_puts_t(term, "  net       - Show ethernet status\n");
+    term_puts_t(term, "  install   - Start guided disk installer\n");
+    term_puts_t(term, "  install-status - Show installer staging plan\n");
     term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
@@ -1099,6 +1392,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     for (int row = 0; row < TERM_ROWS; row++) term_clear_line(term, row);
     term->cursor_x = 0;
     term->cursor_y = 0;
+    term->scroll_offset = 0;
   } else if (term_command_is(cmd, "about")) {
     term_print_about(term);
   } else if (term_command_is(cmd, "version")) {
@@ -1466,6 +1760,21 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "net")) {
     term_print_net_status(term);
+  } else if (term_command_is(cmd, "install")) {
+    term_start_installer(term);
+    return;
+  } else if (term_command_is(cmd, "install-status")) {
+    char buf[2048];
+    int n = term_read_regular_file(term, "install-plan",
+                                   "/workspace/.orizon/install-plan", buf,
+                                   sizeof(buf), "install-status");
+    if (n > 0) {
+      buf[n] = '\0';
+      term_puts_t(term, buf);
+      if (buf[n - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    }
   } else if (term_command_is(cmd, "update") || term_command_is(cmd, "orizon-update")) {
     term_run_update(term);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
@@ -1573,7 +1882,7 @@ void term_prompt(terminal_t *term) {
 void term_handle_key(terminal_t *term, int key) {
   if (!term) return;
 
-  if (!term->edit_mode) {
+  if (!term->edit_mode && !term->install_mode) {
     if (key == KEY_UP) {
       if (term->history_count > 0 && term->history_pos > 0) {
         term->history_pos--;
@@ -1610,13 +1919,16 @@ void term_handle_key(terminal_t *term, int key) {
 
   if (key == '\n' || key == '\r') {
     term->input_buf[term->input_len] = '\0';
-    if (term->edit_mode) {
+    if (term->install_mode) {
+      term_puts_t(term, "\n");
+      term_install_submit(term, term->input_buf);
+    } else if (term->edit_mode) {
       term_editor_submit(term, term->input_buf);
     } else {
       term_execute(term, term->input_buf);
     }
     term->input_len = 0;
-    if (!term->edit_mode) {
+    if (!term->edit_mode && !term->install_mode) {
       term_prompt(term);
     }
   } else if (key == '\b' || key == 127) {
@@ -1651,7 +1963,9 @@ terminal_t *term_create(int x, int y) {
   term_puts_t(term,
               "Type '\033[33mhelp\033[0m' for commands or '\033[33mneofetch\033[0m' for system info.\n");
   term_puts_t(term,
-              "This VM boots into a clean personal base with the console ready first.\n\n");
+              "This VM boots into a clean personal base with the console ready first.\n");
+  term_puts_t(term,
+              "Type '\033[33minstall\033[0m' to prepare a guided disk installation plan.\n\n");
   term_prompt(term);
   
   return term;

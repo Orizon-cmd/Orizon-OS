@@ -3,6 +3,10 @@
 Orizon OS should not depend on one host. GitHub is the public update source;
 ZimaOS is only the current lab VM backend.
 
+Status: paused while disk installation is built. A live ISO cannot safely
+replace itself, so the installation path now takes priority over full in-OS
+package replacement.
+
 ## Internet Entry Points
 
 Download the latest public ISO from GitHub without compiling:

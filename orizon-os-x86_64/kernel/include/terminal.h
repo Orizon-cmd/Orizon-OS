@@ -24,6 +24,7 @@ void term_render(terminal_t *term);
 
 /* Handle keyboard input */
 void term_handle_key(terminal_t *term, int key);
+void term_scroll_view(terminal_t *term, int lines);
 
 /* Output */
 void term_putc(terminal_t *term, char c);

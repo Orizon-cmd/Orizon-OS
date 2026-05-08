@@ -13,9 +13,10 @@ le developpement noyau:
 - interface framebuffer simple avec splash `Orizon OS`
 - une seule console centrale pour travailler proprement
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
-- mise a jour sans reinstallation complete de l'espace de travail
+- premiere base d'installateur disque guide avec langue, clavier et plan disque
 - commande `update` interne avec transaction full-upgrade, DHCP/DNS/TCP et
-  contact GitHub
+  contact GitHub, actuellement mise en pause avant installation reelle
+- console avec scrollback et support molette souris PS/2
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
 
@@ -26,7 +27,32 @@ Ce qui est volontairement absent du profil actif:
 - jeux et applications integrees non essentielles
 - flux de mise a jour herite d'un ancien projet
 
+## Installation Disque
+
+Le prochain axe prioritaire est l'installation sur disque. Depuis la console:
+
+```text
+install
+```
+
+L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
+ecrit un plan de staging dans `/workspace/.orizon/install-plan`. Par securite,
+il ne partitionne pas encore le disque: il attend le writer GPT/FAT32/ESP et un
+schema de boot A/B avant toute ecriture destructive.
+
+Pour revoir le plan:
+
+```text
+install-status
+```
+
+Details: [docs/orizon/INSTALL.md](docs/orizon/INSTALL.md).
+
 ## Update Dans Orizon OS
+
+Le systeme de mise a jour Internet est volontairement en pause pendant la mise
+en place de l'installation disque. Le code actuel reste disponible comme preuve
+reseau/TLS, mais il ne remplace pas encore le systeme.
 
 Dans la console Orizon OS:
 
@@ -80,9 +106,8 @@ La transaction ecrit aussi un manifeste et un plan de staging:
 ```
 
 Le telechargement complet du corps des paquets GitHub demande encore le
-streaming du corps HTTP chiffre, un manifeste/payload verifies, puis un writer
-ESP/FAT32 ou un schema de boot A/B pour remplacer le systeme sans casser le
-demarrage courant.
+streaming du corps HTTP chiffre, un manifeste/payload verifies, puis le meme
+writer ESP/FAT32 ou schema de boot A/B que l'installateur disque.
 
 ## Noyau Et Performance
 

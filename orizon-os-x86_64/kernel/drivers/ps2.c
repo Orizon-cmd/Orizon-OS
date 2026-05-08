@@ -155,10 +155,12 @@ static const char scancode_to_ascii_shift[128] = {
 volatile int ps2_mouse_x = 400;
 volatile int ps2_mouse_y = 300;
 volatile int ps2_mouse_buttons = 0;
+volatile int ps2_mouse_wheel_delta = 0;
 
 /* Mouse packet buffer */
 static uint8_t mouse_packet[4];
 static int mouse_packet_index = 0;
+static int mouse_packet_size = 3;
 
 /* Extended scancode state */
 static int extended_scancode = 0;
@@ -232,6 +234,46 @@ static void ps2_mouse_write(uint8_t data) {
   ps2_send_data(data);
 }
 
+static int ps2_mouse_write_ack(uint8_t data) {
+  ps2_send_command(PS2_CMD_WRITE_MOUSE);
+  ps2_send_data(data);
+  ps2_wait_output();
+  return inb(PS2_DATA_PORT) == 0xFA ? 0 : -1;
+}
+
+static int ps2_mouse_set_sample_rate(uint8_t rate) {
+  if (ps2_mouse_write_ack(MOUSE_CMD_SET_RATE) < 0) {
+    return -1;
+  }
+  return ps2_mouse_write_ack(rate);
+}
+
+static int ps2_mouse_identify(uint8_t *id) {
+  if (!id || ps2_mouse_write_ack(0xF2) < 0) {
+    return -1;
+  }
+  ps2_wait_output();
+  *id = inb(PS2_DATA_PORT);
+  return 0;
+}
+
+static void ps2_try_enable_wheel(void) {
+  uint8_t id = 0;
+
+  mouse_packet_size = 3;
+  if (ps2_mouse_set_sample_rate(200) < 0 ||
+      ps2_mouse_set_sample_rate(100) < 0 ||
+      ps2_mouse_set_sample_rate(80) < 0) {
+    ps2_flush_output();
+    return;
+  }
+
+  if (ps2_mouse_identify(&id) == 0 && (id == 3 || id == 4)) {
+    mouse_packet_size = 4;
+  }
+  ps2_flush_output();
+}
+
 /* ===================================================================== */
 /* PS/2 Polling                                                          */
 /* ===================================================================== */
@@ -262,7 +304,7 @@ void ps2_poll(void) {
         continue;
       }
       
-      if (mouse_packet_index >= 3) {
+      if (mouse_packet_index >= mouse_packet_size) {
         mouse_packet_index = 0;
         
         uint8_t flags = mouse_packet[0];
@@ -296,6 +338,14 @@ void ps2_poll(void) {
         if (flags & 0x01) ps2_mouse_buttons |= 1;
         if (flags & 0x02) ps2_mouse_buttons |= 2;
         if (flags & 0x04) ps2_mouse_buttons |= 4;
+
+        if (mouse_packet_size == 4) {
+          int wheel = mouse_packet[3] & 0x0F;
+          if (wheel & 0x08) {
+            wheel -= 16;
+          }
+          ps2_mouse_wheel_delta += wheel;
+        }
       }
     } else {
       /* ============ KEYBOARD DATA ============ */
@@ -537,13 +587,8 @@ int ps2_init(void) {
     for (int i = 0; i < 5000; i++) io_wait();
     ps2_flush_output();
     
-    /* Set sample rate to 100 */
-    ps2_mouse_write(MOUSE_CMD_SET_RATE);
-    for (int i = 0; i < 1000; i++) io_wait();
-    ps2_flush_output();
-    ps2_mouse_write(100);
-    for (int i = 0; i < 1000; i++) io_wait();
-    ps2_flush_output();
+    /* Enable IntelliMouse wheel packets when the device supports them. */
+    ps2_try_enable_wheel();
     
     /* Enable data reporting */
     ps2_mouse_write(MOUSE_CMD_ENABLE);
@@ -586,6 +631,11 @@ int ps2_init(void) {
 int ps2_get_mouse_x(void) { return ps2_mouse_x; }
 int ps2_get_mouse_y(void) { return ps2_mouse_y; }
 int ps2_get_mouse_buttons(void) { return ps2_mouse_buttons; }
+int ps2_consume_mouse_wheel(void) {
+  int delta = ps2_mouse_wheel_delta;
+  ps2_mouse_wheel_delta = 0;
+  return delta;
+}
 
 /* Keep old handler functions for compatibility */
 static void ps2_keyboard_irq(interrupt_frame_t *frame) {

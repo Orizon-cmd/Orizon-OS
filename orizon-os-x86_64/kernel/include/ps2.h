@@ -61,10 +61,12 @@ void ps2_set_mouse_scale(int scale);
 int ps2_get_mouse_x(void);
 int ps2_get_mouse_y(void);
 int ps2_get_mouse_buttons(void);
+int ps2_consume_mouse_wheel(void);
 
 /* External mouse state (for direct access) */
 extern volatile int ps2_mouse_x;
 extern volatile int ps2_mouse_y;
 extern volatile int ps2_mouse_buttons;
+extern volatile int ps2_mouse_wheel_delta;
 
 #endif /* _PS2_H */

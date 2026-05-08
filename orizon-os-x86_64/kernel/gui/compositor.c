@@ -233,6 +233,7 @@ static void poll_input_state(void) {
   int new_x = ps2_get_mouse_x();
   int new_y = ps2_get_mouse_y();
   int new_buttons = ps2_get_mouse_buttons();
+  int wheel = ps2_consume_mouse_wheel();
   int left_click = (new_buttons & 1) && !(prev_buttons & 1);
 
   if (new_x != mouse_x || new_y != mouse_y || new_buttons != prev_buttons) {
@@ -243,6 +244,11 @@ static void poll_input_state(void) {
 
   if (left_click && splash_ticks_remaining > 0) {
     splash_ticks_remaining = 0;
+    needs_redraw = 1;
+  }
+
+  if (wheel != 0 && splash_ticks_remaining <= 0 && main_terminal) {
+    term_scroll_view(main_terminal, wheel * 3);
     needs_redraw = 1;
   }
 
