@@ -8,7 +8,7 @@ with a restrained, development-first interface.
 
 - Boots on the ZimaOS VM target and on UEFI-capable `x86_64` hardware
 - Uses a simple framebuffer UI with an `Orizon OS` splash and one core console
-- Keeps a tiny RAM-backed workspace for development commands
+- Keeps `/workspace` persistent on the ZimaOS VM data partition
 - Stays intentionally small so new features can be added deliberately
 
 ## Why it is minimal
@@ -68,8 +68,8 @@ Linux OVMF path is usually `/usr/share/OVMF/OVMF_CODE.fd`.
 ```text
 kernel/
 |- boot/         # Limine entry point
-|- drivers/      # framebuffer, ps2, usb, acpi, pci
-|- fs/           # minimal RAM-backed workspace
+|- drivers/      # framebuffer, ps2, usb, storage, acpi, pci
+|- fs/           # minimal workspace filesystem with persistence
 |- gui/          # console compositor and terminal
 |- mm/           # memory allocation
 `- include/      # headers
@@ -82,4 +82,5 @@ build.sh         # alternative build script
 ## Notes
 
 - The active VM build is intentionally console-first.
+- On the ZimaOS VM, `/workspace` is saved to the reserved Orizon data area.
 - New features should be reintroduced deliberately from this minimal base.

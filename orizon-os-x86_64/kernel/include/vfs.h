@@ -67,6 +67,12 @@ void vfs_init(void);
 /* Seed initial filesystem content */
 void vfs_seed_content(void);
 
+/* Persistent workspace backend */
+void vfs_persist_load(void);
+int vfs_persist_save(void);
+int vfs_persist_available(void);
+const char *vfs_persist_status(void);
+
 /* File operations */
 file_t *vfs_open(const char *path, int flags);
 void vfs_close(file_t *file);

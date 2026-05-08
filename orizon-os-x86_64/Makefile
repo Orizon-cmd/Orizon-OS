@@ -80,6 +80,7 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/drivers/wc.c \
            $(KERNEL_DIR)/drivers/ps2.c \
            $(KERNEL_DIR)/drivers/pci.c \
+           $(KERNEL_DIR)/drivers/storage.c \
            $(KERNEL_DIR)/drivers/acpi.c \
            $(KERNEL_DIR)/drivers/usb.c \
            $(KERNEL_DIR)/drivers/usb_hid.c \

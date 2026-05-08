@@ -253,6 +253,7 @@ void gui_init(void) {
   font_init();
   vfs_init();
   vfs_seed_content();
+  vfs_persist_load();
   layout_console();
 
   main_terminal = term_create(term_x, term_y);

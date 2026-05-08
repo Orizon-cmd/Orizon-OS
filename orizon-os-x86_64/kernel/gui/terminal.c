@@ -619,6 +619,9 @@ static void term_print_about(terminal_t *term) {
   snprintf(line, sizeof(line), "Heap used: %lu bytes\n",
            (unsigned long)kmalloc_get_used());
   term_puts_t(term, line);
+  term_puts_t(term, "Storage: ");
+  term_puts_t(term, vfs_persist_status());
+  term_puts_t(term, "\n");
   term_puts_t(term, "Built: " __DATE__ " " __TIME__ "\n");
 }
 
@@ -767,7 +770,9 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  append <f> <text> - Append file text\n");
     term_puts_t(term, "  mkdir <d> - Create directory\n");
     term_puts_t(term, "  rm <f>    - Remove file\n");
+    term_puts_t(term, "  sync      - Save /workspace to disk\n");
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
+    term_puts_t(term, "  storage   - Show persistence state\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
     term_puts_t(term, "  neofetch  - System info\n");
@@ -1062,6 +1067,15 @@ void term_execute(terminal_t *term, const char *cmd) {
     } else {
       term_puts_t(term, "rm: failed\n");
     }
+  } else if (term_command_is(cmd, "sync")) {
+    if (vfs_persist_save() == 0) {
+      term_puts_t(term, "Synced /workspace to disk\n");
+    } else {
+      term_puts_t(term, "sync: persistence unavailable\n");
+    }
+  } else if (term_command_is(cmd, "storage")) {
+    term_puts_t(term, vfs_persist_status());
+    term_puts_t(term, "\n");
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");

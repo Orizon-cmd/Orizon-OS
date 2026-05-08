@@ -12,7 +12,7 @@ le développement noyau:
 - démarrage stable en VM et sur cible `x86_64` UEFI
 - interface framebuffer simple avec splash `Orizon OS`
 - une seule console centrale pour travailler proprement
-- espace RAM minimal avec `/workspace`, `/system` et `/tmp`
+- espace `/workspace` persistant en VM, avec `/system` et `/tmp` en base minimale
 - mise à jour de la VM sans réinstallation complète
 
 Ce qui est volontairement absent du profil actif:

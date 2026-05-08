@@ -4,7 +4,14 @@
 
 #include "../include/vfs.h"
 #include "../include/kmalloc.h"
+#include "../include/storage.h"
 #include "../include/string.h"
+
+#define PERSIST_MAGIC "ORZPFS1"
+#define PERSIST_VERSION 1U
+#define PERSIST_BYTES (128U * 1024U)
+#define PERSIST_SECTORS (PERSIST_BYTES / ORIZON_SECTOR_SIZE)
+#define PERSIST_HEADER_SIZE ORIZON_SECTOR_SIZE
 
 /* Inode structure */
 typedef struct inode {
@@ -22,6 +29,12 @@ static inode_t inodes[MAX_FILES];
 static int inode_count = 0;
 static file_t open_files[MAX_OPEN];
 static int vfs_initialized = 0;
+static int persist_ready = 0;
+static int persist_loading = 0;
+static const char *persist_status = "workspace persistence not loaded";
+static uint8_t persist_buf[PERSIST_BYTES] __attribute__((aligned(4096)));
+
+static int create_inode(const char *path, int type);
 
 /* String helpers */
 static int str_eq(const char *a, const char *b) {
@@ -95,6 +108,202 @@ static int path_is_inside(const char *path, const char *prefix) {
   int len = strlen(prefix);
   return strncmp(path, prefix, (size_t)len) == 0 &&
          (path[len] == '\0' || path[len] == '/');
+}
+
+static int path_should_persist(const char *path) {
+  return path && path_is_inside(path, "/workspace");
+}
+
+static int append_path_component(char *path, size_t size, const char *component,
+                                 size_t component_len) {
+  size_t path_len = strlen(path);
+  if (component_len == 0) {
+    return 0;
+  }
+  if (path_len > 1) {
+    if (path_len + 1 >= size) {
+      return -1;
+    }
+    path[path_len++] = '/';
+    path[path_len] = '\0';
+  }
+  if (path_len + component_len >= size) {
+    return -1;
+  }
+  for (size_t i = 0; i < component_len; i++) {
+    path[path_len + i] = component[i];
+  }
+  path[path_len + component_len] = '\0';
+  return 0;
+}
+
+static void put_u16(uint8_t *dst, uint16_t value) {
+  dst[0] = (uint8_t)value;
+  dst[1] = (uint8_t)(value >> 8);
+}
+
+static void put_u32(uint8_t *dst, uint32_t value) {
+  dst[0] = (uint8_t)value;
+  dst[1] = (uint8_t)(value >> 8);
+  dst[2] = (uint8_t)(value >> 16);
+  dst[3] = (uint8_t)(value >> 24);
+}
+
+static uint16_t get_u16(const uint8_t *src) {
+  return (uint16_t)(src[0] | ((uint16_t)src[1] << 8));
+}
+
+static uint32_t get_u32(const uint8_t *src) {
+  return (uint32_t)src[0] |
+         ((uint32_t)src[1] << 8) |
+         ((uint32_t)src[2] << 16) |
+         ((uint32_t)src[3] << 24);
+}
+
+static uint32_t persist_checksum(const uint8_t *buf, size_t size) {
+  uint32_t sum = 0;
+  for (size_t i = 0; i < size; i++) {
+    sum = (sum << 5) | (sum >> 27);
+    sum += buf[i];
+  }
+  return sum;
+}
+
+static int persist_append_entry(size_t *offset, uint32_t *entry_count,
+                                const inode_t *node) {
+  size_t path_len = strlen(node->path);
+  size_t data_size = node->type == 0 ? node->size : 0;
+  size_t needed = 1 + 2 + 4 + path_len + data_size;
+
+  if (path_len == 0 || path_len > 0xFFFF || data_size > 0xFFFFFFFFU) {
+    return -1;
+  }
+  if (*offset + needed > PERSIST_BYTES) {
+    return -1;
+  }
+
+  uint8_t *p = persist_buf + *offset;
+  p[0] = (uint8_t)node->type;
+  put_u16(p + 1, (uint16_t)path_len);
+  put_u32(p + 3, (uint32_t)data_size);
+  memcpy(p + 7, node->path, path_len);
+  if (data_size > 0 && node->data) {
+    memcpy(p + 7 + path_len, node->data, data_size);
+  }
+
+  *offset += needed;
+  (*entry_count)++;
+  return 0;
+}
+
+static void persist_set_status(const char *status) {
+  persist_status = status;
+}
+
+static int find_child_inode(int parent) {
+  for (int i = 0; i < inode_count; i++) {
+    if (inodes[i].parent == parent) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void delete_inode_index(int idx) {
+  if (idx <= 0 || idx >= inode_count) {
+    return;
+  }
+
+  while (1) {
+    int child = find_child_inode(idx);
+    if (child < 0) {
+      break;
+    }
+    delete_inode_index(child);
+  }
+
+  if (inodes[idx].data) {
+    kfree(inodes[idx].data);
+  }
+
+  if (idx < inode_count - 1) {
+    inodes[idx] = inodes[inode_count - 1];
+    for (int i = 0; i < inode_count - 1; i++) {
+      if (inodes[i].parent == inode_count - 1) {
+        inodes[i].parent = idx;
+      }
+    }
+  }
+  inode_count--;
+}
+
+static void clear_workspace_contents(void) {
+  int workspace = find_inode("/workspace");
+  if (workspace < 0) {
+    return;
+  }
+
+  while (1) {
+    int child = find_child_inode(workspace);
+    if (child < 0) {
+      break;
+    }
+    delete_inode_index(child);
+    workspace = find_inode("/workspace");
+    if (workspace < 0) {
+      return;
+    }
+  }
+}
+
+static int ensure_parent_dirs(const char *path) {
+  char cur[MAX_PATH];
+  const char *p = path;
+
+  if (!path || path[0] != '/') {
+    return -EINVAL;
+  }
+
+  strcpy(cur, "/");
+  p++;
+  while (*p) {
+    const char *start = p;
+    size_t len = 0;
+
+    while (p[len] && p[len] != '/') {
+      len++;
+    }
+
+    if (p[len] == '\0') {
+      break; /* final component */
+    }
+
+    if (append_path_component(cur, sizeof(cur), start, len) < 0) {
+      return -ENAMETOOLONG;
+    }
+    if (find_inode(cur) < 0 && create_inode(cur, 1) < 0) {
+      return -ENOENT;
+    }
+
+    p += len;
+    while (*p == '/') {
+      p++;
+    }
+  }
+
+  return 0;
+}
+
+static void maybe_persist_path(const char *path) {
+  if (persist_ready && !persist_loading && path_should_persist(path)) {
+    vfs_persist_save();
+  }
+}
+
+static void maybe_persist_inode(int idx) {
+  if (idx >= 0 && idx < inode_count) {
+    maybe_persist_path(inodes[idx].path);
+  }
 }
 
 /* Create inode */
@@ -192,6 +401,157 @@ void vfs_seed_content(void) {
   }
 }
 
+int vfs_persist_save(void) {
+  if (!persist_ready || persist_loading) {
+    return -EINVAL;
+  }
+  if (!storage_available()) {
+    persist_set_status("workspace persistence unavailable");
+    return -EIO;
+  }
+
+  memset(persist_buf, 0, sizeof(persist_buf));
+  memcpy(persist_buf, PERSIST_MAGIC, 7);
+  put_u32(persist_buf + 8, PERSIST_VERSION);
+
+  size_t offset = PERSIST_HEADER_SIZE;
+  uint32_t entry_count = 0;
+
+  /* Directories first so loading can recreate parents before files. */
+  for (int i = 0; i < inode_count; i++) {
+    if (inodes[i].type == 1 && path_should_persist(inodes[i].path) &&
+        !str_eq(inodes[i].path, "/workspace")) {
+      if (persist_append_entry(&offset, &entry_count, &inodes[i]) < 0) {
+        persist_set_status("workspace persistence full");
+        return -ENOSPC;
+      }
+    }
+  }
+  for (int i = 0; i < inode_count; i++) {
+    if (inodes[i].type == 0 && path_should_persist(inodes[i].path)) {
+      if (persist_append_entry(&offset, &entry_count, &inodes[i]) < 0) {
+        persist_set_status("workspace persistence full");
+        return -ENOSPC;
+      }
+    }
+  }
+
+  uint32_t payload_size = (uint32_t)(offset - PERSIST_HEADER_SIZE);
+  put_u32(persist_buf + 12, entry_count);
+  put_u32(persist_buf + 16, payload_size);
+  put_u32(persist_buf + 20,
+          persist_checksum(persist_buf + PERSIST_HEADER_SIZE, payload_size));
+
+  uint32_t sectors = (uint32_t)((offset + ORIZON_SECTOR_SIZE - 1) /
+                                ORIZON_SECTOR_SIZE);
+  if (sectors == 0) {
+    sectors = 1;
+  }
+  if (storage_write(ORIZON_PERSIST_LBA, persist_buf, sectors) < 0) {
+    persist_set_status("workspace persistence write failed");
+    return -EIO;
+  }
+
+  persist_set_status("workspace persistence active");
+  return 0;
+}
+
+void vfs_persist_load(void) {
+  if (!vfs_initialized) {
+    vfs_init();
+  }
+
+  if (!storage_available()) {
+    persist_ready = 0;
+    persist_set_status("workspace persistence unavailable");
+    return;
+  }
+
+  if (storage_read(ORIZON_PERSIST_LBA, persist_buf, PERSIST_SECTORS) < 0) {
+    persist_ready = 0;
+    persist_set_status("workspace persistence read failed");
+    return;
+  }
+
+  persist_loading = 1;
+  persist_ready = 1;
+
+  if (memcmp(persist_buf, PERSIST_MAGIC, 7) != 0 ||
+      get_u32(persist_buf + 8) != PERSIST_VERSION) {
+    persist_loading = 0;
+    persist_set_status("workspace persistence initialized");
+    vfs_persist_save();
+    return;
+  }
+
+  uint32_t entry_count = get_u32(persist_buf + 12);
+  uint32_t payload_size = get_u32(persist_buf + 16);
+  uint32_t checksum = get_u32(persist_buf + 20);
+
+  if (payload_size > PERSIST_BYTES - PERSIST_HEADER_SIZE ||
+      checksum != persist_checksum(persist_buf + PERSIST_HEADER_SIZE,
+                                   payload_size)) {
+    persist_loading = 0;
+    persist_set_status("workspace persistence checksum failed");
+    return;
+  }
+
+  clear_workspace_contents();
+
+  size_t offset = PERSIST_HEADER_SIZE;
+  for (uint32_t entry = 0; entry < entry_count; entry++) {
+    if (offset + 7 > PERSIST_HEADER_SIZE + payload_size) {
+      break;
+    }
+
+    int type = persist_buf[offset];
+    uint16_t path_len = get_u16(persist_buf + offset + 1);
+    uint32_t data_size = get_u32(persist_buf + offset + 3);
+    offset += 7;
+
+    if (path_len == 0 || path_len >= MAX_PATH ||
+        offset + path_len + data_size > PERSIST_HEADER_SIZE + payload_size) {
+      break;
+    }
+
+    char path[MAX_PATH];
+    memcpy(path, persist_buf + offset, path_len);
+    path[path_len] = '\0';
+    offset += path_len;
+
+    if (!path_should_persist(path) || str_eq(path, "/workspace")) {
+      offset += data_size;
+      continue;
+    }
+
+    ensure_parent_dirs(path);
+
+    if (type == 1) {
+      if (find_inode(path) < 0) {
+        create_inode(path, 1);
+      }
+    } else {
+      file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
+      if (f) {
+        vfs_write(f, persist_buf + offset, data_size);
+        vfs_close(f);
+      }
+    }
+    offset += data_size;
+  }
+
+  persist_loading = 0;
+  persist_set_status("workspace persistence active");
+}
+
+int vfs_persist_available(void) {
+  return persist_ready && storage_available();
+}
+
+const char *vfs_persist_status(void) {
+  return persist_status;
+}
+
 /* Open file */
 file_t *vfs_open(const char *path, int flags) {
   if (!vfs_initialized) vfs_init();
@@ -244,7 +604,12 @@ file_t *vfs_open(const char *path, int flags) {
 /* Close file */
 void vfs_close(file_t *file) {
   if (file && file->valid) {
+    int inode = file->inode;
+    int flags = file->flags;
     file->valid = 0;
+    if (flags & (O_WRONLY | O_RDWR | O_CREAT | O_TRUNC | O_APPEND)) {
+      maybe_persist_inode(inode);
+    }
   }
 }
 
@@ -324,7 +689,11 @@ int vfs_seek(file_t *file, int offset, int whence) {
 /* Create directory */
 int vfs_mkdir(const char *path) {
   if (!vfs_initialized) vfs_init();
-  return create_inode(path, 1);
+  int result = create_inode(path, 1);
+  if (result >= 0) {
+    maybe_persist_path(path);
+  }
+  return result;
 }
 
 /* Read directory */
@@ -368,12 +737,17 @@ int vfs_exists(const char *path) {
 /* Create file */
 int vfs_create(const char *path) {
   if (!vfs_initialized) vfs_init();
-  return create_inode(path, 0);
+  int result = create_inode(path, 0);
+  if (result >= 0) {
+    maybe_persist_path(path);
+  }
+  return result;
 }
 
 /* Delete file/directory */
 int vfs_delete(const char *path) {
   int idx = find_inode(path);
+  int should_persist = path_should_persist(path);
   if (idx < 0) return -ENOENT;
   if (idx == 0) return -EINVAL; /* Can't delete root */
   
@@ -402,13 +776,17 @@ int vfs_delete(const char *path) {
     }
   }
   inode_count--;
-  
+
+  if (should_persist) {
+    vfs_persist_save();
+  }
   return 0;
 }
 
 /* Rename file/directory */
 int vfs_rename(const char *oldpath, const char *newpath) {
   int idx = find_inode(oldpath);
+  int should_persist = path_should_persist(oldpath) || path_should_persist(newpath);
   if (idx < 0) return -ENOENT;
   if (idx == 0) return -EINVAL; /* Can't rename root */
   if (find_inode(newpath) >= 0) return -EEXIST;
@@ -450,6 +828,9 @@ int vfs_rename(const char *oldpath, const char *newpath) {
   str_cpy(inodes[idx].path, newpath, MAX_PATH);
   get_filename(newpath, inodes[idx].name);
   inodes[idx].parent = parent;
-  
+
+  if (should_persist) {
+    vfs_persist_save();
+  }
   return 0;
 }
