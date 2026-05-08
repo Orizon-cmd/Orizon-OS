@@ -71,6 +71,9 @@ Current kernel-owned layers:
   shared secret proof hash from the server ECDHE key.
 - TLS 1.2 ClientKeyExchange record construction/sending, extended-master-secret
   session hash, master-secret derivation, and AES-128-GCM key-block proof.
+- TLS ChangeCipherSpec plus encrypted client Finished flight, encrypted server
+  reply capture, AES-128-GCM tag verification/decryption, and server Finished
+  transcript diagnostics.
 - SHA-256 hashing for downloaded update proofs.
 - Local manifest and staging plan:
   `/workspace/.orizon/update-manifest`, `/workspace/.orizon/update-plan`,
@@ -85,8 +88,8 @@ Current kernel-owned layers:
 
 Still required before GitHub package downloads can happen fully inside Orizon OS:
 
-- TLS cryptography: root trust anchoring, ChangeCipherSpec/Finished, AEAD record
-  encryption/decryption, and HTTP inside the encrypted tunnel.
+- TLS cryptography: root trust anchoring, exact server Finished transcript
+  verification, encrypted HTTP GET/response handling, and package body streaming.
 - Verified package/manifest format.
 - Safe ESP/FAT32 writer or A/B boot slot for replacing kernel/system files
   without corrupting the current boot.
@@ -95,5 +98,8 @@ Until TLS crypto and the boot writer exist, `update` starts the upgrade, reaches
 GitHub over the kernel network stack, saves the GitHub HTTP redirect/proof,
 performs a TLS server-handshake, leaf identity, chain-link, RSA signature
 verification, X25519 shared-secret probe, ClientKeyExchange send, and TLS key
-schedule proof, hashes the proofs, writes a staging plan, and stops safely
-instead of pretending that the machine was upgraded.
+schedule proof. It can now send the encrypted client Finished and decrypt the
+server Finished record, but intentionally stops before encrypted HTTP while the
+server Finished transcript check is being tightened. It hashes the proofs,
+writes a staging plan, and stops safely instead of pretending that the machine
+was upgraded.

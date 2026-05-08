@@ -6,6 +6,7 @@
  */
 
 #include "../include/netstack.h"
+#include "../include/aes_gcm.h"
 #include "../include/net.h"
 #include "../include/sha256.h"
 #include "../include/string.h"
@@ -58,11 +59,18 @@ static uint8_t transport_buf[NETSTACK_MTU];
 static uint8_t checksum_buf[NETSTACK_MTU + 16];
 static uint8_t tls_tx_buf[512];
 static uint8_t tls_rx_buf[16384];
+static uint8_t tls_secure_rx_buf[2048];
+static uint8_t tls_server_plain_buf[2048];
 static uint8_t tls_client_random[32];
 static uint8_t tls_client_x25519_scalar[32];
 static size_t tls_client_hello_handshake_len = 0;
 static int tls_client_x25519_scalar_ready = 0;
 static int tls_last_client_key_exchange_sent = 0;
+static int tls_last_client_finished_sent = 0;
+static size_t tls_last_secure_reply_len = 0;
+static char tls_last_secure_reply_sha256[SHA256_HEX_SIZE];
+static uint8_t tls_last_client_finished_plain[16];
+static size_t tls_last_client_finished_plain_len = 0;
 
 static uint16_t get_be16(const uint8_t *p) {
   return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -93,6 +101,12 @@ static void put_be32(uint8_t *p, uint32_t v) {
   p[1] = (uint8_t)((v >> 16) & 0xff);
   p[2] = (uint8_t)((v >> 8) & 0xff);
   p[3] = (uint8_t)(v & 0xff);
+}
+
+static void put_be64(uint8_t *p, uint64_t v) {
+  for (int i = 7; i >= 0; i--) {
+    p[7 - i] = (uint8_t)(v >> (i * 8));
+  }
 }
 
 static uint64_t deadline_from_ms(uint64_t ms) {
@@ -1116,6 +1130,10 @@ static int build_tls_client_hello(const char *host, uint8_t *out,
   memset(tls_client_x25519_scalar, 0, sizeof(tls_client_x25519_scalar));
   tls_client_x25519_scalar_ready = 0;
   tls_last_client_key_exchange_sent = 0;
+  tls_last_client_finished_sent = 0;
+  tls_last_secure_reply_len = 0;
+  tls_last_secure_reply_sha256[0] = '\0';
+  tls_last_client_finished_plain_len = 0;
   tls_client_hello_handshake_len = 0;
   tls_put(out, out_cap, &off, 22);      /* handshake record */
   tls_put16(out, out_cap, &off, 0x0301); /* record legacy version */
@@ -1246,6 +1264,14 @@ typedef struct {
   int traffic_keys_ready;
   int key_schedule_supported;
   int handshake_ctx_ready;
+  int client_finished_ready;
+  int server_secure_decrypted;
+  int server_change_cipher_spec_seen;
+  int server_ticket_seen;
+  int server_finished_seen;
+  int server_finished_verified;
+  int server_finished_verified_without_client_finished;
+  int server_alert_seen;
   uint16_t server_version;
   uint16_t cipher;
   uint16_t key_exchange_group;
@@ -1253,6 +1279,11 @@ typedef struct {
   size_t key_public_len;
   size_t client_key_exchange_len;
   size_t client_key_exchange_record_len;
+  size_t client_finished_record_len;
+  size_t client_secure_flight_len;
+  size_t server_secure_plain_len;
+  uint8_t server_alert_level;
+  uint8_t server_alert_description;
   char client_public_sha256[SHA256_HEX_SIZE];
   char shared_secret_sha256[SHA256_HEX_SIZE];
   char client_key_exchange_sha256[SHA256_HEX_SIZE];
@@ -1261,14 +1292,25 @@ typedef struct {
   char key_block_sha256[SHA256_HEX_SIZE];
   char client_write_key_sha256[SHA256_HEX_SIZE];
   char server_write_key_sha256[SHA256_HEX_SIZE];
+  char client_finished_sha256[SHA256_HEX_SIZE];
+  char client_finished_record_sha256[SHA256_HEX_SIZE];
+  char server_secure_plain_sha256[SHA256_HEX_SIZE];
+  char server_finished_sha256[SHA256_HEX_SIZE];
   uint8_t client_public[32];
   uint8_t shared_secret[32];
   uint8_t server_random[32];
   uint8_t server_key_public[32];
   uint8_t client_key_exchange[64];
   uint8_t client_key_exchange_record[80];
+  uint8_t client_finished_record[80];
+  uint8_t client_finished_plain[16];
+  uint8_t client_secure_flight[96];
   uint8_t master_secret[48];
   uint8_t key_block[72];
+  uint8_t client_write_key[16];
+  uint8_t server_write_key[16];
+  uint8_t client_write_iv[4];
+  uint8_t server_write_iv[4];
   sha256_ctx_t handshake_ctx;
   size_t certificate_count;
   size_t certificate_chain_len;
@@ -2353,6 +2395,86 @@ static int tls_build_client_key_exchange(tls_parse_info_t *info) {
   return 0;
 }
 
+static int tls_build_client_finished(tls_parse_info_t *info,
+                                     const uint8_t session_hash[32]) {
+  uint8_t verify_data[12];
+  uint8_t plaintext[16];
+  uint8_t ciphertext[16];
+  uint8_t tag[16];
+  uint8_t nonce[12];
+  uint8_t explicit_nonce[8] = {0};
+  uint8_t aad[13];
+  size_t off = 0;
+
+  if (!info || !session_hash || !info->master_secret_ready ||
+      !info->traffic_keys_ready) {
+    return -1;
+  }
+
+  if (tls_prf_sha256(info->master_secret, sizeof(info->master_secret),
+                     "client finished", session_hash, 32, NULL, 0,
+                     verify_data, sizeof(verify_data)) != 0) {
+    return -1;
+  }
+
+  plaintext[0] = 20; /* Finished */
+  plaintext[1] = 0;
+  plaintext[2] = 0;
+  plaintext[3] = sizeof(verify_data);
+  memcpy(plaintext + 4, verify_data, sizeof(verify_data));
+  memcpy(info->client_finished_plain, plaintext, sizeof(plaintext));
+  sha256_buffer_hex(plaintext, sizeof(plaintext), info->client_finished_sha256);
+
+  memcpy(nonce, info->client_write_iv, sizeof(info->client_write_iv));
+  memcpy(nonce + sizeof(info->client_write_iv), explicit_nonce,
+         sizeof(explicit_nonce));
+  put_be64(aad, 0); /* first record after ChangeCipherSpec starts at seq 0 */
+  aad[8] = 22;      /* handshake */
+  put_be16(aad + 9, 0x0303);
+  put_be16(aad + 11, sizeof(plaintext));
+
+  if (aes128_gcm_encrypt(info->client_write_key, nonce, aad, sizeof(aad),
+                         plaintext, sizeof(plaintext), ciphertext, tag) != 0) {
+    return -1;
+  }
+
+  tls_put(info->client_finished_record, sizeof(info->client_finished_record),
+          &off, 22);
+  tls_put16(info->client_finished_record, sizeof(info->client_finished_record),
+            &off, 0x0303);
+  tls_put16(info->client_finished_record, sizeof(info->client_finished_record),
+            &off, (uint16_t)(sizeof(explicit_nonce) + sizeof(ciphertext) +
+                             sizeof(tag)));
+  tls_put_bytes(info->client_finished_record,
+                sizeof(info->client_finished_record), &off, explicit_nonce,
+                sizeof(explicit_nonce));
+  tls_put_bytes(info->client_finished_record,
+                sizeof(info->client_finished_record), &off, ciphertext,
+                sizeof(ciphertext));
+  tls_put_bytes(info->client_finished_record,
+                sizeof(info->client_finished_record), &off, tag, sizeof(tag));
+  info->client_finished_record_len = off;
+  sha256_buffer_hex(info->client_finished_record,
+                    info->client_finished_record_len,
+                    info->client_finished_record_sha256);
+
+  off = 0;
+  tls_put(info->client_secure_flight, sizeof(info->client_secure_flight), &off,
+          20); /* ChangeCipherSpec */
+  tls_put16(info->client_secure_flight, sizeof(info->client_secure_flight),
+            &off, 0x0303);
+  tls_put16(info->client_secure_flight, sizeof(info->client_secure_flight),
+            &off, 1);
+  tls_put(info->client_secure_flight, sizeof(info->client_secure_flight), &off,
+          1);
+  tls_put_bytes(info->client_secure_flight, sizeof(info->client_secure_flight),
+                &off, info->client_finished_record,
+                info->client_finished_record_len);
+  info->client_secure_flight_len = off;
+  info->client_finished_ready = 1;
+  return 0;
+}
+
 static void tls_prepare_key_schedule(tls_parse_info_t *info) {
   uint8_t session_hash[SHA256_DIGEST_SIZE];
   uint8_t random_seed[64];
@@ -2406,9 +2528,166 @@ static void tls_prepare_key_schedule(tls_parse_info_t *info) {
   }
 
   info->traffic_keys_ready = 1;
+  memcpy(info->client_write_key, info->key_block, 16);
+  memcpy(info->server_write_key, info->key_block + 16, 16);
+  memcpy(info->client_write_iv, info->key_block + 32, 4);
+  memcpy(info->server_write_iv, info->key_block + 36, 4);
   sha256_buffer_hex(info->key_block, key_block_len, info->key_block_sha256);
   sha256_buffer_hex(info->key_block, 16, info->client_write_key_sha256);
   sha256_buffer_hex(info->key_block + 16, 16, info->server_write_key_sha256);
+  tls_build_client_finished(info, session_hash);
+}
+
+static int tls_decrypt_aes_gcm_record(const tls_parse_info_t *info,
+                                      uint64_t seq, uint8_t record_type,
+                                      uint16_t version, const uint8_t *record,
+                                      size_t record_len, uint8_t *plain,
+                                      size_t plain_cap, size_t *plain_len) {
+  uint8_t nonce[12];
+  uint8_t aad[13];
+  size_t ciphertext_len;
+
+  if (!info || !record || !plain || !plain_len || record_len < 24) {
+    return -1;
+  }
+  ciphertext_len = record_len - 8 - 16;
+  if (ciphertext_len > plain_cap) {
+    return -1;
+  }
+
+  memcpy(nonce, info->server_write_iv, sizeof(info->server_write_iv));
+  memcpy(nonce + sizeof(info->server_write_iv), record, 8);
+  put_be64(aad, seq);
+  aad[8] = record_type;
+  put_be16(aad + 9, version);
+  put_be16(aad + 11, (uint16_t)ciphertext_len);
+  if (aes128_gcm_decrypt(info->server_write_key, nonce, aad, sizeof(aad),
+                         record + 8, ciphertext_len,
+                         record + 8 + ciphertext_len, plain) != 0) {
+    return -1;
+  }
+  *plain_len = ciphertext_len;
+  return 0;
+}
+
+static void tls_parse_decrypted_server_handshake(tls_parse_info_t *info,
+                                                 const uint8_t *plain,
+                                                 size_t plain_len,
+                                                 sha256_ctx_t *server_ctx,
+                                                 sha256_ctx_t *server_ctx_no_client) {
+  size_t p = 0;
+  while (p + 4 <= plain_len) {
+    uint8_t hs_type = plain[p];
+    size_t hs_len = get_be24(plain + p + 1);
+    if (p + 4 + hs_len > plain_len) {
+      break;
+    }
+
+    if (hs_type == 20 && hs_len >= 12) {
+      uint8_t digest[SHA256_DIGEST_SIZE];
+      uint8_t expected[12];
+      char digest_hex[SHA256_HEX_SIZE];
+      tls_sha256_ctx_hex(server_ctx, digest, digest_hex);
+      if (tls_prf_sha256(info->master_secret, sizeof(info->master_secret),
+                         "server finished", digest, sizeof(digest), NULL, 0,
+                         expected, sizeof(expected)) == 0) {
+        info->server_finished_seen = 1;
+        if (memcmp(plain + p + 4, expected, sizeof(expected)) == 0) {
+          info->server_finished_verified = 1;
+        }
+      }
+      if (!info->server_finished_verified && server_ctx_no_client) {
+        tls_sha256_ctx_hex(server_ctx_no_client, digest, digest_hex);
+        if (tls_prf_sha256(info->master_secret, sizeof(info->master_secret),
+                           "server finished", digest, sizeof(digest), NULL, 0,
+                           expected, sizeof(expected)) == 0 &&
+            memcmp(plain + p + 4, expected, sizeof(expected)) == 0) {
+          info->server_finished_verified_without_client_finished = 1;
+        }
+      }
+      sha256_buffer_hex(plain + p, 4 + hs_len, info->server_finished_sha256);
+    } else {
+      if (hs_type == 4) {
+        info->server_ticket_seen = 1;
+      }
+    }
+
+    sha256_update(server_ctx, plain + p, 4 + hs_len);
+    if (server_ctx_no_client) {
+      sha256_update(server_ctx_no_client, plain + p, 4 + hs_len);
+    }
+    p += 4 + hs_len;
+  }
+}
+
+static void tls_decrypt_server_secure_reply(tls_parse_info_t *info) {
+  size_t off = 0;
+  size_t plain_total = 0;
+  uint64_t server_seq = 0;
+  sha256_ctx_t server_ctx;
+  sha256_ctx_t server_ctx_no_client;
+
+  if (!info || !info->traffic_keys_ready || !info->client_finished_ready ||
+      tls_last_secure_reply_len == 0) {
+    return;
+  }
+
+  server_ctx_no_client = info->handshake_ctx;
+  sha256_update(&server_ctx_no_client, info->client_key_exchange,
+                info->client_key_exchange_len);
+  server_ctx = server_ctx_no_client;
+  if (tls_last_client_finished_plain_len == sizeof(tls_last_client_finished_plain)) {
+    sha256_update(&server_ctx, tls_last_client_finished_plain,
+                  tls_last_client_finished_plain_len);
+  } else {
+    sha256_update(&server_ctx, info->client_finished_plain,
+                  sizeof(info->client_finished_plain));
+  }
+
+  while (off + 5 <= tls_last_secure_reply_len) {
+    uint8_t record_type = tls_secure_rx_buf[off];
+    uint16_t version = get_be16(tls_secure_rx_buf + off + 1);
+    size_t record_len = get_be16(tls_secure_rx_buf + off + 3);
+    const uint8_t *record = tls_secure_rx_buf + off + 5;
+    size_t plain_len = 0;
+
+    off += 5;
+    if (off + record_len > tls_last_secure_reply_len) {
+      break;
+    }
+
+    if (record_type == 20 && record_len == 1 && record[0] == 1) {
+      info->server_change_cipher_spec_seen = 1;
+    } else if ((record_type == 22 || record_type == 21) &&
+               plain_total < sizeof(tls_server_plain_buf) &&
+               tls_decrypt_aes_gcm_record(
+                   info, server_seq, record_type, version, record, record_len,
+                   tls_server_plain_buf + plain_total,
+                   sizeof(tls_server_plain_buf) - plain_total, &plain_len) ==
+                   0) {
+      uint8_t *plain = tls_server_plain_buf + plain_total;
+      info->server_secure_decrypted = 1;
+      server_seq++;
+      if (record_type == 22) {
+        tls_parse_decrypted_server_handshake(info, plain, plain_len,
+                                             &server_ctx,
+                                             &server_ctx_no_client);
+      } else if (record_type == 21 && plain_len >= 2) {
+        info->server_alert_seen = 1;
+        info->server_alert_level = plain[0];
+        info->server_alert_description = plain[1];
+      }
+      plain_total += plain_len;
+    }
+
+    off += record_len;
+  }
+
+  if (plain_total > 0) {
+    info->server_secure_plain_len = plain_total;
+    sha256_buffer_hex(tls_server_plain_buf, plain_total,
+                      info->server_secure_plain_sha256);
+  }
 }
 
 static void tls_copy_asn1_time(const uint8_t *value, size_t len, char *out,
@@ -2900,6 +3179,7 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
 
   out[0] = '\0';
   tls_parse_records(rx, rx_len, &info, host);
+  tls_decrypt_server_secure_reply(&info);
 
   snprintf(line, sizeof(line), "tls host=%s port=443 bytes=%lu\n", host,
            (unsigned long)rx_len);
@@ -3068,6 +3348,58 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
     append_text(out, out_cap, line);
   }
 
+  if (info.client_finished_ready) {
+    snprintf(line, sizeof(line),
+             "tls client-finished ready=yes sent=%s flight-bytes=%lu record-sha256=%s\n",
+             tls_last_client_finished_sent ? "yes" : "no",
+             (unsigned long)info.client_secure_flight_len,
+             info.client_finished_record_sha256);
+    append_text(out, out_cap, line);
+    snprintf(line, sizeof(line), "tls client-finished-plain-sha256 %s\n",
+             info.client_finished_sha256);
+    append_text(out, out_cap, line);
+  }
+
+  if (tls_last_secure_reply_len > 0) {
+    snprintf(line, sizeof(line),
+             "tls server-secure-reply bytes=%lu sha256=%s first-bytes=",
+             (unsigned long)tls_last_secure_reply_len,
+             tls_last_secure_reply_sha256);
+    append_text(out, out_cap, line);
+    append_hex_bytes(out, out_cap, tls_secure_rx_buf,
+                     tls_last_secure_reply_len < 64
+                         ? tls_last_secure_reply_len
+                         : 64);
+    append_text(out, out_cap, "\n");
+  }
+
+  if (info.server_secure_decrypted) {
+    snprintf(line, sizeof(line),
+             "tls server-secure-decrypt ready=yes plain-bytes=%lu sha256=%s ccs=%s ticket=%s\n",
+             (unsigned long)info.server_secure_plain_len,
+             info.server_secure_plain_sha256,
+             info.server_change_cipher_spec_seen ? "yes" : "not-seen",
+             info.server_ticket_seen ? "yes" : "no");
+    append_text(out, out_cap, line);
+    snprintf(line, sizeof(line),
+             "tls server-finished seen=%s verified=%s alt-no-client-finished=%s sha256=%s\n",
+             info.server_finished_seen ? "yes" : "no",
+             info.server_finished_verified ? "yes" : "no",
+             info.server_finished_verified_without_client_finished ? "yes"
+                                                                    : "no",
+             info.server_finished_sha256[0] ? info.server_finished_sha256
+                                            : "none");
+    append_text(out, out_cap, line);
+  }
+
+  if (info.server_alert_seen) {
+    snprintf(line, sizeof(line),
+             "tls server-secure-alert level=%lu description=%lu\n",
+             (unsigned long)info.server_alert_level,
+             (unsigned long)info.server_alert_description);
+    append_text(out, out_cap, line);
+  }
+
   if (info.alerts > 0) {
     snprintf(line, sizeof(line), "tls alert level=%lu description=%lu\n",
              (unsigned long)info.alert_level,
@@ -3084,7 +3416,13 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
              info.partial_handshake ? "yes" : "no");
     append_text(out, out_cap, line);
   }
-  append_text(out, out_cap, "tls next tls-record-encryption-and-https-body\n");
+  if (info.server_finished_seen && !info.server_finished_verified) {
+    append_text(out, out_cap,
+                "tls next tls-server-finished-transcript-verification\n");
+  } else {
+    append_text(out, out_cap,
+                "tls next tls-encrypted-http-get-and-package-body\n");
+  }
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");
@@ -3133,6 +3471,28 @@ int netstack_tls_probe(const char *host, char *out, size_t out_cap,
       set_status("tls: clientkeyexchange sent");
     } else {
       set_status("tls: clientkeyexchange send failed");
+    }
+  }
+  if (tls_last_client_key_exchange_sent && send_info.client_finished_ready &&
+      send_info.client_secure_flight_len > 0) {
+    size_t secure_reply_len = 0;
+    set_status("tls: client finished");
+    if (tcp_send_data(&conn, send_info.client_secure_flight,
+                      send_info.client_secure_flight_len) >= 0) {
+      tls_last_client_finished_sent = 1;
+      memcpy(tls_last_client_finished_plain, send_info.client_finished_plain,
+             sizeof(tls_last_client_finished_plain));
+      tls_last_client_finished_plain_len = sizeof(tls_last_client_finished_plain);
+      set_status("tls: finished sent");
+      if (tcp_recv_bytes(&conn, tls_secure_rx_buf, sizeof(tls_secure_rx_buf),
+                         &secure_reply_len, 3000) == 0) {
+        tls_last_secure_reply_len = secure_reply_len;
+        sha256_buffer_hex(tls_secure_rx_buf, secure_reply_len,
+                          tls_last_secure_reply_sha256);
+        set_status("tls: server secure reply");
+      }
+    } else {
+      set_status("tls: finished send failed");
     }
   }
 
