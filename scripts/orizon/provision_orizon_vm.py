@@ -23,6 +23,7 @@ def build_domain_xml(config: dict) -> str:
     memory_kib = int(config.get("memory_mib", 4096)) * 1024
     vcpu_count = int(config.get("vcpu_count", 4))
     bridge_device = config.get("bridge_device", "eth0")
+    network_name = config.get("network_name", "")
     network_model = config.get("network_model", "e1000e")
     video_model = config.get("video_model", "virtio")
     video_width = int(config.get("video_width", 1280))
@@ -32,6 +33,17 @@ def build_domain_xml(config: dict) -> str:
         "firmware_nvram_template", "/usr/share/qemu/edk2-i386-vars.fd"
     )
     nvram_path = f"/var/lib/libvirt/qemu/nvram/{name}_VARS.fd"
+
+    if network_name:
+        interface_xml = f"""    <interface type='network'>
+      <source network='{network_name}'/>
+      <model type='{network_model}'/>
+    </interface>"""
+    else:
+        interface_xml = f"""    <interface type='direct'>
+      <source dev='{bridge_device}' mode='bridge'/>
+      <model type='{network_model}'/>
+    </interface>"""
 
     return f"""<domain type='kvm'>
   <name>{name}</name>
@@ -80,10 +92,7 @@ def build_domain_xml(config: dict) -> str:
     <controller type='pci' index='1' model='pcie-root-port'/>
     <controller type='pci' index='2' model='pcie-root-port'/>
     <controller type='pci' index='3' model='pcie-root-port'/>
-    <interface type='direct'>
-      <source dev='{bridge_device}' mode='bridge'/>
-      <model type='{network_model}'/>
-    </interface>
+{interface_xml}
     <serial type='pty'>
       <target type='isa-serial' port='0'>
         <model name='isa-serial'/>

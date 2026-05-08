@@ -5,6 +5,7 @@
 #include "../include/gui.h"
 #include "../include/kmalloc.h"
 #include "../include/net.h"
+#include "../include/netstack.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
 #include "../include/string.h"
@@ -1005,6 +1006,9 @@ static void term_run_update(terminal_t *term) {
 static void term_print_net_status(terminal_t *term) {
   char line[256];
   net_format_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  netstack_format_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
 }

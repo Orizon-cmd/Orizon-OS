@@ -6,6 +6,7 @@
   "disk_size": "8G",
   "memory_mib": 4096,
   "vcpu_count": 4,
+  "network_name": "default",
   "bridge_device": "eth0",
   "network_model": "e1000e",
   "video_model": "virtio",

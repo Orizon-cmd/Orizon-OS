@@ -53,6 +53,11 @@ Current kernel-owned layers:
 
 - Intel `e1000/e1000e` Ethernet probe for the VM and compatible hardware.
 - Raw Ethernet TX/RX rings.
+- ARP handling and gateway MAC resolution.
+- DHCP IPv4 configuration.
+- DNS A-record resolver.
+- Minimal blocking TCP client and HTTP GET probe.
+- GitHub edge contact saved to `/workspace/.orizon/github-http-response`.
 - PIT timer at 100 Hz with real uptime counters.
 - Idle `hlt` loop to avoid burning a full CPU core while waiting.
 - First scheduler/process table with CPU tick accounting.
@@ -61,16 +66,13 @@ Current kernel-owned layers:
 - Runtime system files `/system/packages`, `/system/update-state`, and
   `/system/update-source`.
 
-Still required before GitHub downloads can happen fully inside Orizon OS:
+Still required before GitHub package downloads can happen fully inside Orizon OS:
 
-- ARP and IPv4.
-- DHCP or static IPv4 configuration.
-- DNS.
-- TCP.
 - HTTPS/TLS, because GitHub requires HTTPS for raw artifacts.
 - Verified package/manifest format.
 - Safe boot/system writer for replacing kernel/system files without corrupting
   the current boot.
 
-Until those layers exist, `update` starts the upgrade and stops safely at the
-first missing kernel layer instead of pretending that the machine was upgraded.
+Until TLS and the package writer exist, `update` starts the upgrade, reaches
+GitHub over the kernel network stack, saves the GitHub HTTP redirect/proof, and
+stops safely instead of pretending that the machine was upgraded.

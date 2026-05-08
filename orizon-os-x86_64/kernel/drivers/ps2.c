@@ -555,11 +555,15 @@ int ps2_init(void) {
     for (int i = 0; i < 5000; i++) io_wait();
   }
   
-  /* Re-read and enable IRQs for both ports */
+  /* Keep PS/2 in polling mode.
+   * The GUI loop wakes on the PIT timer and polls input every tick. Running
+   * terminal commands directly inside a keyboard IRQ would keep IF cleared,
+   * which is unsafe for blocking work like the network updater.
+   */
   ps2_send_command(PS2_CMD_READ_CONFIG);
   io_wait();
   config = ps2_read_data();
-  config |= 0x03;  /* Enable IRQs for both keyboard (bit 0) and mouse (bit 1) */
+  config &= ~0x03; /* Disable PS/2 IRQ bits; polling remains active. */
   config &= ~0x30; /* Make sure clocks are enabled (bits 4,5 = 0) */
   ps2_send_command(PS2_CMD_WRITE_CONFIG);
   ps2_send_data(config);
@@ -569,9 +573,8 @@ int ps2_init(void) {
   ps2_flush_output();
   idt_register_handler(0x21, ps2_keyboard_irq);
   idt_register_handler(0x2C, ps2_mouse_irq);
-  pic_clear_mask(1);
-  pic_clear_mask(2);
-  pic_clear_mask(12);
+  pic_set_mask(1);
+  pic_set_mask(12);
   
   return 0;
 }

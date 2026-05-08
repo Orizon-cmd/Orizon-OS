@@ -14,7 +14,8 @@ le developpement noyau:
 - une seule console centrale pour travailler proprement
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - mise a jour sans reinstallation complete de l'espace de travail
-- commande `update` interne avec transaction full-upgrade et probe Ethernet
+- commande `update` interne avec transaction full-upgrade, DHCP/DNS/TCP et
+  contact GitHub
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
 
@@ -33,15 +34,18 @@ Dans la console Orizon OS:
 update
 ```
 
-La commande lance maintenant une transaction de mise a jour interne, facon
-`apt full-upgrade`: preparation de la base packages, probe Ethernet, et journal
-local dans `/workspace/.orizon/update.log`. Elle ne lance pas de programme
-externe.
+La commande lance une transaction de mise a jour interne, facon
+`apt full-upgrade`: preparation de la base packages, probe Ethernet,
+configuration IPv4 par DHCP, resolution DNS, ouverture TCP vers GitHub, et
+journal local dans `/workspace/.orizon/update.log`. Elle ne lance pas de
+programme externe.
 
 Le driver Ethernet Intel `e1000/e1000e` est initialise au demarrage pour la VM
-et les cartes compatibles. Le telechargement GitHub complet depuis l'OS demande
-encore les couches reseau suivantes dans le noyau: ARP, IPv4, DHCP, DNS, TCP et
-HTTPS/TLS.
+et les cartes compatibles. Orizon OS sait maintenant joindre le edge GitHub et
+sauvegarder la reponse HTTP dans
+`/workspace/.orizon/github-http-response`. Le telechargement complet du corps
+des paquets GitHub demande encore le client HTTPS/TLS noyau, car GitHub force
+HTTPS pour les artefacts bruts.
 
 ## Noyau Et Performance
 
