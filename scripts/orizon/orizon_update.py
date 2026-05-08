@@ -93,6 +93,44 @@ def resolve_github_ref(repo_url: str, ref: str) -> str:
     if re.fullmatch(r"[0-9a-fA-F]{40}", ref):
         return ref
 
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "ls-remote",
+                repo_url,
+                f"refs/heads/{ref}",
+                f"refs/tags/{ref}",
+                f"refs/tags/{ref}^{{}}",
+                ref,
+            ],
+            cwd=REPO_ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if result.returncode == 0:
+            first_sha = ""
+            peeled_tag_sha = ""
+            for line in result.stdout.splitlines():
+                parts = line.split()
+                if len(parts) < 2:
+                    continue
+                sha, remote_ref = parts[0], parts[1]
+                if not first_sha:
+                    first_sha = sha
+                if remote_ref.endswith("^{}"):
+                    peeled_tag_sha = sha
+                if remote_ref == f"refs/heads/{ref}":
+                    return sha
+            if peeled_tag_sha:
+                return peeled_tag_sha
+            if first_sha:
+                return first_sha
+    except FileNotFoundError:
+        pass
+
     slug = github_repo_slug(repo_url)
     quoted_ref = urllib.parse.quote(ref, safe="")
     api_url = f"https://api.github.com/repos/{slug}/commits/{quoted_ref}"
