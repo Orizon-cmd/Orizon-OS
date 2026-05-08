@@ -18,6 +18,8 @@ le developpement noyau:
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
   les fichiers de boot installes
+- mini gestionnaire de paquets `pkg` avec format texte `.opkg`, SHA-256 du
+  payload, installation de fichiers et script post-install minimal
 - console avec scrollback et support molette souris PS/2
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
@@ -67,6 +69,29 @@ keyboard
 ```
 
 Details: [docs/orizon/INSTALL.md](docs/orizon/INSTALL.md).
+
+## Paquets Orizon
+
+Orizon OS contient maintenant une premiere base de gestionnaire de paquets.
+Le format est volontairement simple: un fichier texte `.opkg` contient `name`,
+`version`, un `sha256` du payload, des blocs `file` a installer, puis un
+bloc `post-install` minimal.
+
+Commandes disponibles:
+
+```text
+pkg list
+pkg status
+pkg sample
+pkg hash /workspace/packages/orizon-hello.opkg
+pkg install /workspace/packages/orizon-hello.opkg
+```
+
+`pkg install` est reserve a un OS installe sur disque. Les paquets installes
+sont stockes dans `/workspace/.orizon/pkgdb`, puis rejoues au boot pour
+restaurer les fichiers systeme en RAM comme `/system/share/...`.
+
+Details: [docs/orizon/PACKAGES.md](docs/orizon/PACKAGES.md).
 
 ## Update Dans Orizon OS
 
@@ -131,6 +156,7 @@ La transaction ecrit ses etats et journaux ici:
 /workspace/.orizon/update-state
 /workspace/.orizon/update-manifest
 /workspace/.orizon/last-update
+/workspace/.orizon/pkgdb
 /system/installed
 ```
 

@@ -8,6 +8,7 @@
 #include "../include/install.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
+#include "../include/packages.h"
 #include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
@@ -1083,6 +1084,93 @@ static void term_run_rollback(terminal_t *term) {
   term_puts_t(term, report);
 }
 
+static void term_pkg_help(terminal_t *term) {
+  term_puts_t(term, "\033[1;36mOrizon packages\033[0m\n");
+  term_puts_t(term, "  pkg list          - List installed packages\n");
+  term_puts_t(term, "  pkg status        - Show package manager state\n");
+  term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
+  term_puts_t(term, "  pkg hash <file>   - Print package payload sha256\n");
+  if (term_install_already_complete()) {
+    term_puts_t(term, "  pkg install <file> - Install a verified local package\n");
+  } else {
+    term_puts_t(term,
+                "  pkg install <file> - Available after disk install only\n");
+  }
+}
+
+static void term_run_pkg(terminal_t *term, const char *cmd) {
+  static char report[8192];
+  const char *args = term_skip_spaces(cmd + 3);
+
+  if (*args == '\0' || term_command_is(args, "help")) {
+    term_pkg_help(term);
+    return;
+  }
+
+  if (term_command_is(args, "list")) {
+    if (orizon_pkg_list(report, sizeof(report)) == 0) {
+      term_puts_t(term, report);
+      if (report[0] && report[strlen(report) - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    } else {
+      term_puts_t(term, "pkg list: database unavailable\n");
+    }
+    return;
+  }
+
+  if (term_command_is(args, "status")) {
+    orizon_pkg_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "sample")) {
+    orizon_pkg_write_sample(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "hash")) {
+    char path[MAX_PATH];
+    const char *requested = term_skip_spaces(args + 4);
+    if (*requested == '\0') {
+      term_puts_t(term, "usage: pkg hash <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "pkg hash: invalid path\n");
+      return;
+    }
+    orizon_pkg_hash_file(path, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "install")) {
+    char path[MAX_PATH];
+    const char *requested = term_skip_spaces(args + 7);
+    if (!term_install_already_complete()) {
+      term_puts_t(term,
+                  "pkg install: unavailable in live boot. Install Orizon OS first.\n");
+      return;
+    }
+    if (*requested == '\0') {
+      term_puts_t(term, "usage: pkg install <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "pkg install: invalid path\n");
+      return;
+    }
+    orizon_pkg_install_file(path, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  term_puts_t(term, "pkg: unknown command. Try 'pkg help'.\n");
+}
+
 static void term_print_net_status(terminal_t *term) {
   char line[256];
   net_format_status(line, sizeof(line));
@@ -1497,6 +1585,13 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  mkdir <d> - Create directory\n");
     term_puts_t(term, "  rm <f>    - Remove file\n");
     term_puts_t(term, "  sync      - Save /workspace to disk\n");
+    term_puts_t(term, "\033[33mPackages:\033[0m\n");
+    term_puts_t(term, "  pkg list/status - Show installed package data\n");
+    term_puts_t(term, "  pkg sample      - Create a sample .opkg package\n");
+    term_puts_t(term, "  pkg hash <file> - Print package payload sha256\n");
+    if (term_install_already_complete()) {
+      term_puts_t(term, "  pkg install <file> - Install a verified package\n");
+    }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  storage   - Show persistence state\n");
     term_puts_t(term, "  net       - Show ethernet status\n");
@@ -1946,6 +2041,8 @@ void term_execute(terminal_t *term, const char *cmd) {
         term_puts_t(term, "\n");
       }
     }
+  } else if (term_command_is(cmd, "pkg")) {
+    term_run_pkg(term, cmd);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");

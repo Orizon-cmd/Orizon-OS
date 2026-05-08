@@ -355,6 +355,11 @@ void vfs_seed_content(void) {
   /* Create a small, stable workspace for iterative development. */
   vfs_mkdir("/workspace");
   vfs_mkdir("/system");
+  vfs_mkdir("/system/share");
+  vfs_mkdir("/home");
+  vfs_mkdir("/home/orizon");
+  vfs_mkdir("/packages");
+  vfs_mkdir("/logs");
   vfs_mkdir("/tmp");
 
   file_t *f;

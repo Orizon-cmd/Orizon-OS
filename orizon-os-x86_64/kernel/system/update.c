@@ -12,6 +12,7 @@
 #include "../include/install.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
+#include "../include/packages.h"
 #include "../include/sched.h"
 #include "../include/sha256.h"
 #include "../include/string.h"
@@ -26,10 +27,8 @@
 #define UPDATE_ROLLBACK_STATE_PATH "/workspace/.orizon/rollback-state"
 #define UPDATE_ROLLBACK_INFO_PATH "/workspace/.orizon/rollback-info"
 #define SYSTEM_STATE_PATH "/system/update-state"
-#define SYSTEM_PACKAGES_PATH "/system/packages"
 #define SYSTEM_SOURCE_PATH "/system/update-source"
 #define SYSTEM_MANIFEST_PATH "/system/update-manifest"
-#define SYSTEM_INSTALLED_PATH "/system/installed"
 #define UPDATE_SOURCE "https://github.com/Orizon-cmd/Orizon-OS"
 #define UPDATE_CHANNEL "main"
 #define UPDATE_RAW_HOST "raw.githubusercontent.com"
@@ -41,11 +40,6 @@
 #define UPDATE_KERNEL_MAX (4U * 1024U * 1024U)
 #define UPDATE_EFI_MAX (512U * 1024U)
 #define UPDATE_CONF_MAX 4096U
-
-typedef struct {
-  const char *name;
-  const char *version;
-} update_package_t;
 
 typedef struct {
   char version[64];
@@ -60,20 +54,6 @@ typedef struct {
   char limine_sha256[SHA256_HEX_SIZE];
   size_t limine_size;
 } update_manifest_t;
-
-static const update_package_t base_packages[] = {
-    {"orizon-core", "core-x86_64"},
-    {"orizon-console", "minimal-shell"},
-    {"orizon-vfs", "workspace-persistence"},
-    {"orizon-net", "ethernet-e1000"},
-    {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
-    {"orizon-tls", "github-https-range"},
-    {"orizon-sha256", "artifact-verification"},
-    {"orizon-manifest", "github-manifest"},
-    {"orizon-timer", "pit-100hz"},
-    {"orizon-scheduler", "process-accounting"},
-    {"orizon-updater", "installed-esp-writer"},
-};
 
 static const char *update_status_text = "update: not run";
 static char update_manifest_text[UPDATE_MANIFEST_MAX];
@@ -172,28 +152,6 @@ static int append_limine_rollback_entry(char *conf, size_t cap) {
   }
   snprintf(conf + used, cap - used, "%s", rollback_limine_entry);
   return 0;
-}
-
-static void update_write_package_db(void) {
-  char line[128];
-  update_write_file("/workspace/.orizon/packages", "", 0);
-  update_write_file(SYSTEM_PACKAGES_PATH, "", 0);
-  for (size_t i = 0; i < sizeof(base_packages) / sizeof(base_packages[0]); i++) {
-    snprintf(line, sizeof(line), "%s %s\n", base_packages[i].name,
-             base_packages[i].version);
-    update_write_file("/workspace/.orizon/packages", line, 1);
-    update_write_file(SYSTEM_PACKAGES_PATH, line, 1);
-  }
-}
-
-static void update_write_installed_db(void) {
-  char line[128];
-  update_write_file(SYSTEM_INSTALLED_PATH, "", 0);
-  for (size_t i = 0; i < sizeof(base_packages) / sizeof(base_packages[0]); i++) {
-    snprintf(line, sizeof(line), "%s %s installed\n", base_packages[i].name,
-             base_packages[i].version);
-    update_write_file(SYSTEM_INSTALLED_PATH, line, 1);
-  }
 }
 
 static int hex_equal(const char *a, const char *b) {
@@ -451,8 +409,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_append_log("Source: " UPDATE_SOURCE);
 
   update_set_state("update: preparing installed package database");
-  update_write_package_db();
-  update_write_installed_db();
+  orizon_pkg_init();
+  orizon_pkg_refresh_database();
   append_report(report, report_size, "[1/7] Installed package database ready");
 
   update_set_state("update: probing ethernet");

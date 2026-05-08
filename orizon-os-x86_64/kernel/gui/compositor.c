@@ -8,6 +8,7 @@
 #include "../include/gui.h"
 #include "../include/input_layout.h"
 #include "../include/net.h"
+#include "../include/packages.h"
 #include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
@@ -265,6 +266,7 @@ void gui_init(void) {
   vfs_init();
   vfs_seed_content();
   vfs_persist_load();
+  orizon_pkg_init();
   input_load_keyboard_layout_from_vfs();
   net_init();
   layout_console();

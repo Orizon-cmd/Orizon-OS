@@ -98,6 +98,32 @@ limine-sha256 <sha256>
 The kernel accepts only non-empty payload sizes within its fixed safety caps
 and verifies all hashes before writing the ESP.
 
+## Package Manager Link
+
+`update` now refreshes the Orizon package database through the in-kernel
+package manager instead of writing a fixed package list by itself. The first
+package layer is local and text based:
+
+```text
+pkg list
+pkg status
+pkg sample
+pkg hash <file.opkg>
+pkg install <file.opkg>
+```
+
+Installed package metadata lives in:
+
+```text
+/workspace/.orizon/pkgdb
+/system/packages
+/system/installed
+```
+
+This prepares the next update model: GitHub can publish a package index and
+individual `.opkg` files, while the boot rollback system remains responsible
+for kernel and UEFI loader changes.
+
 ## Live Boot Behavior
 
 Live boot is for testing and installation, not self-replacement. Because the
