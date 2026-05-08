@@ -40,7 +40,7 @@ static const update_package_t base_packages[] = {
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
-    {"orizon-tls", "server-certificate-chain-probe"},
+    {"orizon-tls", "certificate-signature-material"},
     {"orizon-sha256", "manifest-verification"},
     {"orizon-manifest", "staged-update-plan"},
     {"orizon-timer", "pit-100hz"},
@@ -59,7 +59,7 @@ static const char update_manifest[] =
     "package orizon-vfs workspace-persistence required\n"
     "package orizon-net ethernet-e1000 required\n"
     "package orizon-ipv4 dhcp-dns-tcp-bootstrap required\n"
-    "package orizon-tls server-certificate-chain-probe required\n"
+    "package orizon-tls certificate-signature-material required\n"
     "package orizon-sha256 manifest-verification required\n"
     "package orizon-manifest staged-update-plan required\n"
     "package orizon-timer pit-100hz required\n"
@@ -147,7 +147,7 @@ static void update_write_plan(const char *phase, const char *network,
     update_write_file(UPDATE_PLAN_PATH, line, 1);
   }
   update_write_file(UPDATE_PLAN_PATH,
-                    "next certificate-signature-validation-and-key-schedule\n",
+                    "next rsa-pkcs1-sha256-verify-and-key-schedule\n",
                     1);
   update_write_file(UPDATE_PLAN_PATH, "install staged-boot-writer\n", 1);
 }
@@ -310,7 +310,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     append_report(report, report_size, tls_response);
     append_report(report, report_size, pkg_line);
     append_report(report, report_size,
-                  "[7/8] Certificate signature validation and TLS key schedule pending");
+                  "[7/8] RSA certificate verify and TLS key schedule pending");
     append_report(report, report_size,
                   "[8/8] Full package install paused before encrypted HTTP and boot writer");
     append_report(report, report_size,

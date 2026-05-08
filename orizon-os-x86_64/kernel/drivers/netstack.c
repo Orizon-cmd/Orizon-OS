@@ -1188,6 +1188,18 @@ typedef struct {
   size_t cert_len;
   char subject_sha256[SHA256_HEX_SIZE];
   char issuer_sha256[SHA256_HEX_SIZE];
+  char tbs_sha256[SHA256_HEX_SIZE];
+  char signature_sha256[SHA256_HEX_SIZE];
+  const char *signature_alg;
+  const char *tbs_signature_alg;
+  const char *public_key_alg;
+  const char *public_key_curve;
+  int signature_alg_consistent;
+  int signature_sha256_rsa;
+  int public_key_rsa;
+  size_t signature_len;
+  size_t public_key_bits;
+  uint32_t rsa_exponent;
 } tls_cert_summary_t;
 
 typedef struct {
@@ -1392,6 +1404,219 @@ static int asn1_read_tlv(const uint8_t *der, size_t der_len, size_t *off,
   return 0;
 }
 
+static int tls_oid_equal(const uint8_t *oid, size_t oid_len,
+                         const uint8_t *expected, size_t expected_len) {
+  return oid_len == expected_len && memcmp(oid, expected, expected_len) == 0;
+}
+
+static const char *tls_signature_oid_name(const uint8_t *oid, size_t oid_len) {
+  static const uint8_t sha256_rsa[] = {0x2a, 0x86, 0x48, 0x86, 0xf7,
+                                       0x0d, 0x01, 0x01, 0x0b};
+  static const uint8_t sha384_rsa[] = {0x2a, 0x86, 0x48, 0x86, 0xf7,
+                                       0x0d, 0x01, 0x01, 0x0c};
+  static const uint8_t ecdsa_sha256[] = {0x2a, 0x86, 0x48, 0xce,
+                                         0x3d, 0x04, 0x03, 0x02};
+  static const uint8_t ecdsa_sha384[] = {0x2a, 0x86, 0x48, 0xce,
+                                         0x3d, 0x04, 0x03, 0x03};
+
+  if (tls_oid_equal(oid, oid_len, sha256_rsa, sizeof(sha256_rsa))) {
+    return "sha256WithRSAEncryption";
+  }
+  if (tls_oid_equal(oid, oid_len, sha384_rsa, sizeof(sha384_rsa))) {
+    return "sha384WithRSAEncryption";
+  }
+  if (tls_oid_equal(oid, oid_len, ecdsa_sha256, sizeof(ecdsa_sha256))) {
+    return "ecdsaWithSHA256";
+  }
+  if (tls_oid_equal(oid, oid_len, ecdsa_sha384, sizeof(ecdsa_sha384))) {
+    return "ecdsaWithSHA384";
+  }
+  return "unknown";
+}
+
+static int tls_signature_oid_is_sha256_rsa(const uint8_t *oid,
+                                           size_t oid_len) {
+  static const uint8_t sha256_rsa[] = {0x2a, 0x86, 0x48, 0x86, 0xf7,
+                                       0x0d, 0x01, 0x01, 0x0b};
+  return tls_oid_equal(oid, oid_len, sha256_rsa, sizeof(sha256_rsa));
+}
+
+static const char *tls_public_key_oid_name(const uint8_t *oid,
+                                           size_t oid_len) {
+  static const uint8_t rsa_encryption[] = {0x2a, 0x86, 0x48, 0x86, 0xf7,
+                                           0x0d, 0x01, 0x01, 0x01};
+  static const uint8_t ec_public_key[] = {0x2a, 0x86, 0x48, 0xce,
+                                         0x3d, 0x02, 0x01};
+
+  if (tls_oid_equal(oid, oid_len, rsa_encryption, sizeof(rsa_encryption))) {
+    return "rsaEncryption";
+  }
+  if (tls_oid_equal(oid, oid_len, ec_public_key, sizeof(ec_public_key))) {
+    return "id-ecPublicKey";
+  }
+  return "unknown";
+}
+
+static int tls_public_key_oid_is_rsa(const uint8_t *oid, size_t oid_len) {
+  static const uint8_t rsa_encryption[] = {0x2a, 0x86, 0x48, 0x86, 0xf7,
+                                           0x0d, 0x01, 0x01, 0x01};
+  return tls_oid_equal(oid, oid_len, rsa_encryption, sizeof(rsa_encryption));
+}
+
+static const char *tls_curve_oid_name(const uint8_t *oid, size_t oid_len) {
+  static const uint8_t secp256r1[] = {0x2a, 0x86, 0x48, 0xce,
+                                      0x3d, 0x03, 0x01, 0x07};
+  static const uint8_t secp384r1[] = {0x2b, 0x81, 0x04, 0x00, 0x22};
+
+  if (tls_oid_equal(oid, oid_len, secp256r1, sizeof(secp256r1))) {
+    return "secp256r1";
+  }
+  if (tls_oid_equal(oid, oid_len, secp384r1, sizeof(secp384r1))) {
+    return "secp384r1";
+  }
+  return "";
+}
+
+static int tls_parse_algorithm_identifier(const uint8_t *der, size_t der_len,
+                                          const uint8_t **oid,
+                                          size_t *oid_len,
+                                          const uint8_t **params,
+                                          size_t *params_len,
+                                          uint8_t *params_tag) {
+  size_t off = 0;
+  uint8_t tag = 0;
+
+  if (asn1_read_tlv(der, der_len, &off, &tag, oid, oid_len) != 0 ||
+      tag != 0x06) {
+    return -1;
+  }
+
+  if (params) {
+    *params = NULL;
+  }
+  if (params_len) {
+    *params_len = 0;
+  }
+  if (params_tag) {
+    *params_tag = 0;
+  }
+  if (off < der_len && params && params_len && params_tag) {
+    if (asn1_read_tlv(der, der_len, &off, params_tag, params, params_len) != 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+static size_t tls_bit_length(const uint8_t *data, size_t len) {
+  while (len > 0 && *data == 0) {
+    data++;
+    len--;
+  }
+  if (len == 0) {
+    return 0;
+  }
+
+  uint8_t first = data[0];
+  size_t bits = (len - 1) * 8;
+  while (first) {
+    bits++;
+    first >>= 1;
+  }
+  return bits;
+}
+
+static uint32_t tls_parse_small_uint(const uint8_t *data, size_t len) {
+  uint32_t value = 0;
+  while (len > 0 && *data == 0) {
+    data++;
+    len--;
+  }
+  if (len > 4) {
+    return 0;
+  }
+  for (size_t i = 0; i < len; i++) {
+    value = (value << 8) | data[i];
+  }
+  return value;
+}
+
+static void tls_parse_rsa_public_key(const uint8_t *bit_string,
+                                     size_t bit_string_len,
+                                     tls_cert_summary_t *summary) {
+  if (!bit_string || bit_string_len < 2 || bit_string[0] != 0 || !summary) {
+    return;
+  }
+
+  size_t off = 1;
+  uint8_t tag = 0;
+  const uint8_t *seq = NULL;
+  size_t seq_len = 0;
+  if (asn1_read_tlv(bit_string, bit_string_len, &off, &tag, &seq, &seq_len) !=
+          0 ||
+      tag != 0x30) {
+    return;
+  }
+
+  size_t p = 0;
+  const uint8_t *modulus = NULL;
+  size_t modulus_len = 0;
+  const uint8_t *exponent = NULL;
+  size_t exponent_len = 0;
+  if (asn1_read_tlv(seq, seq_len, &p, &tag, &modulus, &modulus_len) != 0 ||
+      tag != 0x02) {
+    return;
+  }
+  if (asn1_read_tlv(seq, seq_len, &p, &tag, &exponent, &exponent_len) != 0 ||
+      tag != 0x02) {
+    return;
+  }
+
+  summary->public_key_bits = tls_bit_length(modulus, modulus_len);
+  summary->rsa_exponent = tls_parse_small_uint(exponent, exponent_len);
+}
+
+static void tls_parse_spki(const uint8_t *der, size_t der_len,
+                           tls_cert_summary_t *summary) {
+  size_t off = 0;
+  uint8_t tag = 0;
+  const uint8_t *alg_seq = NULL;
+  size_t alg_seq_len = 0;
+  const uint8_t *spki = NULL;
+  size_t spki_len = 0;
+  const uint8_t *oid = NULL;
+  size_t oid_len = 0;
+  const uint8_t *params = NULL;
+  size_t params_len = 0;
+  uint8_t params_tag = 0;
+
+  if (!summary ||
+      asn1_read_tlv(der, der_len, &off, &tag, &alg_seq, &alg_seq_len) != 0 ||
+      tag != 0x30) {
+    return;
+  }
+  if (tls_parse_algorithm_identifier(alg_seq, alg_seq_len, &oid, &oid_len,
+                                     &params, &params_len, &params_tag) != 0) {
+    return;
+  }
+
+  summary->public_key_alg = tls_public_key_oid_name(oid, oid_len);
+  summary->public_key_rsa = tls_public_key_oid_is_rsa(oid, oid_len);
+  if (params_tag == 0x06) {
+    summary->public_key_curve = tls_curve_oid_name(params, params_len);
+  }
+
+  if (asn1_read_tlv(der, der_len, &off, &tag, &spki, &spki_len) != 0 ||
+      tag != 0x03) {
+    return;
+  }
+  if (summary->public_key_rsa) {
+    tls_parse_rsa_public_key(spki, spki_len, summary);
+  } else if (spki_len > 1) {
+    summary->public_key_bits = (spki_len - 1) * 8;
+  }
+}
+
 static void tls_copy_asn1_time(const uint8_t *value, size_t len, char *out,
                                size_t out_cap) {
   copy_ascii_limited(out, out_cap, value, len);
@@ -1407,6 +1632,8 @@ static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
   size_t tbs_len = 0;
   const uint8_t *value = NULL;
   size_t value_len = 0;
+  const uint8_t *oid = NULL;
+  size_t oid_len = 0;
 
   if (!summary) {
     return -1;
@@ -1420,11 +1647,14 @@ static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
   }
 
   size_t cert_off = 0;
+  size_t tbs_tlv_start = cert_off;
   if (asn1_read_tlv(cert_seq, cert_seq_len, &cert_off, &tag, &tbs, &tbs_len) !=
           0 ||
       tag != 0x30) {
     return -1;
   }
+  sha256_buffer_hex(cert_seq + tbs_tlv_start, cert_off - tbs_tlv_start,
+                    summary->tbs_sha256);
 
   size_t p = 0;
   if (p < tbs_len && tbs[p] == 0xa0) {
@@ -1433,10 +1663,17 @@ static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
     }
   }
 
-  for (int i = 0; i < 2; i++) {
-    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
-      return -1;
-    }
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+    return -1;
+  }
+
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+  if (tls_parse_algorithm_identifier(value, value_len, &oid, &oid_len, NULL,
+                                     NULL, NULL) == 0) {
+    summary->tbs_signature_alg = tls_signature_oid_name(oid, oid_len);
   }
 
   if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
@@ -1455,6 +1692,37 @@ static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
     return -1;
   }
   sha256_buffer_hex(value, value_len, summary->subject_sha256);
+
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+  tls_parse_spki(value, value_len, summary);
+
+  if (asn1_read_tlv(cert_seq, cert_seq_len, &cert_off, &tag, &value,
+                    &value_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+  if (tls_parse_algorithm_identifier(value, value_len, &oid, &oid_len, NULL,
+                                     NULL, NULL) == 0) {
+    summary->signature_alg = tls_signature_oid_name(oid, oid_len);
+    summary->signature_sha256_rsa = tls_signature_oid_is_sha256_rsa(oid, oid_len);
+  }
+
+  if (summary->signature_alg && summary->tbs_signature_alg &&
+      strcmp(summary->signature_alg, "unknown") != 0 &&
+      strcmp(summary->signature_alg, summary->tbs_signature_alg) == 0) {
+    summary->signature_alg_consistent = 1;
+  }
+
+  if (asn1_read_tlv(cert_seq, cert_seq_len, &cert_off, &tag, &value,
+                    &value_len) == 0 &&
+      tag == 0x03 && value_len > 1) {
+    summary->signature_len = value_len - 1;
+    sha256_buffer_hex(value + 1, value_len - 1, summary->signature_sha256);
+  }
+
   summary->parsed = 1;
   return 0;
 }
@@ -1866,18 +2134,47 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
       append_text(out, out_cap, line);
     }
     if (info.cert_summaries > 0) {
+      tls_cert_summary_t *leaf = &info.certs[0];
       snprintf(line, sizeof(line),
                "tls chain-link links-ok=%lu/%lu names-parsed=%lu\n",
                (unsigned long)info.chain_links_ok,
                (unsigned long)info.chain_links_checked,
                (unsigned long)info.cert_summaries);
       append_text(out, out_cap, line);
+      snprintf(line, sizeof(line),
+               "tls cert-signature leaf-alg=%s tbs-match=%s sig-bytes=%lu\n",
+               leaf->signature_alg ? leaf->signature_alg : "unknown",
+               leaf->signature_alg_consistent ? "yes" : "no",
+               (unsigned long)leaf->signature_len);
+      append_text(out, out_cap, line);
+      snprintf(line, sizeof(line), "tls leaf-tbs-sha256 %s\n",
+               leaf->tbs_sha256);
+      append_text(out, out_cap, line);
+      if (leaf->signature_sha256[0]) {
+        snprintf(line, sizeof(line), "tls leaf-signature-sha256 %s\n",
+                 leaf->signature_sha256);
+        append_text(out, out_cap, line);
+      }
       snprintf(line, sizeof(line), "tls leaf-issuer-sha256 %s\n",
                info.certs[0].issuer_sha256);
       append_text(out, out_cap, line);
       if (info.cert_summaries > 1) {
+        tls_cert_summary_t *issuer = &info.certs[1];
         snprintf(line, sizeof(line), "tls next-subject-sha256 %s\n",
-                 info.certs[1].subject_sha256);
+                 issuer->subject_sha256);
+        append_text(out, out_cap, line);
+        snprintf(line, sizeof(line),
+                 "tls issuer-public-key alg=%s bits=%lu exponent=%lu\n",
+                 issuer->public_key_alg ? issuer->public_key_alg : "unknown",
+                 (unsigned long)issuer->public_key_bits,
+                 (unsigned long)issuer->rsa_exponent);
+        append_text(out, out_cap, line);
+        snprintf(line, sizeof(line),
+                 "tls signature-material ready=%s method=rsa-pkcs1-sha256\n",
+                 (leaf->signature_sha256_rsa && issuer->public_key_rsa &&
+                  issuer->public_key_bits > 0 && issuer->rsa_exponent > 0)
+                     ? "yes"
+                     : "no");
         append_text(out, out_cap, line);
       }
     }
@@ -1911,7 +2208,7 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
     append_text(out, out_cap, line);
   }
   append_text(out, out_cap,
-              "tls next certificate-signature-validation-and-key-schedule\n");
+              "tls next rsa-pkcs1-sha256-verify-and-key-schedule\n");
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");
