@@ -6,9 +6,9 @@ with a restrained, development-first interface.
 
 ## Current Shape
 
-- Boots on the ZimaOS VM target and on UEFI-capable `x86_64` hardware
+- Boots on UEFI-capable `x86_64` hardware; ZimaOS is only the current lab VM
 - Uses a simple framebuffer UI with an `Orizon OS` splash and one core console
-- Keeps `/workspace` persistent on the ZimaOS VM data partition
+- Keeps `/workspace` persistent when an Orizon data area is available
 - Stays intentionally small so new features can be added deliberately
 
 ## Why it is minimal
@@ -47,6 +47,21 @@ Or the shell script:
 
 This creates `orizonos-x86_64.iso`.
 
+## Portable Update Flow
+
+From the repository root:
+
+```bash
+python scripts/orizon/orizon_update.py --mode local-iso
+```
+
+This builds on the current machine and refreshes the root `Orizon-OS.iso`
+artifact. The ZimaOS backend is available for the lab VM with:
+
+```bash
+python scripts/orizon/orizon_update.py --mode zimaos-vm
+```
+
 ## Running
 
 ### QEMU (UEFI mode)
@@ -82,5 +97,6 @@ build.sh         # alternative build script
 ## Notes
 
 - The active VM build is intentionally console-first.
-- On the ZimaOS VM, `/workspace` is saved to the reserved Orizon data area.
+- `/workspace` is saved to the reserved Orizon data area when the boot disk has
+  been prepared for persistence.
 - New features should be reintroduced deliberately from this minimal base.

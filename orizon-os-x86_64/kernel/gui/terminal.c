@@ -4,6 +4,7 @@
 
 #include "../include/gui.h"
 #include "../include/kmalloc.h"
+#include "../include/ps2.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
 #include "../include/vfs.h"
@@ -49,6 +50,8 @@ typedef struct terminal {
   /* Input */
   char input_buf[256];
   int input_len;
+  int input_cursor;
+  int input_start_x, input_start_y;
   char cwd[256];
 
   /* Line editor */
@@ -332,6 +335,133 @@ void term_puts_t(terminal_t *term, const char *str) {
   while (*str) term_putc(term, *str++);
 }
 
+static void term_prepare_input(terminal_t *term) {
+  term->input_len = 0;
+  term->input_cursor = 0;
+  term->input_buf[0] = '\0';
+  term->input_start_x = term->cursor_x;
+  term->input_start_y = term->cursor_y;
+  term->history_pos = term->history_count;
+}
+
+static int term_input_limit(terminal_t *term) {
+  int limit = TERM_COLS - term->input_start_x - 1;
+  if (limit < 1) {
+    limit = 1;
+  }
+  if (limit > 255) {
+    limit = 255;
+  }
+  return limit;
+}
+
+static void term_redraw_input(terminal_t *term) {
+  int row = term->input_start_y;
+  int start = term->input_start_x;
+
+  if (row < 0 || row >= TERM_ROWS) {
+    return;
+  }
+
+  term->cursor_x = start;
+  term->cursor_y = row;
+  for (int col = start; col < TERM_COLS; col++) {
+    int idx = row * TERM_COLS + col;
+    term->chars[idx] = ' ';
+    term->fg_colors[idx] = term->current_fg;
+    term->bg_colors[idx] = term->current_bg;
+  }
+
+  for (int i = 0; i < term->input_len; i++) {
+    term_putc(term, term->input_buf[i]);
+  }
+
+  term->cursor_x = start + term->input_cursor;
+  term->cursor_y = row;
+  if (term->cursor_x >= TERM_COLS) {
+    term->cursor_x = TERM_COLS - 1;
+  }
+}
+
+static void term_insert_input_char(terminal_t *term, char c) {
+  int limit = term_input_limit(term);
+  if (term->input_len >= limit) {
+    return;
+  }
+
+  for (int i = term->input_len; i > term->input_cursor; i--) {
+    term->input_buf[i] = term->input_buf[i - 1];
+  }
+  term->input_buf[term->input_cursor++] = c;
+  term->input_len++;
+  term->input_buf[term->input_len] = '\0';
+  term_redraw_input(term);
+}
+
+static void term_backspace_input(terminal_t *term) {
+  if (term->input_cursor <= 0) {
+    return;
+  }
+
+  for (int i = term->input_cursor - 1; i < term->input_len; i++) {
+    term->input_buf[i] = term->input_buf[i + 1];
+  }
+  term->input_cursor--;
+  term->input_len--;
+  term_redraw_input(term);
+}
+
+static void term_add_history(terminal_t *term, const char *cmd) {
+  if (!cmd || *cmd == '\0') {
+    return;
+  }
+  if (term->history_count > 0 &&
+      strcmp(term->history[term->history_count - 1], cmd) == 0) {
+    term->history_pos = term->history_count;
+    return;
+  }
+
+  if (term->history_count >= 16) {
+    for (int i = 1; i < 16; i++) {
+      strncpy(term->history[i - 1], term->history[i], 255);
+      term->history[i - 1][255] = '\0';
+    }
+    term->history_count = 15;
+  }
+
+  strncpy(term->history[term->history_count], cmd, 255);
+  term->history[term->history_count][255] = '\0';
+  term->history_count++;
+  term->history_pos = term->history_count;
+}
+
+static void term_set_input_text(terminal_t *term, const char *text) {
+  strncpy(term->input_buf, text ? text : "", 255);
+  term->input_buf[255] = '\0';
+  term->input_len = strlen(term->input_buf);
+  if (term->input_len > term_input_limit(term)) {
+    term->input_len = term_input_limit(term);
+    term->input_buf[term->input_len] = '\0';
+  }
+  term->input_cursor = term->input_len;
+  term_redraw_input(term);
+}
+
+static int term_parse_uint(const char *s, int *out) {
+  int value = 0;
+  int seen = 0;
+  while (*s >= '0' && *s <= '9') {
+    value = value * 10 + (*s - '0');
+    seen = 1;
+    s++;
+  }
+  if (!seen || value <= 0) {
+    return -1;
+  }
+  *out = value;
+  return 0;
+}
+
 static const char *term_skip_spaces(const char *s) {
   while (s && *s == ' ') {
     s++;
@@ -506,6 +636,7 @@ static int term_copy_file(const char *src_path, const char *dst_path) {
 
 static void term_editor_prompt(terminal_t *term) {
   term_puts_t(term, "\033[33medit>\033[0m ");
+  term_prepare_input(term);
 }
 
 static void term_start_editor(terminal_t *term, const char *display,
@@ -707,6 +838,142 @@ static void term_print_tree(terminal_t *term, const char *display,
   term_print_tree_recursive(term, path, 1);
 }
 
+static int term_read_regular_file(terminal_t *term, const char *display,
+                                  const char *path, char *buf, size_t cap,
+                                  const char *tool_name) {
+  int is_dir = 0;
+  if (vfs_stat(path, NULL, &is_dir) < 0) {
+    term_puts_t(term, tool_name);
+    term_puts_t(term, ": ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": No such file\n");
+    return -1;
+  }
+  if (is_dir) {
+    term_puts_t(term, tool_name);
+    term_puts_t(term, ": ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": Is a directory\n");
+    return -1;
+  }
+
+  file_t *f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    term_puts_t(term, tool_name);
+    term_puts_t(term, ": open failed\n");
+    return -1;
+  }
+
+  size_t used = 0;
+  ssize_t n;
+  while (used < cap - 1 &&
+         (n = vfs_read(f, buf + used, (cap - 1) - used)) > 0) {
+    used += (size_t)n;
+  }
+  vfs_close(f);
+  buf[used] = '\0';
+  return n < 0 ? -1 : (int)used;
+}
+
+static void term_print_head(terminal_t *term, const char *display,
+                            const char *path, int max_lines) {
+  char buf[2048];
+  int n = term_read_regular_file(term, display, path, buf, sizeof(buf), "head");
+  int lines = 0;
+
+  if (n < 0) {
+    return;
+  }
+
+  for (int i = 0; i < n && lines < max_lines; i++) {
+    term_putc(term, buf[i]);
+    if (buf[i] == '\n') {
+      lines++;
+    }
+  }
+  if (n > 0 && buf[n - 1] != '\n') {
+    term_puts_t(term, "\n");
+  }
+}
+
+static void term_print_grep(terminal_t *term, const char *pattern,
+                            const char *display, const char *path) {
+  char buf[2048];
+  char line[256];
+  int line_len = 0;
+  int matches = 0;
+  int n = term_read_regular_file(term, display, path, buf, sizeof(buf), "grep");
+
+  if (n < 0) {
+    return;
+  }
+
+  for (int i = 0; i <= n; i++) {
+    char c = (i < n) ? buf[i] : '\n';
+    if (c == '\n' || line_len >= 255) {
+      line[line_len] = '\0';
+      if (strstr(line, pattern)) {
+        term_puts_t(term, line);
+        term_puts_t(term, "\n");
+        matches++;
+      }
+      line_len = 0;
+    } else {
+      line[line_len++] = c;
+    }
+  }
+
+  if (matches == 0) {
+    term_puts_t(term, "grep: no matches\n");
+  }
+}
+
+static void term_find_recursive(terminal_t *term, const char *path,
+                                const char *pattern, int depth) {
+  dirent_t entries[16];
+  int count;
+
+  if (depth > 6) {
+    return;
+  }
+
+  count = vfs_readdir(path, entries, 16);
+  if (count < 0) {
+    return;
+  }
+
+  for (int i = 0; i < count; i++) {
+    char child[MAX_PATH];
+    if (strcmp(path, "/") == 0) {
+      snprintf(child, sizeof(child), "/%s", entries[i].name);
+    } else {
+      snprintf(child, sizeof(child), "%s/%s", path, entries[i].name);
+    }
+
+    if (!pattern || *pattern == '\0' || strstr(entries[i].name, pattern)) {
+      term_puts_t(term, child);
+      if (entries[i].type == 1) {
+        term_puts_t(term, "/");
+      }
+      term_puts_t(term, "\n");
+    }
+
+    if (entries[i].type == 1) {
+      term_find_recursive(term, child, pattern, depth + 1);
+    }
+  }
+}
+
+static void term_print_update_info(terminal_t *term) {
+  term_puts_t(term, "\033[1;36mOrizon update model\033[0m\n");
+  term_puts_t(term, "This kernel does not self-update over the network yet.\n");
+  term_puts_t(term, "Use the portable host updater from the repo:\n");
+  term_puts_t(term, "  python scripts/orizon/orizon_update.py --mode local-iso\n");
+  term_puts_t(term, "Lab VM backend, optional:\n");
+  term_puts_t(term, "  python scripts/orizon/orizon_update.py --mode zimaos-vm\n");
+  term_puts_t(term, "/workspace is preserved across OS updates.\n");
+}
+
 /* Render terminal */
 void term_render(terminal_t *term) {
   if (!term || !term->visible) return;
@@ -746,10 +1013,7 @@ void term_execute(terminal_t *term, const char *cmd) {
   while (*cmd == ' ') cmd++;
   if (*cmd == '\0') return;
   
-  /* Save to history */
-  if (term->history_count < 16) {
-    strncpy(term->history[term->history_count++], cmd, 255);
-  }
+  term_add_history(term, cmd);
   
   term_puts_t(term, "\n");
   
@@ -760,6 +1024,9 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  cd <dir>  - Change directory\n");
     term_puts_t(term, "  pwd       - Print working directory\n");
     term_puts_t(term, "  cat <f>   - Display file contents\n");
+    term_puts_t(term, "  head [-n] <f> - Show first lines\n");
+    term_puts_t(term, "  grep <text> <f> - Search file text\n");
+    term_puts_t(term, "  find [p] [text] - Find entries\n");
     term_puts_t(term, "  stat <p>  - Show file or directory info\n");
     term_puts_t(term, "  tree [p]  - Show a small directory tree\n");
     term_puts_t(term, "  cp <s> <d> - Copy a file\n");
@@ -773,6 +1040,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  sync      - Save /workspace to disk\n");
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  storage   - Show persistence state\n");
+    term_puts_t(term, "  update    - Show portable update flow\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
     term_puts_t(term, "  neofetch  - System info\n");
@@ -894,6 +1162,86 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, filename);
       term_puts_t(term, ": No such file\n");
     }
+  } else if (term_command_is(cmd, "head")) {
+    const char *args = term_skip_spaces(cmd + 4);
+    const char *filename = args;
+    int lines = 10;
+    char path[MAX_PATH];
+
+    if (*args == '-') {
+      args++;
+      if (term_parse_uint(args, &lines) < 0) {
+        term_puts_t(term, "usage: head [-n] <file>\n");
+        return;
+      }
+      while (*args >= '0' && *args <= '9') {
+        args++;
+      }
+      filename = term_skip_spaces(args);
+    }
+
+    if (*filename == '\0') {
+      term_puts_t(term, "usage: head [-n] <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "head: invalid path\n");
+      return;
+    }
+    term_print_head(term, filename, path, lines);
+  } else if (term_command_is(cmd, "grep")) {
+    char pattern[MAX_PATH];
+    char file_arg[MAX_PATH];
+    char path[MAX_PATH];
+
+    if (term_split_two_paths(cmd + 4, pattern, file_arg, sizeof(file_arg)) < 0) {
+      term_puts_t(term, "usage: grep <text> <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, file_arg, path, sizeof(path)) < 0) {
+      term_puts_t(term, "grep: invalid path\n");
+      return;
+    }
+    term_print_grep(term, pattern, file_arg, path);
+  } else if (term_command_is(cmd, "find")) {
+    const char *args = term_skip_spaces(cmd + 4);
+    char first[MAX_PATH] = {0};
+    char second[MAX_NAME] = {0};
+    char path[MAX_PATH];
+    const char *pattern = "";
+    int is_dir = 0;
+
+    if (*args == '\0') {
+      snprintf(path, sizeof(path), "%s", term->cwd[0] ? term->cwd : "/");
+    } else {
+      const char *p = args;
+      size_t len = 0;
+      while (p[len] && p[len] != ' ') {
+        len++;
+      }
+      if (len >= sizeof(first)) {
+        term_puts_t(term, "find: invalid argument\n");
+        return;
+      }
+      for (size_t i = 0; i < len; i++) {
+        first[i] = p[i];
+      }
+      first[len] = '\0';
+      p = term_skip_spaces(p + len);
+      if (*p) {
+        strncpy(second, p, sizeof(second) - 1);
+      }
+
+      if (resolve_path(term->cwd, first, path, sizeof(path)) == 0 &&
+          vfs_stat(path, NULL, &is_dir) == 0 && is_dir) {
+        pattern = second;
+      } else {
+        snprintf(path, sizeof(path), "%s", term->cwd[0] ? term->cwd : "/");
+        pattern = first;
+      }
+    }
+
+    term_find_recursive(term, path, pattern, 0);
   } else if (term_command_is(cmd, "stat")) {
     char path[MAX_PATH];
     const char *requested = term_skip_spaces(cmd + 4);
@@ -1076,6 +1424,8 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "storage")) {
     term_puts_t(term, vfs_persist_status());
     term_puts_t(term, "\n");
+  } else if (term_command_is(cmd, "update") || term_command_is(cmd, "orizon-update")) {
+    term_print_update_info(term);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");
@@ -1144,12 +1494,48 @@ void term_prompt(terminal_t *term) {
   term_puts_t(term, "\033[34m");
   term_puts_t(term, cwd);
   term_puts_t(term, "\033[0m$ ");
+  term_prepare_input(term);
 }
 
 /* Handle keyboard input */
 void term_handle_key(terminal_t *term, int key) {
   if (!term) return;
-  
+
+  if (!term->edit_mode) {
+    if (key == KEY_UP) {
+      if (term->history_count > 0 && term->history_pos > 0) {
+        term->history_pos--;
+        term_set_input_text(term, term->history[term->history_pos]);
+      }
+      return;
+    }
+    if (key == KEY_DOWN) {
+      if (term->history_pos < term->history_count - 1) {
+        term->history_pos++;
+        term_set_input_text(term, term->history[term->history_pos]);
+      } else {
+        term->history_pos = term->history_count;
+        term_set_input_text(term, "");
+      }
+      return;
+    }
+  }
+
+  if (key == KEY_LEFT) {
+    if (term->input_cursor > 0) {
+      term->input_cursor--;
+      term_redraw_input(term);
+    }
+    return;
+  }
+  if (key == KEY_RIGHT) {
+    if (term->input_cursor < term->input_len) {
+      term->input_cursor++;
+      term_redraw_input(term);
+    }
+    return;
+  }
+
   if (key == '\n' || key == '\r') {
     term->input_buf[term->input_len] = '\0';
     if (term->edit_mode) {
@@ -1162,14 +1548,9 @@ void term_handle_key(terminal_t *term, int key) {
       term_prompt(term);
     }
   } else if (key == '\b' || key == 127) {
-    if (term->input_len > 0) {
-      term->input_len--;
-      term->cursor_x--;
-      term->chars[term->cursor_y * TERM_COLS + term->cursor_x] = ' ';
-    }
-  } else if (key >= 32 && key < 127 && term->input_len < 255) {
-    term->input_buf[term->input_len++] = (char)key;
-    term_putc(term, (char)key);
+    term_backspace_input(term);
+  } else if (key >= 32 && key < 127) {
+    term_insert_input_char(term, (char)key);
   }
 }
 

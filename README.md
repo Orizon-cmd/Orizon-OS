@@ -1,53 +1,73 @@
 # Orizon OS
 
-Orizon OS est maintenant un projet autonome et personnel. Ce dépôt est la
-source d’autorité du système: il n’y a plus de synchronisation prévue avec un
-ancien OS ou un dépôt amont externe.
+Orizon OS est maintenant un projet autonome et personnel. Ce depot est la
+source d'autorite du systeme: il n'y a plus de synchronisation prevue avec un
+ancien OS ou un depot amont externe.
 
 ## Direction actuelle
 
-Le point d’entrée actif est `orizon-os-x86_64`, recentré en base minimale pour
-le développement noyau:
+Le point d'entree actif est `orizon-os-x86_64`, recentre en base minimale pour
+le developpement noyau:
 
-- démarrage stable en VM et sur cible `x86_64` UEFI
+- demarrage stable en VM et sur cible `x86_64` UEFI
 - interface framebuffer simple avec splash `Orizon OS`
 - une seule console centrale pour travailler proprement
-- espace `/workspace` persistant en VM, avec `/system` et `/tmp` en base minimale
-- mise à jour de la VM sans réinstallation complète
+- espace `/workspace` persistant quand une zone donnees Orizon est disponible
+- mise a jour sans reinstallation complete de l'espace de travail
 
 Ce qui est volontairement absent du profil actif:
 
-- gestionnaire de fichiers intégré
-- bureau de démonstration
-- jeux et applications intégrées non essentielles
-- flux de mise à jour hérité d’un ancien projet
+- gestionnaire de fichiers integre
+- bureau de demonstration
+- jeux et applications integrees non essentielles
+- flux de mise a jour herite d'un ancien projet
 
-## Boucle de travail VM
+## Mise A Jour Portable
 
-Le cycle le plus rapide aujourd’hui passe par le serveur ZimaOS:
+ZimaOS est seulement le labo VM actuel. Orizon OS doit rester portable vers
+d'autres machines `x86_64` UEFI.
+
+Le point d'entree recommande est:
 
 ```powershell
-python scripts/orizon/build_x86_64_on_zimaos.py --deploy-vm
+python scripts/orizon/orizon_update.py --mode local-iso
+```
+
+Ce mode construit l'ISO sur la machine courante si la toolchain est installee
+et rafraichit `Orizon-OS.iso` a la racine.
+
+Backends disponibles:
+
+- `local-iso`: build local portable, pour toute machine avec clang/lld/xorriso
+- `zimaos-iso`: build via Docker sur le serveur ZimaOS, puis recupere l'ISO
+- `zimaos-vm`: build via ZimaOS, deploie sur la VM `orizon-dev`, puis recupere l'ISO
+
+## Boucle De Travail VM
+
+Le cycle le plus rapide aujourd'hui passe encore par le serveur ZimaOS:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-vm
 powershell -File scripts/orizon/open_orizon_vnc.ps1
 ```
 
-La première commande reconstruit `orizon-os-x86_64` dans Docker sur ZimaOS,
-déploie le résultat sur `orizon-dev`, puis redémarre la VM si nécessaire. La
-seconde ouvre la console VNC avec TigerVNC en profil rapide.
+La premiere commande reconstruit `orizon-os-x86_64`, deploie le resultat sur
+`orizon-dev`, preserve la partition donnees Orizon, puis met a jour
+`Orizon-OS.iso`. La seconde ouvre la console VNC avec TigerVNC.
 
-## Arborescence utile
+## Arborescence Utile
 
-- `orizon-os-x86_64/` : noyau et image de démarrage `x86_64`
+- `orizon-os-x86_64/` : noyau et image de demarrage `x86_64`
 - `docs/orizon/` : notes de projet et labo ZimaOS
-- `scripts/orizon/` : build, déploiement VM, accès VNC et SSH
-- `config/hosts/*.local.*` : secrets locaux ignorés par Git
+- `scripts/orizon/` : update portable, build, deploiement VM, acces VNC et SSH
+- `config/hosts/*.local.*` : secrets locaux ignores par Git
 
-## Base active `x86_64`
+## Base Active `x86_64`
 
-Le socle actif vise un noyau propre, stable et facile à faire évoluer. Il
-privilégie la lisibilité, le contrôle du boot, et une surface réduite pour
-réintroduire les fonctionnalités plus tard, uniquement si elles servent la
-vision d’Orizon OS.
+Le socle actif vise un noyau propre, stable et facile a faire evoluer. Il
+privilegie la lisibilite, le controle du boot, et une surface reduite pour
+reintroduire les fonctionnalites plus tard, uniquement si elles servent la
+vision d'Orizon OS.
 
-Pour les détails de build locaux, voir
+Pour les details de build locaux, voir
 [orizon-os-x86_64/README.md](orizon-os-x86_64/README.md).

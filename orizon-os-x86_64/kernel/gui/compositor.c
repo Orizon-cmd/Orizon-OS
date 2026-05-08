@@ -220,7 +220,7 @@ static void keyboard_callback(int key) {
     return;
   }
 
-  if (main_terminal && key < 0x100) {
+  if (main_terminal) {
     term_handle_key(main_terminal, key);
     needs_redraw = 1;
   }
