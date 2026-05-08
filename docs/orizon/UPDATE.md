@@ -65,6 +65,8 @@ Current kernel-owned layers:
   `/workspace/.orizon/github-tls-response`.
 - TLS certificate signature material extraction: leaf TBS SHA-256, signature
   algorithm, signature SHA-256, and issuer RSA public-key metadata.
+- RSA PKCS#1 v1.5 SHA-256 verification of the leaf certificate signature
+  against the provided issuer public key.
 - SHA-256 hashing for downloaded update proofs.
 - Local manifest and staging plan:
   `/workspace/.orizon/update-manifest`, `/workspace/.orizon/update-plan`,
@@ -79,15 +81,14 @@ Current kernel-owned layers:
 
 Still required before GitHub package downloads can happen fully inside Orizon OS:
 
-- TLS cryptography: RSA PKCS#1 SHA-256 certificate verification, root
-  validation, key agreement, traffic keys, AEAD, and HTTP inside the encrypted
-  tunnel.
+- TLS cryptography: root trust anchoring, key agreement, traffic keys, AEAD,
+  and HTTP inside the encrypted tunnel.
 - Verified package/manifest format.
 - Safe ESP/FAT32 writer or A/B boot slot for replacing kernel/system files
   without corrupting the current boot.
 
 Until TLS crypto and the boot writer exist, `update` starts the upgrade, reaches
 GitHub over the kernel network stack, saves the GitHub HTTP redirect/proof,
-performs a TLS server-handshake, leaf identity, chain-link, and signature
-material probe, hashes the proofs, writes a staging plan, and stops safely
+performs a TLS server-handshake, leaf identity, chain-link, and RSA signature
+verification probe, hashes the proofs, writes a staging plan, and stops safely
 instead of pretending that the machine was upgraded.

@@ -1182,6 +1182,7 @@ static int build_tls_client_hello(const char *host, uint8_t *out,
 }
 
 #define TLS_MAX_CERT_SUMMARIES 4
+#define TLS_RSA_MAX_BYTES 256
 
 typedef struct {
   int parsed;
@@ -1197,9 +1198,15 @@ typedef struct {
   int signature_alg_consistent;
   int signature_sha256_rsa;
   int public_key_rsa;
+  int rsa_modulus_ready;
+  int signature_ready;
   size_t signature_len;
   size_t public_key_bits;
+  size_t rsa_modulus_len;
   uint32_t rsa_exponent;
+  uint8_t tbs_digest[SHA256_DIGEST_SIZE];
+  uint8_t signature_bytes[TLS_RSA_MAX_BYTES];
+  uint8_t rsa_modulus[TLS_RSA_MAX_BYTES];
 } tls_cert_summary_t;
 
 typedef struct {
@@ -1224,6 +1231,9 @@ typedef struct {
   size_t cert_summaries;
   size_t chain_links_checked;
   size_t chain_links_ok;
+  int leaf_signature_verify_ready;
+  int leaf_signature_verified;
+  const char *leaf_signature_verify_status;
   tls_cert_summary_t certs[TLS_MAX_CERT_SUMMARIES];
   size_t leaf_certificate_len;
   char leaf_certificate_sha256[SHA256_HEX_SIZE];
@@ -1404,6 +1414,16 @@ static int asn1_read_tlv(const uint8_t *der, size_t der_len, size_t *off,
   return 0;
 }
 
+static void tls_sha256_bytes_hex(const void *data, size_t len,
+                                 uint8_t digest[SHA256_DIGEST_SIZE],
+                                 char hex[SHA256_HEX_SIZE]) {
+  sha256_ctx_t ctx;
+  sha256_init(&ctx);
+  sha256_update(&ctx, data, len);
+  sha256_final(&ctx, digest);
+  sha256_hex(digest, hex);
+}
+
 static int tls_oid_equal(const uint8_t *oid, size_t oid_len,
                          const uint8_t *expected, size_t expected_len) {
   return oid_len == expected_len && memcmp(oid, expected, expected_len) == 0;
@@ -1574,6 +1594,15 @@ static void tls_parse_rsa_public_key(const uint8_t *bit_string,
 
   summary->public_key_bits = tls_bit_length(modulus, modulus_len);
   summary->rsa_exponent = tls_parse_small_uint(exponent, exponent_len);
+  while (modulus_len > 0 && *modulus == 0) {
+    modulus++;
+    modulus_len--;
+  }
+  if (modulus_len > 0 && modulus_len <= TLS_RSA_MAX_BYTES) {
+    memcpy(summary->rsa_modulus, modulus, modulus_len);
+    summary->rsa_modulus_len = modulus_len;
+    summary->rsa_modulus_ready = 1;
+  }
 }
 
 static void tls_parse_spki(const uint8_t *der, size_t der_len,
@@ -1617,6 +1646,204 @@ static void tls_parse_spki(const uint8_t *der, size_t der_len,
   }
 }
 
+static int rsa_ge_bytes(const uint8_t *a, const uint8_t *b, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (a[i] > b[i]) {
+      return 1;
+    }
+    if (a[i] < b[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void rsa_sub_inplace(uint8_t *a, const uint8_t *b, size_t len) {
+  uint16_t borrow = 0;
+  for (size_t i = len; i > 0; i--) {
+    uint16_t av = a[i - 1];
+    uint16_t bv = (uint16_t)b[i - 1] + borrow;
+    if (av < bv) {
+      a[i - 1] = (uint8_t)(av + 256 - bv);
+      borrow = 1;
+    } else {
+      a[i - 1] = (uint8_t)(av - bv);
+      borrow = 0;
+    }
+  }
+}
+
+static int rsa_ge_ext(const uint8_t *tmp, const uint8_t *mod, size_t len) {
+  if (tmp[0] != 0) {
+    return 1;
+  }
+  return rsa_ge_bytes(tmp + 1, mod, len);
+}
+
+static void rsa_sub_ext(uint8_t *tmp, const uint8_t *mod, size_t len) {
+  uint16_t borrow = 0;
+  for (size_t i = len + 1; i > 1; i--) {
+    uint16_t av = tmp[i - 1];
+    uint16_t bv = (uint16_t)mod[i - 2] + borrow;
+    if (av < bv) {
+      tmp[i - 1] = (uint8_t)(av + 256 - bv);
+      borrow = 1;
+    } else {
+      tmp[i - 1] = (uint8_t)(av - bv);
+      borrow = 0;
+    }
+  }
+  if (borrow) {
+    tmp[0]--;
+  }
+}
+
+static void rsa_add_mod(uint8_t *out, const uint8_t *a, const uint8_t *b,
+                        const uint8_t *mod, size_t len) {
+  uint8_t tmp[TLS_RSA_MAX_BYTES + 1];
+  uint16_t carry = 0;
+
+  memset(tmp, 0, sizeof(tmp));
+  for (size_t i = len; i > 0; i--) {
+    uint16_t sum = (uint16_t)a[i - 1] + b[i - 1] + carry;
+    tmp[i] = (uint8_t)sum;
+    carry = sum >> 8;
+  }
+  tmp[0] = (uint8_t)carry;
+
+  if (rsa_ge_ext(tmp, mod, len)) {
+    rsa_sub_ext(tmp, mod, len);
+  }
+  memcpy(out, tmp + 1, len);
+}
+
+static void rsa_double_mod(uint8_t *out, const uint8_t *a,
+                           const uint8_t *mod, size_t len) {
+  rsa_add_mod(out, a, a, mod, len);
+}
+
+static void rsa_mul_mod(uint8_t *out, const uint8_t *a, const uint8_t *b,
+                        const uint8_t *mod, size_t len) {
+  uint8_t result[TLS_RSA_MAX_BYTES];
+  uint8_t temp[TLS_RSA_MAX_BYTES];
+
+  memset(result, 0, len);
+  memcpy(temp, a, len);
+  if (rsa_ge_bytes(temp, mod, len)) {
+    rsa_sub_inplace(temp, mod, len);
+  }
+
+  for (size_t i = len; i > 0; i--) {
+    uint8_t byte = b[i - 1];
+    for (int bit = 0; bit < 8; bit++) {
+      if (byte & (uint8_t)(1U << bit)) {
+        rsa_add_mod(result, result, temp, mod, len);
+      }
+      rsa_double_mod(temp, temp, mod, len);
+    }
+  }
+  memcpy(out, result, len);
+}
+
+static int rsa_left_pad(uint8_t *out, size_t out_len, const uint8_t *in,
+                        size_t in_len) {
+  if (in_len > out_len || out_len > TLS_RSA_MAX_BYTES) {
+    return -1;
+  }
+  memset(out, 0, out_len);
+  memcpy(out + out_len - in_len, in, in_len);
+  return 0;
+}
+
+static int rsa_modexp65537(uint8_t *out, const uint8_t *sig, size_t sig_len,
+                           const uint8_t *mod, size_t mod_len) {
+  uint8_t base[TLS_RSA_MAX_BYTES];
+  uint8_t result[TLS_RSA_MAX_BYTES];
+  uint8_t scratch[TLS_RSA_MAX_BYTES];
+
+  if (!out || !sig || !mod || mod_len == 0 || mod_len > TLS_RSA_MAX_BYTES ||
+      rsa_left_pad(base, mod_len, sig, sig_len) != 0) {
+    return -1;
+  }
+  if (rsa_ge_bytes(base, mod, mod_len)) {
+    return -1;
+  }
+
+  memcpy(result, base, mod_len);
+  for (int i = 0; i < 16; i++) {
+    rsa_mul_mod(scratch, result, result, mod, mod_len);
+    memcpy(result, scratch, mod_len);
+  }
+  rsa_mul_mod(out, result, base, mod, mod_len);
+  return 0;
+}
+
+static int tls_check_pkcs1_sha256(const uint8_t *em, size_t em_len,
+                                  const uint8_t digest[SHA256_DIGEST_SIZE]) {
+  static const uint8_t sha256_digest_info_prefix[] = {
+      0x30, 0x31, 0x30, 0x0d, 0x06, 0x09, 0x60, 0x86, 0x48, 0x01,
+      0x65, 0x03, 0x04, 0x02, 0x01, 0x05, 0x00, 0x04, 0x20};
+  size_t tail_len = sizeof(sha256_digest_info_prefix) + SHA256_DIGEST_SIZE;
+
+  if (!em || em_len < 3 + 8 + tail_len || em[0] != 0 || em[1] != 1) {
+    return 0;
+  }
+
+  size_t ps_len = em_len - 3 - tail_len;
+  for (size_t i = 0; i < ps_len; i++) {
+    if (em[2 + i] != 0xff) {
+      return 0;
+    }
+  }
+  if (em[2 + ps_len] != 0) {
+    return 0;
+  }
+  if (memcmp(em + 3 + ps_len, sha256_digest_info_prefix,
+             sizeof(sha256_digest_info_prefix)) != 0) {
+    return 0;
+  }
+  return memcmp(em + 3 + ps_len + sizeof(sha256_digest_info_prefix), digest,
+                SHA256_DIGEST_SIZE) == 0;
+}
+
+static int tls_verify_leaf_signature(tls_parse_info_t *info) {
+  uint8_t encoded[TLS_RSA_MAX_BYTES];
+  tls_cert_summary_t *leaf;
+  tls_cert_summary_t *issuer;
+
+  if (!info || info->cert_summaries < 2) {
+    return 0;
+  }
+
+  leaf = &info->certs[0];
+  issuer = &info->certs[1];
+  if (!leaf->signature_sha256_rsa || !leaf->signature_alg_consistent ||
+      !leaf->signature_ready || !issuer->public_key_rsa ||
+      !issuer->rsa_modulus_ready || issuer->rsa_exponent != 65537 ||
+      issuer->rsa_modulus_len == 0 ||
+      leaf->signature_len > issuer->rsa_modulus_len) {
+    info->leaf_signature_verify_status = "unsupported";
+    return 0;
+  }
+
+  info->leaf_signature_verify_ready = 1;
+  if (rsa_modexp65537(encoded, leaf->signature_bytes, leaf->signature_len,
+                      issuer->rsa_modulus, issuer->rsa_modulus_len) != 0) {
+    info->leaf_signature_verify_status = "rsa-error";
+    return 0;
+  }
+
+  if (tls_check_pkcs1_sha256(encoded, issuer->rsa_modulus_len,
+                             leaf->tbs_digest)) {
+    info->leaf_signature_verified = 1;
+    info->leaf_signature_verify_status = "ok";
+    return 1;
+  }
+
+  info->leaf_signature_verify_status = "bad-signature";
+  return 0;
+}
+
 static void tls_copy_asn1_time(const uint8_t *value, size_t len, char *out,
                                size_t out_cap) {
   copy_ascii_limited(out, out_cap, value, len);
@@ -1653,8 +1880,8 @@ static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
       tag != 0x30) {
     return -1;
   }
-  sha256_buffer_hex(cert_seq + tbs_tlv_start, cert_off - tbs_tlv_start,
-                    summary->tbs_sha256);
+  tls_sha256_bytes_hex(cert_seq + tbs_tlv_start, cert_off - tbs_tlv_start,
+                       summary->tbs_digest, summary->tbs_sha256);
 
   size_t p = 0;
   if (p < tbs_len && tbs[p] == 0xa0) {
@@ -1721,6 +1948,10 @@ static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
       tag == 0x03 && value_len > 1) {
     summary->signature_len = value_len - 1;
     sha256_buffer_hex(value + 1, value_len - 1, summary->signature_sha256);
+    if (summary->signature_len <= TLS_RSA_MAX_BYTES) {
+      memcpy(summary->signature_bytes, value + 1, summary->signature_len);
+      summary->signature_ready = 1;
+    }
   }
 
   summary->parsed = 1;
@@ -1985,6 +2216,7 @@ static void tls_parse_certificate(const uint8_t *body, size_t len,
 
   if (info->certificate_count > 0) {
     info->certificate_seen = 1;
+    tls_verify_leaf_signature(info);
   }
 }
 
@@ -2176,6 +2408,14 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
                      ? "yes"
                      : "no");
         append_text(out, out_cap, line);
+        snprintf(line, sizeof(line),
+                 "tls leaf-signature-verify ready=%s verified=%s status=%s\n",
+                 info.leaf_signature_verify_ready ? "yes" : "no",
+                 info.leaf_signature_verified ? "yes" : "no",
+                 info.leaf_signature_verify_status
+                     ? info.leaf_signature_verify_status
+                     : "not-run");
+        append_text(out, out_cap, line);
       }
     }
   }
@@ -2207,8 +2447,7 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
              info.partial_handshake ? "yes" : "no");
     append_text(out, out_cap, line);
   }
-  append_text(out, out_cap,
-              "tls next rsa-pkcs1-sha256-verify-and-key-schedule\n");
+  append_text(out, out_cap, "tls next tls-key-agreement-and-record-crypto\n");
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");
