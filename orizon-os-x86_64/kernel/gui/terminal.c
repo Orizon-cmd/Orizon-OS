@@ -998,7 +998,7 @@ static void term_find_recursive(terminal_t *term, const char *path,
 }
 
 static void term_run_update(terminal_t *term) {
-  char report[1024];
+  char report[2048];
   orizon_update_full_upgrade(report, sizeof(report));
   term_puts_t(term, report);
 }
