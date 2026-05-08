@@ -4,6 +4,7 @@
  */
 
 #include "../include/idt.h"
+#include "../include/input_layout.h"
 #include "../include/types.h"
 
 /* ===================================================================== */
@@ -82,48 +83,7 @@ static keyboard_callback_t key_callback = 0;
 static void ps2_keyboard_irq(interrupt_frame_t *frame);
 static void ps2_mouse_irq(interrupt_frame_t *frame);
 
-/* ===================================================================== */
-/* Scancode Set 1 to ASCII Table (US QWERTY)                             */
-/* This is the standard PS/2 scancode set 1 (XT) mapping                 */
-/* ===================================================================== */
-
-static const char scancode_to_ascii[128] = {
-    0,    27,   '1',  '2',  '3',  '4',  '5',  '6',  /* 00-07 */
-    '7',  '8',  '9',  '0',  '-',  '=',  '\b', '\t', /* 08-0F */
-    'q',  'w',  'e',  'r',  't',  'y',  'u',  'i',  /* 10-17 */
-    'o',  'p',  '[',  ']',  '\n', 0,    'a',  's',  /* 18-1F */
-    'd',  'f',  'g',  'h',  'j',  'k',  'l',  ';',  /* 20-27 */
-    '\'', '`',  0,    '\\', 'z',  'x',  'c',  'v',  /* 28-2F */
-    'b',  'n',  'm',  ',',  '.',  '/',  0,    '*',  /* 30-37 */
-    0,    ' ',  0,    0,    0,    0,    0,    0,    /* 38-3F */
-    0,    0,    0,    0,    0,    0,    0,    '7',  /* 40-47 */
-    '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',  /* 48-4F */
-    '2',  '3',  '0',  '.',  0,    0,    0,    0,    /* 50-57 */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 58-5F */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 60-67 */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 68-6F */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 70-77 */
-    0,    0,    0,    0,    0,    0,    0,    0     /* 78-7F */
-};
-
-static const char scancode_to_ascii_shift[128] = {
-    0,    27,   '!',  '@',  '#',  '$',  '%',  '^',  /* 00-07 */
-    '&',  '*',  '(',  ')',  '_',  '+',  '\b', '\t', /* 08-0F */
-    'Q',  'W',  'E',  'R',  'T',  'Y',  'U',  'I',  /* 10-17 */
-    'O',  'P',  '{',  '}',  '\n', 0,    'A',  'S',  /* 18-1F */
-    'D',  'F',  'G',  'H',  'J',  'K',  'L',  ':',  /* 20-27 */
-    '"',  '~',  0,    '|',  'Z',  'X',  'C',  'V',  /* 28-2F */
-    'B',  'N',  'M',  '<',  '>',  '?',  0,    '*',  /* 30-37 */
-    0,    ' ',  0,    0,    0,    0,    0,    0,    /* 38-3F */
-    0,    0,    0,    0,    0,    0,    0,    '7',  /* 40-47 */
-    '8',  '9',  '-',  '4',  '5',  '6',  '+',  '1',  /* 48-4F */
-    '2',  '3',  '0',  '.',  0,    0,    0,    0,    /* 50-57 */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 58-5F */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 60-67 */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 68-6F */
-    0,    0,    0,    0,    0,    0,    0,    0,    /* 70-77 */
-    0,    0,    0,    0,    0,    0,    0,    0     /* 78-7F */
-};
+/* ASCII layout mapping lives in input_layout.c so PS/2 and USB stay aligned. */
 
 /* Special key codes */
 #define KEY_UP 0x100
@@ -444,19 +404,7 @@ void ps2_poll(void) {
       default:
         /* Regular keys */
         if (scancode < 128) {
-          int use_shift = shift_pressed;
-          
-          /* Caps lock affects letters only */
-          char base = scancode_to_ascii[scancode];
-          if (caps_lock && base >= 'a' && base <= 'z') {
-            use_shift = !use_shift;
-          }
-          
-          if (use_shift) {
-            key = scancode_to_ascii_shift[scancode];
-          } else {
-            key = scancode_to_ascii[scancode];
-          }
+          key = input_map_ps2_scancode(scancode, shift_pressed, caps_lock);
         }
         break;
       }

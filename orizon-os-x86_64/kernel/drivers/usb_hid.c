@@ -5,25 +5,12 @@
 #include "../include/types.h"
 #include "../include/ps2.h"
 #include "../include/gui.h"
+#include "../include/input_layout.h"
 
 void usb_hid_handle_key(int key);
 
 static uint8_t prev_keys[6] = {0};
 static int caps_lock = 0;
-
-static const char hid_to_ascii[128] = {
-    0,  0,  0,  0, 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l',
-    'm','n','o','p','q','r','s','t','u','v','w','x','y','z',
-    '1','2','3','4','5','6','7','8','9','0',
-    '\n', 0, 0, '\t', ' ', '-', '=', '[', ']', '\\', '#', ';', '\'', '`', ',', '.', '/'
-};
-
-static const char hid_to_ascii_shift[128] = {
-    0,  0,  0,  0, 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
-    'M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z',
-    '!','@','#','$','%','^','&','*','(',')',
-    '\n', 0, 0, '\t', ' ', '_', '+', '{', '}', '|', '~', ':', '"', '~', '<', '>', '?'
-};
 
 void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
   static int call_count = 0;
@@ -120,13 +107,7 @@ void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
     case 0x51: out = KEY_DOWN; break;
     case 0x52: out = KEY_UP; break;
     default:
-      if (key >= 0x04 && key <= 0x1D) {
-        char base = (char)('a' + (key - 0x04));
-        int upper = shift ^ caps_lock;
-        out = upper ? (base - 32) : base;
-      } else if (key < 128) {
-        out = shift ? hid_to_ascii_shift[key] : hid_to_ascii[key];
-      }
+      out = input_map_hid_usage(key, shift, caps_lock);
       break;
     }
 

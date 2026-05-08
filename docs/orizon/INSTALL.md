@@ -6,10 +6,12 @@ The live ISO cannot safely rewrite itself, so the next durable model is:
 1. boot the live ISO,
 2. run `install`,
 3. collect language, keyboard, hostname, and disk strategy,
-4. write a staging plan under `/workspace/.orizon/`,
-5. write a GPT disk with a FAT32 ESP,
-6. copy the UEFI fallback loader, kernel, and Limine config,
-7. preserve the Orizon data partition used by `/workspace`.
+4. write an installation plan under `/workspace/.orizon/`,
+5. save `/workspace` before touching the disk,
+6. write a GPT disk with a FAT32 ESP,
+7. copy the UEFI fallback loader, kernel, and Limine config,
+8. preserve the Orizon data partition used by `/workspace`,
+9. mark the system as installed and shut down so installer media can be removed.
 
 ## Current In-OS Command
 
@@ -32,6 +34,8 @@ It writes runtime/staging state:
 ```text
 /workspace/.orizon/install-plan
 /workspace/.orizon/install-state
+/workspace/.orizon/installed
+/workspace/.orizon/keyboard
 /system/install-state
 /system/locale
 /system/keyboard
@@ -48,6 +52,22 @@ It also writes a bootable disk layout in `guided-full-disk` mode:
 - `/INSTALL.TXT`
 
 `/workspace` remains persistent through the Orizon data partition.
+Files and directories created during the live boot are saved before the ESP/GPT
+writer runs, so they survive the install path.
+
+After success the installer prints a shutdown notice:
+
+```text
+Remove/eject the ISO or USB installer before the next boot.
+```
+
+It then schedules shutdown. On the next boot, the persistent installed marker
+blocks `install` to avoid accidental reinstall/destructive disk writes. Use
+`install-status` to review the saved state.
+
+The selected keyboard layout is now applied by the kernel input layer. Current
+layouts are `fr-azerty` and `us-qwerty`; accent keys are mapped to ASCII-safe
+fallbacks until the console grows Unicode text support.
 
 ## Safety Boundary
 
@@ -58,7 +78,7 @@ no dual-boot preservation, and no A/B rollback slots yet.
 ## Next Kernel Layers
 
 - Add an explicit multi-disk selector.
-- Add keyboard layouts beyond storing the selected layout.
 - Add rollback-safe A/B system slots.
 - Add optional dual-boot/manual partitioning.
-- Add a boot verification marker after the first installed boot.
+- Add full Unicode keyboard/text rendering for accented keys.
+- Replace emulator poweroff fallback with full ACPI shutdown parsing.

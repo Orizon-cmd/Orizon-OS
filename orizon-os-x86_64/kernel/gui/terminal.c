@@ -3,10 +3,12 @@
  */
 
 #include "../include/gui.h"
+#include "../include/input_layout.h"
 #include "../include/kmalloc.h"
 #include "../include/install.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
+#include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
 #include "../include/storage.h"
@@ -1084,6 +1086,41 @@ static int term_write_text_file(const char *path, const char *text) {
   return 0;
 }
 
+static int term_read_text_file_silent(const char *path, char *buf, size_t cap) {
+  file_t *f;
+  size_t used = 0;
+  ssize_t n = 0;
+
+  if (!path || !buf || cap < 2) {
+    return -1;
+  }
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    return -1;
+  }
+  while (used < cap - 1 &&
+         (n = vfs_read(f, buf + used, (cap - 1) - used)) > 0) {
+    used += (size_t)n;
+  }
+  vfs_close(f);
+  buf[used] = '\0';
+  return n < 0 ? -1 : (int)used;
+}
+
+static int term_install_already_complete(void) {
+  char state[256];
+
+  if (vfs_exists("/workspace/.orizon/installed")) {
+    return 1;
+  }
+  if (term_read_text_file_silent("/workspace/.orizon/install-state", state,
+                                 sizeof(state)) > 0 &&
+      strstr(state, "install complete")) {
+    return 1;
+  }
+  return 0;
+}
+
 static int term_install_value_is(const char *value, const char *a,
                                  const char *b, const char *c) {
   return strcmp(value, a) == 0 || (b && strcmp(value, b) == 0) ||
@@ -1156,6 +1193,7 @@ static void term_install_finish(terminal_t *term, int success) {
 static void term_install_write_plan(terminal_t *term) {
   char plan[2048];
   char state[256];
+  char marker[256];
   static char install_report[4096];
   orizon_install_config_t config;
 
@@ -1189,6 +1227,8 @@ static void term_install_write_plan(terminal_t *term) {
 
   if (term_write_text_file("/workspace/.orizon/install-plan", plan) < 0 ||
       term_write_text_file("/workspace/.orizon/install-state", state) < 0 ||
+      term_write_text_file("/workspace/.orizon/keyboard",
+                           term->install_keyboard) < 0 ||
       term_write_text_file("/system/install-state", state) < 0 ||
       term_write_text_file("/system/locale", term->install_language) < 0 ||
       term_write_text_file("/system/keyboard", term->install_keyboard) < 0) {
@@ -1196,11 +1236,19 @@ static void term_install_write_plan(terminal_t *term) {
     term_install_finish(term, 0);
     return;
   }
-  vfs_persist_save();
 
   if (strcmp(term->install_disk_mode, "manual-later") == 0) {
+    vfs_persist_save();
     term_puts_t(term, "\nInstaller plan saved for manual disk work.\n");
     term_install_finish(term, 1);
+    return;
+  }
+
+  term_puts_t(term, "\nSaving /workspace before disk write...\n");
+  if (vfs_persist_save() < 0) {
+    term_puts_t(term,
+                "install: cannot save /workspace, aborting to avoid data loss\n");
+    term_install_finish(term, 0);
     return;
   }
 
@@ -1212,9 +1260,25 @@ static void term_install_write_plan(terminal_t *term) {
   if (orizon_install_run(&config, install_report, sizeof(install_report)) == 0) {
     term_puts_t(term, install_report);
     term_write_text_file("/workspace/.orizon/install-log", install_report);
+    snprintf(marker, sizeof(marker),
+             "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
+             "next=shutdown-remove-installer\n",
+             term->install_language, term->install_keyboard,
+             term->install_hostname);
+    term_write_text_file("/workspace/.orizon/installed", marker);
+    term_write_text_file("/workspace/.orizon/install-state",
+                         "install complete\nnext shutdown-remove-installer\n");
+    term_write_text_file("/workspace/.orizon/keyboard",
+                         term->install_keyboard);
     term_write_text_file("/system/install-state", "install complete\n");
+    term_write_text_file("/system/installed", "1\n");
     vfs_persist_save();
     term_install_finish(term, 1);
+    term_puts_t(term,
+                "SHUTDOWN in 5 seconds.\n"
+                "Remove/eject the ISO or USB installer before the next boot.\n"
+                "Then start the machine again to boot from the installed disk.\n");
+    power_schedule_shutdown(TIMER_HZ * 5);
   } else {
     term_puts_t(term, install_report);
     term_puts_t(term, "install: failed before marking disk bootable\n");
@@ -1232,9 +1296,11 @@ static void term_install_submit(terminal_t *term, const char *line) {
 
   switch (term->install_step) {
   case 0:
-    if (term_install_value_is(value, "1", "fr", "francais")) {
+    if (term_install_value_is(value, "1", "fr", "francais") ||
+        strcmp(value, "&") == 0) {
       strcpy(term->install_language, "fr_FR");
-    } else if (term_install_value_is(value, "2", "en", "english")) {
+    } else if (term_install_value_is(value, "2", "en", "english") ||
+               strcmp(value, "e") == 0) {
       strcpy(term->install_language, "en_US");
     } else {
       term_puts_t(term, "Choose 1 or 2.\n");
@@ -1245,22 +1311,30 @@ static void term_install_submit(terminal_t *term, const char *line) {
     term_install_prompt(term);
     return;
   case 1:
-    if (term_install_value_is(value, "1", "fr", "azerty")) {
+    if (term_install_value_is(value, "1", "fr", "azerty") ||
+        strcmp(value, "&") == 0) {
       strcpy(term->install_keyboard, "fr-azerty");
-    } else if (term_install_value_is(value, "2", "us", "qwerty")) {
+    } else if (term_install_value_is(value, "2", "us", "qwerty") ||
+               strcmp(value, "e") == 0) {
       strcpy(term->install_keyboard, "us-qwerty");
     } else {
       term_puts_t(term, "Choose 1 or 2.\n");
       term_install_prompt(term);
       return;
     }
+    input_set_keyboard_layout(term->install_keyboard);
+    term_puts_t(term, "Keyboard layout active: ");
+    term_puts_t(term, input_keyboard_layout());
+    term_puts_t(term, "\n");
     term->install_step++;
     term_install_prompt(term);
     return;
   case 2:
-    if (term_install_value_is(value, "1", "guided", "full")) {
+    if (term_install_value_is(value, "1", "guided", "full") ||
+        strcmp(value, "&") == 0) {
       strcpy(term->install_disk_mode, "guided-full-disk");
-    } else if (term_install_value_is(value, "2", "manual", "later")) {
+    } else if (term_install_value_is(value, "2", "manual", "later") ||
+               strcmp(value, "e") == 0) {
       strcpy(term->install_disk_mode, "manual-later");
     } else {
       term_puts_t(term, "Choose 1 or 2.\n");
@@ -1296,6 +1370,14 @@ static void term_install_submit(terminal_t *term, const char *line) {
 }
 
 static void term_start_installer(terminal_t *term) {
+  if (term_install_already_complete()) {
+    term_puts_t(term, "\ninstall: Orizon OS is already installed.\n");
+    term_puts_t(term,
+                "Reinstall is disabled from this command to protect your disk and /workspace.\n");
+    term_puts_t(term, "Use install-status to review the installed state.\n");
+    return;
+  }
+
   term->install_mode = 1;
   term->install_step = 0;
   term->install_language[0] = '\0';
@@ -1399,7 +1481,9 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  storage   - Show persistence state\n");
     term_puts_t(term, "  net       - Show ethernet status\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
-    term_puts_t(term, "  install-status - Show installer staging plan\n");
+    term_puts_t(term, "  install-status - Show installer plan/state\n");
+    term_puts_t(term, "  keyboard  - Show active keyboard layout\n");
+    term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
     term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
@@ -1785,6 +1869,10 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "storage")) {
     term_puts_t(term, vfs_persist_status());
     term_puts_t(term, "\n");
+  } else if (term_command_is(cmd, "keyboard")) {
+    term_puts_t(term, "Keyboard layout: ");
+    term_puts_t(term, input_keyboard_layout());
+    term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "net")) {
     term_print_net_status(term);
   } else if (term_command_is(cmd, "install")) {
@@ -1802,6 +1890,22 @@ void term_execute(terminal_t *term, const char *cmd) {
         term_puts_t(term, "\n");
       }
     }
+    n = term_read_text_file_silent("/workspace/.orizon/install-state", buf,
+                                   sizeof(buf));
+    if (n > 0) {
+      term_puts_t(term, "state: ");
+      term_puts_t(term, buf);
+      if (buf[n - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    }
+  } else if (term_command_is(cmd, "shutdown") ||
+             term_command_is(cmd, "poweroff")) {
+    vfs_persist_save();
+    term_puts_t(term,
+                "SHUTDOWN in 3 seconds.\n"
+                "If this was an install boot, remove/eject the ISO or USB media now.\n");
+    power_schedule_shutdown(TIMER_HZ * 3);
   } else if (term_command_is(cmd, "update") || term_command_is(cmd, "orizon-update")) {
     term_run_update(term);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
@@ -1991,8 +2095,13 @@ terminal_t *term_create(int x, int y) {
               "Type '\033[33mhelp\033[0m' for commands or '\033[33mneofetch\033[0m' for system info.\n");
   term_puts_t(term,
               "This VM boots into a clean personal base with the console ready first.\n");
-  term_puts_t(term,
-              "Type '\033[33minstall\033[0m' to run the guided disk installer.\n\n");
+  if (term_install_already_complete()) {
+    term_puts_t(term,
+                "Installed disk detected. '\033[33minstall\033[0m' is disabled; use '\033[33minstall-status\033[0m'.\n\n");
+  } else {
+    term_puts_t(term,
+                "Type '\033[33minstall\033[0m' to run the guided disk installer.\n\n");
+  }
   term_prompt(term);
   
   return term;

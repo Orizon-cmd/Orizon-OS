@@ -14,6 +14,7 @@ le developpement noyau:
 - une seule console centrale pour travailler proprement
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32 et boot UEFI
+- layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - commande `update` interne avec transaction full-upgrade, DHCP/DNS/TCP et
   contact GitHub, actuellement mise en pause avant installation reelle
 - console avec scrollback et support molette souris PS/2
@@ -39,6 +40,13 @@ L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
 peut installer Orizon OS sur le disque cible. Le mode `guided-full-disk` ecrit
 une GPT, formate une ESP FAT32, copie `BOOTX64.EFI`, `kernel.elf` et
 `limine.conf`, puis conserve une partition data Orizon pour `/workspace`.
+Avant l'ecriture disque, `/workspace` est synchronise pour garder les dossiers
+et fichiers crees pendant le live boot.
+
+Apres une installation reussie, Orizon OS marque le disque comme installe,
+affiche une consigne de retrait/ejection de l'ISO ou de la cle USB, puis lance
+un shutdown. Au boot suivant, la commande `install` est bloquee pour proteger
+le disque et les donnees.
 
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA, une ESP de 1 MiB a 512 MiB, et une partition
@@ -49,6 +57,12 @@ Pour revoir le plan:
 
 ```text
 install-status
+```
+
+Pour verifier le layout clavier actif:
+
+```text
+keyboard
 ```
 
 Details: [docs/orizon/INSTALL.md](docs/orizon/INSTALL.md).

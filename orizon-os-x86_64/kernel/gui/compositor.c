@@ -6,7 +6,9 @@
  */
 
 #include "../include/gui.h"
+#include "../include/input_layout.h"
 #include "../include/net.h"
+#include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
 #include "../include/string.h"
@@ -263,6 +265,7 @@ void gui_init(void) {
   vfs_init();
   vfs_seed_content();
   vfs_persist_load();
+  input_load_keyboard_layout_from_vfs();
   net_init();
   layout_console();
 
@@ -324,6 +327,7 @@ void gui_main_loop(void) {
     }
 
     gui_compose();
+    power_poll();
 
     sched_enter_idle();
     __asm__ volatile("hlt");

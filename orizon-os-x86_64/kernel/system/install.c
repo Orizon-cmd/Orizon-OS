@@ -445,7 +445,8 @@ static int fat32_install_boot_files(const fat32_volume_t *vol,
   size_t off;
 
   snprintf(install_text, sizeof(install_text),
-           "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n",
+           "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
+           "next=shutdown-remove-installer\n",
            config->language, config->keyboard, config->hostname);
   install_txt_file = fat_alloc_chain((fat32_volume_t *)vol, strlen(install_text));
 
@@ -608,6 +609,6 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
   append_report(report, report_size, "[4/5] Installing kernel and Limine config");
   append_report(report, report_size, "[5/5] Preserving Orizon data partition");
   append_report(report, report_size,
-                "Install complete: reboot can start from the installed disk.");
+                "Install complete: shutdown will start so installer media can be removed.");
   return 0;
 }
