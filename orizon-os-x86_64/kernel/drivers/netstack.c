@@ -1181,6 +1181,15 @@ static int build_tls_client_hello(const char *host, uint8_t *out,
   return 0;
 }
 
+#define TLS_MAX_CERT_SUMMARIES 4
+
+typedef struct {
+  int parsed;
+  size_t cert_len;
+  char subject_sha256[SHA256_HEX_SIZE];
+  char issuer_sha256[SHA256_HEX_SIZE];
+} tls_cert_summary_t;
+
 typedef struct {
   size_t records;
   size_t handshake_records;
@@ -1200,6 +1209,10 @@ typedef struct {
   size_t key_public_len;
   size_t certificate_count;
   size_t certificate_chain_len;
+  size_t cert_summaries;
+  size_t chain_links_checked;
+  size_t chain_links_ok;
+  tls_cert_summary_t certs[TLS_MAX_CERT_SUMMARIES];
   size_t leaf_certificate_len;
   char leaf_certificate_sha256[SHA256_HEX_SIZE];
   int leaf_identity_parsed;
@@ -1382,6 +1395,68 @@ static int asn1_read_tlv(const uint8_t *der, size_t der_len, size_t *off,
 static void tls_copy_asn1_time(const uint8_t *value, size_t len, char *out,
                                size_t out_cap) {
   copy_ascii_limited(out, out_cap, value, len);
+}
+
+static int tls_parse_certificate_names(const uint8_t *cert, size_t cert_len,
+                                       tls_cert_summary_t *summary) {
+  size_t off = 0;
+  uint8_t tag = 0;
+  const uint8_t *cert_seq = NULL;
+  size_t cert_seq_len = 0;
+  const uint8_t *tbs = NULL;
+  size_t tbs_len = 0;
+  const uint8_t *value = NULL;
+  size_t value_len = 0;
+
+  if (!summary) {
+    return -1;
+  }
+  memset(summary, 0, sizeof(*summary));
+  summary->cert_len = cert_len;
+
+  if (asn1_read_tlv(cert, cert_len, &off, &tag, &cert_seq, &cert_seq_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+
+  size_t cert_off = 0;
+  if (asn1_read_tlv(cert_seq, cert_seq_len, &cert_off, &tag, &tbs, &tbs_len) !=
+          0 ||
+      tag != 0x30) {
+    return -1;
+  }
+
+  size_t p = 0;
+  if (p < tbs_len && tbs[p] == 0xa0) {
+    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+      return -1;
+    }
+  }
+
+  for (int i = 0; i < 2; i++) {
+    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+      return -1;
+    }
+  }
+
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+  sha256_buffer_hex(value, value_len, summary->issuer_sha256);
+
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
+      tag != 0x30) {
+    return -1;
+  }
+  sha256_buffer_hex(value, value_len, summary->subject_sha256);
+  summary->parsed = 1;
+  return 0;
 }
 
 static void tls_parse_subject_alt_names(const uint8_t *der, size_t der_len,
@@ -1614,9 +1689,22 @@ static void tls_parse_certificate(const uint8_t *body, size_t len,
   info->certificate_chain_len = chain_len;
   while (p + 3 <= end) {
     size_t cert_len = get_be24(body + p);
+    tls_cert_summary_t cert_summary;
     p += 3;
     if (p + cert_len > end) {
       break;
+    }
+    if (tls_parse_certificate_names(body + p, cert_len, &cert_summary) == 0 &&
+        info->cert_summaries < TLS_MAX_CERT_SUMMARIES) {
+      info->certs[info->cert_summaries++] = cert_summary;
+      if (info->cert_summaries >= 2) {
+        tls_cert_summary_t *child = &info->certs[info->cert_summaries - 2];
+        tls_cert_summary_t *issuer = &info->certs[info->cert_summaries - 1];
+        info->chain_links_checked++;
+        if (strcmp(child->issuer_sha256, issuer->subject_sha256) == 0) {
+          info->chain_links_ok++;
+        }
+      }
     }
     if (info->certificate_count == 0) {
       info->leaf_certificate_len = cert_len;
@@ -1777,6 +1865,22 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
                info.leaf_first_dns[0] ? info.leaf_first_dns : "none");
       append_text(out, out_cap, line);
     }
+    if (info.cert_summaries > 0) {
+      snprintf(line, sizeof(line),
+               "tls chain-link links-ok=%lu/%lu names-parsed=%lu\n",
+               (unsigned long)info.chain_links_ok,
+               (unsigned long)info.chain_links_checked,
+               (unsigned long)info.cert_summaries);
+      append_text(out, out_cap, line);
+      snprintf(line, sizeof(line), "tls leaf-issuer-sha256 %s\n",
+               info.certs[0].issuer_sha256);
+      append_text(out, out_cap, line);
+      if (info.cert_summaries > 1) {
+        snprintf(line, sizeof(line), "tls next-subject-sha256 %s\n",
+                 info.certs[1].subject_sha256);
+        append_text(out, out_cap, line);
+      }
+    }
   }
 
   if (info.server_key_exchange_seen) {
@@ -1806,7 +1910,8 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
              info.partial_handshake ? "yes" : "no");
     append_text(out, out_cap, line);
   }
-  append_text(out, out_cap, "tls next trust-chain-validation-and-key-schedule\n");
+  append_text(out, out_cap,
+              "tls next certificate-signature-validation-and-key-schedule\n");
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");
