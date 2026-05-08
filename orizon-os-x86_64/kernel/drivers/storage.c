@@ -25,6 +25,7 @@
 
 #define ATA_DEV_BUSY 0x80
 #define ATA_DEV_DRQ 0x08
+#define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_DMA_EXT 0x25
 #define ATA_CMD_WRITE_DMA_EXT 0x35
 
@@ -93,6 +94,7 @@ typedef struct {
 static ahci_mem_t *hba = NULL;
 static ahci_port_t *disk_port = NULL;
 static int disk_ready = 0;
+static uint64_t disk_sectors = 0;
 static const char *disk_status = "storage: not initialized";
 
 static ahci_cmd_header_t cmd_list[32] __attribute__((aligned(1024)));
@@ -251,6 +253,72 @@ static int ahci_io(uint64_t lba, void *buf, uint32_t sectors, int write) {
   return -1;
 }
 
+static int ahci_identify(ahci_port_t *port, uint16_t *out_words) {
+  if (!port || !out_words) {
+    return -1;
+  }
+
+  int spin = 1000000;
+  while ((port->tfd & (ATA_DEV_BUSY | ATA_DEV_DRQ)) && spin-- > 0) {
+    __asm__ volatile("pause");
+  }
+  if (spin <= 0) {
+    return -1;
+  }
+
+  int slot = ahci_find_cmd_slot(port);
+  if (slot < 0) {
+    return -1;
+  }
+
+  ahci_cmd_header_t *header = &cmd_list[slot];
+  ahci_cmd_table_t *table = &cmd_tables[slot];
+  memset(table, 0, sizeof(*table));
+  memset(out_words, 0, ORIZON_SECTOR_SIZE);
+
+  header->flags = 5;
+  header->prdtl = 1;
+  header->prdbc = 0;
+
+  uint64_t buf_phys = storage_phys_addr(out_words);
+  table->prdt[0].dba = (uint32_t)buf_phys;
+  table->prdt[0].dbau = (uint32_t)(buf_phys >> 32);
+  table->prdt[0].dbc = (ORIZON_SECTOR_SIZE - 1) | (1U << 31);
+
+  uint8_t *fis = table->cfis;
+  fis[0] = 0x27;
+  fis[1] = 1U << 7;
+  fis[2] = ATA_CMD_IDENTIFY;
+
+  port->is = 0xFFFFFFFFU;
+  port->ci = 1U << slot;
+
+  for (int i = 0; i < 5000000; i++) {
+    if ((port->ci & (1U << slot)) == 0) {
+      return (port->is & AHCI_PORT_IS_TFES) ? -1 : 0;
+    }
+    if (port->is & AHCI_PORT_IS_TFES) {
+      return -1;
+    }
+    __asm__ volatile("pause");
+  }
+
+  return -1;
+}
+
+static uint64_t identify_sector_count(const uint16_t *id) {
+  uint64_t sectors = 0;
+  if (!id) {
+    return 0;
+  }
+  sectors = ((uint64_t)id[100]) | ((uint64_t)id[101] << 16) |
+            ((uint64_t)id[102] << 32) | ((uint64_t)id[103] << 48);
+  if (sectors == 0) {
+    sectors = ((uint64_t)id[60]) | ((uint64_t)id[61] << 16);
+  }
+  return sectors;
+}
+
 int storage_init(void) {
   if (disk_ready) {
     return 0;
@@ -301,8 +369,12 @@ int storage_init(void) {
       continue;
     }
     if (ahci_setup_port(&hba->ports[i]) == 0) {
+      static uint16_t identify_words[256] __attribute__((aligned(4096)));
       disk_port = &hba->ports[i];
       disk_ready = 1;
+      if (ahci_identify(disk_port, identify_words) == 0) {
+        disk_sectors = identify_sector_count(identify_words);
+      }
       set_status("storage: AHCI disk ready");
       return 0;
     }
@@ -318,6 +390,33 @@ int storage_available(void) {
 
 const char *storage_status(void) {
   return disk_status;
+}
+
+uint64_t storage_sector_count(void) {
+  if (!storage_available()) {
+    return 0;
+  }
+  return disk_sectors;
+}
+
+void storage_format_capacity(char *out, size_t out_size) {
+  uint64_t mib;
+  uint64_t sectors = storage_sector_count();
+  if (!out || out_size == 0) {
+    return;
+  }
+  if (sectors == 0) {
+    snprintf(out, out_size, "unknown size");
+    return;
+  }
+  mib = sectors / 2048;
+  if (mib >= 1024) {
+    snprintf(out, out_size, "%lu GiB (%lu sectors)",
+             (unsigned long)(mib / 1024), (unsigned long)sectors);
+  } else {
+    snprintf(out, out_size, "%lu MiB (%lu sectors)", (unsigned long)mib,
+             (unsigned long)sectors);
+  }
 }
 
 int storage_read(uint64_t lba, void *buf, uint32_t sector_count) {

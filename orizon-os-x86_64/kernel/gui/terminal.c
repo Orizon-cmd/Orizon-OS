@@ -4,6 +4,7 @@
 
 #include "../include/gui.h"
 #include "../include/kmalloc.h"
+#include "../include/install.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/ps2.h"
@@ -1093,9 +1094,9 @@ static void term_install_prompt(terminal_t *term) {
   switch (term->install_step) {
   case 0:
     term_puts_t(term, "\033[1;36mOrizon OS Installer\033[0m\n");
-    term_puts_t(term, "This guided installer prepares a disk install plan.\n");
+    term_puts_t(term, "This guided installer can install Orizon OS to disk.\n");
     term_puts_t(term,
-                "Boot writing is locked until GPT/FAT/A-B slots are implemented.\n\n");
+                "guided-full-disk rewrites the target disk layout.\n\n");
     term_puts_t(term, "[1/5] Language\n");
     term_puts_t(term, "  1. Francais\n");
     term_puts_t(term, "  2. English\n");
@@ -1113,7 +1114,7 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, storage_available() ? storage_status()
                                           : "no writable AHCI disk");
     term_puts_t(term, "\n");
-    term_puts_t(term, "  1. guided-full-disk-a-b\n");
+    term_puts_t(term, "  1. guided-full-disk\n");
     term_puts_t(term, "  2. manual-later\n");
     term_puts_t(term, "Choice: ");
     break;
@@ -1133,7 +1134,7 @@ static void term_install_prompt(terminal_t *term) {
     snprintf(line, sizeof(line), "  Hostname: %s\n", term->install_hostname);
     term_puts_t(term, line);
     term_puts_t(term,
-                "Type INSTALL to write the staging plan, or cancel to abort: ");
+                "Type INSTALL to write the disk, or cancel to abort: ");
     break;
   }
   default:
@@ -1146,16 +1147,17 @@ static void term_install_finish(terminal_t *term, int success) {
   term->install_mode = 0;
   term->install_step = 0;
   if (success) {
-    term_puts_t(term, "\nInstaller plan saved.\n");
-    term_puts_t(term, "Next kernel layer: GPT/FAT boot writer and A/B slots.\n");
+    term_puts_t(term, "\nInstaller finished.\n");
   } else {
-    term_puts_t(term, "\nInstaller cancelled.\n");
+    term_puts_t(term, "\nInstaller stopped.\n");
   }
 }
 
 static void term_install_write_plan(terminal_t *term) {
   char plan[2048];
   char state[256];
+  static char install_report[4096];
+  orizon_install_config_t config;
 
   vfs_mkdir("/workspace");
   vfs_mkdir("/workspace/.orizon");
@@ -1170,15 +1172,18 @@ static void term_install_write_plan(terminal_t *term) {
            "hostname %s\n"
            "disk-mode %s\n"
            "disk-status %s\n"
-           "boot-strategy pending-a-b-slots\n"
-           "write-mode safe-staging-only\n"
-           "next gpt-fat32-esp-writer\n",
+           "boot-strategy uefi-fallback-esp\n"
+           "write-mode %s\n"
+           "next reboot-installed-disk\n",
            term->install_language, term->install_keyboard,
            term->install_hostname, term->install_disk_mode,
-           storage_available() ? storage_status() : "unavailable");
+           storage_available() ? storage_status() : "unavailable",
+           strcmp(term->install_disk_mode, "manual-later") == 0
+               ? "plan-only-no-disk-write"
+               : "destructive-full-disk");
 
   snprintf(state, sizeof(state),
-           "install staged: language=%s keyboard=%s disk=%s hostname=%s\n",
+           "install configured: language=%s keyboard=%s disk=%s hostname=%s\n",
            term->install_language, term->install_keyboard,
            term->install_disk_mode, term->install_hostname);
 
@@ -1192,7 +1197,29 @@ static void term_install_write_plan(terminal_t *term) {
     return;
   }
   vfs_persist_save();
-  term_install_finish(term, 1);
+
+  if (strcmp(term->install_disk_mode, "manual-later") == 0) {
+    term_puts_t(term, "\nInstaller plan saved for manual disk work.\n");
+    term_install_finish(term, 1);
+    return;
+  }
+
+  config.language = term->install_language;
+  config.keyboard = term->install_keyboard;
+  config.disk_mode = term->install_disk_mode;
+  config.hostname = term->install_hostname;
+  term_puts_t(term, "\n");
+  if (orizon_install_run(&config, install_report, sizeof(install_report)) == 0) {
+    term_puts_t(term, install_report);
+    term_write_text_file("/workspace/.orizon/install-log", install_report);
+    term_write_text_file("/system/install-state", "install complete\n");
+    vfs_persist_save();
+    term_install_finish(term, 1);
+  } else {
+    term_puts_t(term, install_report);
+    term_puts_t(term, "install: failed before marking disk bootable\n");
+    term_install_finish(term, 0);
+  }
 }
 
 static void term_install_submit(terminal_t *term, const char *line) {
@@ -1232,7 +1259,7 @@ static void term_install_submit(terminal_t *term, const char *line) {
     return;
   case 2:
     if (term_install_value_is(value, "1", "guided", "full")) {
-      strcpy(term->install_disk_mode, "guided-full-disk-a-b");
+      strcpy(term->install_disk_mode, "guided-full-disk");
     } else if (term_install_value_is(value, "2", "manual", "later")) {
       strcpy(term->install_disk_mode, "manual-later");
     } else {
@@ -1965,7 +1992,7 @@ terminal_t *term_create(int x, int y) {
   term_puts_t(term,
               "This VM boots into a clean personal base with the console ready first.\n");
   term_puts_t(term,
-              "Type '\033[33minstall\033[0m' to prepare a guided disk installation plan.\n\n");
+              "Type '\033[33minstall\033[0m' to run the guided disk installer.\n\n");
   term_prompt(term);
   
   return term;

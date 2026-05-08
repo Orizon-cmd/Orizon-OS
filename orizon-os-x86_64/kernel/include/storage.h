@@ -14,6 +14,8 @@
 int storage_init(void);
 int storage_available(void);
 const char *storage_status(void);
+uint64_t storage_sector_count(void);
+void storage_format_capacity(char *out, size_t out_size);
 
 int storage_read(uint64_t lba, void *buf, uint32_t sector_count);
 int storage_write(uint64_t lba, const void *buf, uint32_t sector_count);

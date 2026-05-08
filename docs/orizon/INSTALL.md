@@ -7,7 +7,9 @@ The live ISO cannot safely rewrite itself, so the next durable model is:
 2. run `install`,
 3. collect language, keyboard, hostname, and disk strategy,
 4. write a staging plan under `/workspace/.orizon/`,
-5. later hand that plan to a GPT/FAT32 boot writer with A/B boot slots.
+5. write a GPT disk with a FAT32 ESP,
+6. copy the UEFI fallback loader, kernel, and Limine config,
+7. preserve the Orizon data partition used by `/workspace`.
 
 ## Current In-OS Command
 
@@ -21,11 +23,11 @@ The guided flow currently asks for:
 
 - language: `fr_FR` or `en_US`
 - keyboard: `fr-azerty` or `us-qwerty`
-- disk mode: `guided-full-disk-a-b` or `manual-later`
+- disk mode: `guided-full-disk` or `manual-later`
 - hostname, defaulting to `orizon-os`
 - explicit confirmation with `INSTALL` or `install`
 
-It writes:
+It writes runtime/staging state:
 
 ```text
 /workspace/.orizon/install-plan
@@ -35,20 +37,28 @@ It writes:
 /system/keyboard
 ```
 
-Only `/workspace` is persistent today. The `/system` files are runtime state
-until the real installed root filesystem exists.
+It also writes a bootable disk layout in `guided-full-disk` mode:
+
+- protective MBR plus primary/backup GPT
+- partition 1: FAT32 ESP from 1 MiB to 512 MiB
+- partition 2: Orizon data from 512 MiB to the end of disk
+- `/EFI/BOOT/BOOTX64.EFI`
+- `/boot/kernel.elf`
+- `/limine.conf`, `/boot/limine.conf`, and `/EFI/BOOT/limine.conf`
+- `/INSTALL.TXT`
+
+`/workspace` remains persistent through the Orizon data partition.
 
 ## Safety Boundary
 
-The installer does not partition or overwrite the disk yet. That is deliberate:
-Orizon OS still needs a proper GPT writer, FAT32/ESP writer, boot entry writer,
-and rollback-safe A/B boot slots before destructive disk writes are acceptable.
+The installer can now partition and install to the first AHCI/SATA disk. It is
+still intentionally narrow: UEFI fallback boot only, no multi-disk picker yet,
+no dual-boot preservation, and no A/B rollback slots yet.
 
 ## Next Kernel Layers
 
-- Read disk identity and size with ATA IDENTIFY.
-- Create a GPT layout from the installer plan.
-- Format/write an ESP FAT32 boot partition.
-- Copy kernel, Limine files, and system metadata into slot A.
-- Keep slot B reserved for rollback updates.
-- Mark an installation as bootable only after verification.
+- Add an explicit multi-disk selector.
+- Add keyboard layouts beyond storing the selected layout.
+- Add rollback-safe A/B system slots.
+- Add optional dual-boot/manual partitioning.
+- Add a boot verification marker after the first installed boot.

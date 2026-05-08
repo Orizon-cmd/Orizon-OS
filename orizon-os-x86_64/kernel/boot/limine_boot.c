@@ -5,6 +5,7 @@
 
 #include "../include/gui.h"
 #include "../include/limine.h"
+#include "../include/bootinfo.h"
 #include "../include/idt.h"
 #include "../include/acpi.h"
 #include "../include/sched.h"
@@ -57,10 +58,43 @@ __attribute__((used,
                               .revision = 0,
                               .response = NULL};
 
+/* Kernel file request, used by the installer to copy the current kernel. */
+__attribute__((used,
+               section(".limine_requests"))) static volatile struct limine_kernel_file_request
+    kernel_file_request = {.id = {0xc7b1dd30df4c8b88, 0x0a82e883a194f07b,
+                                  0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69},
+                           .revision = 0,
+                           .response = NULL};
+
+static volatile struct limine_internal_module boot_efi_module = {
+    .path = "/EFI/BOOT/BOOTX64.EFI",
+    .cmdline = "orizon-bootx64",
+    .flags = 0};
+
+static volatile struct limine_internal_module *boot_modules[] = {
+    (struct limine_internal_module *)&boot_efi_module};
+
+/* Module request, used by the installer to copy the fallback UEFI loader. */
+__attribute__((used,
+               section(".limine_requests"))) static volatile struct limine_module_request
+    module_request = {.id = {0xc7b1dd30df4c8b88, 0x0a82e883a194f07b,
+                             0x3e7e279702be32af, 0xca1c4f3bd1280cee},
+                      .revision = 1,
+                      .response = NULL,
+                      .internal_module_count = 1,
+                      .internal_modules =
+                          (struct limine_internal_module **)boot_modules};
+
 /* Global HHDM offset for drivers to use */
 uint64_t hhdm_offset = 0xFFFF800000000000ULL;
 uint64_t kernel_phys_base = 0;
 uint64_t kernel_virt_base = 0;
+
+static const void *loaded_kernel_image = NULL;
+static size_t loaded_kernel_image_size = 0;
+static const void *loaded_boot_efi_image = NULL;
+static size_t loaded_boot_efi_image_size = 0;
+static const char *loaded_payload_status = "boot payloads not captured";
 
 /* Debug framebuffer access */
 uint32_t *g_fb_ptr = NULL;
@@ -87,6 +121,53 @@ __attribute__((used, section(".limine_requests"))) static volatile uint64_t
 /* ========== Kernel State ========== */
 
 static struct limine_framebuffer *fb = NULL;
+
+static void capture_boot_payloads(void) {
+  loaded_kernel_image = NULL;
+  loaded_kernel_image_size = 0;
+  loaded_boot_efi_image = NULL;
+  loaded_boot_efi_image_size = 0;
+
+  if (kernel_file_request.response &&
+      kernel_file_request.response->kernel_file &&
+      kernel_file_request.response->kernel_file->address &&
+      kernel_file_request.response->kernel_file->size > 0) {
+    loaded_kernel_image = kernel_file_request.response->kernel_file->address;
+    loaded_kernel_image_size = kernel_file_request.response->kernel_file->size;
+  }
+
+  if (module_request.response && module_request.response->modules) {
+    for (uint64_t i = 0; i < module_request.response->module_count; i++) {
+      struct limine_file *file = module_request.response->modules[i];
+      if (!file || !file->address || file->size == 0) {
+        continue;
+      }
+      if ((file->cmdline && strstr(file->cmdline, "orizon-bootx64")) ||
+          (file->path && strstr(file->path, "BOOTX64.EFI"))) {
+        loaded_boot_efi_image = file->address;
+        loaded_boot_efi_image_size = file->size;
+      }
+    }
+  }
+
+  if (loaded_kernel_image && loaded_boot_efi_image) {
+    loaded_payload_status = "boot payloads ready";
+  } else if (!loaded_kernel_image) {
+    loaded_payload_status = "kernel payload missing";
+  } else {
+    loaded_payload_status = "UEFI loader payload missing";
+  }
+}
+
+const void *boot_kernel_image(void) { return loaded_kernel_image; }
+size_t boot_kernel_image_size(void) { return loaded_kernel_image_size; }
+const void *boot_efi_image(void) { return loaded_boot_efi_image; }
+size_t boot_efi_image_size(void) { return loaded_boot_efi_image_size; }
+const char *boot_payload_status(void) { return loaded_payload_status; }
+int boot_payloads_ready(void) {
+  return loaded_kernel_image && loaded_boot_efi_image &&
+         loaded_kernel_image_size > 0 && loaded_boot_efi_image_size > 0;
+}
 
 /* ========== Early Serial Debug ========== */
 
@@ -274,6 +355,11 @@ void _start(void) {
     serial_puthex(kernel_virt_base);
     serial_puts("\n");
   }
+
+  capture_boot_payloads();
+  serial_puts("Installer payload status: ");
+  serial_puts(boot_payload_status());
+  serial_puts("\n");
 
   /* Get framebuffer */
   if (framebuffer_request.response == NULL) {

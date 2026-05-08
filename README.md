@@ -13,7 +13,7 @@ le developpement noyau:
 - interface framebuffer simple avec splash `Orizon OS`
 - une seule console centrale pour travailler proprement
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
-- premiere base d'installateur disque guide avec langue, clavier et plan disque
+- installateur disque guide avec langue, clavier, GPT, ESP FAT32 et boot UEFI
 - commande `update` interne avec transaction full-upgrade, DHCP/DNS/TCP et
   contact GitHub, actuellement mise en pause avant installation reelle
 - console avec scrollback et support molette souris PS/2
@@ -36,9 +36,14 @@ install
 ```
 
 L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
-ecrit un plan de staging dans `/workspace/.orizon/install-plan`. Par securite,
-il ne partitionne pas encore le disque: il attend le writer GPT/FAT32/ESP et un
-schema de boot A/B avant toute ecriture destructive.
+peut installer Orizon OS sur le disque cible. Le mode `guided-full-disk` ecrit
+une GPT, formate une ESP FAT32, copie `BOOTX64.EFI`, `kernel.elf` et
+`limine.conf`, puis conserve une partition data Orizon pour `/workspace`.
+
+La premiere version cible le cas le plus utile pour le labo et les machines
+UEFI simples: un disque AHCI/SATA, une ESP de 1 MiB a 512 MiB, et une partition
+data Orizon a partir de 512 MiB. Les installations multi-disques, dual-boot et
+rollback A/B arriveront ensuite.
 
 Pour revoir le plan:
 

@@ -38,6 +38,12 @@
   {LIMINE_COMMON_MAGIC, 0x71ba76863cc55f63, 0xb2644a48c516a487}
 #define LIMINE_RSDP_REQUEST                                                    \
   {LIMINE_COMMON_MAGIC, 0xc5e77b6b397e7b43, 0x27637845accdcf3c}
+#define LIMINE_KERNEL_FILE_REQUEST                                             \
+  {LIMINE_COMMON_MAGIC, 0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69}
+#define LIMINE_MODULE_REQUEST                                                  \
+  {LIMINE_COMMON_MAGIC, 0x3e7e279702be32af, 0xca1c4f3bd1280cee}
+
+#define LIMINE_INTERNAL_MODULE_REQUIRED (1 << 0)
 
 /* Memory map entry types */
 #define LIMINE_MEMMAP_USABLE 0
@@ -53,6 +59,30 @@
 #define LIMINE_FRAMEBUFFER_RGB 1
 
 /* ========== Structures ========== */
+
+struct limine_uuid {
+  uint32_t a;
+  uint16_t b;
+  uint16_t c;
+  uint8_t d[8];
+};
+
+struct limine_file {
+  uint64_t revision;
+  void *address;
+  uint64_t size;
+  char *path;
+  char *cmdline;
+  uint32_t media_type;
+  uint32_t unused;
+  uint32_t tftp_ip;
+  uint32_t tftp_port;
+  uint32_t partition_index;
+  uint32_t mbr_disk_id;
+  struct limine_uuid gpt_disk_uuid;
+  struct limine_uuid gpt_part_uuid;
+  struct limine_uuid part_uuid;
+};
 
 /* Framebuffer */
 struct limine_framebuffer {
@@ -144,6 +174,37 @@ struct limine_kernel_address_request {
   uint64_t id[4];
   uint64_t revision;
   struct limine_kernel_address_response *response;
+};
+
+struct limine_kernel_file_response {
+  uint64_t revision;
+  struct limine_file *kernel_file;
+};
+
+struct limine_kernel_file_request {
+  uint64_t id[4];
+  uint64_t revision;
+  struct limine_kernel_file_response *response;
+};
+
+struct limine_internal_module {
+  const char *path;
+  const char *cmdline;
+  uint64_t flags;
+};
+
+struct limine_module_response {
+  uint64_t revision;
+  uint64_t module_count;
+  struct limine_file **modules;
+};
+
+struct limine_module_request {
+  uint64_t id[4];
+  uint64_t revision;
+  struct limine_module_response *response;
+  uint64_t internal_module_count;
+  struct limine_internal_module **internal_modules;
 };
 
 /* RSDP (ACPI root pointer) */

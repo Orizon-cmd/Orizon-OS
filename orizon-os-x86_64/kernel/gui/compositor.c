@@ -248,7 +248,7 @@ static void poll_input_state(void) {
   }
 
   if (wheel != 0 && splash_ticks_remaining <= 0 && main_terminal) {
-    term_scroll_view(main_terminal, wheel * 3);
+    term_scroll_view(main_terminal, -wheel * 3);
     needs_redraw = 1;
   }
 
