@@ -1,11 +1,14 @@
 /*
- * Orizon OS x86_64 - Update Manager
+ * Orizon OS x86_64 - Installed System Update Manager
  *
- * `update` is the in-OS full-upgrade entrypoint. It owns the transaction and
- * records state locally; network protocols are added underneath it.
+ * The updater is intentionally installed-disk only. Live boot can prepare and
+ * install the OS; once installed, `update` owns a full boot-payload refresh:
+ * fetch manifest, download artifacts from GitHub, verify SHA-256, rewrite the
+ * ESP, and preserve the Orizon data partition used by /workspace.
  */
 
 #include "../include/update.h"
+#include "../include/install.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/sched.h"
@@ -16,11 +19,9 @@
 #define UPDATE_STATE_PATH "/workspace/.orizon/update-state"
 #define UPDATE_LOG_PATH "/workspace/.orizon/update.log"
 #define UPDATE_MANIFEST_PATH "/workspace/.orizon/update-manifest"
-#define UPDATE_PLAN_PATH "/workspace/.orizon/update-plan"
-#define UPDATE_PROOF_PATH "/workspace/.orizon/github-http-response"
-#define UPDATE_PROOF_HASH_PATH "/workspace/.orizon/github-http-response.sha256"
-#define UPDATE_TLS_PROOF_PATH "/workspace/.orizon/github-tls-response"
-#define UPDATE_TLS_PROOF_HASH_PATH "/workspace/.orizon/github-tls-response.sha256"
+#define UPDATE_PROOF_PATH "/workspace/.orizon/github-https-manifest"
+#define UPDATE_PROOF_HASH_PATH "/workspace/.orizon/github-https-manifest.sha256"
+#define UPDATE_LAST_SUCCESS_PATH "/workspace/.orizon/last-update"
 #define SYSTEM_STATE_PATH "/system/update-state"
 #define SYSTEM_PACKAGES_PATH "/system/packages"
 #define SYSTEM_SOURCE_PATH "/system/update-source"
@@ -28,11 +29,33 @@
 #define SYSTEM_INSTALLED_PATH "/system/installed"
 #define UPDATE_SOURCE "https://github.com/Orizon-cmd/Orizon-OS"
 #define UPDATE_CHANNEL "main"
+#define UPDATE_RAW_HOST "raw.githubusercontent.com"
+#define UPDATE_RAW_PREFIX "/Orizon-cmd/Orizon-OS/main/"
+#define UPDATE_MANIFEST_REMOTE "updates/x86_64/manifest.txt"
+#define UPDATE_CHUNK_BYTES 8192U
+#define UPDATE_MANIFEST_MAX 4096U
+#define UPDATE_KERNEL_MAX (4U * 1024U * 1024U)
+#define UPDATE_EFI_MAX (512U * 1024U)
+#define UPDATE_CONF_MAX 4096U
 
 typedef struct {
   const char *name;
   const char *version;
 } update_package_t;
+
+typedef struct {
+  char version[64];
+  char commit[64];
+  char kernel_path[160];
+  char kernel_sha256[SHA256_HEX_SIZE];
+  size_t kernel_size;
+  char efi_path[160];
+  char efi_sha256[SHA256_HEX_SIZE];
+  size_t efi_size;
+  char limine_path[160];
+  char limine_sha256[SHA256_HEX_SIZE];
+  size_t limine_size;
+} update_manifest_t;
 
 static const update_package_t base_packages[] = {
     {"orizon-core", "core-x86_64"},
@@ -40,43 +63,40 @@ static const update_package_t base_packages[] = {
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
-    {"orizon-tls", "encrypted-http-range-probe"},
-    {"orizon-sha256", "manifest-verification"},
-    {"orizon-manifest", "staged-update-plan"},
+    {"orizon-tls", "github-https-range"},
+    {"orizon-sha256", "artifact-verification"},
+    {"orizon-manifest", "github-manifest"},
     {"orizon-timer", "pit-100hz"},
     {"orizon-scheduler", "process-accounting"},
-    {"orizon-updater", "github-bootstrap"},
+    {"orizon-updater", "installed-esp-writer"},
 };
 
-static const char update_manifest[] =
-    "manifest-version 1\n"
-    "os Orizon OS\n"
-    "channel " UPDATE_CHANNEL "\n"
-    "source " UPDATE_SOURCE "\n"
-    "transport github-https\n"
-    "package orizon-core core-x86_64 required\n"
-    "package orizon-console minimal-shell required\n"
-    "package orizon-vfs workspace-persistence required\n"
-    "package orizon-net ethernet-e1000 required\n"
-    "package orizon-ipv4 dhcp-dns-tcp-bootstrap required\n"
-    "package orizon-tls encrypted-http-range-probe required\n"
-    "package orizon-sha256 manifest-verification required\n"
-    "package orizon-manifest staged-update-plan required\n"
-    "package orizon-timer pit-100hz required\n"
-    "package orizon-scheduler process-accounting required\n"
-    "package orizon-updater github-bootstrap required\n"
-    "payload Orizon-OS.iso transport=https sha256=pending size=pending\n";
-
 static const char *update_status_text = "update: not run";
-static char github_response[4096];
-static char tls_response[4096];
+static char update_manifest_text[UPDATE_MANIFEST_MAX];
+static uint8_t update_kernel[UPDATE_KERNEL_MAX] __attribute__((aligned(4096)));
+static uint8_t update_efi[UPDATE_EFI_MAX] __attribute__((aligned(4096)));
+static char update_limine_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
+static uint8_t update_chunk[UPDATE_CHUNK_BYTES] __attribute__((aligned(4096)));
 
 static void update_write_file(const char *path, const char *text, int append) {
   file_t *f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
   if (!f) {
     return;
   }
-  vfs_write(f, text, strlen(text));
+  if (text) {
+    vfs_write(f, text, strlen(text));
+  }
+  vfs_close(f);
+}
+
+static void update_write_blob(const char *path, const void *data, size_t size) {
+  file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return;
+  }
+  if (data && size > 0) {
+    vfs_write(f, data, size);
+  }
   vfs_close(f);
 }
 
@@ -92,11 +112,25 @@ static void update_write_line(const char *path, const char *line) {
 
 static void update_set_state(const char *state) {
   update_status_text = state;
-  update_write_file(UPDATE_STATE_PATH, state, 0);
-  update_write_file(UPDATE_STATE_PATH, "\n", 1);
-  update_write_file(SYSTEM_STATE_PATH, state, 0);
-  update_write_file(SYSTEM_STATE_PATH, "\n", 1);
+  update_write_line(UPDATE_STATE_PATH, state);
+  update_write_line(SYSTEM_STATE_PATH, state);
   update_append_log(state);
+}
+
+static void append_report(char *report, size_t report_size, const char *line) {
+  size_t used;
+  if (!report || report_size == 0 || !line) {
+    return;
+  }
+  used = strlen(report);
+  if (used + 1 >= report_size) {
+    return;
+  }
+  snprintf(report + used, report_size - used, "%s\n", line);
+}
+
+static int update_installed_marker_present(void) {
+  return vfs_exists("/workspace/.orizon/installed");
 }
 
 static void update_write_package_db(void) {
@@ -111,11 +145,6 @@ static void update_write_package_db(void) {
   }
 }
 
-static void update_write_manifest(void) {
-  update_write_file(UPDATE_MANIFEST_PATH, update_manifest, 0);
-  update_write_file(SYSTEM_MANIFEST_PATH, update_manifest, 0);
-}
-
 static void update_write_installed_db(void) {
   char line[128];
   update_write_file(SYSTEM_INSTALLED_PATH, "", 0);
@@ -126,60 +155,205 @@ static void update_write_installed_db(void) {
   }
 }
 
-static void update_write_plan(const char *phase, const char *network,
-                              const char *proof_hash, size_t proof_len) {
-  char line[256];
-  update_write_file(UPDATE_PLAN_PATH, "", 0);
-  update_write_file(UPDATE_PLAN_PATH, "plan-version 1\n", 1);
-  update_write_file(UPDATE_PLAN_PATH, "source " UPDATE_SOURCE "\n", 1);
-  update_write_file(UPDATE_PLAN_PATH, "channel " UPDATE_CHANNEL "\n", 1);
-  snprintf(line, sizeof(line), "phase %s\n", phase ? phase : "unknown");
-  update_write_file(UPDATE_PLAN_PATH, line, 1);
-  if (network && *network) {
-    snprintf(line, sizeof(line), "network %s\n", network);
-    update_write_file(UPDATE_PLAN_PATH, line, 1);
+static int hex_equal(const char *a, const char *b) {
+  for (size_t i = 0; i < SHA256_HEX_SIZE - 1; i++) {
+    char ca = a[i];
+    char cb = b[i];
+    if (ca >= 'A' && ca <= 'F') {
+      ca = (char)(ca + ('a' - 'A'));
+    }
+    if (cb >= 'A' && cb <= 'F') {
+      cb = (char)(cb + ('a' - 'A'));
+    }
+    if (ca != cb) {
+      return 0;
+    }
   }
-  if (proof_hash && *proof_hash) {
-    snprintf(line, sizeof(line), "proof-bytes %lu\n",
-             (unsigned long)proof_len);
-    update_write_file(UPDATE_PLAN_PATH, line, 1);
-    snprintf(line, sizeof(line), "proof-sha256 %s\n", proof_hash);
-    update_write_file(UPDATE_PLAN_PATH, line, 1);
-  }
-  if (phase && strcmp(phase, "tls-encrypted-http-range") == 0) {
-    update_write_file(UPDATE_PLAN_PATH,
-                      "next tls-package-body-streaming-and-boot-writer\n", 1);
-  } else if (phase && strcmp(phase, "tls-handshake") == 0) {
-    update_write_file(UPDATE_PLAN_PATH,
-                      "next tls-encrypted-http-get-and-package-body\n", 1);
-  } else {
-    update_write_file(UPDATE_PLAN_PATH,
-                      "next tls-package-body-streaming-and-boot-writer\n", 1);
-  }
-  update_write_file(UPDATE_PLAN_PATH, "install staged-boot-writer\n", 1);
+  return 1;
 }
 
-static void append_report(char *report, size_t report_size, const char *line) {
-  size_t used;
-  if (!report || report_size == 0) {
-    return;
+static int parse_size_value(const char *text, size_t *out) {
+  size_t value = 0;
+  int seen = 0;
+  while (*text >= '0' && *text <= '9') {
+    value = value * 10 + (size_t)(*text - '0');
+    text++;
+    seen = 1;
   }
-  used = strlen(report);
-  if (used + 1 >= report_size) {
-    return;
+  if (!seen || (*text != '\0' && *text != '\n' && *text != '\r' && *text != ' ')) {
+    return -1;
   }
-  snprintf(report + used, report_size - used, "%s\n", line);
+  *out = value;
+  return 0;
+}
+
+static int manifest_copy_value(const char *manifest, const char *key, char *out,
+                               size_t out_size) {
+  size_t key_len = strlen(key);
+  const char *p = manifest;
+
+  if (!manifest || !key || !out || out_size == 0) {
+    return -1;
+  }
+  while (*p) {
+    const char *line = p;
+    size_t len = 0;
+    while (p[len] && p[len] != '\n') {
+      len++;
+    }
+    if (len > key_len && strncmp(line, key, key_len) == 0 &&
+        line[key_len] == ' ') {
+      size_t value_len = len - key_len - 1;
+      if (value_len >= out_size) {
+        value_len = out_size - 1;
+      }
+      memcpy(out, line + key_len + 1, value_len);
+      out[value_len] = '\0';
+      return 0;
+    }
+    p += len;
+    if (*p == '\n') {
+      p++;
+    }
+  }
+  return -1;
+}
+
+static int manifest_size_value(const char *manifest, const char *key,
+                               size_t *out) {
+  char value[32];
+  if (manifest_copy_value(manifest, key, value, sizeof(value)) < 0) {
+    return -1;
+  }
+  return parse_size_value(value, out);
+}
+
+static int parse_update_manifest(const char *text, update_manifest_t *manifest) {
+  if (!text || !manifest || !strstr(text, "manifest-version 1") ||
+      !strstr(text, "os Orizon OS")) {
+    return -1;
+  }
+  memset(manifest, 0, sizeof(*manifest));
+  if (manifest_copy_value(text, "version", manifest->version,
+                          sizeof(manifest->version)) < 0 ||
+      manifest_copy_value(text, "commit", manifest->commit,
+                          sizeof(manifest->commit)) < 0 ||
+      manifest_copy_value(text, "kernel-path", manifest->kernel_path,
+                          sizeof(manifest->kernel_path)) < 0 ||
+      manifest_copy_value(text, "kernel-sha256", manifest->kernel_sha256,
+                          sizeof(manifest->kernel_sha256)) < 0 ||
+      manifest_size_value(text, "kernel-size", &manifest->kernel_size) < 0 ||
+      manifest_copy_value(text, "efi-path", manifest->efi_path,
+                          sizeof(manifest->efi_path)) < 0 ||
+      manifest_copy_value(text, "efi-sha256", manifest->efi_sha256,
+                          sizeof(manifest->efi_sha256)) < 0 ||
+      manifest_size_value(text, "efi-size", &manifest->efi_size) < 0 ||
+      manifest_copy_value(text, "limine-path", manifest->limine_path,
+                          sizeof(manifest->limine_path)) < 0 ||
+      manifest_copy_value(text, "limine-sha256", manifest->limine_sha256,
+                          sizeof(manifest->limine_sha256)) < 0 ||
+      manifest_size_value(text, "limine-size", &manifest->limine_size) < 0) {
+    return -1;
+  }
+  if (manifest->kernel_size == 0 || manifest->kernel_size > UPDATE_KERNEL_MAX ||
+      manifest->efi_size == 0 || manifest->efi_size > UPDATE_EFI_MAX ||
+      manifest->limine_size == 0 || manifest->limine_size >= UPDATE_CONF_MAX) {
+    return -1;
+  }
+  return 0;
+}
+
+static int build_raw_path(const char *relative, char *out, size_t out_size) {
+  const char *rel = relative;
+  if (!relative || !out || out_size == 0) {
+    return -1;
+  }
+  while (*rel == '/') {
+    rel++;
+  }
+  return snprintf(out, out_size, UPDATE_RAW_PREFIX "%s", rel) < (int)out_size
+             ? 0
+             : -1;
+}
+
+static int download_range_path(const char *relative, uint64_t start,
+                               uint64_t end, void *out, size_t out_cap,
+                               size_t *out_len, char *diag,
+                               size_t diag_cap) {
+  char path[240];
+  if (build_raw_path(relative, path, sizeof(path)) < 0) {
+    return -1;
+  }
+  return netstack_https_range_get(UPDATE_RAW_HOST, path, start, end, out,
+                                  out_cap, out_len, diag, diag_cap);
+}
+
+static int download_artifact(const char *label, const char *relative,
+                             size_t expected_size, const char *expected_hash,
+                             void *dst, size_t dst_cap, char *report,
+                             size_t report_size) {
+  size_t done = 0;
+  char line[224];
+  char diag[192];
+  char actual_hash[SHA256_HEX_SIZE];
+
+  if (!relative || !expected_hash || !dst || expected_size == 0 ||
+      expected_size > dst_cap) {
+    append_report(report, report_size, "update: invalid manifest artifact");
+    return -1;
+  }
+
+  snprintf(line, sizeof(line), "Downloading %s (%lu bytes)", label,
+           (unsigned long)expected_size);
+  append_report(report, report_size, line);
+  update_append_log(line);
+
+  while (done < expected_size) {
+    size_t wanted = expected_size - done;
+    size_t got = 0;
+    if (wanted > UPDATE_CHUNK_BYTES) {
+      wanted = UPDATE_CHUNK_BYTES;
+    }
+    if (download_range_path(relative, (uint64_t)done,
+                            (uint64_t)(done + wanted - 1), update_chunk,
+                            sizeof(update_chunk), &got, diag,
+                            sizeof(diag)) != 0 ||
+        got == 0 || got > wanted) {
+      snprintf(line, sizeof(line), "update: download failed for %s at %lu",
+               label, (unsigned long)done);
+      append_report(report, report_size, line);
+      update_append_log(line);
+      return -2;
+    }
+    memcpy((uint8_t *)dst + done, update_chunk, got);
+    done += got;
+  }
+
+  sha256_buffer_hex(dst, expected_size, actual_hash);
+  if (!hex_equal(actual_hash, expected_hash)) {
+    snprintf(line, sizeof(line), "update: sha256 mismatch for %s", label);
+    append_report(report, report_size, line);
+    update_append_log(line);
+    snprintf(line, sizeof(line), "expected %s", expected_hash);
+    update_append_log(line);
+    snprintf(line, sizeof(line), "actual   %s", actual_hash);
+    update_append_log(line);
+    return -3;
+  }
+
+  snprintf(line, sizeof(line), "%s verified sha256 %s", label, actual_hash);
+  append_report(report, report_size, line);
+  update_append_log(line);
+  return 0;
 }
 
 int orizon_update_full_upgrade(char *report, size_t report_size) {
+  update_manifest_t manifest;
   char net_line[256];
-  char ip_line[256];
-  char stack_line[256];
-  char pkg_line[128];
-  char proof_hash[SHA256_HEX_SIZE];
-  char tls_hash[SHA256_HEX_SIZE];
-  size_t github_len = 0;
-  size_t tls_len = 0;
+  char line[256];
+  char manifest_hash[SHA256_HEX_SIZE];
+  size_t manifest_len = 0;
+  char update_text[512];
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -188,6 +362,13 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   vfs_mkdir("/workspace");
   vfs_mkdir("/workspace/.orizon");
   vfs_mkdir("/system");
+
+  if (!update_installed_marker_present()) {
+    append_report(report, report_size,
+                  "update: unavailable in live boot. Install Orizon OS first.");
+    return -10;
+  }
+
   sched_enter_process("update-manager");
   update_write_file(UPDATE_LOG_PATH, "", 0);
   update_write_file(SYSTEM_SOURCE_PATH, UPDATE_SOURCE "\n", 0);
@@ -197,32 +378,20 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_append_log("Orizon full-upgrade started");
   update_append_log("Source: " UPDATE_SOURCE);
 
-  update_set_state("update: preparing package database");
+  update_set_state("update: preparing installed package database");
   update_write_package_db();
-  update_write_manifest();
   update_write_installed_db();
-  update_write_plan("prepare", "", "", 0);
-  for (size_t i = 0; i < sizeof(base_packages) / sizeof(base_packages[0]); i++) {
-    snprintf(pkg_line, sizeof(pkg_line), "Package target: %s %s",
-             base_packages[i].name, base_packages[i].version);
-    update_append_log(pkg_line);
-  }
-  append_report(report, report_size, "[1/8] Local package database ready");
-  append_report(report, report_size, "Manifest staged: " UPDATE_MANIFEST_PATH);
+  append_report(report, report_size, "[1/7] Installed package database ready");
 
   update_set_state("update: probing ethernet");
   net_init();
   net_format_status(net_line, sizeof(net_line));
-  update_append_log(net_line);
-  append_report(report, report_size, "[2/8] Ethernet probe");
+  append_report(report, report_size, "[2/7] Ethernet probe");
   append_report(report, report_size, net_line);
-
+  update_append_log(net_line);
   if (!net_link_up()) {
     update_set_state("update: blocked - ethernet link is down");
-    append_report(report, report_size,
-                  "[3/8] GitHub download skipped: ethernet link is down");
-    append_report(report, report_size,
-                  "Check VM/device network cable, bridge, or adapter model.");
+    append_report(report, report_size, "update: ethernet link is down");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
@@ -230,135 +399,100 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   }
 
   update_set_state("update: configuring ipv4 with dhcp");
-  append_report(report, report_size, "[3/8] Ethernet link is up");
   if (netstack_configure_ipv4() != 0) {
-    netstack_format_status(ip_line, sizeof(ip_line));
-    append_report(report, report_size, "[4/8] DHCP/IPv4 failed");
-    append_report(report, report_size, ip_line);
-    update_append_log(ip_line);
-    update_write_plan("blocked-dhcp", ip_line, "", 0);
+    netstack_format_status(net_line, sizeof(net_line));
+    update_set_state("update: blocked - dhcp failed");
+    append_report(report, report_size, "[3/7] DHCP/IPv4 failed");
+    append_report(report, report_size, net_line);
+    update_append_log(net_line);
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
     return -2;
   }
+  netstack_format_status(net_line, sizeof(net_line));
+  append_report(report, report_size, "[3/7] DHCP/IPv4 ready");
+  append_report(report, report_size, net_line);
+  update_append_log(net_line);
 
-  netstack_format_status(ip_line, sizeof(ip_line));
-  update_append_log(ip_line);
-  update_write_plan("network-ready", ip_line, "", 0);
-  append_report(report, report_size, "[4/8] DHCP/IPv4 ready");
-  append_report(report, report_size, ip_line);
-
-  update_set_state("update: downloading github metadata");
-  github_response[0] = '\0';
-  if (netstack_github_probe(github_response, sizeof(github_response),
-                            &github_len) != 0) {
-    netstack_format_status(ip_line, sizeof(ip_line));
-    append_report(report, report_size, "[5/8] GitHub TCP download failed");
-    append_report(report, report_size, ip_line);
-    append_report(report, report_size,
-                  "Next required layer: stronger TCP retry/TLS diagnostics.");
-    update_append_log("GitHub TCP/HTTP probe failed");
-    update_append_log(ip_line);
-    update_write_plan("blocked-github-tcp", ip_line, "", 0);
+  update_set_state("update: downloading github manifest");
+  if (download_range_path(UPDATE_MANIFEST_REMOTE, 0, UPDATE_MANIFEST_MAX - 2,
+                          update_manifest_text,
+                          sizeof(update_manifest_text) - 1, &manifest_len,
+                          net_line, sizeof(net_line)) != 0 ||
+      manifest_len == 0) {
+    update_set_state("update: blocked - manifest download failed");
+    append_report(report, report_size, "[4/7] GitHub manifest download failed");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
     return -3;
   }
+  update_manifest_text[manifest_len] = '\0';
+  sha256_buffer_hex(update_manifest_text, manifest_len, manifest_hash);
+  update_write_blob(UPDATE_PROOF_PATH, update_manifest_text, manifest_len);
+  update_write_line(UPDATE_PROOF_HASH_PATH, manifest_hash);
+  if (parse_update_manifest(update_manifest_text, &manifest) < 0) {
+    update_set_state("update: blocked - invalid manifest");
+    append_report(report, report_size, "[4/7] Invalid GitHub update manifest");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -4;
+  }
+  update_write_blob(UPDATE_MANIFEST_PATH, update_manifest_text, manifest_len);
+  update_write_blob(SYSTEM_MANIFEST_PATH, update_manifest_text, manifest_len);
+  snprintf(line, sizeof(line), "[4/7] Manifest %s commit %s",
+           manifest.version, manifest.commit);
+  append_report(report, report_size, line);
+  update_append_log(line);
 
-  sha256_buffer_hex(github_response, github_len, proof_hash);
-  update_write_file(UPDATE_PROOF_PATH, github_response, 0);
-  update_write_line(UPDATE_PROOF_HASH_PATH, proof_hash);
-  netstack_format_status(ip_line, sizeof(ip_line));
-  update_append_log(ip_line);
-  snprintf(ip_line, sizeof(ip_line), "Downloaded %lu bytes from GitHub edge",
-           (unsigned long)github_len);
-  update_append_log(ip_line);
-  snprintf(pkg_line, sizeof(pkg_line), "GitHub proof sha256 %s", proof_hash);
-  update_append_log(pkg_line);
-  netstack_format_status(stack_line, sizeof(stack_line));
-  update_write_plan("github-proof", stack_line, proof_hash, github_len);
-  append_report(report, report_size, "[5/8] GitHub TCP/HTTP response saved");
-  append_report(report, report_size, stack_line);
-  append_report(report, report_size, ip_line);
-  append_report(report, report_size, pkg_line);
-
-  if (strstr(github_response, "Location: https://") ||
-      strstr(github_response, "HTTP/1.1 301") ||
-      strstr(github_response, "HTTP/1.0 301")) {
-    update_set_state("update: probing github tls");
-    tls_response[0] = '\0';
-    if (netstack_github_tls_probe(tls_response, sizeof(tls_response),
-                                  &tls_len) != 0) {
-      netstack_format_status(ip_line, sizeof(ip_line));
-      append_report(report, report_size, "[6/8] TLS ClientHello failed");
-      append_report(report, report_size, ip_line);
-      append_report(report, report_size,
-                    "Next required layer: TLS retry/diagnostics.");
-      update_append_log("GitHub TLS ClientHello failed");
-      update_append_log(ip_line);
-      update_write_plan("blocked-tls-clienthello", ip_line, proof_hash,
-                        github_len);
-      vfs_persist_save();
-      sched_set_process_state("update-manager", SCHED_SLEEPING);
-      sched_enter_process("gui-shell");
-      return -4;
-    }
-
-    sha256_buffer_hex(tls_response, tls_len, tls_hash);
-    update_write_file(UPDATE_TLS_PROOF_PATH, tls_response, 0);
-    update_write_line(UPDATE_TLS_PROOF_HASH_PATH, tls_hash);
-    snprintf(pkg_line, sizeof(pkg_line), "TLS proof sha256 %s", tls_hash);
-    update_append_log(pkg_line);
-    netstack_format_status(stack_line, sizeof(stack_line));
-    int tls_finished_verified =
-        strstr(tls_response, "tls server-finished seen=yes verified=yes") != 0;
-    int tls_http_decrypted =
-        strstr(tls_response, "tls encrypted-http-response decrypted=yes") != 0;
-    update_write_plan(tls_http_decrypted ? "tls-encrypted-http-range"
-                                         : "tls-handshake",
-                      stack_line, tls_hash, tls_len);
-    append_report(report, report_size, "[6/8] TLS server handshake saved");
-    append_report(report, report_size, tls_response);
-    append_report(report, report_size, pkg_line);
-    if (tls_http_decrypted) {
-      update_set_state("update: encrypted github http proof ready");
-      if (tls_finished_verified) {
-        append_report(report, report_size,
-                      "[7/8] TLS handshake verified and encrypted HTTP response decrypted");
-      } else {
-        append_report(report, report_size,
-                      "[7/8] Encrypted GitHub HTTP response decrypted");
-      }
-      append_report(report, report_size,
-                    "[8/8] Full package install paused before package body streaming, manifest verification, and boot writer");
-      update_append_log(
-          "GitHub encrypted HTTP range proof recorded; package streaming is next");
-    } else {
-      append_report(report, report_size,
-                    "[7/8] TLS secure flight captured; encrypted package HTTP still diagnostic");
-      append_report(report, report_size,
-                    "[8/8] Full package install paused before encrypted HTTP package streaming, manifest verification, and boot writer");
-      update_append_log(
-          "GitHub TLS secure flight recorded; encrypted package HTTP is next");
-    }
-    append_report(report, report_size,
-                  "Saved proofs: /workspace/.orizon/github-http-response and github-tls-response");
-    update_append_log("Boot/system file writer pending");
+  update_set_state("update: downloading boot payloads");
+  append_report(report, report_size, "[5/7] Downloading verified artifacts");
+  if (download_artifact("kernel.elf", manifest.kernel_path,
+                        manifest.kernel_size, manifest.kernel_sha256,
+                        update_kernel, sizeof(update_kernel), report,
+                        report_size) < 0 ||
+      download_artifact("BOOTX64.EFI", manifest.efi_path, manifest.efi_size,
+                        manifest.efi_sha256, update_efi, sizeof(update_efi),
+                        report, report_size) < 0 ||
+      download_artifact("limine.conf", manifest.limine_path,
+                        manifest.limine_size, manifest.limine_sha256,
+                        update_limine_conf, sizeof(update_limine_conf) - 1,
+                        report, report_size) < 0) {
+    update_set_state("update: blocked - artifact verification failed");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
     return -5;
   }
+  update_limine_conf[manifest.limine_size] = '\0';
 
-  update_set_state("update: github response downloaded");
+  snprintf(update_text, sizeof(update_text),
+           "Orizon OS updated\nsource=%s\nchannel=%s\nversion=%s\ncommit=%s\n"
+           "kernel-sha256=%s\n",
+           UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
+           manifest.kernel_sha256);
+
+  update_set_state("update: writing installed ESP");
+  append_report(report, report_size, "[6/7] Rewriting installed boot partition");
+  if (orizon_install_update_esp(update_kernel, manifest.kernel_size, update_efi,
+                                manifest.efi_size, update_limine_conf,
+                                manifest.limine_size, update_text,
+                                strlen(update_text), report,
+                                report_size) != 0) {
+    update_set_state("update: blocked - ESP write failed");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -6;
+  }
+
+  update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text, strlen(update_text));
+  update_set_state("update: complete");
   append_report(report, report_size,
-                "[6/8] GitHub data downloaded without redirect");
-  append_report(report, report_size,
-                "[7/8] Package installer/boot writer pending");
-  update_append_log("GitHub response downloaded");
-  update_append_log("Boot/system file writer pending");
+                "[7/7] Update complete. Reboot to start the refreshed system.");
+  update_append_log("Update complete");
   vfs_persist_save();
   sched_set_process_state("update-manager", SCHED_SLEEPING);
   sched_enter_process("gui-shell");

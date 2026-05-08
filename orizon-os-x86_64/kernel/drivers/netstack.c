@@ -61,8 +61,8 @@ static uint8_t tls_tx_buf[512];
 static uint8_t tls_rx_buf[16384];
 static uint8_t tls_secure_rx_buf[2048];
 static uint8_t tls_server_plain_buf[2048];
-static uint8_t tls_app_rx_buf[4096];
-static uint8_t tls_app_plain_buf[4096];
+static uint8_t tls_app_rx_buf[32768];
+static uint8_t tls_app_plain_buf[32768];
 static uint8_t tls_client_random[32];
 static uint8_t tls_client_x25519_scalar[32];
 static size_t tls_client_hello_handshake_len = 0;
@@ -3728,6 +3728,156 @@ int netstack_tls_probe(const char *host, char *out, size_t out_cap,
     *out_len = strlen(out);
   }
   set_status("tls: server response received");
+  return 0;
+}
+
+static const uint8_t *http_body_start(const uint8_t *plain, size_t plain_len,
+                                      size_t *body_len) {
+  if (body_len) {
+    *body_len = 0;
+  }
+  if (!plain || plain_len < 4) {
+    return NULL;
+  }
+  for (size_t i = 0; i + 3 < plain_len; i++) {
+    if (plain[i] == '\r' && plain[i + 1] == '\n' &&
+        plain[i + 2] == '\r' && plain[i + 3] == '\n') {
+      if (body_len) {
+        *body_len = plain_len - (i + 4);
+      }
+      return plain + i + 4;
+    }
+  }
+  return NULL;
+}
+
+int netstack_https_range_get(const char *host, const char *path,
+                             uint64_t start, uint64_t end, void *out,
+                             size_t out_cap, size_t *out_len,
+                             char *diag, size_t diag_cap) {
+  uint32_t ip = 0;
+  tcp_conn_t conn;
+  tls_parse_info_t send_info;
+  size_t hello_len = 0;
+  size_t rx_len = 0;
+  char http_get[512];
+  size_t app_record_len = 0;
+  size_t app_reply_len = 0;
+  const uint8_t *body;
+  size_t body_len = 0;
+
+  if (out_len) {
+    *out_len = 0;
+  }
+  if (diag && diag_cap > 0) {
+    diag[0] = '\0';
+  }
+  if (!host || !path || !out || out_cap == 0 || end < start) {
+    return -1;
+  }
+  if (netstack_resolve_a(host, &ip) != 0) {
+    return -2;
+  }
+  if (tcp_connect(&conn, ip, HTTPS_PORT) != 0) {
+    return -3;
+  }
+  if (build_tls_client_hello(host, tls_tx_buf, sizeof(tls_tx_buf),
+                             &hello_len) != 0) {
+    set_status("tls: clienthello build failed");
+    return -4;
+  }
+
+  set_status("tls: clienthello");
+  if (tcp_send_data(&conn, tls_tx_buf, hello_len) < 0) {
+    set_status("tls: send failed");
+    return -5;
+  }
+  if (tcp_recv_bytes(&conn, tls_rx_buf, sizeof(tls_rx_buf), &rx_len, 6000) !=
+      0) {
+    set_status("tls: response timeout");
+    return -6;
+  }
+
+  tls_parse_records(tls_rx_buf, rx_len, &send_info, host);
+  if (!send_info.client_key_exchange_ready ||
+      send_info.client_key_exchange_record_len == 0) {
+    return -7;
+  }
+  if (tcp_send_data(&conn, send_info.client_key_exchange_record,
+                    send_info.client_key_exchange_record_len) < 0) {
+    return -8;
+  }
+  tls_last_client_key_exchange_sent = 1;
+
+  if (!send_info.client_finished_ready || send_info.client_secure_flight_len == 0) {
+    return -9;
+  }
+  if (tcp_send_data(&conn, send_info.client_secure_flight,
+                    send_info.client_secure_flight_len) < 0) {
+    return -10;
+  }
+  tls_last_client_finished_sent = 1;
+  memcpy(tls_last_client_finished_plain, send_info.client_finished_plain,
+         sizeof(tls_last_client_finished_plain));
+  tls_last_client_finished_plain_len = sizeof(tls_last_client_finished_plain);
+
+  if (tcp_recv_bytes(&conn, tls_secure_rx_buf, sizeof(tls_secure_rx_buf),
+                     &tls_last_secure_reply_len, 3000) != 0) {
+    return -11;
+  }
+  sha256_buffer_hex(tls_secure_rx_buf, tls_last_secure_reply_len,
+                    tls_last_secure_reply_sha256);
+  tls_decrypt_server_secure_reply(&send_info);
+  if (!send_info.server_finished_verified) {
+    return -12;
+  }
+
+  snprintf(http_get, sizeof(http_get),
+           "GET %s HTTP/1.1\r\n"
+           "Host: %s\r\n"
+           "User-Agent: OrizonOS-update/1.0\r\n"
+           "Accept: */*\r\n"
+           "Range: bytes=%lu-%lu\r\n"
+           "Connection: close\r\n"
+           "\r\n",
+           path, host, (unsigned long)start, (unsigned long)end);
+
+  if (tls_build_encrypted_client_record(
+          &send_info, 1, 23, (const uint8_t *)http_get, strlen(http_get),
+          tls_tx_buf, sizeof(tls_tx_buf), &app_record_len) != 0) {
+    return -13;
+  }
+  if (tcp_send_data(&conn, tls_tx_buf, app_record_len) < 0) {
+    return -14;
+  }
+  tls_last_http_get_sent = 1;
+  if (tcp_recv_bytes(&conn, tls_app_rx_buf, sizeof(tls_app_rx_buf),
+                     &app_reply_len, 6000) != 0) {
+    return -15;
+  }
+  tls_last_http_reply_len = app_reply_len;
+  sha256_buffer_hex(tls_app_rx_buf, app_reply_len, tls_last_http_reply_sha256);
+  tls_decrypt_server_http_reply(&send_info);
+  if (!tls_last_http_decrypted) {
+    return -16;
+  }
+
+  body = http_body_start(tls_app_plain_buf, tls_last_http_plain_len, &body_len);
+  if (!body || body_len == 0 || body_len > out_cap) {
+    return -17;
+  }
+  memcpy(out, body, body_len);
+  if (out_len) {
+    *out_len = body_len;
+  }
+  if (diag && diag_cap > 0) {
+    snprintf(diag, diag_cap,
+             "https range status=%s bytes=%lu plain=%lu sha256=%s",
+             tls_last_http_status[0] ? tls_last_http_status : "unknown",
+             (unsigned long)body_len, (unsigned long)tls_last_http_plain_len,
+             tls_last_http_plain_sha256);
+  }
+  set_status("tls: https range downloaded");
   return 0;
 }
 

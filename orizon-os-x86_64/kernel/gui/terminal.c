@@ -1057,8 +1057,16 @@ static void term_find_recursive(terminal_t *term, const char *path,
   }
 }
 
+static int term_install_already_complete(void);
+
 static void term_run_update(terminal_t *term) {
   static char report[8192];
+
+  if (!term_install_already_complete()) {
+    term_puts_t(term,
+                "update: unavailable in live boot. Install Orizon OS first.\n");
+    return;
+  }
   orizon_update_full_upgrade(report, sizeof(report));
   term_puts_t(term, report);
 }
@@ -1484,7 +1492,9 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  keyboard  - Show active keyboard layout\n");
     term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
-    term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
+    if (term_install_already_complete()) {
+      term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
+    }
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
     term_puts_t(term, "  neofetch  - System info\n");

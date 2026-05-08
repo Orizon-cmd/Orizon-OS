@@ -2,7 +2,7 @@
 
 Orizon OS est maintenant un projet autonome et personnel. Ce depot est la
 source d'autorite du systeme: il n'y a plus de synchronisation prevue avec un
-ancien OS ou un depot amont externe.
+autre OS ou un depot amont externe.
 
 ## Direction actuelle
 
@@ -15,8 +15,9 @@ le developpement noyau:
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32 et boot UEFI
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
-- commande `update` interne avec transaction full-upgrade, DHCP/DNS/TCP et
-  contact GitHub, actuellement mise en pause avant installation reelle
+- commande `update` interne, disponible seulement apres installation disque,
+  qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
+  les fichiers de boot installes
 - console avec scrollback et support molette souris PS/2
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
@@ -26,7 +27,7 @@ Ce qui est volontairement absent du profil actif:
 - gestionnaire de fichiers integre
 - bureau de demonstration
 - jeux et applications integrees non essentielles
-- flux de mise a jour herite d'un ancien projet
+- flux de mise a jour externe
 
 ## Installation Disque
 
@@ -69,9 +70,10 @@ Details: [docs/orizon/INSTALL.md](docs/orizon/INSTALL.md).
 
 ## Update Dans Orizon OS
 
-Le systeme de mise a jour Internet est volontairement en pause pendant la mise
-en place de l'installation disque. Le code actuel reste disponible comme preuve
-reseau/TLS, mais il ne remplace pas encore le systeme.
+La commande `update` est volontairement reservee a un Orizon OS installe sur
+disque. En live-boot, elle n'apparait pas dans `help` et refuse de demarrer si
+quelqu'un la tape quand meme, parce qu'un ISO demarre en lecture seule ne peut
+pas se modifier lui-meme proprement.
 
 Dans la console Orizon OS:
 
@@ -79,54 +81,38 @@ Dans la console Orizon OS:
 update
 ```
 
-La commande lance une transaction de mise a jour interne, facon
-`apt full-upgrade`: preparation de la base packages, probe Ethernet,
-configuration IPv4 par DHCP, resolution DNS, ouverture TCP vers GitHub, et
-journal local dans `/workspace/.orizon/update.log`. Elle ne lance pas de
-programme externe.
+La commande lance une transaction interne, facon `apt full-upgrade`, sans
+programme externe: preparation de la base packages, probe Ethernet Intel
+`e1000/e1000e`, DHCP, DNS, TCP, TLS vers GitHub, telechargement du manifeste
+public, telechargement des artefacts par requetes HTTP `Range`, verification
+SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
+`BOOTX64.EFI` et `limine.conf`. La partition data Orizon et `/workspace` sont
+preserves.
 
-Le driver Ethernet Intel `e1000/e1000e` est initialise au demarrage pour la VM
-et les cartes compatibles. Orizon OS sait maintenant joindre le edge GitHub et
-sauvegarder la reponse HTTP dans
-`/workspace/.orizon/github-http-response`, puis ouvrir le port HTTPS `443`,
-envoyer un `TLS ClientHello` avec SNI GitHub, recevoir le handshake serveur
-jusqu'au certificat/ServerKeyExchange quand le serveur l'envoie, et sauvegarder
-la preuve TLS dans `/workspace/.orizon/github-tls-response`. Le certificat leaf
-est maintenant parse pour verifier que ses noms DNS couvrent bien
-`raw.githubusercontent.com`, puis Orizon compare l'issuer du leaf avec le
-subject du certificat suivant pour verifier la coherence de base de la chaine
-fournie par GitHub. Il extrait aussi le hash du TBS certificate, l'algorithme
-de signature et la cle publique RSA de l'intermediaire, puis verifie la
-signature RSA PKCS#1 SHA-256 du certificat leaf. Le noyau prepare aussi une
-cle cliente X25519 bootstrap, calcule la cle publique cliente et derive le
-secret partage avec la cle X25519 serveur. Il construit maintenant le message
-`ClientKeyExchange`, l'envoie sur la connexion TCP TLS, calcule le hash de
-session, derive le `master_secret` TLS 1.2 avec `extended_master_secret`, puis
-prepare le premier bloc de cles AES-128-GCM. Le noyau chiffre aussi le
-`Finished` client, l'envoie avec `ChangeCipherSpec`, recoit la reponse
-securisee du serveur, verifie le `Finished` serveur, puis envoie une requete
-HTTP `Range` dans le tunnel TLS chiffre. La premiere reponse GitHub
-`HTTP/1.1 206 Partial Content` est maintenant dechiffree par le noyau.
-
-Les preuves reseau sont hashees:
+Le depot public GitHub est la source officielle:
 
 ```text
-/workspace/.orizon/github-http-response.sha256
-/workspace/.orizon/github-tls-response.sha256
+https://github.com/Orizon-cmd/Orizon-OS
 ```
 
-La transaction ecrit aussi un manifeste et un plan de staging:
+Le manifeste lu par le noyau se trouve ici:
 
 ```text
+updates/x86_64/manifest.txt
+```
+
+La transaction ecrit ses etats et journaux ici:
+
+```text
+/workspace/.orizon/update.log
+/workspace/.orizon/update-state
 /workspace/.orizon/update-manifest
-/workspace/.orizon/update-plan
-/system/update-manifest
+/workspace/.orizon/last-update
 /system/installed
 ```
 
-Le telechargement complet du corps des paquets GitHub demande encore le
-streaming du corps HTTP chiffre, un manifeste/payload verifies, puis le meme
-writer ESP/FAT32 ou schema de boot A/B que l'installateur disque.
+Apres une mise a jour reussie, il suffit de redemarrer pour booter sur le
+payload installe rafraichi.
 
 ## Noyau Et Performance
 

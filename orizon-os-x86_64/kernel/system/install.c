@@ -33,6 +33,17 @@ typedef struct {
   uint32_t cluster_count;
 } fat32_volume_t;
 
+typedef struct {
+  const void *kernel;
+  size_t kernel_size;
+  const void *efi;
+  size_t efi_size;
+  const char *limine_conf;
+  size_t limine_conf_size;
+  const char *install_text;
+  size_t install_text_size;
+} install_boot_payload_t;
+
 static uint8_t sector_buf[ORIZON_SECTOR_SIZE] __attribute__((aligned(4096)));
 static uint8_t cluster_buf[INSTALL_CLUSTER_BYTES] __attribute__((aligned(4096)));
 static uint8_t gpt_entries[INSTALL_GPT_ENTRY_SECTORS * ORIZON_SECTOR_SIZE]
@@ -420,35 +431,41 @@ static int fat_write_fats(const fat32_volume_t *vol) {
   return 0;
 }
 
-static int fat32_install_boot_files(const fat32_volume_t *vol,
-                                    const orizon_install_config_t *config) {
+static int fat32_write_boot_files(const fat32_volume_t *vol,
+                                  const install_boot_payload_t *payload) {
   static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
                                        '~', '1', 'C', 'O', 'N'};
-  char install_text[512];
-  const void *kernel = boot_kernel_image();
-  const void *efi = boot_efi_image();
-  size_t kernel_size = boot_kernel_image_size();
-  size_t efi_size = boot_efi_image_size();
-  uint32_t efi_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
-  uint32_t efi_boot_dir =
-      fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
-  uint32_t boot_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
-  uint32_t bootx64_file = fat_alloc_chain((fat32_volume_t *)vol, efi_size);
-  uint32_t kernel_file = fat_alloc_chain((fat32_volume_t *)vol, kernel_size);
-  uint32_t limine_root_file =
-      fat_alloc_chain((fat32_volume_t *)vol, sizeof(install_limine_conf) - 1);
-  uint32_t limine_boot_file =
-      fat_alloc_chain((fat32_volume_t *)vol, sizeof(install_limine_conf) - 1);
-  uint32_t limine_efi_file =
-      fat_alloc_chain((fat32_volume_t *)vol, sizeof(install_limine_conf) - 1);
+  uint32_t efi_dir;
+  uint32_t efi_boot_dir;
+  uint32_t boot_dir;
+  uint32_t bootx64_file;
+  uint32_t kernel_file;
+  uint32_t limine_root_file;
+  uint32_t limine_boot_file;
+  uint32_t limine_efi_file;
   uint32_t install_txt_file;
   size_t off;
 
-  snprintf(install_text, sizeof(install_text),
-           "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
-           "next=shutdown-remove-installer\n",
-           config->language, config->keyboard, config->hostname);
-  install_txt_file = fat_alloc_chain((fat32_volume_t *)vol, strlen(install_text));
+  if (!vol || !payload || !payload->kernel || payload->kernel_size == 0 ||
+      !payload->efi || payload->efi_size == 0 || !payload->limine_conf ||
+      payload->limine_conf_size == 0 || !payload->install_text ||
+      payload->install_text_size == 0) {
+    return -1;
+  }
+
+  efi_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
+  efi_boot_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
+  boot_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
+  bootx64_file = fat_alloc_chain((fat32_volume_t *)vol, payload->efi_size);
+  kernel_file = fat_alloc_chain((fat32_volume_t *)vol, payload->kernel_size);
+  limine_root_file =
+      fat_alloc_chain((fat32_volume_t *)vol, payload->limine_conf_size);
+  limine_boot_file =
+      fat_alloc_chain((fat32_volume_t *)vol, payload->limine_conf_size);
+  limine_efi_file =
+      fat_alloc_chain((fat32_volume_t *)vol, payload->limine_conf_size);
+  install_txt_file =
+      fat_alloc_chain((fat32_volume_t *)vol, payload->install_text_size);
 
   if (!efi_dir || !efi_boot_dir || !boot_dir || !bootx64_file ||
       !kernel_file || !limine_root_file || !limine_boot_file ||
@@ -466,9 +483,9 @@ static int fat32_install_boot_files(const fat32_volume_t *vol,
   fat_dir_add_entry(cluster_buf, &off, "BOOT       ", 0x10, boot_dir, 0);
   fat_dir_add_lfn(cluster_buf, &off, "limine.conf", limine_short);
   fat_dir_add_entry(cluster_buf, &off, limine_short, 0x20, limine_root_file,
-                    sizeof(install_limine_conf) - 1);
+                    payload->limine_conf_size);
   fat_dir_add_entry(cluster_buf, &off, "INSTALL TXT", 0x20, install_txt_file,
-                    strlen(install_text));
+                    payload->install_text_size);
   if (fat_write_cluster(vol, vol->root_cluster, cluster_buf) < 0) {
     return -1;
   }
@@ -485,10 +502,10 @@ static int fat32_install_boot_files(const fat32_volume_t *vol,
   off = 0;
   fat_dir_add_dot(cluster_buf, &off, efi_boot_dir, efi_dir);
   fat_dir_add_entry(cluster_buf, &off, "BOOTX64 EFI", 0x20, bootx64_file,
-                    efi_size);
+                    payload->efi_size);
   fat_dir_add_lfn(cluster_buf, &off, "limine.conf", limine_short);
   fat_dir_add_entry(cluster_buf, &off, limine_short, 0x20, limine_efi_file,
-                    sizeof(install_limine_conf) - 1);
+                    payload->limine_conf_size);
   if (fat_write_cluster(vol, efi_boot_dir, cluster_buf) < 0) {
     return -1;
   }
@@ -497,32 +514,34 @@ static int fat32_install_boot_files(const fat32_volume_t *vol,
   off = 0;
   fat_dir_add_dot(cluster_buf, &off, boot_dir, vol->root_cluster);
   fat_dir_add_entry(cluster_buf, &off, "KERNEL  ELF", 0x20, kernel_file,
-                    kernel_size);
+                    payload->kernel_size);
   fat_dir_add_lfn(cluster_buf, &off, "limine.conf", limine_short);
   fat_dir_add_entry(cluster_buf, &off, limine_short, 0x20, limine_boot_file,
-                    sizeof(install_limine_conf) - 1);
+                    payload->limine_conf_size);
   if (fat_write_cluster(vol, boot_dir, cluster_buf) < 0) {
     return -1;
   }
 
-  if (fat_write_file_data(vol, bootx64_file, efi, efi_size) < 0 ||
-      fat_write_file_data(vol, kernel_file, kernel, kernel_size) < 0 ||
-      fat_write_file_data(vol, limine_root_file, install_limine_conf,
-                          sizeof(install_limine_conf) - 1) < 0 ||
-      fat_write_file_data(vol, limine_boot_file, install_limine_conf,
-                          sizeof(install_limine_conf) - 1) < 0 ||
-      fat_write_file_data(vol, limine_efi_file, install_limine_conf,
-                          sizeof(install_limine_conf) - 1) < 0 ||
-      fat_write_file_data(vol, install_txt_file, install_text,
-                          strlen(install_text)) < 0) {
+  if (fat_write_file_data(vol, bootx64_file, payload->efi,
+                          payload->efi_size) < 0 ||
+      fat_write_file_data(vol, kernel_file, payload->kernel,
+                          payload->kernel_size) < 0 ||
+      fat_write_file_data(vol, limine_root_file, payload->limine_conf,
+                          payload->limine_conf_size) < 0 ||
+      fat_write_file_data(vol, limine_boot_file, payload->limine_conf,
+                          payload->limine_conf_size) < 0 ||
+      fat_write_file_data(vol, limine_efi_file, payload->limine_conf,
+                          payload->limine_conf_size) < 0 ||
+      fat_write_file_data(vol, install_txt_file, payload->install_text,
+                          payload->install_text_size) < 0) {
     return -1;
   }
 
   return 0;
 }
 
-static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
-                            const orizon_install_config_t *config) {
+static int fat32_format_esp_payload(uint64_t start_lba, uint32_t total_sectors,
+                                    const install_boot_payload_t *payload) {
   fat32_volume_t vol;
 
   if (fat32_init(&vol, start_lba, total_sectors) < 0) {
@@ -548,7 +567,28 @@ static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
     }
   }
 
-  return fat32_install_boot_files(&vol, config);
+  return fat32_write_boot_files(&vol, payload);
+}
+
+static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
+                            const orizon_install_config_t *config) {
+  char install_text[512];
+  install_boot_payload_t payload;
+
+  snprintf(install_text, sizeof(install_text),
+           "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
+           "next=shutdown-remove-installer\n",
+           config->language, config->keyboard, config->hostname);
+
+  payload.kernel = boot_kernel_image();
+  payload.kernel_size = boot_kernel_image_size();
+  payload.efi = boot_efi_image();
+  payload.efi_size = boot_efi_image_size();
+  payload.limine_conf = install_limine_conf;
+  payload.limine_conf_size = sizeof(install_limine_conf) - 1;
+  payload.install_text = install_text;
+  payload.install_text_size = strlen(install_text);
+  return fat32_format_esp_payload(start_lba, total_sectors, &payload);
 }
 
 int orizon_install_run(const orizon_install_config_t *config, char *report,
@@ -610,5 +650,59 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
   append_report(report, report_size, "[5/5] Preserving Orizon data partition");
   append_report(report, report_size,
                 "Install complete: shutdown will start so installer media can be removed.");
+  return 0;
+}
+
+int orizon_install_update_esp(const void *kernel, size_t kernel_size,
+                              const void *efi, size_t efi_size,
+                              const char *limine_conf,
+                              size_t limine_conf_size,
+                              const char *update_text,
+                              size_t update_text_size, char *report,
+                              size_t report_size) {
+  uint64_t sectors;
+  uint32_t esp_sectors =
+      (uint32_t)(INSTALL_DATA_START_LBA - INSTALL_ESP_START_LBA);
+  install_boot_payload_t payload;
+  char line[160];
+
+  if (!kernel || kernel_size == 0 || !efi || efi_size == 0 ||
+      !limine_conf || limine_conf_size == 0 || !update_text ||
+      update_text_size == 0) {
+    append_report(report, report_size, "update: invalid boot payload");
+    return -1;
+  }
+  if (!storage_available()) {
+    append_report(report, report_size, "update: no writable AHCI disk");
+    return -2;
+  }
+  sectors = storage_sector_count();
+  if (sectors < INSTALL_DATA_START_LBA + 65536) {
+    append_report(report, report_size, "update: disk is too small");
+    return -3;
+  }
+
+  snprintf(line, sizeof(line), "Payloads: kernel=%lu bytes, BOOTX64.EFI=%lu bytes",
+           (unsigned long)kernel_size, (unsigned long)efi_size);
+  append_report(report, report_size, line);
+  append_report(report, report_size, "[1/3] Formatting installed ESP");
+
+  payload.kernel = kernel;
+  payload.kernel_size = kernel_size;
+  payload.efi = efi;
+  payload.efi_size = efi_size;
+  payload.limine_conf = limine_conf;
+  payload.limine_conf_size = limine_conf_size;
+  payload.install_text = update_text;
+  payload.install_text_size = update_text_size;
+
+  if (fat32_format_esp_payload(INSTALL_ESP_START_LBA, esp_sectors,
+                               &payload) < 0) {
+    append_report(report, report_size, "update: ESP/FAT32 write failed");
+    return -4;
+  }
+
+  append_report(report, report_size, "[2/3] Installed updated boot files");
+  append_report(report, report_size, "[3/3] Preserved Orizon data partition");
   return 0;
 }
