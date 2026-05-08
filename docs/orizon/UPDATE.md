@@ -24,11 +24,48 @@ The command performs a kernel-owned full-upgrade transaction:
 - download `updates/x86_64/manifest.txt` from the public repository
 - download `kernel.elf`, `BOOTX64.EFI`, and `limine.conf` by HTTPS `Range`
 - verify every artifact with SHA-256 from the manifest
+- keep the currently booted kernel and UEFI loader as the ESP rollback slot
 - rewrite only the installed ESP boot files
 - preserve the Orizon data partition and `/workspace`
 - save update logs and success metadata
 
 After success, reboot to start the refreshed boot payload.
+
+## Rollback
+
+Each installed update writes two boot slots to the ESP:
+
+```text
+/boot/kernel.elf
+/EFI/BOOT/BOOTX64.EFI
+/boot/KROLLBK.ELF
+/EFI/BOOT/BOOTX64.ROL
+```
+
+`kernel.elf` and `BOOTX64.EFI` are the updated payload. `KROLLBK.ELF` and
+`BOOTX64.ROL` are copied from the payload that was running before the update.
+The generated Limine config keeps the normal `Orizon OS` entry and adds:
+
+```text
+Orizon OS Rollback
+```
+
+If the refreshed system does not boot correctly, boot the rollback entry. Once
+inside the rollback system, run:
+
+```text
+rollback
+```
+
+That command rewrites the ESP so the currently booted rollback payload becomes
+the main boot slot again. Metadata is available with:
+
+```text
+rollback-status
+```
+
+This is the first recovery layer. A future boot-count guard can make failed
+boot detection fully automatic before the kernel starts.
 
 ## Public Manifest
 
@@ -69,6 +106,7 @@ safely. For that reason:
 
 - `help` does not list `update` in live boot
 - typing `update` manually prints an install-first message
+- `rollback` is also installed-disk only
 - installing the OS creates `/workspace/.orizon/installed`
 - only after booting the installed disk does `update` become available
 
@@ -129,6 +167,8 @@ Persistent files:
 /workspace/.orizon/github-https-manifest.sha256
 /workspace/.orizon/packages
 /workspace/.orizon/last-update
+/workspace/.orizon/rollback-info
+/workspace/.orizon/rollback-state
 ```
 
 Runtime files:
@@ -148,5 +188,5 @@ place after artifact verification. The next reliability steps are:
 
 - root trust anchoring instead of proof-level certificate checks
 - stronger retry/error recovery during HTTPS downloads
-- A/B boot slots or rollback metadata before replacing boot payloads
 - signed release manifests in addition to SHA-256 transport verification
+- boot-count based automatic fallback before the kernel starts

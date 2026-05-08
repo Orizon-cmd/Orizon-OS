@@ -8,6 +8,7 @@
  */
 
 #include "../include/update.h"
+#include "../include/bootinfo.h"
 #include "../include/install.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
@@ -22,6 +23,8 @@
 #define UPDATE_PROOF_PATH "/workspace/.orizon/github-https-manifest"
 #define UPDATE_PROOF_HASH_PATH "/workspace/.orizon/github-https-manifest.sha256"
 #define UPDATE_LAST_SUCCESS_PATH "/workspace/.orizon/last-update"
+#define UPDATE_ROLLBACK_STATE_PATH "/workspace/.orizon/rollback-state"
+#define UPDATE_ROLLBACK_INFO_PATH "/workspace/.orizon/rollback-info"
 #define SYSTEM_STATE_PATH "/system/update-state"
 #define SYSTEM_PACKAGES_PATH "/system/packages"
 #define SYSTEM_SOURCE_PATH "/system/update-source"
@@ -79,6 +82,27 @@ static uint8_t update_efi[UPDATE_EFI_MAX] __attribute__((aligned(4096)));
 static char update_limine_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
 static uint8_t update_chunk[UPDATE_CHUNK_BYTES] __attribute__((aligned(4096)));
 
+static const char rollback_limine_entry[] =
+    "\n"
+    "/Orizon OS Rollback\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/boot/KROLLBK.ELF\n"
+    "    module_path: boot():/EFI/BOOT/BOOTX64.ROL\n"
+    "    module_cmdline: orizon-bootx64 rollback\n";
+
+static const char rollback_restore_limine_conf[] =
+    "# Limine Configuration File\n"
+    "# Orizon OS x86_64 rollback restore\n"
+    "\n"
+    "timeout: 5\n"
+    "default_entry: 1\n"
+    "\n"
+    "/Orizon OS\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/boot/kernel.elf\n"
+    "    module_path: boot():/EFI/BOOT/BOOTX64.EFI\n"
+    "    module_cmdline: orizon-bootx64\n";
+
 static void update_write_file(const char *path, const char *text, int append) {
   file_t *f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
   if (!f) {
@@ -132,6 +156,22 @@ static void append_report(char *report, size_t report_size, const char *line) {
 
 static int update_installed_marker_present(void) {
   return vfs_exists("/workspace/.orizon/installed");
+}
+
+static int append_limine_rollback_entry(char *conf, size_t cap) {
+  size_t used;
+  if (!conf || cap == 0) {
+    return -1;
+  }
+  if (strstr(conf, "KROLLBK.ELF") || strstr(conf, "Orizon OS Rollback")) {
+    return 0;
+  }
+  used = strlen(conf);
+  if (used + strlen(rollback_limine_entry) + 1 >= cap) {
+    return -1;
+  }
+  snprintf(conf + used, cap - used, "%s", rollback_limine_entry);
+  return 0;
 }
 
 static void update_write_package_db(void) {
@@ -375,8 +415,10 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   char net_line[256];
   char line[256];
   char manifest_hash[SHA256_HEX_SIZE];
+  char rollback_hash[SHA256_HEX_SIZE];
   size_t manifest_len = 0;
   char update_text[512];
+  char rollback_text[512];
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -391,6 +433,13 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
                   "update: unavailable in live boot. Install Orizon OS first.");
     return -10;
   }
+  if (!boot_payloads_ready()) {
+    append_report(report, report_size,
+                  "update: boot payload capture unavailable, rollback unsafe");
+    return -11;
+  }
+  sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
+                    rollback_hash);
 
   sched_enter_process("update-manager");
   update_write_file(UPDATE_LOG_PATH, "", 0);
@@ -490,20 +539,42 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     return -5;
   }
   update_limine_conf[manifest.limine_size] = '\0';
+  if (append_limine_rollback_entry(update_limine_conf,
+                                   sizeof(update_limine_conf)) < 0) {
+    update_set_state("update: blocked - rollback config failed");
+    append_report(report, report_size,
+                  "update: cannot add rollback boot entry");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -5;
+  }
 
   snprintf(update_text, sizeof(update_text),
            "Orizon OS updated\nsource=%s\nchannel=%s\nversion=%s\ncommit=%s\n"
-           "kernel-sha256=%s\n",
+           "kernel-sha256=%s\nrollback-kernel-sha256=%s\n",
            UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
-           manifest.kernel_sha256);
+           manifest.kernel_sha256, rollback_hash);
+  snprintf(rollback_text, sizeof(rollback_text),
+           "rollback-version 1\n"
+           "state available\n"
+           "source %s\n"
+           "channel %s\n"
+           "updated-version %s\n"
+           "updated-commit %s\n"
+           "rollback-kernel-sha256 %s\n"
+           "boot-entry Orizon OS Rollback\n"
+           "restore-command rollback\n",
+           UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
+           rollback_hash);
 
   update_set_state("update: writing installed ESP");
   append_report(report, report_size, "[6/7] Rewriting installed boot partition");
-  if (orizon_install_update_esp(update_kernel, manifest.kernel_size, update_efi,
-                                manifest.efi_size, update_limine_conf,
-                                manifest.limine_size, update_text,
-                                strlen(update_text), report,
-                                report_size) != 0) {
+  if (orizon_install_update_esp_with_rollback(
+          update_kernel, manifest.kernel_size, update_efi, manifest.efi_size,
+          boot_kernel_image(), boot_kernel_image_size(), boot_efi_image(),
+          boot_efi_image_size(), update_limine_conf, strlen(update_limine_conf),
+          update_text, strlen(update_text), report, report_size) != 0) {
     update_set_state("update: blocked - ESP write failed");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
@@ -512,10 +583,79 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   }
 
   update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text, strlen(update_text));
+  update_write_blob(UPDATE_ROLLBACK_INFO_PATH, rollback_text,
+                    strlen(rollback_text));
+  update_write_line(UPDATE_ROLLBACK_STATE_PATH,
+                    "rollback available: choose Orizon OS Rollback at boot or run rollback");
   update_set_state("update: complete");
   append_report(report, report_size,
                 "[7/7] Update complete. Reboot to start the refreshed system.");
+  append_report(report, report_size,
+                "Rollback ready: boot 'Orizon OS Rollback' or run rollback to restore it.");
   update_append_log("Update complete");
+  vfs_persist_save();
+  sched_set_process_state("update-manager", SCHED_SLEEPING);
+  sched_enter_process("gui-shell");
+  return 0;
+}
+
+int orizon_update_rollback(char *report, size_t report_size) {
+  char rollback_hash[SHA256_HEX_SIZE];
+  char rollback_text[512];
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  vfs_mkdir("/system");
+
+  if (!update_installed_marker_present()) {
+    append_report(report, report_size,
+                  "rollback: unavailable in live boot. Install Orizon OS first.");
+    return -10;
+  }
+  if (!boot_payloads_ready()) {
+    append_report(report, report_size,
+                  "rollback: boot payload capture unavailable");
+    return -11;
+  }
+
+  sched_enter_process("update-manager");
+  update_set_state("rollback: restoring currently booted payload");
+  append_report(report, report_size, "\033[1;36mOrizon rollback\033[0m");
+  append_report(report, report_size,
+                "Restoring the currently booted kernel/loader as the main boot slot.");
+
+  sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
+                    rollback_hash);
+  snprintf(rollback_text, sizeof(rollback_text),
+           "Orizon OS rollback restored\nsource=currently-booted-payload\n"
+           "kernel-sha256=%s\n",
+           rollback_hash);
+
+  if (orizon_install_update_esp(boot_kernel_image(), boot_kernel_image_size(),
+                                boot_efi_image(), boot_efi_image_size(),
+                                rollback_restore_limine_conf,
+                                sizeof(rollback_restore_limine_conf) - 1,
+                                rollback_text, strlen(rollback_text), report,
+                                report_size) != 0) {
+    update_set_state("rollback: ESP restore failed");
+    append_report(report, report_size, "rollback: ESP restore failed");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -1;
+  }
+
+  update_write_blob(UPDATE_ROLLBACK_INFO_PATH, rollback_text,
+                    strlen(rollback_text));
+  update_write_line(UPDATE_ROLLBACK_STATE_PATH,
+                    "rollback restored: reboot to use restored main slot");
+  update_set_state("rollback: complete");
+  append_report(report, report_size,
+                "Rollback complete. Reboot to use the restored main boot slot.");
   vfs_persist_save();
   sched_set_process_state("update-manager", SCHED_SLEEPING);
   sched_enter_process("gui-shell");

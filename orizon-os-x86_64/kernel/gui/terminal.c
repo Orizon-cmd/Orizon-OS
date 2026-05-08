@@ -1071,6 +1071,18 @@ static void term_run_update(terminal_t *term) {
   term_puts_t(term, report);
 }
 
+static void term_run_rollback(terminal_t *term) {
+  static char report[4096];
+
+  if (!term_install_already_complete()) {
+    term_puts_t(term,
+                "rollback: unavailable in live boot. Install Orizon OS first.\n");
+    return;
+  }
+  orizon_update_rollback(report, sizeof(report));
+  term_puts_t(term, report);
+}
+
 static void term_print_net_status(terminal_t *term) {
   char line[256];
   net_format_status(line, sizeof(line));
@@ -1494,6 +1506,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
+      term_puts_t(term, "  rollback  - Restore the booted rollback slot\n");
+      term_puts_t(term, "  rollback-status - Show rollback metadata\n");
     }
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
@@ -1918,6 +1932,20 @@ void term_execute(terminal_t *term, const char *cmd) {
     power_schedule_shutdown(TIMER_HZ * 3);
   } else if (term_command_is(cmd, "update") || term_command_is(cmd, "orizon-update")) {
     term_run_update(term);
+  } else if (term_command_is(cmd, "rollback")) {
+    term_run_rollback(term);
+  } else if (term_command_is(cmd, "rollback-status")) {
+    char buf[1024];
+    int n = term_read_regular_file(term, "rollback-info",
+                                   "/workspace/.orizon/rollback-info", buf,
+                                   sizeof(buf), "rollback-status");
+    if (n > 0) {
+      buf[n] = '\0';
+      term_puts_t(term, buf);
+      if (buf[n - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    }
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");

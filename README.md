@@ -52,7 +52,7 @@ le disque et les donnees.
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA, une ESP de 1 MiB a 512 MiB, et une partition
 data Orizon a partir de 512 MiB. Les installations multi-disques, dual-boot et
-rollback A/B arriveront ensuite.
+boot-count automatique arriveront ensuite.
 
 Pour revoir le plan:
 
@@ -88,6 +88,29 @@ public, telechargement des artefacts par requetes HTTP `Range`, verification
 SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
 `BOOTX64.EFI` et `limine.conf`. La partition data Orizon et `/workspace` sont
 preserves.
+
+Avant de remplacer le payload principal, Orizon garde le kernel et le loader
+actuellement demarres dans un slot rollback sur l'ESP:
+
+```text
+/boot/KROLLBK.ELF
+/EFI/BOOT/BOOTX64.ROL
+```
+
+Le menu Limine contient ensuite une entree `Orizon OS Rollback`. Si une mise a
+jour boote mal, cette entree permet de redemarrer sur l'ancien payload. Une
+fois dans ce slot, la commande suivante restaure le payload demarre comme slot
+principal:
+
+```text
+rollback
+```
+
+Pour consulter les metadonnees du rollback:
+
+```text
+rollback-status
+```
 
 Le depot public GitHub est la source officielle:
 

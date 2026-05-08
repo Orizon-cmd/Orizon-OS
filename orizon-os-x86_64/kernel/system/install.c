@@ -42,6 +42,10 @@ typedef struct {
   size_t limine_conf_size;
   const char *install_text;
   size_t install_text_size;
+  const void *rollback_kernel;
+  size_t rollback_kernel_size;
+  const void *rollback_efi;
+  size_t rollback_efi_size;
 } install_boot_payload_t;
 
 static uint8_t sector_buf[ORIZON_SECTOR_SIZE] __attribute__((aligned(4096)));
@@ -435,15 +439,22 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
                                   const install_boot_payload_t *payload) {
   static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
                                        '~', '1', 'C', 'O', 'N'};
+  static const char rollback_kernel_short[11] = {
+      'K', 'R', 'O', 'L', 'L', 'B', 'K', ' ', 'E', 'L', 'F'};
+  static const char rollback_efi_short[11] = {
+      'B', 'O', 'O', 'T', 'X', '6', '4', ' ', 'R', 'O', 'L'};
   uint32_t efi_dir;
   uint32_t efi_boot_dir;
   uint32_t boot_dir;
   uint32_t bootx64_file;
+  uint32_t rollback_efi_file = 0;
   uint32_t kernel_file;
+  uint32_t rollback_kernel_file = 0;
   uint32_t limine_root_file;
   uint32_t limine_boot_file;
   uint32_t limine_efi_file;
   uint32_t install_txt_file;
+  int has_rollback;
   size_t off;
 
   if (!vol || !payload || !payload->kernel || payload->kernel_size == 0 ||
@@ -452,12 +463,28 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
       payload->install_text_size == 0) {
     return -1;
   }
+  has_rollback = payload->rollback_kernel && payload->rollback_efi &&
+                 payload->rollback_kernel_size > 0 &&
+                 payload->rollback_efi_size > 0;
+  if ((payload->rollback_kernel || payload->rollback_efi ||
+       payload->rollback_kernel_size || payload->rollback_efi_size) &&
+      !has_rollback) {
+    return -1;
+  }
 
   efi_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
   efi_boot_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
   boot_dir = fat_alloc_chain((fat32_volume_t *)vol, INSTALL_CLUSTER_BYTES);
   bootx64_file = fat_alloc_chain((fat32_volume_t *)vol, payload->efi_size);
+  if (has_rollback) {
+    rollback_efi_file =
+        fat_alloc_chain((fat32_volume_t *)vol, payload->rollback_efi_size);
+  }
   kernel_file = fat_alloc_chain((fat32_volume_t *)vol, payload->kernel_size);
+  if (has_rollback) {
+    rollback_kernel_file =
+        fat_alloc_chain((fat32_volume_t *)vol, payload->rollback_kernel_size);
+  }
   limine_root_file =
       fat_alloc_chain((fat32_volume_t *)vol, payload->limine_conf_size);
   limine_boot_file =
@@ -469,7 +496,8 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
 
   if (!efi_dir || !efi_boot_dir || !boot_dir || !bootx64_file ||
       !kernel_file || !limine_root_file || !limine_boot_file ||
-      !limine_efi_file || !install_txt_file) {
+      !limine_efi_file || !install_txt_file ||
+      (has_rollback && (!rollback_efi_file || !rollback_kernel_file))) {
     return -1;
   }
 
@@ -503,6 +531,10 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
   fat_dir_add_dot(cluster_buf, &off, efi_boot_dir, efi_dir);
   fat_dir_add_entry(cluster_buf, &off, "BOOTX64 EFI", 0x20, bootx64_file,
                     payload->efi_size);
+  if (has_rollback) {
+    fat_dir_add_entry(cluster_buf, &off, rollback_efi_short, 0x20,
+                      rollback_efi_file, payload->rollback_efi_size);
+  }
   fat_dir_add_lfn(cluster_buf, &off, "limine.conf", limine_short);
   fat_dir_add_entry(cluster_buf, &off, limine_short, 0x20, limine_efi_file,
                     payload->limine_conf_size);
@@ -515,6 +547,10 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
   fat_dir_add_dot(cluster_buf, &off, boot_dir, vol->root_cluster);
   fat_dir_add_entry(cluster_buf, &off, "KERNEL  ELF", 0x20, kernel_file,
                     payload->kernel_size);
+  if (has_rollback) {
+    fat_dir_add_entry(cluster_buf, &off, rollback_kernel_short, 0x20,
+                      rollback_kernel_file, payload->rollback_kernel_size);
+  }
   fat_dir_add_lfn(cluster_buf, &off, "limine.conf", limine_short);
   fat_dir_add_entry(cluster_buf, &off, limine_short, 0x20, limine_boot_file,
                     payload->limine_conf_size);
@@ -526,6 +562,12 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
                           payload->efi_size) < 0 ||
       fat_write_file_data(vol, kernel_file, payload->kernel,
                           payload->kernel_size) < 0 ||
+      (has_rollback &&
+       (fat_write_file_data(vol, rollback_efi_file, payload->rollback_efi,
+                            payload->rollback_efi_size) < 0 ||
+        fat_write_file_data(vol, rollback_kernel_file,
+                            payload->rollback_kernel,
+                            payload->rollback_kernel_size) < 0)) ||
       fat_write_file_data(vol, limine_root_file, payload->limine_conf,
                           payload->limine_conf_size) < 0 ||
       fat_write_file_data(vol, limine_boot_file, payload->limine_conf,
@@ -588,6 +630,10 @@ static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
   payload.limine_conf_size = sizeof(install_limine_conf) - 1;
   payload.install_text = install_text;
   payload.install_text_size = strlen(install_text);
+  payload.rollback_kernel = NULL;
+  payload.rollback_kernel_size = 0;
+  payload.rollback_efi = NULL;
+  payload.rollback_efi_size = 0;
   return fat32_format_esp_payload(start_lba, total_sectors, &payload);
 }
 
@@ -653,23 +699,32 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
   return 0;
 }
 
-int orizon_install_update_esp(const void *kernel, size_t kernel_size,
-                              const void *efi, size_t efi_size,
-                              const char *limine_conf,
-                              size_t limine_conf_size,
-                              const char *update_text,
-                              size_t update_text_size, char *report,
-                              size_t report_size) {
+static int orizon_install_update_esp_payload(
+    const void *kernel, size_t kernel_size, const void *efi, size_t efi_size,
+    const void *rollback_kernel, size_t rollback_kernel_size,
+    const void *rollback_efi, size_t rollback_efi_size,
+    const char *limine_conf, size_t limine_conf_size,
+    const char *update_text, size_t update_text_size, char *report,
+    size_t report_size) {
   uint64_t sectors;
   uint32_t esp_sectors =
       (uint32_t)(INSTALL_DATA_START_LBA - INSTALL_ESP_START_LBA);
   install_boot_payload_t payload;
   char line[160];
+  int has_rollback =
+      rollback_kernel && rollback_efi && rollback_kernel_size > 0 &&
+      rollback_efi_size > 0;
 
   if (!kernel || kernel_size == 0 || !efi || efi_size == 0 ||
       !limine_conf || limine_conf_size == 0 || !update_text ||
       update_text_size == 0) {
     append_report(report, report_size, "update: invalid boot payload");
+    return -1;
+  }
+  if ((rollback_kernel || rollback_efi || rollback_kernel_size ||
+       rollback_efi_size) &&
+      !has_rollback) {
+    append_report(report, report_size, "update: invalid rollback payload");
     return -1;
   }
   if (!storage_available()) {
@@ -695,6 +750,10 @@ int orizon_install_update_esp(const void *kernel, size_t kernel_size,
   payload.limine_conf_size = limine_conf_size;
   payload.install_text = update_text;
   payload.install_text_size = update_text_size;
+  payload.rollback_kernel = rollback_kernel;
+  payload.rollback_kernel_size = rollback_kernel_size;
+  payload.rollback_efi = rollback_efi;
+  payload.rollback_efi_size = rollback_efi_size;
 
   if (fat32_format_esp_payload(INSTALL_ESP_START_LBA, esp_sectors,
                                &payload) < 0) {
@@ -703,6 +762,35 @@ int orizon_install_update_esp(const void *kernel, size_t kernel_size,
   }
 
   append_report(report, report_size, "[2/3] Installed updated boot files");
+  if (has_rollback) {
+    append_report(report, report_size,
+                  "Rollback slot: /boot/KROLLBK.ELF and /EFI/BOOT/BOOTX64.ROL");
+  }
   append_report(report, report_size, "[3/3] Preserved Orizon data partition");
   return 0;
+}
+
+int orizon_install_update_esp(const void *kernel, size_t kernel_size,
+                              const void *efi, size_t efi_size,
+                              const char *limine_conf,
+                              size_t limine_conf_size,
+                              const char *update_text,
+                              size_t update_text_size, char *report,
+                              size_t report_size) {
+  return orizon_install_update_esp_payload(
+      kernel, kernel_size, efi, efi_size, NULL, 0, NULL, 0, limine_conf,
+      limine_conf_size, update_text, update_text_size, report, report_size);
+}
+
+int orizon_install_update_esp_with_rollback(
+    const void *kernel, size_t kernel_size, const void *efi, size_t efi_size,
+    const void *rollback_kernel, size_t rollback_kernel_size,
+    const void *rollback_efi, size_t rollback_efi_size,
+    const char *limine_conf, size_t limine_conf_size,
+    const char *update_text, size_t update_text_size, char *report,
+    size_t report_size) {
+  return orizon_install_update_esp_payload(
+      kernel, kernel_size, efi, efi_size, rollback_kernel,
+      rollback_kernel_size, rollback_efi, rollback_efi_size, limine_conf,
+      limine_conf_size, update_text, update_text_size, report, report_size);
 }
