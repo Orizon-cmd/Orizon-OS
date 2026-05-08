@@ -4,9 +4,11 @@
 
 #include "../include/gui.h"
 #include "../include/kmalloc.h"
+#include "../include/net.h"
 #include "../include/ps2.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
+#include "../include/update.h"
 #include "../include/vfs.h"
 
 /* Terminal colors (ANSI) */
@@ -964,16 +966,17 @@ static void term_find_recursive(terminal_t *term, const char *path,
   }
 }
 
-static void term_print_update_info(terminal_t *term) {
-  term_puts_t(term, "\033[1;36mOrizon update model\033[0m\n");
-  term_puts_t(term, "This kernel does not self-update over the network yet.\n");
-  term_puts_t(term, "Public GitHub ISO update:\n");
-  term_puts_t(term, "  python scripts/orizon/orizon_update.py --mode github-iso\n");
-  term_puts_t(term, "Build latest GitHub source:\n");
-  term_puts_t(term, "  python scripts/orizon/orizon_update.py --from-github --mode local-iso\n");
-  term_puts_t(term, "Lab VM backend, optional:\n");
-  term_puts_t(term, "  python scripts/orizon/orizon_update.py --from-github --mode zimaos-vm\n");
-  term_puts_t(term, "/workspace is preserved across OS updates.\n");
+static void term_run_update(terminal_t *term) {
+  char report[1024];
+  orizon_update_full_upgrade(report, sizeof(report));
+  term_puts_t(term, report);
+}
+
+static void term_print_net_status(terminal_t *term) {
+  char line[256];
+  net_format_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
 }
 
 /* Render terminal */
@@ -1042,7 +1045,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  sync      - Save /workspace to disk\n");
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  storage   - Show persistence state\n");
-    term_puts_t(term, "  update    - Show portable update flow\n");
+    term_puts_t(term, "  net       - Show ethernet status\n");
+    term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
     term_puts_t(term, "  neofetch  - System info\n");
@@ -1426,8 +1430,10 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "storage")) {
     term_puts_t(term, vfs_persist_status());
     term_puts_t(term, "\n");
+  } else if (term_command_is(cmd, "net")) {
+    term_print_net_status(term);
   } else if (term_command_is(cmd, "update") || term_command_is(cmd, "orizon-update")) {
-    term_print_update_info(term);
+    term_run_update(term);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");

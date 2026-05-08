@@ -45,7 +45,29 @@ All three flows refresh the root `Orizon-OS.iso` artifact unless
 
 ## Current Kernel Behavior
 
-The in-OS `update` command is informational for now. A real self-updater will
-need networking, signature checks, and a safe boot-slot strategy. Until then,
-updates are applied by host-side tools while `/workspace` persists through the
-Orizon data area.
+The in-OS `update` command is now the real full-upgrade entrypoint. It starts a
+kernel-owned transaction, probes the Ethernet adapter, writes state under
+`/workspace/.orizon/`, and refuses to launch external host tools.
+
+Current kernel-owned layers:
+
+- Intel `e1000/e1000e` Ethernet probe for the VM and compatible hardware.
+- Raw Ethernet TX/RX rings.
+- Local update transaction state and package database bootstrap.
+- `/workspace/.orizon/update.log` and `/workspace/.orizon/update-state`.
+- Runtime system files `/system/packages`, `/system/update-state`, and
+  `/system/update-source`.
+
+Still required before GitHub downloads can happen fully inside Orizon OS:
+
+- ARP and IPv4.
+- DHCP or static IPv4 configuration.
+- DNS.
+- TCP.
+- HTTPS/TLS, because GitHub requires HTTPS for raw artifacts.
+- Verified package/manifest format.
+- Safe boot/system writer for replacing kernel/system files without corrupting
+  the current boot.
+
+Until those layers exist, `update` starts the upgrade and stops safely at the
+first missing kernel layer instead of pretending that the machine was upgraded.

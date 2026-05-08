@@ -14,6 +14,7 @@ le developpement noyau:
 - une seule console centrale pour travailler proprement
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - mise a jour sans reinstallation complete de l'espace de travail
+- commande `update` interne avec transaction full-upgrade et probe Ethernet
 
 Ce qui est volontairement absent du profil actif:
 
@@ -21,6 +22,24 @@ Ce qui est volontairement absent du profil actif:
 - bureau de demonstration
 - jeux et applications integrees non essentielles
 - flux de mise a jour herite d'un ancien projet
+
+## Update Dans Orizon OS
+
+Dans la console Orizon OS:
+
+```text
+update
+```
+
+La commande lance maintenant une transaction de mise a jour interne, facon
+`apt full-upgrade`: preparation de la base packages, probe Ethernet, et journal
+local dans `/workspace/.orizon/update.log`. Elle ne lance pas de programme
+externe.
+
+Le driver Ethernet Intel `e1000/e1000e` est initialise au demarrage pour la VM
+et les cartes compatibles. Le telechargement GitHub complet depuis l'OS demande
+encore les couches reseau suivantes dans le noyau: ARP, IPv4, DHCP, DNS, TCP et
+HTTPS/TLS.
 
 ## Mise A Jour Par Internet
 

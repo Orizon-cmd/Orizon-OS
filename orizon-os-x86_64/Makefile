@@ -75,11 +75,13 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/mm/kmalloc.c \
            $(KERNEL_DIR)/mm/mmio.c \
            $(KERNEL_DIR)/fs/vfs.c \
+           $(KERNEL_DIR)/system/update.c \
            $(KERNEL_DIR)/drivers/framebuffer.c \
            $(KERNEL_DIR)/drivers/idt.c \
            $(KERNEL_DIR)/drivers/wc.c \
            $(KERNEL_DIR)/drivers/ps2.c \
            $(KERNEL_DIR)/drivers/pci.c \
+           $(KERNEL_DIR)/drivers/net.c \
            $(KERNEL_DIR)/drivers/storage.c \
            $(KERNEL_DIR)/drivers/acpi.c \
            $(KERNEL_DIR)/drivers/usb.c \
@@ -108,6 +110,7 @@ $(BUILD_DIR):
 	mkdir -p $(BUILD_DIR)/lib
 	mkdir -p $(BUILD_DIR)/mm
 	mkdir -p $(BUILD_DIR)/fs
+	mkdir -p $(BUILD_DIR)/system
 	mkdir -p $(BUILD_DIR)/drivers
 	mkdir -p $(BUILD_DIR)/gui
 

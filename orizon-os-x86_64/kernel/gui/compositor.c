@@ -6,6 +6,7 @@
  */
 
 #include "../include/gui.h"
+#include "../include/net.h"
 #include "../include/ps2.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
@@ -254,6 +255,7 @@ void gui_init(void) {
   vfs_init();
   vfs_seed_content();
   vfs_persist_load();
+  net_init();
   layout_console();
 
   main_terminal = term_create(term_x, term_y);
