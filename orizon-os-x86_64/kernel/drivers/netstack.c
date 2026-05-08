@@ -3751,6 +3751,15 @@ static const uint8_t *http_body_start(const uint8_t *plain, size_t plain_len,
   return NULL;
 }
 
+static int https_range_error(char *diag, size_t diag_cap, int code,
+                             const char *message) {
+  if (diag && diag_cap > 0) {
+    snprintf(diag, diag_cap, "https range error %d: %s", code,
+             message ? message : "unknown");
+  }
+  return code;
+}
+
 int netstack_https_range_get(const char *host, const char *path,
                              uint64_t start, uint64_t end, void *out,
                              size_t out_cap, size_t *out_len,
@@ -3773,48 +3782,52 @@ int netstack_https_range_get(const char *host, const char *path,
     diag[0] = '\0';
   }
   if (!host || !path || !out || out_cap == 0 || end < start) {
-    return -1;
+    return https_range_error(diag, diag_cap, -1, "invalid arguments");
   }
   if (netstack_resolve_a(host, &ip) != 0) {
-    return -2;
+    return https_range_error(diag, diag_cap, -2, "dns resolve failed");
   }
   if (tcp_connect(&conn, ip, HTTPS_PORT) != 0) {
-    return -3;
+    return https_range_error(diag, diag_cap, -3, "tcp connect failed");
   }
   if (build_tls_client_hello(host, tls_tx_buf, sizeof(tls_tx_buf),
                              &hello_len) != 0) {
     set_status("tls: clienthello build failed");
-    return -4;
+    return https_range_error(diag, diag_cap, -4, "clienthello build failed");
   }
 
   set_status("tls: clienthello");
   if (tcp_send_data(&conn, tls_tx_buf, hello_len) < 0) {
     set_status("tls: send failed");
-    return -5;
+    return https_range_error(diag, diag_cap, -5, "clienthello send failed");
   }
   if (tcp_recv_bytes(&conn, tls_rx_buf, sizeof(tls_rx_buf), &rx_len, 6000) !=
       0) {
     set_status("tls: response timeout");
-    return -6;
+    return https_range_error(diag, diag_cap, -6, "serverhello timeout");
   }
 
   tls_parse_records(tls_rx_buf, rx_len, &send_info, host);
   if (!send_info.client_key_exchange_ready ||
       send_info.client_key_exchange_record_len == 0) {
-    return -7;
+    return https_range_error(diag, diag_cap, -7,
+                             "client key exchange unavailable");
   }
   if (tcp_send_data(&conn, send_info.client_key_exchange_record,
                     send_info.client_key_exchange_record_len) < 0) {
-    return -8;
+    return https_range_error(diag, diag_cap, -8,
+                             "client key exchange send failed");
   }
   tls_last_client_key_exchange_sent = 1;
 
   if (!send_info.client_finished_ready || send_info.client_secure_flight_len == 0) {
-    return -9;
+    return https_range_error(diag, diag_cap, -9,
+                             "client finished unavailable");
   }
   if (tcp_send_data(&conn, send_info.client_secure_flight,
                     send_info.client_secure_flight_len) < 0) {
-    return -10;
+    return https_range_error(diag, diag_cap, -10,
+                             "client finished send failed");
   }
   tls_last_client_finished_sent = 1;
   memcpy(tls_last_client_finished_plain, send_info.client_finished_plain,
@@ -3823,13 +3836,15 @@ int netstack_https_range_get(const char *host, const char *path,
 
   if (tcp_recv_bytes(&conn, tls_secure_rx_buf, sizeof(tls_secure_rx_buf),
                      &tls_last_secure_reply_len, 3000) != 0) {
-    return -11;
+    return https_range_error(diag, diag_cap, -11,
+                             "server finished timeout");
   }
   sha256_buffer_hex(tls_secure_rx_buf, tls_last_secure_reply_len,
                     tls_last_secure_reply_sha256);
   tls_decrypt_server_secure_reply(&send_info);
   if (!send_info.server_finished_verified) {
-    return -12;
+    return https_range_error(diag, diag_cap, -12,
+                             "server finished verification failed");
   }
 
   snprintf(http_get, sizeof(http_get),
@@ -3845,25 +3860,33 @@ int netstack_https_range_get(const char *host, const char *path,
   if (tls_build_encrypted_client_record(
           &send_info, 1, 23, (const uint8_t *)http_get, strlen(http_get),
           tls_tx_buf, sizeof(tls_tx_buf), &app_record_len) != 0) {
-    return -13;
+    return https_range_error(diag, diag_cap, -13,
+                             "http record build failed");
   }
   if (tcp_send_data(&conn, tls_tx_buf, app_record_len) < 0) {
-    return -14;
+    return https_range_error(diag, diag_cap, -14, "http send failed");
   }
   tls_last_http_get_sent = 1;
   if (tcp_recv_bytes(&conn, tls_app_rx_buf, sizeof(tls_app_rx_buf),
                      &app_reply_len, 6000) != 0) {
-    return -15;
+    return https_range_error(diag, diag_cap, -15, "http response timeout");
   }
   tls_last_http_reply_len = app_reply_len;
   sha256_buffer_hex(tls_app_rx_buf, app_reply_len, tls_last_http_reply_sha256);
   tls_decrypt_server_http_reply(&send_info);
   if (!tls_last_http_decrypted) {
-    return -16;
+    return https_range_error(diag, diag_cap, -16, "http decrypt failed");
   }
 
   body = http_body_start(tls_app_plain_buf, tls_last_http_plain_len, &body_len);
   if (!body || body_len == 0 || body_len > out_cap) {
+    if (diag && diag_cap > 0) {
+      snprintf(diag, diag_cap,
+               "https range error -17: invalid body status=%s body=%lu cap=%lu plain=%lu",
+               tls_last_http_status[0] ? tls_last_http_status : "unknown",
+               (unsigned long)body_len, (unsigned long)out_cap,
+               (unsigned long)tls_last_http_plain_len);
+    }
     return -17;
   }
   memcpy(out, body, body_len);

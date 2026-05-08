@@ -32,7 +32,8 @@
 #define UPDATE_RAW_HOST "raw.githubusercontent.com"
 #define UPDATE_RAW_PREFIX "/Orizon-cmd/Orizon-OS/main/"
 #define UPDATE_MANIFEST_REMOTE "updates/x86_64/manifest.txt"
-#define UPDATE_CHUNK_BYTES 8192U
+#define UPDATE_CHUNK_BYTES 12288U
+#define UPDATE_RANGE_RETRIES 5U
 #define UPDATE_MANIFEST_MAX 4096U
 #define UPDATE_KERNEL_MAX (4U * 1024U * 1024U)
 #define UPDATE_EFI_MAX (512U * 1024U)
@@ -311,18 +312,40 @@ static int download_artifact(const char *label, const char *relative,
   while (done < expected_size) {
     size_t wanted = expected_size - done;
     size_t got = 0;
+    int rc = -1;
+    int ok = 0;
     if (wanted > UPDATE_CHUNK_BYTES) {
       wanted = UPDATE_CHUNK_BYTES;
     }
-    if (download_range_path(relative, (uint64_t)done,
-                            (uint64_t)(done + wanted - 1), update_chunk,
-                            sizeof(update_chunk), &got, diag,
-                            sizeof(diag)) != 0 ||
-        got == 0 || got > wanted) {
-      snprintf(line, sizeof(line), "update: download failed for %s at %lu",
-               label, (unsigned long)done);
+
+    for (unsigned attempt = 1; attempt <= UPDATE_RANGE_RETRIES; attempt++) {
+      got = 0;
+      diag[0] = '\0';
+      rc = download_range_path(relative, (uint64_t)done,
+                               (uint64_t)(done + wanted - 1), update_chunk,
+                               sizeof(update_chunk), &got, diag,
+                               sizeof(diag));
+      if (rc == 0 && got > 0 && got <= wanted) {
+        ok = 1;
+        break;
+      }
+      snprintf(line, sizeof(line),
+               "update: retry %lu/%lu for %s at %lu rc=%d got=%lu %s",
+               (unsigned long)attempt, (unsigned long)UPDATE_RANGE_RETRIES,
+               label, (unsigned long)done, rc, (unsigned long)got, diag);
+      update_append_log(line);
+    }
+
+    if (!ok) {
+      snprintf(line, sizeof(line),
+               "update: download failed for %s at %lu rc=%d got=%lu",
+               label, (unsigned long)done, rc, (unsigned long)got);
       append_report(report, report_size, line);
       update_append_log(line);
+      if (diag[0]) {
+        append_report(report, report_size, diag);
+        update_append_log(diag);
+      }
       return -2;
     }
     memcpy((uint8_t *)dst + done, update_chunk, got);
