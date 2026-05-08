@@ -46,7 +46,9 @@ sauvegarder la reponse HTTP dans
 `/workspace/.orizon/github-http-response`, puis ouvrir le port HTTPS `443`,
 envoyer un `TLS ClientHello` avec SNI GitHub, recevoir le handshake serveur
 jusqu'au certificat/ServerKeyExchange quand le serveur l'envoie, et sauvegarder
-la preuve TLS dans `/workspace/.orizon/github-tls-response`.
+la preuve TLS dans `/workspace/.orizon/github-tls-response`. Le certificat leaf
+est maintenant parse pour verifier que ses noms DNS couvrent bien
+`raw.githubusercontent.com`.
 
 Les preuves reseau sont hashees:
 
@@ -65,9 +67,9 @@ La transaction ecrit aussi un manifeste et un plan de staging:
 ```
 
 Le telechargement complet du corps des paquets GitHub demande encore la
-validation du certificat, le calcul des cles TLS, le chiffrement AEAD et HTTP
-dans le tunnel TLS. Le remplacement boot final demandera ensuite un writer
-ESP/FAT32 ou un schema de boot A/B.
+validation de chaine de confiance, le calcul des cles TLS, le chiffrement AEAD
+et HTTP dans le tunnel TLS. Le remplacement boot final demandera ensuite un
+writer ESP/FAT32 ou un schema de boot A/B.
 
 ## Noyau Et Performance
 

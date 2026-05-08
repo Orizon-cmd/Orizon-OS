@@ -1202,9 +1202,17 @@ typedef struct {
   size_t certificate_chain_len;
   size_t leaf_certificate_len;
   char leaf_certificate_sha256[SHA256_HEX_SIZE];
+  int leaf_identity_parsed;
+  int leaf_identity_match;
+  size_t leaf_dns_names;
+  char leaf_matched_dns[96];
+  char leaf_first_dns[96];
+  char leaf_not_before[32];
+  char leaf_not_after[32];
   char alpn[16];
   uint8_t alert_level;
   uint8_t alert_description;
+  const char *expected_host;
 } tls_parse_info_t;
 
 static const char *tls_cipher_name(uint16_t cipher) {
@@ -1260,6 +1268,283 @@ static const char *tls_signature_name(uint16_t sig) {
   default:
     return "unknown";
   }
+}
+
+static char lower_ascii(char c) {
+  if (c >= 'A' && c <= 'Z') {
+    return (char)(c - 'A' + 'a');
+  }
+  return c;
+}
+
+static int ascii_ieq_char(char a, char b) {
+  return lower_ascii(a) == lower_ascii(b);
+}
+
+static int ascii_ieq_span(const char *a, const uint8_t *b, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (!a[i] || !ascii_ieq_char(a[i], (char)b[i])) {
+      return 0;
+    }
+  }
+  return a[len] == '\0';
+}
+
+static int ascii_iends_with_span(const char *host, const uint8_t *suffix,
+                                 size_t suffix_len, size_t *prefix_len) {
+  size_t host_len = strlen(host);
+  if (host_len <= suffix_len) {
+    return 0;
+  }
+
+  size_t start = host_len - suffix_len;
+  for (size_t i = 0; i < suffix_len; i++) {
+    if (!ascii_ieq_char(host[start + i], (char)suffix[i])) {
+      return 0;
+    }
+  }
+  if (prefix_len) {
+    *prefix_len = start;
+  }
+  return 1;
+}
+
+static int tls_dns_name_matches(const char *host, const uint8_t *dns,
+                                size_t dns_len) {
+  if (!host || !dns || dns_len == 0) {
+    return 0;
+  }
+
+  if (dns_len > 2 && dns[0] == '*' && dns[1] == '.') {
+    size_t prefix_len = 0;
+    if (!ascii_iends_with_span(host, dns + 1, dns_len - 1, &prefix_len) ||
+        prefix_len == 0) {
+      return 0;
+    }
+    for (size_t i = 0; i < prefix_len; i++) {
+      if (host[i] == '.') {
+        return 0;
+      }
+    }
+    return 1;
+  }
+
+  return ascii_ieq_span(host, dns, dns_len);
+}
+
+static void copy_ascii_limited(char *out, size_t out_cap, const uint8_t *src,
+                               size_t src_len) {
+  size_t n = src_len;
+  if (!out || out_cap == 0) {
+    return;
+  }
+  if (n >= out_cap) {
+    n = out_cap - 1;
+  }
+  for (size_t i = 0; i < n; i++) {
+    uint8_t c = src[i];
+    out[i] = (c >= 32 && c <= 126) ? (char)c : '?';
+  }
+  out[n] = '\0';
+}
+
+static int asn1_read_tlv(const uint8_t *der, size_t der_len, size_t *off,
+                         uint8_t *tag, const uint8_t **value,
+                         size_t *value_len) {
+  if (!der || !off || !tag || !value || !value_len || *off + 2 > der_len) {
+    return -1;
+  }
+
+  *tag = der[(*off)++];
+  uint8_t first_len = der[(*off)++];
+  size_t len = 0;
+  if ((first_len & 0x80) == 0) {
+    len = first_len;
+  } else {
+    size_t len_bytes = first_len & 0x7f;
+    if (len_bytes == 0 || len_bytes > sizeof(size_t) || *off + len_bytes > der_len) {
+      return -1;
+    }
+    for (size_t i = 0; i < len_bytes; i++) {
+      len = (len << 8) | der[(*off)++];
+    }
+  }
+
+  if (*off + len > der_len) {
+    return -1;
+  }
+  *value = der + *off;
+  *value_len = len;
+  *off += len;
+  return 0;
+}
+
+static void tls_copy_asn1_time(const uint8_t *value, size_t len, char *out,
+                               size_t out_cap) {
+  copy_ascii_limited(out, out_cap, value, len);
+}
+
+static void tls_parse_subject_alt_names(const uint8_t *der, size_t der_len,
+                                        tls_parse_info_t *info) {
+  size_t off = 0;
+  uint8_t tag = 0;
+  const uint8_t *seq = NULL;
+  size_t seq_len = 0;
+
+  if (asn1_read_tlv(der, der_len, &off, &tag, &seq, &seq_len) != 0 ||
+      tag != 0x30) {
+    return;
+  }
+
+  size_t p = 0;
+  while (p < seq_len) {
+    const uint8_t *name = NULL;
+    size_t name_len = 0;
+    if (asn1_read_tlv(seq, seq_len, &p, &tag, &name, &name_len) != 0) {
+      break;
+    }
+    if (tag != 0x82) {
+      continue;
+    }
+
+    info->leaf_dns_names++;
+    if (!info->leaf_first_dns[0]) {
+      copy_ascii_limited(info->leaf_first_dns, sizeof(info->leaf_first_dns),
+                         name, name_len);
+    }
+    if (!info->leaf_identity_match &&
+        tls_dns_name_matches(info->expected_host, name, name_len)) {
+      info->leaf_identity_match = 1;
+      copy_ascii_limited(info->leaf_matched_dns,
+                         sizeof(info->leaf_matched_dns), name, name_len);
+    }
+  }
+}
+
+static void tls_parse_certificate_extensions(const uint8_t *der, size_t der_len,
+                                             tls_parse_info_t *info) {
+  size_t off = 0;
+  uint8_t tag = 0;
+  const uint8_t *seq = NULL;
+  size_t seq_len = 0;
+  static const uint8_t san_oid[] = {0x55, 0x1d, 0x11};
+
+  if (asn1_read_tlv(der, der_len, &off, &tag, &seq, &seq_len) != 0 ||
+      tag != 0x30) {
+    return;
+  }
+
+  size_t p = 0;
+  while (p < seq_len) {
+    const uint8_t *ext = NULL;
+    size_t ext_len = 0;
+    if (asn1_read_tlv(seq, seq_len, &p, &tag, &ext, &ext_len) != 0 ||
+        tag != 0x30) {
+      break;
+    }
+
+    size_t e = 0;
+    const uint8_t *oid = NULL;
+    size_t oid_len = 0;
+    const uint8_t *value = NULL;
+    size_t value_len = 0;
+    if (asn1_read_tlv(ext, ext_len, &e, &tag, &oid, &oid_len) != 0 ||
+        tag != 0x06) {
+      continue;
+    }
+
+    if (e < ext_len && ext[e] == 0x01) {
+      const uint8_t *critical = NULL;
+      size_t critical_len = 0;
+      asn1_read_tlv(ext, ext_len, &e, &tag, &critical, &critical_len);
+      UNUSED(critical);
+      UNUSED(critical_len);
+    }
+
+    if (asn1_read_tlv(ext, ext_len, &e, &tag, &value, &value_len) != 0 ||
+        tag != 0x04) {
+      continue;
+    }
+
+    if (oid_len == sizeof(san_oid) &&
+        memcmp(oid, san_oid, sizeof(san_oid)) == 0) {
+      tls_parse_subject_alt_names(value, value_len, info);
+    }
+  }
+}
+
+static void tls_parse_leaf_identity(const uint8_t *cert, size_t cert_len,
+                                    tls_parse_info_t *info) {
+  size_t off = 0;
+  uint8_t tag = 0;
+  const uint8_t *cert_seq = NULL;
+  size_t cert_seq_len = 0;
+  const uint8_t *tbs = NULL;
+  size_t tbs_len = 0;
+
+  if (asn1_read_tlv(cert, cert_len, &off, &tag, &cert_seq, &cert_seq_len) != 0 ||
+      tag != 0x30) {
+    return;
+  }
+
+  size_t cert_off = 0;
+  if (asn1_read_tlv(cert_seq, cert_seq_len, &cert_off, &tag, &tbs, &tbs_len) !=
+          0 ||
+      tag != 0x30) {
+    return;
+  }
+
+  size_t p = 0;
+  const uint8_t *value = NULL;
+  size_t value_len = 0;
+  if (p < tbs_len && tbs[p] == 0xa0) {
+    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+      return;
+    }
+  }
+
+  for (int i = 0; i < 3; i++) {
+    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+      return;
+    }
+  }
+
+  if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0 ||
+      tag != 0x30) {
+    return;
+  }
+  size_t v = 0;
+  const uint8_t *time_value = NULL;
+  size_t time_len = 0;
+  if (asn1_read_tlv(value, value_len, &v, &tag, &time_value, &time_len) == 0 &&
+      (tag == 0x17 || tag == 0x18)) {
+    tls_copy_asn1_time(time_value, time_len, info->leaf_not_before,
+                       sizeof(info->leaf_not_before));
+  }
+  if (asn1_read_tlv(value, value_len, &v, &tag, &time_value, &time_len) == 0 &&
+      (tag == 0x17 || tag == 0x18)) {
+    tls_copy_asn1_time(time_value, time_len, info->leaf_not_after,
+                       sizeof(info->leaf_not_after));
+  }
+
+  for (int i = 0; i < 2; i++) {
+    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+      return;
+    }
+  }
+
+  while (p < tbs_len) {
+    if (asn1_read_tlv(tbs, tbs_len, &p, &tag, &value, &value_len) != 0) {
+      return;
+    }
+    if (tag == 0xa3) {
+      tls_parse_certificate_extensions(value, value_len, info);
+      info->leaf_identity_parsed = 1;
+      return;
+    }
+  }
+
+  info->leaf_identity_parsed = 1;
 }
 
 static void tls_parse_server_hello(const uint8_t *body, size_t len,
@@ -1336,6 +1621,7 @@ static void tls_parse_certificate(const uint8_t *body, size_t len,
     if (info->certificate_count == 0) {
       info->leaf_certificate_len = cert_len;
       sha256_buffer_hex(body + p, cert_len, info->leaf_certificate_sha256);
+      tls_parse_leaf_identity(body + p, cert_len, info);
     }
     info->certificate_count++;
     p += cert_len;
@@ -1388,10 +1674,11 @@ static void tls_parse_handshake_message(uint8_t hs_type, const uint8_t *body,
 }
 
 static void tls_parse_records(const uint8_t *rx, size_t rx_len,
-                              tls_parse_info_t *info) {
+                              tls_parse_info_t *info, const char *host) {
   size_t off = 0;
 
   memset(info, 0, sizeof(*info));
+  info->expected_host = host;
   while (off + 5 <= rx_len) {
     uint8_t record_type = rx[off];
     size_t record_len = get_be16(rx + off + 3);
@@ -1439,7 +1726,7 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
   char line[192];
 
   out[0] = '\0';
-  tls_parse_records(rx, rx_len, &info);
+  tls_parse_records(rx, rx_len, &info, host);
 
   snprintf(line, sizeof(line), "tls host=%s port=443 bytes=%lu\n", host,
            (unsigned long)rx_len);
@@ -1475,6 +1762,21 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
     snprintf(line, sizeof(line), "tls leaf-sha256 %s\n",
              info.leaf_certificate_sha256);
     append_text(out, out_cap, line);
+    if (info.leaf_not_before[0] || info.leaf_not_after[0]) {
+      snprintf(line, sizeof(line), "tls leaf-validity not-before=%s not-after=%s\n",
+               info.leaf_not_before[0] ? info.leaf_not_before : "unknown",
+               info.leaf_not_after[0] ? info.leaf_not_after : "unknown");
+      append_text(out, out_cap, line);
+    }
+    if (info.leaf_identity_parsed) {
+      snprintf(line, sizeof(line),
+               "tls leaf-identity host=%s san-match=%s dns-names=%lu matched=%s first=%s\n",
+               host, info.leaf_identity_match ? "yes" : "no",
+               (unsigned long)info.leaf_dns_names,
+               info.leaf_matched_dns[0] ? info.leaf_matched_dns : "none",
+               info.leaf_first_dns[0] ? info.leaf_first_dns : "none");
+      append_text(out, out_cap, line);
+    }
   }
 
   if (info.server_key_exchange_seen) {
@@ -1504,7 +1806,7 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
              info.partial_handshake ? "yes" : "no");
     append_text(out, out_cap, line);
   }
-  append_text(out, out_cap, "tls next certificate-validation-and-key-schedule\n");
+  append_text(out, out_cap, "tls next trust-chain-validation-and-key-schedule\n");
   append_text(out, out_cap, "tls first-bytes ");
   append_hex_bytes(out, out_cap, rx, rx_len < 96 ? rx_len : 96);
   append_text(out, out_cap, "\n");
