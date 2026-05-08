@@ -967,10 +967,12 @@ static void term_find_recursive(terminal_t *term, const char *path,
 static void term_print_update_info(terminal_t *term) {
   term_puts_t(term, "\033[1;36mOrizon update model\033[0m\n");
   term_puts_t(term, "This kernel does not self-update over the network yet.\n");
-  term_puts_t(term, "Use the portable host updater from the repo:\n");
-  term_puts_t(term, "  python scripts/orizon/orizon_update.py --mode local-iso\n");
+  term_puts_t(term, "Public GitHub ISO update:\n");
+  term_puts_t(term, "  python scripts/orizon/orizon_update.py --mode github-iso\n");
+  term_puts_t(term, "Build latest GitHub source:\n");
+  term_puts_t(term, "  python scripts/orizon/orizon_update.py --from-github --mode local-iso\n");
   term_puts_t(term, "Lab VM backend, optional:\n");
-  term_puts_t(term, "  python scripts/orizon/orizon_update.py --mode zimaos-vm\n");
+  term_puts_t(term, "  python scripts/orizon/orizon_update.py --from-github --mode zimaos-vm\n");
   term_puts_t(term, "/workspace is preserved across OS updates.\n");
 }
 

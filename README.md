@@ -22,22 +22,45 @@ Ce qui est volontairement absent du profil actif:
 - jeux et applications integrees non essentielles
 - flux de mise a jour herite d'un ancien projet
 
-## Mise A Jour Portable
+## Mise A Jour Par Internet
 
 ZimaOS est seulement le labo VM actuel. Orizon OS doit rester portable vers
 d'autres machines `x86_64` UEFI.
 
-Le point d'entree recommande est:
+Le depot public GitHub est la source officielle:
 
-```powershell
-python scripts/orizon/orizon_update.py --mode local-iso
+```text
+https://github.com/Orizon-cmd/Orizon-OS
 ```
 
-Ce mode construit l'ISO sur la machine courante si la toolchain est installee
-et rafraichit `Orizon-OS.iso` a la racine.
+Pour recuperer la derniere ISO publiee depuis Internet, sans compiler:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode github-iso
+```
+
+Sur une nouvelle machine, le demarrage le plus simple est:
+
+```powershell
+git clone https://github.com/Orizon-cmd/Orizon-OS.git
+cd Orizon-OS
+python scripts/orizon/orizon_update.py --mode github-iso
+```
+
+Pour reconstruire depuis le dernier code GitHub sur la machine courante:
+
+```powershell
+python scripts/orizon/orizon_update.py --from-github --mode local-iso
+```
+
+Ces commandes rafraichissent `Orizon-OS.iso` a la racine. Le mode `github-iso`
+est le plus simple pour une machine qui veut juste recevoir une mise a jour; le
+mode `--from-github --mode local-iso` sert aux machines qui ont la toolchain et
+doivent reconstruire.
 
 Backends disponibles:
 
+- `github-iso`: telecharge l'ISO publique depuis GitHub
 - `local-iso`: build local portable, pour toute machine avec clang/lld/xorriso
 - `zimaos-iso`: build via Docker sur le serveur ZimaOS, puis recupere l'ISO
 - `zimaos-vm`: build via ZimaOS, deploie sur la VM `orizon-dev`, puis recupere l'ISO
@@ -47,7 +70,7 @@ Backends disponibles:
 Le cycle le plus rapide aujourd'hui passe encore par le serveur ZimaOS:
 
 ```powershell
-python scripts/orizon/orizon_update.py --mode zimaos-vm
+python scripts/orizon/orizon_update.py --from-github --mode zimaos-vm
 powershell -File scripts/orizon/open_orizon_vnc.ps1
 ```
 

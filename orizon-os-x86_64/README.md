@@ -52,14 +52,20 @@ This creates `orizonos-x86_64.iso`.
 From the repository root:
 
 ```bash
-python scripts/orizon/orizon_update.py --mode local-iso
+python scripts/orizon/orizon_update.py --mode github-iso
 ```
 
-This builds on the current machine and refreshes the root `Orizon-OS.iso`
-artifact. The ZimaOS backend is available for the lab VM with:
+This downloads the latest public `Orizon-OS.iso` from GitHub without requiring
+a compiler. To rebuild from the latest public source on the current machine:
 
 ```bash
-python scripts/orizon/orizon_update.py --mode zimaos-vm
+python scripts/orizon/orizon_update.py --from-github --mode local-iso
+```
+
+The ZimaOS backend remains available only for the lab VM with:
+
+```bash
+python scripts/orizon/orizon_update.py --from-github --mode zimaos-vm
 ```
 
 ## Running
