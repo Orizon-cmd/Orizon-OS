@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -67,7 +70,7 @@ def sync_from_github(repo_url: str, ref: str, allow_dirty: bool) -> None:
         )
 
 
-def github_raw_url(repo_url: str, ref: str, repo_path: str) -> str:
+def github_repo_slug(repo_url: str) -> str:
     prefix = "https://github.com/"
     if not repo_url.startswith(prefix):
         raise ValueError(
@@ -83,6 +86,30 @@ def github_raw_url(repo_url: str, ref: str, repo_path: str) -> str:
             "Cannot derive a raw GitHub URL from this repo URL. "
             "Use --github-iso-url explicitly."
         )
+    return slug
+
+
+def resolve_github_ref(repo_url: str, ref: str) -> str:
+    if re.fullmatch(r"[0-9a-fA-F]{40}", ref):
+        return ref
+
+    slug = github_repo_slug(repo_url)
+    quoted_ref = urllib.parse.quote(ref, safe="")
+    api_url = f"https://api.github.com/repos/{slug}/commits/{quoted_ref}"
+    request = urllib.request.Request(
+        api_url,
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "orizon-update"},
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        data = json.loads(response.read().decode("utf-8"))
+    sha = data.get("sha")
+    if not sha:
+        raise RuntimeError(f"Could not resolve GitHub ref: {ref}")
+    return sha
+
+
+def github_raw_url(repo_url: str, ref: str, repo_path: str) -> str:
+    slug = github_repo_slug(repo_url)
     return f"https://raw.githubusercontent.com/{slug}/{ref}/{repo_path.lstrip('/')}"
 
 
@@ -116,7 +143,13 @@ def download_github_iso(
     explicit_url: str,
     output_iso: Path,
 ) -> None:
-    url = explicit_url or github_raw_url(repo_url, ref, repo_path)
+    if explicit_url:
+        url = explicit_url
+    else:
+        resolved_ref = resolve_github_ref(repo_url, ref)
+        if resolved_ref != ref:
+            print(f"GitHub ref {ref} resolved to {resolved_ref}")
+        url = github_raw_url(repo_url, resolved_ref, repo_path)
     download_file(url, output_iso)
 
 
