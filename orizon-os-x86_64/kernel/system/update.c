@@ -40,7 +40,7 @@ static const update_package_t base_packages[] = {
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
-    {"orizon-tls", "server-finished-decrypt-probe"},
+    {"orizon-tls", "encrypted-http-range-probe"},
     {"orizon-sha256", "manifest-verification"},
     {"orizon-manifest", "staged-update-plan"},
     {"orizon-timer", "pit-100hz"},
@@ -59,7 +59,7 @@ static const char update_manifest[] =
     "package orizon-vfs workspace-persistence required\n"
     "package orizon-net ethernet-e1000 required\n"
     "package orizon-ipv4 dhcp-dns-tcp-bootstrap required\n"
-    "package orizon-tls server-finished-decrypt-probe required\n"
+    "package orizon-tls encrypted-http-range-probe required\n"
     "package orizon-sha256 manifest-verification required\n"
     "package orizon-manifest staged-update-plan required\n"
     "package orizon-timer pit-100hz required\n"
@@ -146,8 +146,16 @@ static void update_write_plan(const char *phase, const char *network,
     snprintf(line, sizeof(line), "proof-sha256 %s\n", proof_hash);
     update_write_file(UPDATE_PLAN_PATH, line, 1);
   }
-  update_write_file(UPDATE_PLAN_PATH,
-                    "next tls-server-finished-transcript-verification\n", 1);
+  if (phase && strcmp(phase, "tls-encrypted-http-range") == 0) {
+    update_write_file(UPDATE_PLAN_PATH,
+                      "next tls-package-body-streaming-and-boot-writer\n", 1);
+  } else if (phase && strcmp(phase, "tls-handshake") == 0) {
+    update_write_file(UPDATE_PLAN_PATH,
+                      "next tls-encrypted-http-get-and-package-body\n", 1);
+  } else {
+    update_write_file(UPDATE_PLAN_PATH,
+                      "next tls-package-body-streaming-and-boot-writer\n", 1);
+  }
   update_write_file(UPDATE_PLAN_PATH, "install staged-boot-writer\n", 1);
 }
 
@@ -304,17 +312,39 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     snprintf(pkg_line, sizeof(pkg_line), "TLS proof sha256 %s", tls_hash);
     update_append_log(pkg_line);
     netstack_format_status(stack_line, sizeof(stack_line));
-    update_write_plan("tls-handshake", stack_line, tls_hash, tls_len);
+    int tls_finished_verified =
+        strstr(tls_response, "tls server-finished seen=yes verified=yes") != 0;
+    int tls_http_decrypted =
+        strstr(tls_response, "tls encrypted-http-response decrypted=yes") != 0;
+    update_write_plan(tls_http_decrypted ? "tls-encrypted-http-range"
+                                         : "tls-handshake",
+                      stack_line, tls_hash, tls_len);
     append_report(report, report_size, "[6/8] TLS server handshake saved");
     append_report(report, report_size, tls_response);
     append_report(report, report_size, pkg_line);
-    append_report(report, report_size,
-                  "[7/8] TLS client Finished sent; server Finished decrypted");
-    append_report(report, report_size,
-                  "[8/8] Full package install paused before server Finished transcript verification, encrypted HTTP, and boot writer");
+    if (tls_http_decrypted) {
+      update_set_state("update: encrypted github http proof ready");
+      if (tls_finished_verified) {
+        append_report(report, report_size,
+                      "[7/8] TLS handshake verified and encrypted HTTP response decrypted");
+      } else {
+        append_report(report, report_size,
+                      "[7/8] Encrypted GitHub HTTP response decrypted");
+      }
+      append_report(report, report_size,
+                    "[8/8] Full package install paused before package body streaming, manifest verification, and boot writer");
+      update_append_log(
+          "GitHub encrypted HTTP range proof recorded; package streaming is next");
+    } else {
+      append_report(report, report_size,
+                    "[7/8] TLS secure flight captured; encrypted package HTTP still diagnostic");
+      append_report(report, report_size,
+                    "[8/8] Full package install paused before encrypted HTTP package streaming, manifest verification, and boot writer");
+      update_append_log(
+          "GitHub TLS secure flight recorded; encrypted package HTTP is next");
+    }
     append_report(report, report_size,
                   "Saved proofs: /workspace/.orizon/github-http-response and github-tls-response");
-    update_append_log("GitHub TLS server Finished decrypt probe recorded; transcript verification is next");
     update_append_log("Boot/system file writer pending");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);

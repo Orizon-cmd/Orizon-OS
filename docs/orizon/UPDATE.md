@@ -74,6 +74,10 @@ Current kernel-owned layers:
 - TLS ChangeCipherSpec plus encrypted client Finished flight, encrypted server
   reply capture, AES-128-GCM tag verification/decryption, and server Finished
   transcript diagnostics.
+- Exact server Finished verification using the transcript that includes the
+  GitHub NewSessionTicket handshake message.
+- Encrypted TLS application-data HTTP `Range` GET to GitHub and decrypted
+  `HTTP/1.1 206 Partial Content` response proof.
 - SHA-256 hashing for downloaded update proofs.
 - Local manifest and staging plan:
   `/workspace/.orizon/update-manifest`, `/workspace/.orizon/update-plan`,
@@ -88,8 +92,8 @@ Current kernel-owned layers:
 
 Still required before GitHub package downloads can happen fully inside Orizon OS:
 
-- TLS cryptography: root trust anchoring, exact server Finished transcript
-  verification, encrypted HTTP GET/response handling, and package body streaming.
+- TLS cryptography: root trust anchoring, full package body streaming over the
+  encrypted HTTP tunnel, and stronger retry/error recovery.
 - Verified package/manifest format.
 - Safe ESP/FAT32 writer or A/B boot slot for replacing kernel/system files
   without corrupting the current boot.
@@ -98,8 +102,8 @@ Until TLS crypto and the boot writer exist, `update` starts the upgrade, reaches
 GitHub over the kernel network stack, saves the GitHub HTTP redirect/proof,
 performs a TLS server-handshake, leaf identity, chain-link, RSA signature
 verification, X25519 shared-secret probe, ClientKeyExchange send, and TLS key
-schedule proof. It can now send the encrypted client Finished and decrypt the
-server Finished record, but intentionally stops before encrypted HTTP while the
-server Finished transcript check is being tightened. It hashes the proofs,
-writes a staging plan, and stops safely instead of pretending that the machine
-was upgraded.
+schedule proof. It now sends the encrypted client Finished, verifies the server
+Finished, sends an encrypted HTTP `Range` GET to GitHub, and decrypts the first
+partial-content response. It hashes the proofs, writes a staging plan, and stops
+safely before full payload streaming, manifest verification, and boot writing
+instead of pretending that the machine was upgraded.

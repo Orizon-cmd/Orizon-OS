@@ -61,6 +61,8 @@ static uint8_t tls_tx_buf[512];
 static uint8_t tls_rx_buf[16384];
 static uint8_t tls_secure_rx_buf[2048];
 static uint8_t tls_server_plain_buf[2048];
+static uint8_t tls_app_rx_buf[4096];
+static uint8_t tls_app_plain_buf[4096];
 static uint8_t tls_client_random[32];
 static uint8_t tls_client_x25519_scalar[32];
 static size_t tls_client_hello_handshake_len = 0;
@@ -71,6 +73,16 @@ static size_t tls_last_secure_reply_len = 0;
 static char tls_last_secure_reply_sha256[SHA256_HEX_SIZE];
 static uint8_t tls_last_client_finished_plain[16];
 static size_t tls_last_client_finished_plain_len = 0;
+static int tls_last_http_get_sent = 0;
+static int tls_last_http_decrypted = 0;
+static size_t tls_last_http_reply_len = 0;
+static size_t tls_last_http_plain_len = 0;
+static char tls_last_http_reply_sha256[SHA256_HEX_SIZE];
+static char tls_last_http_plain_sha256[SHA256_HEX_SIZE];
+static char tls_last_http_status[80];
+static uint8_t tls_last_http_first_record_type = 0;
+static size_t tls_last_http_first_record_len = 0;
+static size_t tls_last_http_decrypt_failures = 0;
 
 static uint16_t get_be16(const uint8_t *p) {
   return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -1134,6 +1146,16 @@ static int build_tls_client_hello(const char *host, uint8_t *out,
   tls_last_secure_reply_len = 0;
   tls_last_secure_reply_sha256[0] = '\0';
   tls_last_client_finished_plain_len = 0;
+  tls_last_http_get_sent = 0;
+  tls_last_http_decrypted = 0;
+  tls_last_http_reply_len = 0;
+  tls_last_http_plain_len = 0;
+  tls_last_http_reply_sha256[0] = '\0';
+  tls_last_http_plain_sha256[0] = '\0';
+  tls_last_http_status[0] = '\0';
+  tls_last_http_first_record_type = 0;
+  tls_last_http_first_record_len = 0;
+  tls_last_http_decrypt_failures = 0;
   tls_client_hello_handshake_len = 0;
   tls_put(out, out_cap, &off, 22);      /* handshake record */
   tls_put16(out, out_cap, &off, 0x0301); /* record legacy version */
@@ -1272,6 +1294,7 @@ typedef struct {
   int server_finished_verified;
   int server_finished_verified_without_client_finished;
   int server_alert_seen;
+  uint64_t server_read_seq_next;
   uint16_t server_version;
   uint16_t cipher;
   uint16_t key_exchange_group;
@@ -2475,6 +2498,47 @@ static int tls_build_client_finished(tls_parse_info_t *info,
   return 0;
 }
 
+static int tls_build_encrypted_client_record(const tls_parse_info_t *info,
+                                             uint64_t seq, uint8_t record_type,
+                                             const uint8_t *plain,
+                                             size_t plain_len, uint8_t *out,
+                                             size_t out_cap,
+                                             size_t *out_len) {
+  uint8_t explicit_nonce[8];
+  uint8_t nonce[12];
+  uint8_t aad[13];
+  uint8_t tag[16];
+  size_t off = 0;
+
+  if (!info || !plain || !out || !out_len ||
+      out_cap < 5 + sizeof(explicit_nonce) + plain_len + sizeof(tag)) {
+    return -1;
+  }
+
+  put_be64(explicit_nonce, seq);
+  memcpy(nonce, info->client_write_iv, sizeof(info->client_write_iv));
+  memcpy(nonce + sizeof(info->client_write_iv), explicit_nonce,
+         sizeof(explicit_nonce));
+  put_be64(aad, seq);
+  aad[8] = record_type;
+  put_be16(aad + 9, 0x0303);
+  put_be16(aad + 11, (uint16_t)plain_len);
+
+  tls_put(out, out_cap, &off, record_type);
+  tls_put16(out, out_cap, &off, 0x0303);
+  tls_put16(out, out_cap, &off,
+            (uint16_t)(sizeof(explicit_nonce) + plain_len + sizeof(tag)));
+  tls_put_bytes(out, out_cap, &off, explicit_nonce, sizeof(explicit_nonce));
+  if (aes128_gcm_encrypt(info->client_write_key, nonce, aad, sizeof(aad),
+                         plain, plain_len, out + off, tag) != 0) {
+    return -1;
+  }
+  off += plain_len;
+  tls_put_bytes(out, out_cap, &off, tag, sizeof(tag));
+  *out_len = off;
+  return 0;
+}
+
 static void tls_prepare_key_schedule(tls_parse_info_t *info) {
   uint8_t session_hash[SHA256_DIGEST_SIZE];
   uint8_t random_seed[64];
@@ -2656,7 +2720,11 @@ static void tls_decrypt_server_secure_reply(tls_parse_info_t *info) {
       break;
     }
 
-    if (record_type == 20 && record_len == 1 && record[0] == 1) {
+    if (record_type == 22 && !info->server_change_cipher_spec_seen) {
+      tls_parse_decrypted_server_handshake(info, record, record_len,
+                                           &server_ctx,
+                                           &server_ctx_no_client);
+    } else if (record_type == 20 && record_len == 1 && record[0] == 1) {
       info->server_change_cipher_spec_seen = 1;
     } else if ((record_type == 22 || record_type == 21) &&
                plain_total < sizeof(tls_server_plain_buf) &&
@@ -2687,6 +2755,97 @@ static void tls_decrypt_server_secure_reply(tls_parse_info_t *info) {
     info->server_secure_plain_len = plain_total;
     sha256_buffer_hex(tls_server_plain_buf, plain_total,
                       info->server_secure_plain_sha256);
+  }
+  info->server_read_seq_next = server_seq;
+}
+
+static void tls_copy_http_status(const uint8_t *plain, size_t plain_len) {
+  size_t n = 0;
+
+  tls_last_http_status[0] = '\0';
+  while (n + 1 < sizeof(tls_last_http_status) && n < plain_len &&
+         plain[n] != '\r' && plain[n] != '\n') {
+    uint8_t c = plain[n];
+    tls_last_http_status[n] = (c >= 32 && c <= 126) ? (char)c : '?';
+    n++;
+  }
+  tls_last_http_status[n] = '\0';
+}
+
+static void tls_decrypt_server_http_reply(tls_parse_info_t *info) {
+  size_t off = 0;
+  size_t plain_total = 0;
+  uint64_t seq;
+
+  tls_last_http_decrypted = 0;
+  tls_last_http_plain_len = 0;
+  tls_last_http_plain_sha256[0] = '\0';
+  tls_last_http_status[0] = '\0';
+  if (!info || !info->traffic_keys_ready || !info->server_finished_verified ||
+      tls_last_http_reply_len == 0) {
+    return;
+  }
+
+  seq = info->server_read_seq_next;
+  while (off + 5 <= tls_last_http_reply_len) {
+    uint8_t record_type = tls_app_rx_buf[off];
+    uint16_t version = get_be16(tls_app_rx_buf + off + 1);
+    size_t record_len = get_be16(tls_app_rx_buf + off + 3);
+    const uint8_t *record = tls_app_rx_buf + off + 5;
+    size_t plain_len = 0;
+
+    if (tls_last_http_first_record_type == 0) {
+      tls_last_http_first_record_type = record_type;
+      tls_last_http_first_record_len = record_len;
+    }
+    off += 5;
+    if (off + record_len > tls_last_http_reply_len) {
+      tls_last_http_decrypt_failures++;
+      break;
+    }
+
+    if (record_type == 23 && plain_total < sizeof(tls_app_plain_buf)) {
+      if (tls_decrypt_aes_gcm_record(
+              info, seq, record_type, version, record, record_len,
+              tls_app_plain_buf + plain_total,
+              sizeof(tls_app_plain_buf) - plain_total, &plain_len) == 0) {
+        plain_total += plain_len;
+        tls_last_http_decrypted = 1;
+        seq++;
+      } else {
+        tls_last_http_decrypt_failures++;
+      }
+    } else if (record_type == 22) {
+      if (tls_decrypt_aes_gcm_record(info, seq, record_type, version, record,
+                                     record_len, tls_server_plain_buf,
+                                     sizeof(tls_server_plain_buf),
+                                     &plain_len) == 0) {
+        if (plain_len >= 4 && tls_server_plain_buf[0] == 4) {
+          info->server_ticket_seen = 1;
+        }
+        seq++;
+      } else {
+        tls_last_http_decrypt_failures++;
+      }
+    } else if (record_type == 21) {
+      uint8_t alert[2];
+      if (tls_decrypt_aes_gcm_record(info, seq, record_type, version, record,
+                                     record_len, alert, sizeof(alert),
+                                     &plain_len) == 0) {
+        seq++;
+      } else {
+        tls_last_http_decrypt_failures++;
+      }
+    }
+
+    off += record_len;
+  }
+
+  if (plain_total > 0) {
+    tls_last_http_plain_len = plain_total;
+    sha256_buffer_hex(tls_app_plain_buf, plain_total,
+                      tls_last_http_plain_sha256);
+    tls_copy_http_status(tls_app_plain_buf, plain_total);
   }
 }
 
@@ -3180,6 +3339,9 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
   out[0] = '\0';
   tls_parse_records(rx, rx_len, &info, host);
   tls_decrypt_server_secure_reply(&info);
+  if (!tls_last_http_decrypted) {
+    tls_decrypt_server_http_reply(&info);
+  }
 
   snprintf(line, sizeof(line), "tls host=%s port=443 bytes=%lu\n", host,
            (unsigned long)rx_len);
@@ -3400,6 +3562,37 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
     append_text(out, out_cap, line);
   }
 
+  if (tls_last_http_get_sent) {
+    snprintf(line, sizeof(line),
+             "tls encrypted-http-get sent=yes encrypted-bytes=%lu first-record=%02x/%lu failures=%lu sha256=%s\n",
+             (unsigned long)tls_last_http_reply_len,
+             (unsigned int)tls_last_http_first_record_type,
+             (unsigned long)tls_last_http_first_record_len,
+             (unsigned long)tls_last_http_decrypt_failures,
+             tls_last_http_reply_sha256[0] ? tls_last_http_reply_sha256
+                                           : "pending");
+    append_text(out, out_cap, line);
+    append_text(out, out_cap, "tls encrypted-http-reply-first-bytes ");
+    append_hex_bytes(out, out_cap, tls_app_rx_buf,
+                     tls_last_http_reply_len < 48 ? tls_last_http_reply_len
+                                                  : 48);
+    append_text(out, out_cap, "\n");
+  }
+
+  if (tls_last_http_decrypted) {
+    snprintf(line, sizeof(line),
+             "tls encrypted-http-response decrypted=yes plain-bytes=%lu sha256=%s status=%s\n",
+             (unsigned long)tls_last_http_plain_len,
+             tls_last_http_plain_sha256,
+             tls_last_http_status[0] ? tls_last_http_status : "unknown");
+    append_text(out, out_cap, line);
+    append_text(out, out_cap, "tls encrypted-http-first-bytes ");
+    append_hex_bytes(out, out_cap, tls_app_plain_buf,
+                     tls_last_http_plain_len < 64 ? tls_last_http_plain_len
+                                                  : 64);
+    append_text(out, out_cap, "\n");
+  }
+
   if (info.alerts > 0) {
     snprintf(line, sizeof(line), "tls alert level=%lu description=%lu\n",
              (unsigned long)info.alert_level,
@@ -3416,7 +3609,10 @@ static void summarize_tls_response(const char *host, const uint8_t *rx,
              info.partial_handshake ? "yes" : "no");
     append_text(out, out_cap, line);
   }
-  if (info.server_finished_seen && !info.server_finished_verified) {
+  if (tls_last_http_decrypted) {
+    append_text(out, out_cap,
+                "tls next tls-package-body-streaming-and-boot-writer\n");
+  } else if (info.server_finished_seen && !info.server_finished_verified) {
     append_text(out, out_cap,
                 "tls next tls-server-finished-transcript-verification\n");
   } else {
@@ -3493,6 +3689,37 @@ int netstack_tls_probe(const char *host, char *out, size_t out_cap,
       }
     } else {
       set_status("tls: finished send failed");
+    }
+  }
+  tls_decrypt_server_secure_reply(&send_info);
+  if (send_info.server_finished_verified) {
+    static const char http_get[] =
+        "GET /Orizon-cmd/Orizon-OS/main/Orizon-OS.iso HTTP/1.1\r\n"
+        "Host: raw.githubusercontent.com\r\n"
+        "User-Agent: OrizonOS-update/0.1\r\n"
+        "Accept: */*\r\n"
+        "Range: bytes=0-2047\r\n"
+        "Connection: close\r\n"
+        "\r\n";
+    size_t app_record_len = 0;
+    size_t app_reply_len = 0;
+    if (tls_build_encrypted_client_record(
+            &send_info, 1, 23, (const uint8_t *)http_get,
+            sizeof(http_get) - 1, tls_tx_buf, sizeof(tls_tx_buf),
+            &app_record_len) == 0) {
+      set_status("tls: encrypted http get");
+      if (tcp_send_data(&conn, tls_tx_buf, app_record_len) >= 0) {
+        tls_last_http_get_sent = 1;
+        set_status("tls: encrypted get sent");
+        if (tcp_recv_bytes(&conn, tls_app_rx_buf, sizeof(tls_app_rx_buf),
+                           &app_reply_len, 5000) == 0) {
+          tls_last_http_reply_len = app_reply_len;
+          sha256_buffer_hex(tls_app_rx_buf, app_reply_len,
+                            tls_last_http_reply_sha256);
+          tls_decrypt_server_http_reply(&send_info);
+          set_status("tls: encrypted http reply");
+        }
+      }
     }
   }
 
