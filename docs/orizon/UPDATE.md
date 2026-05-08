@@ -53,6 +53,9 @@ Current kernel-owned layers:
 
 - Intel `e1000/e1000e` Ethernet probe for the VM and compatible hardware.
 - Raw Ethernet TX/RX rings.
+- PIT timer at 100 Hz with real uptime counters.
+- Idle `hlt` loop to avoid burning a full CPU core while waiting.
+- First scheduler/process table with CPU tick accounting.
 - Local update transaction state and package database bootstrap.
 - `/workspace/.orizon/update.log` and `/workspace/.orizon/update-state`.
 - Runtime system files `/system/packages`, `/system/update-state`, and

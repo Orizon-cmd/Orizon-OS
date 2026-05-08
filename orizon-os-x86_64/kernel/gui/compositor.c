@@ -8,8 +8,10 @@
 #include "../include/gui.h"
 #include "../include/net.h"
 #include "../include/ps2.h"
+#include "../include/sched.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
+#include "../include/timer.h"
 #include "../include/usb.h"
 #include "../include/vfs.h"
 
@@ -293,24 +295,31 @@ void gui_compose(void) {
 }
 
 void gui_main_loop(void) {
-  while (1) {
-    for (int i = 0; i < 10; i++) {
-      ps2_poll();
-      usb_poll();
-      for (volatile int delay = 0; delay < 120; delay++) {
-        __asm__ volatile("pause");
-      }
-    }
+  uint64_t last_tick = timer_ticks();
 
-    if (splash_ticks_remaining > 0) {
-      splash_ticks_remaining--;
-      needs_redraw = 1;
+  while (1) {
+    sched_enter_process("gui-shell");
+    ps2_poll();
+    usb_poll();
+    net_poll();
+
+    uint64_t now = timer_ticks();
+    if (now != last_tick) {
+      uint64_t elapsed = now - last_tick;
+      last_tick = now;
+      if (splash_ticks_remaining > 0) {
+        if ((uint64_t)splash_ticks_remaining > elapsed) {
+          splash_ticks_remaining -= (int)elapsed;
+        } else {
+          splash_ticks_remaining = 0;
+        }
+        needs_redraw = 1;
+      }
     }
 
     gui_compose();
 
-    for (volatile int idle = 0; idle < 300; idle++) {
-      __asm__ volatile("pause");
-    }
+    sched_enter_idle();
+    __asm__ volatile("hlt");
   }
 }

@@ -15,6 +15,8 @@ le developpement noyau:
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - mise a jour sans reinstallation complete de l'espace de travail
 - commande `update` interne avec transaction full-upgrade et probe Ethernet
+- timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
+- debut de table processus/scheduler visible avec `ps`
 
 Ce qui est volontairement absent du profil actif:
 
@@ -40,6 +42,19 @@ Le driver Ethernet Intel `e1000/e1000e` est initialise au demarrage pour la VM
 et les cartes compatibles. Le telechargement GitHub complet depuis l'OS demande
 encore les couches reseau suivantes dans le noyau: ARP, IPv4, DHCP, DNS, TCP et
 HTTPS/TLS.
+
+## Noyau Et Performance
+
+La VM ne doit plus tourner en boucle active permanente. Le noyau utilise un
+timer PIT a 100 Hz pour l'uptime et rentre en idle avec `hlt` entre les ticks
+et les evenements clavier/souris. Les commandes utiles pour verifier:
+
+```text
+uptime
+free
+ps
+neofetch
+```
 
 ## Mise A Jour Par Internet
 

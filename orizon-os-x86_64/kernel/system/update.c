@@ -7,6 +7,7 @@
 
 #include "../include/update.h"
 #include "../include/net.h"
+#include "../include/sched.h"
 #include "../include/string.h"
 #include "../include/vfs.h"
 
@@ -27,6 +28,8 @@ static const update_package_t base_packages[] = {
     {"orizon-console", "minimal-shell"},
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
+    {"orizon-timer", "pit-100hz"},
+    {"orizon-scheduler", "process-accounting"},
     {"orizon-updater", "github-bootstrap"},
 };
 
@@ -90,6 +93,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   vfs_mkdir("/workspace");
   vfs_mkdir("/workspace/.orizon");
   vfs_mkdir("/system");
+  sched_enter_process("update-manager");
   update_write_file(UPDATE_LOG_PATH, "", 0);
   update_write_file(SYSTEM_SOURCE_PATH, UPDATE_SOURCE "\n", 0);
 
@@ -121,6 +125,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     append_report(report, report_size,
                   "Check VM/device network cable, bridge, or adapter model.");
     vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
     return -1;
   }
 
@@ -136,6 +142,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_append_log("GitHub download pending ARP/IPv4/DHCP/DNS/TCP/HTTPS/TLS");
   update_append_log("Boot/system file writer pending");
   vfs_persist_save();
+  sched_set_process_state("update-manager", SCHED_SLEEPING);
+  sched_enter_process("gui-shell");
   return -2;
 }
 

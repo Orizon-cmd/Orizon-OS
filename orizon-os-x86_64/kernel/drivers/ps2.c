@@ -3,6 +3,7 @@
  * For x86_64 Orizon OS input handling
  */
 
+#include "../include/idt.h"
 #include "../include/types.h"
 
 /* ===================================================================== */
@@ -78,6 +79,8 @@ static int caps_lock = 0;
 /* Keyboard callback */
 typedef void (*keyboard_callback_t)(int key);
 static keyboard_callback_t key_callback = 0;
+static void ps2_keyboard_irq(interrupt_frame_t *frame);
+static void ps2_mouse_irq(interrupt_frame_t *frame);
 
 /* ===================================================================== */
 /* Scancode Set 1 to ASCII Table (US QWERTY)                             */
@@ -564,6 +567,11 @@ int ps2_init(void) {
   
   /* Final flush */
   ps2_flush_output();
+  idt_register_handler(0x21, ps2_keyboard_irq);
+  idt_register_handler(0x2C, ps2_mouse_irq);
+  pic_clear_mask(1);
+  pic_clear_mask(2);
+  pic_clear_mask(12);
   
   return 0;
 }
@@ -577,5 +585,15 @@ int ps2_get_mouse_y(void) { return ps2_mouse_y; }
 int ps2_get_mouse_buttons(void) { return ps2_mouse_buttons; }
 
 /* Keep old handler functions for compatibility */
+static void ps2_keyboard_irq(interrupt_frame_t *frame) {
+  UNUSED(frame);
+  ps2_poll();
+}
+
+static void ps2_mouse_irq(interrupt_frame_t *frame) {
+  UNUSED(frame);
+  ps2_poll();
+}
+
 void ps2_keyboard_handler(void) { ps2_poll(); }
 void ps2_mouse_handler(void) { ps2_poll(); }

@@ -37,6 +37,13 @@ typedef struct {
 
 static idt_entry_t idt[256];
 static isr_handler_t isr_handlers[256];
+static uint16_t idt_code_selector = 0x08;
+
+static inline uint16_t read_cs(void) {
+  uint16_t cs;
+  __asm__ volatile("mov %%cs, %0" : "=r"(cs));
+  return cs;
+}
 
 static void idt_handle_irq(uint8_t irq, interrupt_frame_t *frame) {
   uint8_t vector = (uint8_t)(0x20 + irq);
@@ -73,7 +80,7 @@ DEFINE_IRQ_HANDLER(15)
 static void idt_set_gate(uint8_t vector, void *handler) {
   uint64_t addr = (uint64_t)handler;
   idt[vector].offset_low = addr & 0xFFFF;
-  idt[vector].selector = 0x08;
+  idt[vector].selector = idt_code_selector;
   idt[vector].ist = 0;
   idt[vector].type_attr = 0x8E; /* present, ring0, interrupt gate */
   idt[vector].offset_mid = (addr >> 16) & 0xFFFF;
@@ -90,6 +97,8 @@ void idt_register_handler(uint8_t vector, isr_handler_t handler) {
 }
 
 void idt_init(void) {
+  idt_code_selector = read_cs();
+
   for (int i = 0; i < 256; i++) {
     idt_set_gate((uint8_t)i, isr_default);
     isr_handlers[i] = 0;

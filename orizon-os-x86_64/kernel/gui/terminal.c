@@ -6,8 +6,10 @@
 #include "../include/kmalloc.h"
 #include "../include/net.h"
 #include "../include/ps2.h"
+#include "../include/sched.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
+#include "../include/timer.h"
 #include "../include/update.h"
 #include "../include/vfs.h"
 
@@ -738,19 +740,47 @@ static void term_print_version(terminal_t *term) {
   term_puts_t(term, "Built: " __DATE__ " " __TIME__ "\n");
 }
 
+static void term_format_duration(uint64_t seconds, char *out, size_t size) {
+  uint64_t days = seconds / 86400ULL;
+  uint64_t hours = (seconds / 3600ULL) % 24ULL;
+  uint64_t minutes = (seconds / 60ULL) % 60ULL;
+  uint64_t secs = seconds % 60ULL;
+
+  if (days > 0) {
+    snprintf(out, size, "%lud %02lu:%02lu:%02lu", (unsigned long)days,
+             (unsigned long)hours, (unsigned long)minutes, (unsigned long)secs);
+  } else {
+    snprintf(out, size, "%02lu:%02lu:%02lu", (unsigned long)hours,
+             (unsigned long)minutes, (unsigned long)secs);
+  }
+}
+
 static void term_print_about(terminal_t *term) {
   char line[128];
+  char uptime[40];
 
   term_puts_t(term, "\033[1;36mOrizon OS\033[0m\n");
   term_puts_t(term, "Profile: Minimal development base\n");
   term_puts_t(term, "Kernel: core-x86_64\n");
+  term_format_duration(timer_uptime_seconds(), uptime, sizeof(uptime));
+  snprintf(line, sizeof(line), "Uptime: %s (%lu ticks @ %lu Hz)\n", uptime,
+           (unsigned long)timer_ticks(), (unsigned long)timer_hz());
+  term_puts_t(term, line);
   snprintf(line, sizeof(line), "Console: %dx%d\n", TERM_COLS, TERM_ROWS);
   term_puts_t(term, line);
   snprintf(line, sizeof(line), "Display: %lux%lu\n",
            (unsigned long)screen_width, (unsigned long)screen_height);
   term_puts_t(term, line);
+  kmalloc_stats_t stats;
+  kmalloc_get_stats(&stats);
   snprintf(line, sizeof(line), "Heap used: %lu bytes\n",
-           (unsigned long)kmalloc_get_used());
+           (unsigned long)stats.used);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Heap largest free: %lu bytes\n",
+           (unsigned long)stats.largest_free);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Scheduler switches: %lu\n",
+           (unsigned long)sched_context_switches());
   term_puts_t(term, line);
   term_puts_t(term, "Storage: ");
   term_puts_t(term, vfs_persist_status());
@@ -1438,6 +1468,11 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");
   } else if (strncmp(cmd, "neofetch", 8) == 0) {
+    char uptime[40];
+    char line[128];
+    kmalloc_stats_t stats;
+    term_format_duration(timer_uptime_seconds(), uptime, sizeof(uptime));
+    kmalloc_get_stats(&stats);
     term_puts_t(term, "\033[36m");
     term_puts_t(term, "   ___  ____  ___ _____ ___  _   _      ___  ____ \n");
     term_puts_t(term, "  / _ \\|  _ \\|_ _|__  / / _ \\| \\ | |    / _ \\/ ___|\n");
@@ -1448,9 +1483,15 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\033[33mOS:\033[0m      Orizon OS Core\n");
     term_puts_t(term, "\033[33mHost:\033[0m    Personal x86_64 base\n");
     term_puts_t(term, "\033[33mKernel:\033[0m  core-x86_64\n");
-    term_puts_t(term, "\033[33mUptime:\033[0m  0 mins\n");
+    term_puts_t(term, "\033[33mUptime:\033[0m  ");
+    term_puts_t(term, uptime);
+    term_puts_t(term, "\n");
     term_puts_t(term, "\033[33mShell:\033[0m   Orizon console\n");
-    term_puts_t(term, "\033[33mMemory:\033[0m  64 MB heap\n");
+    snprintf(line, sizeof(line), "%lu KB used / %lu KB free\n",
+             (unsigned long)(stats.used / 1024),
+             (unsigned long)(stats.free / 1024));
+    term_puts_t(term, "\033[33mMemory:\033[0m  ");
+    term_puts_t(term, line);
     term_puts_t(term, "\033[33mCPU:\033[0m     x86_64\n");
     term_puts_t(term, "\033[33mProfile:\033[0m Minimal development base\n");
   } else if (strncmp(cmd, "uname", 5) == 0) {
@@ -1460,17 +1501,31 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "Orizon OS\n");
     }
   } else if (strncmp(cmd, "free", 4) == 0) {
-    term_puts_t(term, "              total        used        free\n");
+    kmalloc_stats_t stats;
+    kmalloc_get_stats(&stats);
+    term_puts_t(term, "          total_kb used_kb free_kb largest_kb\n");
     char buf[64];
-    snprintf(buf, 64, "Mem:       %8lu  %8lu  %8lu\n", 
-             (unsigned long)(64*1024*1024), 
-             kmalloc_get_used(), 
-             kmalloc_get_free());
+    snprintf(buf, 64, "Heap:     %8lu %7lu %7lu %10lu\n",
+             (unsigned long)(stats.total / 1024),
+             (unsigned long)(stats.used / 1024),
+             (unsigned long)(stats.free / 1024),
+             (unsigned long)(stats.largest_free / 1024));
+    term_puts_t(term, buf);
+    snprintf(buf, 64, "Blocks: used=%lu free=%lu total=%lu\n",
+             (unsigned long)stats.used_blocks, (unsigned long)stats.free_blocks,
+             (unsigned long)stats.blocks);
     term_puts_t(term, buf);
   } else if (strncmp(cmd, "ps", 2) == 0) {
-    term_puts_t(term, "  PID TTY          TIME CMD\n");
-    term_puts_t(term, "    1 ?        00:00:00 kernel\n");
-    term_puts_t(term, "    2 tty1     00:00:00 shell\n");
+    sched_process_t procs[SCHED_MAX_PROCESSES];
+    int count = sched_snapshot(procs, SCHED_MAX_PROCESSES);
+    term_puts_t(term, "  PID STATE      TICKS CMD\n");
+    for (int i = 0; i < count; i++) {
+      char line[96];
+      snprintf(line, sizeof(line), "%5d %s %5lu %s\n", procs[i].pid,
+               sched_state_name(procs[i].state),
+               (unsigned long)procs[i].cpu_ticks, procs[i].name);
+      term_puts_t(term, line);
+    }
   } else if (strncmp(cmd, "history", 7) == 0) {
     for (int i = 0; i < term->history_count; i++) {
       char num[8];
@@ -1488,7 +1543,12 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (strncmp(cmd, "date", 4) == 0) {
     term_puts_t(term, "Thu Jan 23 00:00:00 UTC 2025\n");
   } else if (strncmp(cmd, "uptime", 6) == 0) {
-    term_puts_t(term, " 00:00:00 up 0 min, 1 user\n");
+    char uptime[40];
+    char line[128];
+    term_format_duration(timer_uptime_seconds(), uptime, sizeof(uptime));
+    snprintf(line, sizeof(line), " %s up %s, 1 user, ticks=%lu\n", uptime,
+             uptime, (unsigned long)timer_ticks());
+    term_puts_t(term, line);
   } else {
     term_puts_t(term, cmd);
     term_puts_t(term, ": command not found\n");

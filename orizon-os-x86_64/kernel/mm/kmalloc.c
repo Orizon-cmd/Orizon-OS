@@ -25,7 +25,6 @@ typedef struct block {
 static uint8_t heap_memory[HEAP_SIZE] __attribute__((aligned(16)));
 static block_t *free_list = NULL;
 static int heap_initialized = 0;
-static size_t heap_used = 0;
 
 /* Initialize heap */
 void kmalloc_init(void) {
@@ -41,7 +40,6 @@ void kmalloc_init(void) {
   free_list->prev = NULL;
 
   heap_initialized = 1;
-  heap_used = sizeof(block_t);
 }
 
 /* Find a free block of at least 'size' bytes */
@@ -126,7 +124,6 @@ void *kmalloc(size_t size) {
   
   /* Mark as used */
   block->free = 0;
-  heap_used += block->size;
   
   /* Return pointer to data (after header) */
   return (void *)((uint8_t *)block + sizeof(block_t));
@@ -187,17 +184,59 @@ void kfree(void *ptr) {
   
   /* Mark as free */
   block->free = 1;
-  heap_used -= block->size;
   
   /* Merge adjacent free blocks */
   coalesce(block);
 }
 
 /* Get heap statistics */
+size_t kmalloc_get_total(void) {
+  return HEAP_SIZE;
+}
+
+void kmalloc_get_stats(kmalloc_stats_t *stats) {
+  if (!stats) {
+    return;
+  }
+  if (!heap_initialized) {
+    kmalloc_init();
+  }
+
+  memset(stats, 0, sizeof(*stats));
+  stats->total = HEAP_SIZE;
+
+  block_t *block = free_list;
+  while (block) {
+    size_t payload = block->size > sizeof(block_t) ? block->size - sizeof(block_t) : 0;
+    stats->blocks++;
+    if (block->free) {
+      stats->free += payload;
+      stats->free_blocks++;
+      if (payload > stats->largest_free) {
+        stats->largest_free = payload;
+      }
+    } else {
+      stats->used += payload;
+      stats->used_blocks++;
+    }
+    block = block->next;
+  }
+}
+
 size_t kmalloc_get_used(void) {
-  return heap_used;
+  kmalloc_stats_t stats;
+  kmalloc_get_stats(&stats);
+  return stats.used;
 }
 
 size_t kmalloc_get_free(void) {
-  return HEAP_SIZE - heap_used;
+  kmalloc_stats_t stats;
+  kmalloc_get_stats(&stats);
+  return stats.free;
+}
+
+size_t kmalloc_get_largest_free(void) {
+  kmalloc_stats_t stats;
+  kmalloc_get_stats(&stats);
+  return stats.largest_free;
 }

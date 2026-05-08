@@ -7,7 +7,9 @@
 #include "../include/limine.h"
 #include "../include/idt.h"
 #include "../include/acpi.h"
+#include "../include/sched.h"
 #include "../include/string.h"
+#include "../include/timer.h"
 #include "../include/types.h"
 
 /* ========== Limine Requests ========== */
@@ -241,6 +243,8 @@ void _start(void) {
   /* Initialize IDT/PIC (interrupts still disabled by default) */
   idt_init();
   pic_init();
+  sched_init();
+  timer_init();
 
   /* Verify base revision was accepted */
   if (limine_base_revision[2] != 0) {
