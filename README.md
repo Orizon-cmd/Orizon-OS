@@ -54,7 +54,10 @@ fournie par GitHub. Il extrait aussi le hash du TBS certificate, l'algorithme
 de signature et la cle publique RSA de l'intermediaire, puis verifie la
 signature RSA PKCS#1 SHA-256 du certificat leaf. Le noyau prepare aussi une
 cle cliente X25519 bootstrap, calcule la cle publique cliente et derive le
-secret partage avec la cle X25519 serveur.
+secret partage avec la cle X25519 serveur. Il construit maintenant le message
+`ClientKeyExchange`, l'envoie sur la connexion TCP TLS, calcule le hash de
+session, derive le `master_secret` TLS 1.2 avec `extended_master_secret`, puis
+prepare le premier bloc de cles AES-128-GCM.
 
 Les preuves reseau sont hashees:
 
@@ -72,10 +75,10 @@ La transaction ecrit aussi un manifeste et un plan de staging:
 /system/installed
 ```
 
-Le telechargement complet du corps des paquets GitHub demande encore l'envoi du
-ClientKeyExchange, le calcul du master secret TLS, le chiffrement AEAD et HTTP
-dans le tunnel TLS. Le remplacement boot final demandera ensuite un writer
-ESP/FAT32 ou un schema de boot A/B.
+Le telechargement complet du corps des paquets GitHub demande encore le
+chiffrement AEAD des records TLS, le message Finished et HTTP dans le tunnel
+TLS. Le remplacement boot final demandera ensuite un writer ESP/FAT32 ou un
+schema de boot A/B.
 
 ## Noyau Et Performance
 

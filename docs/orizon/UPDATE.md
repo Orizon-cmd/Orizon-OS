@@ -69,6 +69,8 @@ Current kernel-owned layers:
   against the provided issuer public key.
 - X25519 key-agreement bootstrap: generated client public key and derived
   shared secret proof hash from the server ECDHE key.
+- TLS 1.2 ClientKeyExchange record construction/sending, extended-master-secret
+  session hash, master-secret derivation, and AES-128-GCM key-block proof.
 - SHA-256 hashing for downloaded update proofs.
 - Local manifest and staging plan:
   `/workspace/.orizon/update-manifest`, `/workspace/.orizon/update-plan`,
@@ -83,8 +85,8 @@ Current kernel-owned layers:
 
 Still required before GitHub package downloads can happen fully inside Orizon OS:
 
-- TLS cryptography: root trust anchoring, ClientKeyExchange, master secret,
-  traffic keys, AEAD, and HTTP inside the encrypted tunnel.
+- TLS cryptography: root trust anchoring, ChangeCipherSpec/Finished, AEAD record
+  encryption/decryption, and HTTP inside the encrypted tunnel.
 - Verified package/manifest format.
 - Safe ESP/FAT32 writer or A/B boot slot for replacing kernel/system files
   without corrupting the current boot.
@@ -92,6 +94,6 @@ Still required before GitHub package downloads can happen fully inside Orizon OS
 Until TLS crypto and the boot writer exist, `update` starts the upgrade, reaches
 GitHub over the kernel network stack, saves the GitHub HTTP redirect/proof,
 performs a TLS server-handshake, leaf identity, chain-link, RSA signature
-verification, and X25519 shared-secret probe, hashes the proofs, writes a
-staging plan, and stops safely instead of pretending that the machine was
-upgraded.
+verification, X25519 shared-secret probe, ClientKeyExchange send, and TLS key
+schedule proof, hashes the proofs, writes a staging plan, and stops safely
+instead of pretending that the machine was upgraded.
