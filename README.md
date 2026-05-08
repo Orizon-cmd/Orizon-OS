@@ -43,8 +43,16 @@ programme externe.
 Le driver Ethernet Intel `e1000/e1000e` est initialise au demarrage pour la VM
 et les cartes compatibles. Orizon OS sait maintenant joindre le edge GitHub et
 sauvegarder la reponse HTTP dans
-`/workspace/.orizon/github-http-response`, avec son hash SHA-256 dans
-`/workspace/.orizon/github-http-response.sha256`.
+`/workspace/.orizon/github-http-response`, puis ouvrir le port HTTPS `443`,
+envoyer un `TLS ClientHello` avec SNI GitHub et sauvegarder la reponse TLS dans
+`/workspace/.orizon/github-tls-response`.
+
+Les preuves reseau sont hashees:
+
+```text
+/workspace/.orizon/github-http-response.sha256
+/workspace/.orizon/github-tls-response.sha256
+```
 
 La transaction ecrit aussi un manifeste et un plan de staging:
 
@@ -55,10 +63,10 @@ La transaction ecrit aussi un manifeste et un plan de staging:
 /system/installed
 ```
 
-Le telechargement complet du corps des paquets GitHub demande encore le client
-HTTPS/TLS noyau, car GitHub force HTTPS pour les artefacts bruts. Le
-remplacement boot final demandera ensuite un writer ESP/FAT32 ou un schema de
-boot A/B.
+Le telechargement complet du corps des paquets GitHub demande encore la crypto
+TLS noyau complete: validation certificat, echange de cle, chiffrement AEAD et
+HTTP dans le tunnel TLS. Le remplacement boot final demandera ensuite un writer
+ESP/FAT32 ou un schema de boot A/B.
 
 ## Noyau Et Performance
 

@@ -58,6 +58,8 @@ Current kernel-owned layers:
 - DNS A-record resolver.
 - Minimal blocking TCP client and HTTP GET probe.
 - GitHub edge contact saved to `/workspace/.orizon/github-http-response`.
+- TLS ClientHello/SNI probe to GitHub `443`, with ServerHello proof saved to
+  `/workspace/.orizon/github-tls-response`.
 - SHA-256 hashing for downloaded update proofs.
 - Local manifest and staging plan:
   `/workspace/.orizon/update-manifest`, `/workspace/.orizon/update-plan`,
@@ -72,12 +74,14 @@ Current kernel-owned layers:
 
 Still required before GitHub package downloads can happen fully inside Orizon OS:
 
-- HTTPS/TLS, because GitHub requires HTTPS for raw artifacts.
+- TLS cryptography: certificate validation, key exchange, traffic keys, AEAD,
+  and HTTP inside the encrypted tunnel.
 - Verified package/manifest format.
 - Safe ESP/FAT32 writer or A/B boot slot for replacing kernel/system files
   without corrupting the current boot.
 
-Until TLS and the boot writer exist, `update` starts the upgrade, reaches
+Until TLS crypto and the boot writer exist, `update` starts the upgrade, reaches
 GitHub over the kernel network stack, saves the GitHub HTTP redirect/proof,
-hashes it, writes a staging plan, and stops safely instead of pretending that
-the machine was upgraded.
+performs a TLS ClientHello/ServerHello probe, hashes the proofs, writes a
+staging plan, and stops safely instead of pretending that the machine was
+upgraded.

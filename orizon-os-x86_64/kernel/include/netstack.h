@@ -23,6 +23,9 @@ int netstack_resolve_a(const char *host, uint32_t *out_ip);
 int netstack_http_get(const char *host, const char *path, char *out,
                       size_t out_cap, size_t *out_len);
 int netstack_github_probe(char *out, size_t out_cap, size_t *out_len);
+int netstack_tls_probe(const char *host, char *out, size_t out_cap,
+                       size_t *out_len);
+int netstack_github_tls_probe(char *out, size_t out_cap, size_t *out_len);
 const netstack_status_t *netstack_get_status(void);
 void netstack_format_status(char *buf, size_t size);
 void netstack_format_ipv4(uint32_t ip, char *buf, size_t size);

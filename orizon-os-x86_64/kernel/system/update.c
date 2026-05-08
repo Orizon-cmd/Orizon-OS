@@ -19,6 +19,8 @@
 #define UPDATE_PLAN_PATH "/workspace/.orizon/update-plan"
 #define UPDATE_PROOF_PATH "/workspace/.orizon/github-http-response"
 #define UPDATE_PROOF_HASH_PATH "/workspace/.orizon/github-http-response.sha256"
+#define UPDATE_TLS_PROOF_PATH "/workspace/.orizon/github-tls-response"
+#define UPDATE_TLS_PROOF_HASH_PATH "/workspace/.orizon/github-tls-response.sha256"
 #define SYSTEM_STATE_PATH "/system/update-state"
 #define SYSTEM_PACKAGES_PATH "/system/packages"
 #define SYSTEM_SOURCE_PATH "/system/update-source"
@@ -38,6 +40,7 @@ static const update_package_t base_packages[] = {
     {"orizon-vfs", "workspace-persistence"},
     {"orizon-net", "ethernet-e1000"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap"},
+    {"orizon-tls", "clienthello-serverhello-probe"},
     {"orizon-sha256", "manifest-verification"},
     {"orizon-manifest", "staged-update-plan"},
     {"orizon-timer", "pit-100hz"},
@@ -56,6 +59,7 @@ static const char update_manifest[] =
     "package orizon-vfs workspace-persistence required\n"
     "package orizon-net ethernet-e1000 required\n"
     "package orizon-ipv4 dhcp-dns-tcp-bootstrap required\n"
+    "package orizon-tls clienthello-serverhello-probe required\n"
     "package orizon-sha256 manifest-verification required\n"
     "package orizon-manifest staged-update-plan required\n"
     "package orizon-timer pit-100hz required\n"
@@ -65,6 +69,7 @@ static const char update_manifest[] =
 
 static const char *update_status_text = "update: not run";
 static char github_response[4096];
+static char tls_response[2048];
 
 static void update_write_file(const char *path, const char *text, int append) {
   file_t *f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
@@ -135,13 +140,13 @@ static void update_write_plan(const char *phase, const char *network,
     update_write_file(UPDATE_PLAN_PATH, line, 1);
   }
   if (proof_hash && *proof_hash) {
-    snprintf(line, sizeof(line), "github-proof-bytes %lu\n",
+    snprintf(line, sizeof(line), "proof-bytes %lu\n",
              (unsigned long)proof_len);
     update_write_file(UPDATE_PLAN_PATH, line, 1);
-    snprintf(line, sizeof(line), "github-proof-sha256 %s\n", proof_hash);
+    snprintf(line, sizeof(line), "proof-sha256 %s\n", proof_hash);
     update_write_file(UPDATE_PLAN_PATH, line, 1);
   }
-  update_write_file(UPDATE_PLAN_PATH, "next tls-download-manifest\n", 1);
+  update_write_file(UPDATE_PLAN_PATH, "next tls-crypto-and-https-download\n", 1);
   update_write_file(UPDATE_PLAN_PATH, "install staged-boot-writer\n", 1);
 }
 
@@ -163,7 +168,9 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   char stack_line[256];
   char pkg_line[128];
   char proof_hash[SHA256_HEX_SIZE];
+  char tls_hash[SHA256_HEX_SIZE];
   size_t github_len = 0;
+  size_t tls_len = 0;
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -191,20 +198,20 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
              base_packages[i].name, base_packages[i].version);
     update_append_log(pkg_line);
   }
-  append_report(report, report_size, "[1/7] Local package database ready");
+  append_report(report, report_size, "[1/8] Local package database ready");
   append_report(report, report_size, "Manifest staged: " UPDATE_MANIFEST_PATH);
 
   update_set_state("update: probing ethernet");
   net_init();
   net_format_status(net_line, sizeof(net_line));
   update_append_log(net_line);
-  append_report(report, report_size, "[2/7] Ethernet probe");
+  append_report(report, report_size, "[2/8] Ethernet probe");
   append_report(report, report_size, net_line);
 
   if (!net_link_up()) {
     update_set_state("update: blocked - ethernet link is down");
     append_report(report, report_size,
-                  "[3/7] GitHub download skipped: ethernet link is down");
+                  "[3/8] GitHub download skipped: ethernet link is down");
     append_report(report, report_size,
                   "Check VM/device network cable, bridge, or adapter model.");
     vfs_persist_save();
@@ -214,10 +221,10 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   }
 
   update_set_state("update: configuring ipv4 with dhcp");
-  append_report(report, report_size, "[3/7] Ethernet link is up");
+  append_report(report, report_size, "[3/8] Ethernet link is up");
   if (netstack_configure_ipv4() != 0) {
     netstack_format_status(ip_line, sizeof(ip_line));
-    append_report(report, report_size, "[4/7] DHCP/IPv4 failed");
+    append_report(report, report_size, "[4/8] DHCP/IPv4 failed");
     append_report(report, report_size, ip_line);
     update_append_log(ip_line);
     update_write_plan("blocked-dhcp", ip_line, "", 0);
@@ -230,7 +237,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   netstack_format_status(ip_line, sizeof(ip_line));
   update_append_log(ip_line);
   update_write_plan("network-ready", ip_line, "", 0);
-  append_report(report, report_size, "[4/7] DHCP/IPv4 ready");
+  append_report(report, report_size, "[4/8] DHCP/IPv4 ready");
   append_report(report, report_size, ip_line);
 
   update_set_state("update: downloading github metadata");
@@ -238,7 +245,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   if (netstack_github_probe(github_response, sizeof(github_response),
                             &github_len) != 0) {
     netstack_format_status(ip_line, sizeof(ip_line));
-    append_report(report, report_size, "[5/7] GitHub TCP download failed");
+    append_report(report, report_size, "[5/8] GitHub TCP download failed");
     append_report(report, report_size, ip_line);
     append_report(report, report_size,
                   "Next required layer: stronger TCP retry/TLS diagnostics.");
@@ -263,7 +270,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_append_log(pkg_line);
   netstack_format_status(stack_line, sizeof(stack_line));
   update_write_plan("github-proof", stack_line, proof_hash, github_len);
-  append_report(report, report_size, "[5/7] GitHub TCP/HTTP response saved");
+  append_report(report, report_size, "[5/8] GitHub TCP/HTTP response saved");
   append_report(report, report_size, stack_line);
   append_report(report, report_size, ip_line);
   append_report(report, report_size, pkg_line);
@@ -271,26 +278,54 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   if (strstr(github_response, "Location: https://") ||
       strstr(github_response, "HTTP/1.1 301") ||
       strstr(github_response, "HTTP/1.0 301")) {
-    update_set_state("update: github reached, https/tls required");
+    update_set_state("update: probing github tls");
+    tls_response[0] = '\0';
+    if (netstack_github_tls_probe(tls_response, sizeof(tls_response),
+                                  &tls_len) != 0) {
+      netstack_format_status(ip_line, sizeof(ip_line));
+      append_report(report, report_size, "[6/8] TLS ClientHello failed");
+      append_report(report, report_size, ip_line);
+      append_report(report, report_size,
+                    "Next required layer: TLS retry/diagnostics.");
+      update_append_log("GitHub TLS ClientHello failed");
+      update_append_log(ip_line);
+      update_write_plan("blocked-tls-clienthello", ip_line, proof_hash,
+                        github_len);
+      vfs_persist_save();
+      sched_set_process_state("update-manager", SCHED_SLEEPING);
+      sched_enter_process("gui-shell");
+      return -4;
+    }
+
+    sha256_buffer_hex(tls_response, tls_len, tls_hash);
+    update_write_file(UPDATE_TLS_PROOF_PATH, tls_response, 0);
+    update_write_line(UPDATE_TLS_PROOF_HASH_PATH, tls_hash);
+    snprintf(pkg_line, sizeof(pkg_line), "TLS proof sha256 %s", tls_hash);
+    update_append_log(pkg_line);
+    netstack_format_status(stack_line, sizeof(stack_line));
+    update_write_plan("tls-handshake", stack_line, tls_hash, tls_len);
+    append_report(report, report_size, "[6/8] TLS ClientHello response saved");
+    append_report(report, report_size, tls_response);
+    append_report(report, report_size, pkg_line);
     append_report(report, report_size,
-                  "[6/7] GitHub requires HTTPS/TLS for the real package body");
+                  "[7/8] TLS crypto and certificate validation pending");
     append_report(report, report_size,
-                  "[7/7] Full package install paused before TLS and boot writer");
+                  "[8/8] Full package install paused before encrypted HTTP and boot writer");
     append_report(report, report_size,
-                  "Saved proof: /workspace/.orizon/github-http-response");
-    update_append_log("GitHub reached over TCP; HTTPS/TLS client is next");
+                  "Saved proofs: /workspace/.orizon/github-http-response and github-tls-response");
+    update_append_log("GitHub TLS server response received; TLS crypto is next");
     update_append_log("Boot/system file writer pending");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
-    return -4;
+    return -5;
   }
 
   update_set_state("update: github response downloaded");
   append_report(report, report_size,
-                "[6/7] GitHub data downloaded without redirect");
+                "[6/8] GitHub data downloaded without redirect");
   append_report(report, report_size,
-                "[7/7] Package installer/boot writer pending");
+                "[7/8] Package installer/boot writer pending");
   update_append_log("GitHub response downloaded");
   update_append_log("Boot/system file writer pending");
   vfs_persist_save();
