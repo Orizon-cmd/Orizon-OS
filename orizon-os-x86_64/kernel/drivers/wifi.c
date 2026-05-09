@@ -86,10 +86,33 @@ static wifi_status_t wifi_status_state = {
     .tx_tfd_phys = 0,
     .tx_buffer_phys = 0,
     .rx_desc_phys = 0,
+    .rx_used_desc_phys = 0,
+    .rx_status_phys = 0,
     .rx_buffer_phys = 0,
     .cmd_write_ptr = 0,
     .tx_write_ptr = 0,
     .rx_write_ptr = 0,
+    .context_ready = 0,
+    .context_armed = 0,
+    .context_failed = 0,
+    .context_mode = 0,
+    .context_errors = 0,
+    .context_generation = 0,
+    .context_lmac_sections = 0,
+    .context_umac_sections = 0,
+    .context_paging_sections = 0,
+    .legacy_context_phys = 0,
+    .v2_context_phys = 0,
+    .prph_info_phys = 0,
+    .prph_scratch_phys = 0,
+    .context_size = 0,
+    .context_v2_size = 0,
+    .prph_scratch_size = 0,
+    .context_control_flags = 0,
+    .context_v2_control_flags = 0,
+    .context_csr_target = 0,
+    .context_csr_value_lo = 0,
+    .context_csr_value_hi = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -266,6 +289,23 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CMD_BUFFER_BYTES 1024U
 #define WIFI_TX_BUFFER_BYTES 2048U
 #define WIFI_RX_BUFFER_BYTES 2048U
+#define WIFI_RX_STATUS_WORDS 16U
+#define WIFI_CONTEXT_DRAM_ENTRIES 64U
+#define WIFI_CONTEXT_DRAM_CHUNK_BYTES (32U * 1024U)
+#define WIFI_CONTEXT_MODE_LEGACY 1U
+#define WIFI_CONTEXT_MODE_V2_LITE 2U
+
+#define CSR_CTXT_INFO_BA 0x040U
+#define CSR_CTXT_INFO_BOOT_CTRL 0x000U
+#define CSR_CTXT_INFO_ADDR 0x118U
+#define CSR_AUTO_FUNC_BOOT_ENA (1U << 1)
+#define CSR_AUTO_FUNC_INIT (1U << 7)
+#define IWL_CTXT_INFO_TFD_FORMAT_LONG 0x0100U
+#define IWL_CTXT_INFO_RB_CB_SIZE_SHIFT 4U
+#define IWL_CTXT_INFO_RB_SIZE_SHIFT 9U
+#define IWL_CTXT_INFO_RB_SIZE_2K 2U
+#define IWL_PRPH_SCRATCH_MTR_MODE (1U << 17)
+#define IWL_PRPH_MTR_FORMAT_256B 0x000c0000U
 
 typedef enum {
   WIFI_FW_IMAGE_RUNTIME = 0,
@@ -289,6 +329,145 @@ typedef struct {
   uint32_t flags;
 } wifi_queue_desc_t;
 
+typedef struct __attribute__((packed)) {
+  uint16_t mac_id;
+  uint16_t version;
+  uint16_t size;
+  uint16_t reserved;
+} wifi_context_version_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t control_flags;
+  uint32_t reserved;
+} wifi_context_control_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t free_rbd_addr;
+  uint64_t used_rbd_addr;
+  uint64_t status_wr_ptr;
+} wifi_context_rbd_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t cmd_queue_addr;
+  uint8_t cmd_queue_size;
+  uint8_t reserved[7];
+} wifi_context_hcmd_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t umac_img[WIFI_CONTEXT_DRAM_ENTRIES];
+  uint64_t lmac_img[WIFI_CONTEXT_DRAM_ENTRIES];
+  uint64_t virtual_img[WIFI_CONTEXT_DRAM_ENTRIES];
+} wifi_context_dram_map_t;
+
+typedef struct __attribute__((packed)) {
+  wifi_context_version_t version;
+  wifi_context_control_t control;
+  uint64_t reserved0;
+  wifi_context_rbd_cfg_t rbd_cfg;
+  wifi_context_hcmd_cfg_t hcmd_cfg;
+  uint32_t reserved1[4];
+  uint64_t dump_addr;
+  uint32_t dump_size;
+  uint32_t dump_reserved;
+  uint64_t early_debug_addr;
+  uint32_t early_debug_size;
+  uint32_t early_debug_reserved;
+  uint64_t pnvm_addr;
+  uint32_t pnvm_size;
+  uint32_t pnvm_reserved;
+  uint32_t reserved2[16];
+  wifi_context_dram_map_t dram;
+  uint32_t reserved3[16];
+} wifi_legacy_context_info_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t pnvm_base_addr;
+  uint32_t pnvm_size;
+  uint32_t reserved;
+} wifi_prph_scratch_pnvm_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t hwm_base_addr;
+  uint32_t hwm_size;
+  uint32_t debug_token_config;
+} wifi_prph_scratch_hwm_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t free_rbd_addr;
+  uint32_t reserved;
+} wifi_prph_scratch_rbd_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  uint64_t base_addr;
+  uint32_t size;
+  uint32_t reserved;
+} wifi_prph_scratch_uefi_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t mbx_addr_0;
+  uint32_t mbx_addr_1;
+} wifi_prph_scratch_step_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  wifi_context_version_t version;
+  wifi_context_control_t control;
+  wifi_prph_scratch_pnvm_cfg_t pnvm_cfg;
+  wifi_prph_scratch_hwm_cfg_t hwm_cfg;
+  wifi_prph_scratch_rbd_cfg_t rbd_cfg;
+  wifi_prph_scratch_uefi_cfg_t reduce_power_cfg;
+  wifi_prph_scratch_step_cfg_t step_cfg;
+} wifi_prph_scratch_ctrl_cfg_t;
+
+typedef struct __attribute__((packed)) {
+  wifi_context_dram_map_t common;
+  uint64_t fseq_img[8];
+} wifi_context_dram_fseq_t;
+
+typedef struct __attribute__((packed)) {
+  wifi_prph_scratch_ctrl_cfg_t ctrl_cfg;
+  uint32_t fseq_override;
+  uint32_t step_analog_params;
+  uint32_t reserved[8];
+  wifi_context_dram_fseq_t dram;
+} wifi_prph_scratch_v2_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t boot_stage_mirror;
+  uint32_t ipc_status_mirror;
+  uint32_t sleep_notif;
+  uint32_t reserved;
+} wifi_prph_info_v2_t;
+
+typedef struct __attribute__((packed)) {
+  uint16_t version;
+  uint16_t size;
+  uint32_t config;
+  uint64_t prph_info_base_addr;
+  uint64_t cr_head_idx_arr_base_addr;
+  uint64_t tr_tail_idx_arr_base_addr;
+  uint64_t cr_tail_idx_arr_base_addr;
+  uint64_t tr_head_idx_arr_base_addr;
+  uint16_t cr_idx_arr_size;
+  uint16_t tr_idx_arr_size;
+  uint64_t mtr_base_addr;
+  uint64_t mcr_base_addr;
+  uint16_t mtr_size;
+  uint16_t mcr_size;
+  uint16_t mtr_doorbell_vec;
+  uint16_t mcr_doorbell_vec;
+  uint16_t mtr_msi_vec;
+  uint16_t mcr_msi_vec;
+  uint8_t mtr_opt_header_size;
+  uint8_t mtr_opt_footer_size;
+  uint8_t mcr_opt_header_size;
+  uint8_t mcr_opt_footer_size;
+  uint16_t msg_rings_ctrl_flags;
+  uint16_t prph_info_msi_vec;
+  uint64_t prph_scratch_base_addr;
+  uint32_t prph_scratch_size;
+  uint32_t reserved;
+} wifi_context_info_v2_t;
+
 static volatile uint8_t *wifi_mmio = NULL;
 static const uint8_t *wifi_firmware_blob = NULL;
 static size_t wifi_firmware_blob_size = 0;
@@ -302,11 +481,21 @@ static uint8_t wifi_tx_tfd[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_TFD_BYTES]
     __attribute__((aligned(4096)));
 static wifi_queue_desc_t wifi_rx_desc[WIFI_RX_QUEUE_ENTRIES]
     __attribute__((aligned(4096)));
+static wifi_queue_desc_t wifi_rx_used_desc[WIFI_RX_QUEUE_ENTRIES]
+    __attribute__((aligned(4096)));
+static uint32_t wifi_rx_status[WIFI_RX_STATUS_WORDS]
+    __attribute__((aligned(4096)));
 static uint8_t wifi_cmd_buffers[WIFI_CMD_QUEUE_ENTRIES][WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_tx_buffers[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_rx_buffers[WIFI_RX_QUEUE_ENTRIES][WIFI_RX_BUFFER_BYTES]
+    __attribute__((aligned(4096)));
+static wifi_legacy_context_info_t wifi_legacy_context
+    __attribute__((aligned(4096)));
+static wifi_context_info_v2_t wifi_context_v2 __attribute__((aligned(4096)));
+static wifi_prph_info_v2_t wifi_prph_info_v2 __attribute__((aligned(4096)));
+static wifi_prph_scratch_v2_t wifi_prph_scratch_v2
     __attribute__((aligned(4096)));
 
 extern const uint8_t orizon_iwlwifi_so_a0_hr_b0_89_ucode_start[];
@@ -569,10 +758,33 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.tx_tfd_phys = 0;
   wifi_status_state.tx_buffer_phys = 0;
   wifi_status_state.rx_desc_phys = 0;
+  wifi_status_state.rx_used_desc_phys = 0;
+  wifi_status_state.rx_status_phys = 0;
   wifi_status_state.rx_buffer_phys = 0;
   wifi_status_state.cmd_write_ptr = 0;
   wifi_status_state.tx_write_ptr = 0;
   wifi_status_state.rx_write_ptr = 0;
+  wifi_status_state.context_ready = 0;
+  wifi_status_state.context_armed = 0;
+  wifi_status_state.context_failed = 0;
+  wifi_status_state.context_mode = 0;
+  wifi_status_state.context_errors = 0;
+  wifi_status_state.context_generation = 0;
+  wifi_status_state.context_lmac_sections = 0;
+  wifi_status_state.context_umac_sections = 0;
+  wifi_status_state.context_paging_sections = 0;
+  wifi_status_state.legacy_context_phys = 0;
+  wifi_status_state.v2_context_phys = 0;
+  wifi_status_state.prph_info_phys = 0;
+  wifi_status_state.prph_scratch_phys = 0;
+  wifi_status_state.context_size = 0;
+  wifi_status_state.context_v2_size = 0;
+  wifi_status_state.prph_scratch_size = 0;
+  wifi_status_state.context_control_flags = 0;
+  wifi_status_state.context_v2_control_flags = 0;
+  wifi_status_state.context_csr_target = 0;
+  wifi_status_state.context_csr_value_lo = 0;
+  wifi_status_state.context_csr_value_hi = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -1652,16 +1864,39 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.tx_tfd_phys = 0;
   wifi_status_state.tx_buffer_phys = 0;
   wifi_status_state.rx_desc_phys = 0;
+  wifi_status_state.rx_used_desc_phys = 0;
+  wifi_status_state.rx_status_phys = 0;
   wifi_status_state.rx_buffer_phys = 0;
   wifi_status_state.cmd_write_ptr = 0;
   wifi_status_state.tx_write_ptr = 0;
   wifi_status_state.rx_write_ptr = 0;
+  wifi_status_state.context_ready = 0;
+  wifi_status_state.context_armed = 0;
+  wifi_status_state.context_failed = 0;
+  wifi_status_state.context_mode = 0;
+  wifi_status_state.context_lmac_sections = 0;
+  wifi_status_state.context_umac_sections = 0;
+  wifi_status_state.context_paging_sections = 0;
+  wifi_status_state.legacy_context_phys = 0;
+  wifi_status_state.v2_context_phys = 0;
+  wifi_status_state.prph_info_phys = 0;
+  wifi_status_state.prph_scratch_phys = 0;
+  wifi_status_state.context_size = 0;
+  wifi_status_state.context_v2_size = 0;
+  wifi_status_state.prph_scratch_size = 0;
+  wifi_status_state.context_control_flags = 0;
+  wifi_status_state.context_v2_control_flags = 0;
+  wifi_status_state.context_csr_target = 0;
+  wifi_status_state.context_csr_value_lo = 0;
+  wifi_status_state.context_csr_value_hi = 0;
 }
 
 static int wifi_prepare_host_queues(void) {
   memset(wifi_cmd_tfd, 0, sizeof(wifi_cmd_tfd));
   memset(wifi_tx_tfd, 0, sizeof(wifi_tx_tfd));
   memset(wifi_rx_desc, 0, sizeof(wifi_rx_desc));
+  memset(wifi_rx_used_desc, 0, sizeof(wifi_rx_used_desc));
+  memset(wifi_rx_status, 0, sizeof(wifi_rx_status));
   memset(wifi_cmd_buffers, 0, sizeof(wifi_cmd_buffers));
   memset(wifi_tx_buffers, 0, sizeof(wifi_tx_buffers));
   memset(wifi_rx_buffers, 0, sizeof(wifi_rx_buffers));
@@ -1672,11 +1907,16 @@ static int wifi_prepare_host_queues(void) {
   wifi_status_state.tx_tfd_phys = wifi_phys_addr(wifi_tx_tfd);
   wifi_status_state.tx_buffer_phys = wifi_phys_addr(wifi_tx_buffers);
   wifi_status_state.rx_desc_phys = wifi_phys_addr(wifi_rx_desc);
+  wifi_status_state.rx_used_desc_phys = wifi_phys_addr(wifi_rx_used_desc);
+  wifi_status_state.rx_status_phys = wifi_phys_addr(wifi_rx_status);
   wifi_status_state.rx_buffer_phys = wifi_phys_addr(wifi_rx_buffers);
 
   if (!wifi_status_state.cmd_tfd_phys || !wifi_status_state.cmd_buffer_phys ||
       !wifi_status_state.tx_tfd_phys || !wifi_status_state.tx_buffer_phys ||
-      !wifi_status_state.rx_desc_phys || !wifi_status_state.rx_buffer_phys) {
+      !wifi_status_state.rx_desc_phys ||
+      !wifi_status_state.rx_used_desc_phys ||
+      !wifi_status_state.rx_status_phys ||
+      !wifi_status_state.rx_buffer_phys) {
     wifi_status_state.queues_failed = 1;
     wifi_status_state.queue_errors++;
     wifi_status_state.status =
@@ -1701,6 +1941,226 @@ static int wifi_prepare_host_queues(void) {
   wifi_status_state.queues_failed = 0;
   wifi_status_state.status =
       "wifi: host command/RX/TX queue memory staged";
+  return 0;
+}
+
+static int wifi_prefers_context_v2(void) {
+  switch (wifi_status_state.device_id) {
+    case 0x54F0:
+    case 0x4DF0:
+    case 0xA0F0:
+    case 0x51F0:
+    case 0x7AF0:
+    case 0x2723:
+    case 0x2725:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static int wifi_context_add_chunks(uint64_t *map, unsigned long *count,
+                                   const uint8_t *data, uint32_t len) {
+  uint32_t offset = 0;
+
+  while (offset < len) {
+    uint32_t chunk = len - offset;
+    uint64_t phys;
+
+    if (*count >= WIFI_CONTEXT_DRAM_ENTRIES) {
+      return -1;
+    }
+    if (chunk > WIFI_CONTEXT_DRAM_CHUNK_BYTES) {
+      chunk = WIFI_CONTEXT_DRAM_CHUNK_BYTES;
+    }
+
+    phys = wifi_phys_addr(data + offset);
+    if (!phys) {
+      return -1;
+    }
+
+    map[*count] = phys;
+    (*count)++;
+    offset += chunk;
+  }
+
+  return 0;
+}
+
+static int wifi_context_stage_firmware_maps(void) {
+  int phase = 1;
+  unsigned long lmac = 0;
+  unsigned long umac = 0;
+  unsigned long paging = 0;
+
+  if (wifi_fw_section_count <= 0) {
+    return -1;
+  }
+
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    const wifi_fw_section_t *section = &wifi_fw_sections[i];
+    uint64_t *map;
+    unsigned long *count;
+
+    if (section->dst == CPU1_CPU2_SEPARATOR_SECTION) {
+      phase = 2;
+      continue;
+    }
+    if (section->dst == PAGING_SEPARATOR_SECTION) {
+      phase = 3;
+      continue;
+    }
+    if (!section->data || section->len == 0) {
+      continue;
+    }
+
+    if (phase == 1) {
+      map = wifi_legacy_context.dram.lmac_img;
+      count = &lmac;
+    } else if (phase == 2) {
+      map = wifi_legacy_context.dram.umac_img;
+      count = &umac;
+    } else {
+      map = wifi_legacy_context.dram.virtual_img;
+      count = &paging;
+    }
+
+    if (wifi_context_add_chunks(map, count, section->data,
+                                section->len) != 0) {
+      return -1;
+    }
+  }
+
+  memcpy(&wifi_prph_scratch_v2.dram.common, &wifi_legacy_context.dram,
+         sizeof(wifi_legacy_context.dram));
+  wifi_status_state.context_lmac_sections = lmac;
+  wifi_status_state.context_umac_sections = umac;
+  wifi_status_state.context_paging_sections = paging;
+  return 0;
+}
+
+static void wifi_context_mark_failure(const char *status) {
+  wifi_status_state.context_ready = 0;
+  wifi_status_state.context_armed = 0;
+  wifi_status_state.context_failed = 1;
+  wifi_status_state.context_errors++;
+  wifi_status_state.status = status;
+}
+
+static int wifi_prepare_context_info(void) {
+  uint32_t rx_cb_exponent = 6U;
+  uint32_t control_flags;
+  uint16_t mac_id;
+
+  if ((!wifi_status_state.firmware_valid || wifi_fw_section_count <= 0) &&
+      wifi_find_firmware() != 0) {
+    wifi_context_mark_failure("wifi: context-info needs valid firmware TLVs");
+    return -1;
+  }
+  if (!wifi_status_state.firmware_valid || wifi_fw_section_count <= 0) {
+    wifi_context_mark_failure("wifi: context-info needs valid firmware TLVs");
+    return -1;
+  }
+
+  if (!wifi_status_state.queues_ready && wifi_prepare_host_queues() != 0) {
+    wifi_context_mark_failure(
+        "wifi: context-info needs valid host queues first");
+    return -1;
+  }
+
+  memset(&wifi_legacy_context, 0, sizeof(wifi_legacy_context));
+  memset(&wifi_context_v2, 0, sizeof(wifi_context_v2));
+  memset(&wifi_prph_info_v2, 0, sizeof(wifi_prph_info_v2));
+  memset(&wifi_prph_scratch_v2, 0, sizeof(wifi_prph_scratch_v2));
+
+  wifi_status_state.legacy_context_phys = wifi_phys_addr(&wifi_legacy_context);
+  wifi_status_state.v2_context_phys = wifi_phys_addr(&wifi_context_v2);
+  wifi_status_state.prph_info_phys = wifi_phys_addr(&wifi_prph_info_v2);
+  wifi_status_state.prph_scratch_phys = wifi_phys_addr(&wifi_prph_scratch_v2);
+
+  if (!wifi_status_state.legacy_context_phys ||
+      !wifi_status_state.v2_context_phys ||
+      !wifi_status_state.prph_info_phys ||
+      !wifi_status_state.prph_scratch_phys) {
+    wifi_context_mark_failure(
+        "wifi: context-info DMA address translation failed");
+    return -1;
+  }
+
+  mac_id = (uint16_t)(wifi_status_state.csr_hw_rev
+                          ? wifi_status_state.csr_hw_rev
+                          : wifi_status_state.device_id);
+  control_flags = IWL_CTXT_INFO_TFD_FORMAT_LONG |
+                  (rx_cb_exponent << IWL_CTXT_INFO_RB_CB_SIZE_SHIFT) |
+                  (IWL_CTXT_INFO_RB_SIZE_2K << IWL_CTXT_INFO_RB_SIZE_SHIFT);
+
+  wifi_legacy_context.version.mac_id = mac_id;
+  wifi_legacy_context.version.version = 0;
+  wifi_legacy_context.version.size =
+      (uint16_t)(sizeof(wifi_legacy_context) / sizeof(uint32_t));
+  wifi_legacy_context.control.control_flags = control_flags;
+  wifi_legacy_context.rbd_cfg.free_rbd_addr = wifi_status_state.rx_desc_phys;
+  wifi_legacy_context.rbd_cfg.used_rbd_addr =
+      wifi_status_state.rx_used_desc_phys;
+  wifi_legacy_context.rbd_cfg.status_wr_ptr =
+      wifi_status_state.rx_status_phys;
+  wifi_legacy_context.hcmd_cfg.cmd_queue_addr =
+      wifi_status_state.cmd_tfd_phys;
+  wifi_legacy_context.hcmd_cfg.cmd_queue_size =
+      (uint8_t)WIFI_CMD_QUEUE_ENTRIES;
+
+  wifi_prph_scratch_v2.ctrl_cfg.version.mac_id = mac_id;
+  wifi_prph_scratch_v2.ctrl_cfg.version.version = 0;
+  wifi_prph_scratch_v2.ctrl_cfg.version.size =
+      (uint16_t)(sizeof(wifi_prph_scratch_v2) / sizeof(uint32_t));
+  wifi_prph_scratch_v2.ctrl_cfg.control.control_flags =
+      IWL_PRPH_SCRATCH_MTR_MODE | IWL_PRPH_MTR_FORMAT_256B;
+  wifi_prph_scratch_v2.ctrl_cfg.rbd_cfg.free_rbd_addr =
+      wifi_status_state.rx_desc_phys;
+
+  if (wifi_context_stage_firmware_maps() != 0) {
+    wifi_context_mark_failure(
+        "wifi: context-info firmware DRAM map overflow/translation failed");
+    return -1;
+  }
+
+  wifi_context_v2.version = 0;
+  wifi_context_v2.size =
+      (uint16_t)(sizeof(wifi_context_v2) / sizeof(uint32_t));
+  wifi_context_v2.config = 0;
+  wifi_context_v2.prph_info_base_addr = wifi_status_state.prph_info_phys;
+  wifi_context_v2.prph_scratch_base_addr =
+      wifi_status_state.prph_scratch_phys;
+  wifi_context_v2.prph_scratch_size =
+      (uint32_t)(sizeof(wifi_prph_scratch_v2) / sizeof(uint32_t));
+
+  wifi_status_state.context_mode =
+      wifi_prefers_context_v2() ? WIFI_CONTEXT_MODE_V2_LITE
+                                : WIFI_CONTEXT_MODE_LEGACY;
+  wifi_status_state.context_size = sizeof(wifi_legacy_context);
+  wifi_status_state.context_v2_size = sizeof(wifi_context_v2);
+  wifi_status_state.prph_scratch_size = sizeof(wifi_prph_scratch_v2);
+  wifi_status_state.context_control_flags = control_flags;
+  wifi_status_state.context_v2_control_flags =
+      wifi_prph_scratch_v2.ctrl_cfg.control.control_flags;
+  if (wifi_status_state.context_mode == WIFI_CONTEXT_MODE_V2_LITE) {
+    wifi_status_state.context_csr_target = CSR_CTXT_INFO_ADDR;
+    wifi_status_state.context_csr_value_lo =
+        (uint32_t)wifi_status_state.v2_context_phys;
+    wifi_status_state.context_csr_value_hi =
+        (uint32_t)(wifi_status_state.v2_context_phys >> 32);
+  } else {
+    wifi_status_state.context_csr_target = CSR_CTXT_INFO_BA;
+    wifi_status_state.context_csr_value_lo =
+        (uint32_t)wifi_status_state.legacy_context_phys;
+    wifi_status_state.context_csr_value_hi =
+        (uint32_t)(wifi_status_state.legacy_context_phys >> 32);
+  }
+  wifi_status_state.context_generation++;
+  wifi_status_state.context_ready = 1;
+  wifi_status_state.context_failed = 0;
+  wifi_status_state.status =
+      "wifi: firmware context-info and PRPH scratch staged";
   return 0;
 }
 
@@ -1778,7 +2238,8 @@ void wifi_format_status(char *buf, size_t size) {
            "driver=%s present=%s ready=%s associated=%s pci=%04x:%04x "
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
-           "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s status=%s",
+           "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
+           "status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -1796,7 +2257,9 @@ void wifi_format_status(char *buf, size_t size) {
            s->boot_ready ? "ready" : (s->boot_failed ? "failed" : "idle"),
            s->alive_seen ? "seen" : (s->alive_timeout ? "timeout" : "idle"),
            s->queues_ready ? (s->queues_armed ? "armed" : "staged")
-                           : (s->queues_failed ? "failed" : "idle"),
+                            : (s->queues_failed ? "failed" : "idle"),
+           s->context_ready ? (s->context_armed ? "armed" : "staged")
+                            : (s->context_failed ? "failed" : "idle"),
            s->status);
 }
 
@@ -2606,11 +3069,12 @@ int wifi_queue_probe(int arm, char *report, size_t report_size) {
            "bytes: cmd-tfd=%lu cmd-buf=%lu tx-tfd=%lu tx-buf=%lu "
            "rx-desc=%lu rx-buf=%lu\n"
            "dma: cmd-tfd=0x%lx cmd-buf=0x%lx tx-tfd=0x%lx tx-buf=0x%lx\n"
-           "dma: rx-desc=0x%lx rx-buf=0x%lx first-rx=0x%lx\n"
+           "dma: rx-desc=0x%lx rx-used=0x%lx rx-status=0x%lx "
+           "rx-buf=0x%lx first-rx=0x%lx\n"
            "ptrs: cmd-w=%u tx-w=%u rx-w=%u armed=%s errors=%lu\n"
            "state: host-side rings only; hardware context/scheduler registers "
            "are not programmed yet\n"
-           "next: implement firmware context-info and TX scheduler setup\n",
+           "next: run 'wifi context' to stage firmware context-info\n",
            arm ? "host queues armed" : "host queues staged",
            s->cmd_queue_entries, s->tx_queue_entries, s->rx_queue_entries,
            s->queue_generation, s->cmd_tfd_bytes, s->cmd_buffer_bytes,
@@ -2618,10 +3082,116 @@ int wifi_queue_probe(int arm, char *report, size_t report_size) {
            s->rx_buffer_bytes, (unsigned long)s->cmd_tfd_phys,
            (unsigned long)s->cmd_buffer_phys, (unsigned long)s->tx_tfd_phys,
            (unsigned long)s->tx_buffer_phys, (unsigned long)s->rx_desc_phys,
+           (unsigned long)s->rx_used_desc_phys,
+           (unsigned long)s->rx_status_phys,
            (unsigned long)s->rx_buffer_phys,
            (unsigned long)wifi_rx_desc[0].phys, s->cmd_write_ptr,
            s->tx_write_ptr, s->rx_write_ptr,
            s->queues_armed ? "yes" : "no", s->queue_errors);
+  return 0;
+}
+
+int wifi_context_probe(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  const char *mode;
+  uint32_t planned_boot_ctrl =
+      CSR_AUTO_FUNC_BOOT_ENA | CSR_AUTO_FUNC_INIT;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi context: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (s->vendor_id != 0x8086) {
+    snprintf(report, report_size,
+             "wifi context: unsupported controller %04x:%04x\n",
+             s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  rc = wifi_prepare_context_info();
+  s = &wifi_status_state;
+  if (rc != 0) {
+    snprintf(report, report_size,
+             "wifi context: staging failed\n"
+             "errors=%lu legacy=0x%lx v2=0x%lx scratch=0x%lx "
+             "prph=0x%lx\n"
+             "queues: ready=%s armed=%s rx-desc=0x%lx rx-used=0x%lx "
+             "rx-status=0x%lx\n"
+             "firmware: valid=%s sections=%lu source=%s\n",
+             s->context_errors, (unsigned long)s->legacy_context_phys,
+             (unsigned long)s->v2_context_phys,
+             (unsigned long)s->prph_scratch_phys,
+             (unsigned long)s->prph_info_phys,
+             s->queues_ready ? "yes" : "no",
+             s->queues_armed ? "yes" : "no",
+             (unsigned long)s->rx_desc_phys,
+             (unsigned long)s->rx_used_desc_phys,
+             (unsigned long)s->rx_status_phys,
+             s->firmware_valid ? "yes" : "no",
+             s->firmware_section_count, s->firmware_source);
+    return -1;
+  }
+
+  if (arm) {
+    if (!s->queues_armed) {
+      wifi_status_state.context_errors++;
+      snprintf(report, report_size,
+               "wifi context: context-info staged, but queues are not armed\n"
+               "run: wifi boot arm, wifi alive, wifi queues arm, then "
+               "wifi context arm\n"
+               "mode=%s legacy=0x%lx v2=0x%lx scratch=0x%lx\n",
+               s->context_mode == WIFI_CONTEXT_MODE_V2_LITE ? "v2-lite"
+                                                            : "legacy",
+               (unsigned long)s->legacy_context_phys,
+               (unsigned long)s->v2_context_phys,
+               (unsigned long)s->prph_scratch_phys);
+      return -1;
+    }
+    wifi_status_state.context_armed = 1;
+    wifi_status_state.status =
+        "wifi: firmware context-info armed; CSR kick deferred";
+  }
+
+  s = &wifi_status_state;
+  mode = s->context_mode == WIFI_CONTEXT_MODE_V2_LITE ? "v2-lite" : "legacy";
+  snprintf(report, report_size,
+           "wifi context: %s\n"
+           "mode=%s generation=%lu legacy-size=%u v2-size=%u scratch-size=%u\n"
+           "dram-map: lmac=%lu umac=%lu paging=%lu chunks of up to %u bytes\n"
+           "dma: legacy=0x%lx v2=0x%lx prph-info=0x%lx scratch=0x%lx\n"
+           "queues: cmd=0x%lx rx-free=0x%lx rx-used=0x%lx "
+           "rx-status=0x%lx entries cmd=%lu rx=%lu\n"
+           "flags: legacy=0x%08x prph=0x%08x planned-csr=0x%03x "
+           "value=0x%08x:%08x boot-ctrl=0x%08x\n"
+           "state: CSR kick intentionally deferred on this manual boot path; "
+           "next step is scheduler/message-ring command setup\n",
+           arm ? "context-info armed" : "context-info staged", mode,
+           s->context_generation, s->context_size, s->context_v2_size,
+           s->prph_scratch_size, s->context_lmac_sections,
+           s->context_umac_sections, s->context_paging_sections,
+           WIFI_CONTEXT_DRAM_CHUNK_BYTES,
+           (unsigned long)s->legacy_context_phys,
+           (unsigned long)s->v2_context_phys,
+           (unsigned long)s->prph_info_phys,
+           (unsigned long)s->prph_scratch_phys,
+           (unsigned long)s->cmd_tfd_phys,
+           (unsigned long)s->rx_desc_phys,
+           (unsigned long)s->rx_used_desc_phys,
+           (unsigned long)s->rx_status_phys,
+           s->cmd_queue_entries, s->rx_queue_entries,
+           s->context_control_flags, s->context_v2_control_flags,
+           s->context_csr_target, s->context_csr_value_hi,
+           s->context_csr_value_lo, planned_boot_ctrl);
   return 0;
 }
 

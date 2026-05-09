@@ -175,11 +175,13 @@ interne passe par PS/2, son SSD par NVMe, et son pave tactile ELAN/Wacom passe
 par I2C-HID. Orizon contient maintenant une premiere sonde Intel LPSS/I2C-HID
 pour ce chemin, avant le parseur multitouch complet. Le Wi-Fi Intel CNVi est
 detecte par `wifi status`; `wifi firmware`, `wifi apm`, `wifi boot arm`,
-`wifi alive` et `wifi queues arm` couvrent maintenant la chaine de diagnostic
+`wifi alive`, `wifi queues arm` et `wifi context arm` couvrent maintenant la
+chaine de diagnostic
 firmware: presence du blob Intel, reveil APM du controleur, release CPU
 firmware, transfert FH DMA garde, attente du signal firmware alive, puis
-preparation des rings commande/RX/TX cote hote. Les vraies connexions attendent
-encore la programmation hardware des queues, la couche 802.11 et WPA.
+preparation des rings commande/RX/TX cote hote et du context-info firmware.
+Les vraies connexions attendent encore la programmation scheduler/message-ring,
+la couche 802.11 et WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
