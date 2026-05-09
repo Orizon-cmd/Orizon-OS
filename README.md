@@ -38,6 +38,8 @@ le developpement noyau:
   `/logs/boot.log`
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
+- fallback de boot sur vrai materiel si le timer legacy PIT/PIC ne declenche
+  pas d'IRQ: Orizon quitte le splash et continue en polling pour diagnostic
 
 Ce qui est volontairement absent du profil actif:
 
@@ -148,6 +150,23 @@ storage select 1
 ```
 
 Details: [docs/orizon/INSTALL.md](docs/orizon/INSTALL.md).
+
+## Boot Sur Vrai Materiel
+
+Si le splash `Orizon OS` apparait sur un PC portable mais que la console ne
+s'ouvre jamais, le kernel est bien lance. Le cas le plus probable est un timer
+legacy PIT/PIC qui ne declenche pas d'IRQ sur cette machine UEFI moderne.
+Orizon contient maintenant un fallback: il evite `hlt` tant qu'aucun tick timer
+n'a ete observe, puis quitte le splash en mode polling.
+
+Apres boot, verifier:
+
+```text
+sysinfo
+report
+```
+
+Details: [docs/orizon/HARDWARE_BOOT.md](docs/orizon/HARDWARE_BOOT.md).
 
 ## Paquets Orizon
 

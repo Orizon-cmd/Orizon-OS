@@ -1440,6 +1440,10 @@ static void term_print_sysinfo(terminal_t *term) {
   snprintf(line, sizeof(line), "uptime %s ticks=%lu hz=%lu\n", uptime,
            (unsigned long)timer_ticks(), (unsigned long)timer_hz());
   term_puts_t(term, line);
+  snprintf(line, sizeof(line), "timer irq=%s fallback=%s\n",
+           gui_timer_irq_active() ? "active" : "not-seen",
+           gui_timer_fallback_active() ? "polling" : "off");
+  term_puts_t(term, line);
   snprintf(line, sizeof(line), "cpu x86_64 vendor=%s\n", vendor);
   term_puts_t(term, line);
   snprintf(line, sizeof(line),
@@ -2009,8 +2013,10 @@ static void term_print_report(terminal_t *term) {
   storage_format_capacity(capacity, sizeof(capacity));
 
   snprintf(line, sizeof(line),
-           "Boot: uptime=%s ticks=%lu hz=%lu log=%luB dropped=%lu saved=%s\n",
+           "Boot: uptime=%s ticks=%lu hz=%lu timer=%s/%s log=%luB dropped=%lu saved=%s\n",
            uptime, (unsigned long)timer_ticks(), (unsigned long)timer_hz(),
+           gui_timer_irq_active() ? "irq" : "no-irq",
+           gui_timer_fallback_active() ? "poll" : "hlt",
            (unsigned long)klog_size(), (unsigned long)klog_dropped_bytes(),
            klog_boot_persisted() ? "yes" : "no");
   term_puts_t(term, line);

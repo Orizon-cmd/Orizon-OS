@@ -28,6 +28,8 @@
 #define SHELL_WIDTH (TERM_CONTENT_WIDTH + PANEL_PADDING * 2)
 #define SHELL_HEIGHT (PANEL_TITLE_HEIGHT + TERM_CONTENT_HEIGHT + PANEL_PADDING * 2)
 #define SPLASH_TICKS 180
+#define TIMER_BOOT_FALLBACK_LOOPS 8000
+#define TIMER_FALLBACK_IDLE_PAUSES 20000
 
 #define COLOR_BG_TOP MAKE_COLOR(10, 14, 24)
 #define COLOR_BG_BOTTOM MAKE_COLOR(22, 28, 42)
@@ -51,6 +53,9 @@ static int mouse_y = 0;
 static int prev_buttons = 0;
 static int needs_redraw = 1;
 static int splash_ticks_remaining = SPLASH_TICKS;
+static int timer_irq_seen = 0;
+static int timer_fallback_polling = 0;
+static uint64_t gui_loop_count = 0;
 
 static void draw_circle(int cx, int cy, int radius, color_t color) {
   for (int y = -radius; y <= radius; y++) {
@@ -104,8 +109,9 @@ static void draw_top_bar(void) {
 }
 
 static void draw_footer(void) {
-  const char *hint =
-      "Core development profile active. Console, workspace and low-level tools are ready.";
+  const char *hint = timer_fallback_polling
+                         ? "Timer IRQ fallback active. Boot continues in polling mode; APIC timer support is next."
+                         : "Core development profile active. Console, workspace and low-level tools are ready.";
   int y = (int)screen_height - FOOTER_HEIGHT;
 
   fb_fill_rect_alpha(0, y, (int)screen_width, FOOTER_HEIGHT,
@@ -201,6 +207,15 @@ static void draw_splash(void) {
     font_draw_string(card_x + 28, card_y + 122,
                      "Preparing core workspace...",
                      COLOR_PANEL_ACCENT);
+    if (timer_fallback_polling) {
+      font_draw_string(card_x + 28, card_y + 144,
+                       "Timer IRQ fallback: continuing without hlt sleep.",
+                       COLOR_TEXT_MUTED);
+    } else if (!timer_irq_seen) {
+      font_draw_string(card_x + 28, card_y + 144,
+                       "Waiting for firmware timer IRQ...",
+                       COLOR_TEXT_MUTED);
+    }
   }
 }
 
@@ -289,6 +304,14 @@ void gui_init(void) {
   needs_redraw = 1;
 }
 
+int gui_timer_irq_active(void) {
+  return timer_irq_seen || timer_ticks() > 0;
+}
+
+int gui_timer_fallback_active(void) {
+  return timer_fallback_polling;
+}
+
 void gui_compose(void) {
   poll_input_state();
 
@@ -311,6 +334,7 @@ void gui_main_loop(void) {
   uint64_t last_tick = timer_ticks();
 
   while (1) {
+    gui_loop_count++;
     sched_enter_process("gui-shell");
     ps2_poll();
     usb_poll();
@@ -320,6 +344,8 @@ void gui_main_loop(void) {
     if (now != last_tick) {
       uint64_t elapsed = now - last_tick;
       last_tick = now;
+      timer_irq_seen = 1;
+      timer_fallback_polling = 0;
       if (splash_ticks_remaining > 0) {
         if ((uint64_t)splash_ticks_remaining > elapsed) {
           splash_ticks_remaining -= (int)elapsed;
@@ -328,12 +354,29 @@ void gui_main_loop(void) {
         }
         needs_redraw = 1;
       }
+    } else if (!timer_irq_seen && gui_loop_count > TIMER_BOOT_FALLBACK_LOOPS) {
+      /*
+       * Some real UEFI laptops do not deliver the legacy PIT/PIC timer IRQ
+       * even though QEMU does. If we hlt before observing a tick, the splash
+       * can become a permanent nap. Keep booting in polling mode instead.
+       */
+      timer_fallback_polling = 1;
+      if (splash_ticks_remaining > 0) {
+        splash_ticks_remaining = 0;
+        needs_redraw = 1;
+      }
     }
 
     gui_compose();
     power_poll();
 
     sched_enter_idle();
-    __asm__ volatile("hlt");
+    if (timer_irq_seen) {
+      __asm__ volatile("hlt");
+    } else {
+      for (int i = 0; i < TIMER_FALLBACK_IDLE_PAUSES; i++) {
+        __asm__ volatile("pause");
+      }
+    }
   }
 }

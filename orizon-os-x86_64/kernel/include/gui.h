@@ -70,6 +70,8 @@ int font_string_width(const char *str);
 void gui_init(void);
 void gui_compose(void);
 void gui_main_loop(void);
+int gui_timer_irq_active(void);
+int gui_timer_fallback_active(void);
 
 /* Direct framebuffer access for low-level debug */
 extern uint32_t *g_fb_ptr;

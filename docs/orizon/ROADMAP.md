@@ -27,9 +27,11 @@
 ## Next Hardware Track
 
 1. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
-2. Harden NVMe and AHCI writes with more error reporting and timeout handling.
-3. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
-4. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
+2. Add APIC/LAPIC timer support so real laptops do not need the PIT/PIC polling
+   fallback.
+3. Harden NVMe and AHCI writes with more error reporting and timeout handling.
+4. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
+5. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
    at least one non-ZimaOS host.
 
 ## Next Userland Track
