@@ -26,12 +26,16 @@
 
 ## Next Hardware Track
 
-1. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
-2. Harden LAPIC timer calibration and add x2APIC support for newer firmware
+1. Make the Lenovo 500w Yoga Gen 4 a concrete real-laptop target: boot,
+   keyboard, NVMe, diagnostics, then I2C-HID touchpad.
+2. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
+3. Harden LAPIC timer calibration and add x2APIC support for newer firmware
    modes.
-3. Harden NVMe and AHCI writes with more error reporting and timeout handling.
-4. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
-5. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
+4. Add ACPI namespace walking plus Intel LPSS/Synopsys DesignWare I2C for
+   ELAN/Wacom HID-over-I2C devices.
+5. Harden NVMe and AHCI writes with more error reporting and timeout handling.
+6. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
+7. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
    at least one non-ZimaOS host.
 
 ## Next Userland Track

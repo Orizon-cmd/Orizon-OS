@@ -680,8 +680,8 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
       "disks", "dmesg", "dns", "edit", "echo", "find", "free", "grep", "head", "help",
       "history", "hostname", "hw", "id", "install", "install-status",
-      "keyboard", "ls", "mkdir", "mounts", "mv",
-      "neofetch", "net", "network-status", "logs", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
+      "input", "keyboard", "ls", "mkdir", "mounts", "mv",
+      "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
       "sysinfo", "touch", "tree", "route", "uname", "update", "uptime", "version", "whoami",
       "write"};
@@ -1398,18 +1398,199 @@ static void term_cpuid(uint32_t leaf, uint32_t subleaf, uint32_t *a,
 
 static const char *term_pci_class_name(uint8_t cls, uint8_t sub) {
   switch (cls) {
+    case 0x00: return "unclassified";
     case 0x01:
+      if (sub == 0x01) return "storage-ide";
       if (sub == 0x06) return "storage-ahci";
       if (sub == 0x08) return "storage-nvme";
       return "storage";
-    case 0x02: return "network";
-    case 0x03: return "display";
-    case 0x06: return "bridge";
+    case 0x02:
+      if (sub == 0x00) return "network-ethernet";
+      if (sub == 0x80) return "network-other";
+      return "network";
+    case 0x03:
+      if (sub == 0x00) return "display-vga";
+      return "display";
+    case 0x04: return "multimedia";
+    case 0x05: return "memory";
+    case 0x06:
+      if (sub == 0x04) return "bridge-pci";
+      if (sub == 0x01) return "bridge-isa";
+      return "bridge";
+    case 0x07: return "communication";
+    case 0x08: return "system";
+    case 0x09: return "input";
     case 0x0C:
       if (sub == 0x03) return "usb";
+      if (sub == 0x05) return "smbus";
+      if (sub == 0x80) return "serial-bus-other";
       return "serial-bus";
+    case 0x11: return "signal-processing";
     default: return "device";
   }
+}
+
+static int term_pci_is_supported_intel_nic(uint16_t device_id) {
+  switch (device_id) {
+    case 0x100E:
+    case 0x10D3:
+    case 0x153A:
+    case 0x15A2:
+    case 0x15A3:
+    case 0x15B7:
+    case 0x15B8:
+    case 0x15D6:
+    case 0x15D7:
+    case 0x15E3:
+    case 0x15F2:
+    case 0x15F3:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static const char *term_pci_driver_hint(const pci_device_info_t *dev) {
+  if (!dev) {
+    return "driver=unknown";
+  }
+  if (dev->class_code == 0x01 && dev->subclass == 0x08) {
+    return "driver=nvme";
+  }
+  if (dev->class_code == 0x01 && dev->subclass == 0x06) {
+    return "driver=ahci";
+  }
+  if (dev->class_code == 0x0C && dev->subclass == 0x03) {
+    if (dev->prog_if == 0x30) {
+      return "driver=xhci";
+    }
+    if (dev->prog_if == 0x20) {
+      return "driver=ehci";
+    }
+    return "driver=usb-pending";
+  }
+  if (dev->class_code == 0x02) {
+    if (dev->vendor_id == 0x8086 &&
+        term_pci_is_supported_intel_nic(dev->device_id)) {
+      return "driver=e1000";
+    }
+    if (dev->vendor_id == 0x10EC && dev->device_id == 0x8139) {
+      return "driver=rtl8139";
+    }
+    if (dev->vendor_id == 0x1AF4 &&
+        (dev->device_id == 0x1000 || dev->device_id == 0x1041)) {
+      return "driver=virtio-net";
+    }
+    if (dev->subclass == 0x80) {
+      return "driver=wifi-pending";
+    }
+    return "driver=ethernet-pending";
+  }
+  if (dev->class_code == 0x0C && dev->subclass == 0x80) {
+    return "driver=i2c-lpss-pending";
+  }
+  if (dev->class_code == 0x0C && dev->subclass == 0x05) {
+    return "driver=smbus-pending";
+  }
+  if (dev->class_code == 0x03) {
+    return "driver=framebuffer";
+  }
+  return "driver=pending";
+}
+
+static int term_pci_is_input_bus_candidate(const pci_device_info_t *dev) {
+  if (!dev) {
+    return 0;
+  }
+  if (dev->class_code == 0x0C &&
+      (dev->subclass == 0x80 || dev->subclass == 0x05)) {
+    return 1;
+  }
+  if (dev->class_code == 0x0C && dev->subclass == 0x03) {
+    return 1;
+  }
+  return 0;
+}
+
+static void term_print_pci_device_line(terminal_t *term,
+                                       const pci_device_info_t *dev,
+                                       int show_bars) {
+  char line[256];
+  snprintf(line, sizeof(line),
+           "%02x:%02x.%u %04x:%04x class=%02x/%02x/%02x %-18s %s\n",
+           dev->bus, dev->device, dev->function, dev->vendor_id,
+           dev->device_id, dev->class_code, dev->subclass, dev->prog_if,
+           term_pci_class_name(dev->class_code, dev->subclass),
+           term_pci_driver_hint(dev));
+  term_puts_t(term, line);
+  if (show_bars) {
+    snprintf(line, sizeof(line),
+             "    BAR0=%08lx BAR1=%08lx BAR2=%08lx BAR3=%08lx BAR4=%08lx BAR5=%08lx\n",
+             (unsigned long)dev->bar[0], (unsigned long)dev->bar[1],
+             (unsigned long)dev->bar[2], (unsigned long)dev->bar[3],
+             (unsigned long)dev->bar[4], (unsigned long)dev->bar[5]);
+    term_puts_t(term, line);
+  }
+}
+
+static void term_print_pci(terminal_t *term, const char *cmd) {
+  pci_device_info_t devs[96];
+  int total = pci_scan_all(devs, 96);
+  int shown = total < 96 ? total : 96;
+  int show_bars = strstr(cmd, "bars") != NULL;
+  char line[128];
+
+  term_puts_t(term, "\033[1;36mPCI devices\033[0m\n");
+  snprintf(line, sizeof(line), "Detected: %d, showing: %d%s\n", total, shown,
+           show_bars ? " with BARs" : "");
+  term_puts_t(term, line);
+  for (int i = 0; i < shown; i++) {
+    term_print_pci_device_line(term, &devs[i], show_bars);
+  }
+  if (total > shown) {
+    term_puts_t(term, "... list truncated; increase PCI buffer in kernel\n");
+  }
+  term_puts_t(term, "Tip: use 'pci bars' to include raw BAR registers.\n");
+}
+
+static void term_print_input_status(terminal_t *term) {
+  char line[256];
+  pci_device_info_t devs[96];
+  int total;
+  int candidates = 0;
+
+  term_puts_t(term, "\033[1;36mInput diagnostics\033[0m\n");
+  term_puts_t(term, "Keyboard layout: ");
+  term_puts_t(term, input_keyboard_layout());
+  term_puts_t(term, "\n");
+
+  ps2_format_status(line, sizeof(line));
+  term_puts_t(term, "PS/2: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  usb_format_status(line, sizeof(line));
+  term_puts_t(term, "USB HID: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+
+  term_puts_t(term, "Pointer support:\n");
+  term_puts_t(term, "  PS/2 mouse/touchpad: supported when firmware exposes i8042\n");
+  term_puts_t(term, "  USB HID keyboard: supported; generic USB mouse is still pending\n");
+  term_puts_t(term, "  I2C-HID touchpad/stylus: pending Intel LPSS I2C + HID-over-I2C\n");
+
+  total = pci_scan_all(devs, 96);
+  term_puts_t(term, "Input bus candidates from PCI:\n");
+  for (int i = 0; i < total && i < 96; i++) {
+    if (!term_pci_is_input_bus_candidate(&devs[i])) {
+      continue;
+    }
+    term_print_pci_device_line(term, &devs[i], 0);
+    candidates++;
+  }
+  if (candidates == 0) {
+    term_puts_t(term, "  none detected in the first PCI scan window\n");
+  }
+  term_puts_t(term, "Note: ACPI child HID names are not enumerated by Orizon yet.\n");
 }
 
 static void term_print_sysinfo(terminal_t *term) {
@@ -1538,7 +1719,7 @@ static void term_print_hw(terminal_t *term) {
   char vendor[13];
   uint32_t a, b, c, d;
   kmalloc_stats_t stats;
-  pci_device_info_t devs[12];
+  pci_device_info_t devs[24];
 
   term_puts_t(term, "\033[1;36mOrizon Hardware Diagnostics\033[0m\n");
 
@@ -1629,22 +1810,17 @@ static void term_print_hw(terminal_t *term) {
   term_print_first_line_or(term, "Update state: ",
                            "/workspace/.orizon/update-state", "not run yet");
 
-  int total = pci_scan_all(devs, 12);
-  int shown = total < 12 ? total : 12;
+  int total = pci_scan_all(devs, 24);
+  int shown = total < 24 ? total : 24;
   snprintf(line, sizeof(line), "PCI: %d device(s), showing %d\n", total,
            shown);
   term_puts_t(term, line);
   for (int i = 0; i < shown; i++) {
-    snprintf(line, sizeof(line),
-             "  %02x:%02x.%u %04x:%04x class=%02x/%02x/%02x %s\n",
-             devs[i].bus, devs[i].device, devs[i].function,
-             devs[i].vendor_id, devs[i].device_id, devs[i].class_code,
-             devs[i].subclass, devs[i].prog_if,
-             term_pci_class_name(devs[i].class_code, devs[i].subclass));
-    term_puts_t(term, line);
+    term_puts_t(term, "  ");
+    term_print_pci_device_line(term, &devs[i], 0);
   }
   if (total > shown) {
-    term_puts_t(term, "  ... use future pci tools for the complete list\n");
+    term_puts_t(term, "  ... use 'pci' for the complete list\n");
   }
 }
 
@@ -3019,6 +3195,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
     term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
+    term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
+    term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
     term_puts_t(term, "  logs [name] - Read recent boot/network/update/install logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  mounts    - Show Orizon data roots\n");
@@ -3074,6 +3252,10 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_print_sysinfo(term);
   } else if (term_command_is(cmd, "hw")) {
     term_print_hw(term);
+  } else if (term_command_is(cmd, "pci")) {
+    term_print_pci(term, cmd);
+  } else if (term_command_is(cmd, "input")) {
+    term_print_input_status(term);
   } else if (term_command_is(cmd, "logs")) {
     term_print_log_summary(term, cmd);
   } else if (term_command_is(cmd, "report")) {

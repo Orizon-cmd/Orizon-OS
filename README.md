@@ -163,9 +163,18 @@ Apres boot, verifier:
 ```text
 sysinfo
 report
+hw
+pci
+input
 ```
 
-Details: [docs/orizon/HARDWARE_BOOT.md](docs/orizon/HARDWARE_BOOT.md).
+Le premier portable cible documente est le Lenovo 500w Yoga Gen 4. Son clavier
+interne passe par PS/2, son SSD par NVMe, et son pave tactile ELAN/Wacom passe
+par I2C-HID, ce qui guide la prochaine etape pilote.
+
+Details:
+[docs/orizon/HARDWARE_BOOT.md](docs/orizon/HARDWARE_BOOT.md) et
+[docs/orizon/LAPTOP_HARDWARE.md](docs/orizon/LAPTOP_HARDWARE.md).
 
 ## Paquets Orizon
 
@@ -326,6 +335,8 @@ Ces commandes rafraichissent `Orizon-OS.iso` a la racine. Le mode `github-iso`
 est le plus simple pour une machine qui veut juste recevoir une mise a jour; le
 mode `--from-github --mode local-iso` sert aux machines qui ont la toolchain et
 doivent reconstruire.
+Les modes de build rafraichissent aussi `updates/x86_64/` pour que la commande
+`update` dans Orizon recoive le meme kernel que l'ISO publiee.
 
 Backends disponibles:
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import hashlib
 import json
 import re
@@ -18,6 +19,7 @@ from common import connect_ssh, parse_env_file
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = "orizon-os-x86_64"
 DEFAULT_ROOT_ISO = "Orizon-OS.iso"
+DEFAULT_UPDATE_DIR = "updates/x86_64"
 DEFAULT_GITHUB_REPO = "https://github.com/Orizon-cmd/Orizon-OS.git"
 DEFAULT_GITHUB_REF = "main"
 
@@ -173,6 +175,92 @@ def download_file(url: str, output_path: Path) -> None:
     print(f"SHA256: {hasher.hexdigest()}")
 
 
+def sha256_file(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest()
+
+
+def update_version() -> str:
+    return datetime.datetime.now().strftime("%Y.%m.%d-%H%M")
+
+
+def write_update_manifest(
+    *, update_dir: Path, repo_url: str, version: str
+) -> None:
+    kernel = update_dir / "kernel.elf"
+    efi = update_dir / "BOOTX64.EFI"
+    limine = update_dir / "limine.conf"
+    manifest = update_dir / "manifest.txt"
+
+    for artifact in (kernel, efi, limine):
+        if not artifact.exists():
+            raise FileNotFoundError(f"Missing update artifact: {artifact}")
+
+    lines = [
+        "manifest-version 1",
+        "os Orizon OS",
+        "channel main",
+        f"version {version}",
+        "commit public-main",
+        f"source {repo_url}",
+        "kernel-path updates/x86_64/kernel.elf",
+        f"kernel-size {kernel.stat().st_size}",
+        f"kernel-sha256 {sha256_file(kernel)}",
+        "efi-path updates/x86_64/BOOTX64.EFI",
+        f"efi-size {efi.stat().st_size}",
+        f"efi-sha256 {sha256_file(efi)}",
+        "limine-path updates/x86_64/limine.conf",
+        f"limine-size {limine.stat().st_size}",
+        f"limine-sha256 {sha256_file(limine)}",
+        "",
+    ]
+    manifest.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Published update manifest: {manifest}")
+
+
+def publish_update_payloads_from_local_tree(
+    *, source_dir: Path, update_dir: Path, repo_url: str
+) -> None:
+    update_dir.mkdir(parents=True, exist_ok=True)
+    payloads = [
+        (source_dir / "build" / "kernel.elf", update_dir / "kernel.elf"),
+        (source_dir / "iso_root" / "EFI" / "BOOT" / "BOOTX64.EFI", update_dir / "BOOTX64.EFI"),
+        (source_dir / "limine.conf", update_dir / "limine.conf"),
+    ]
+    for src, dst in payloads:
+        if not src.exists():
+            raise FileNotFoundError(f"Built payload not found: {src}")
+        shutil.copy2(src, dst)
+        print(f"Published update artifact: {dst}")
+    write_update_manifest(update_dir=update_dir, repo_url=repo_url, version=update_version())
+
+
+def publish_update_payloads_from_zimaos(
+    *,
+    client,
+    remote_project_root: str,
+    update_dir: Path,
+    repo_url: str,
+) -> None:
+    update_dir.mkdir(parents=True, exist_ok=True)
+    payloads = [
+        (f"{remote_project_root}/build/kernel.elf", update_dir / "kernel.elf"),
+        (f"{remote_project_root}/iso_root/EFI/BOOT/BOOTX64.EFI", update_dir / "BOOTX64.EFI"),
+        (f"{remote_project_root}/limine.conf", update_dir / "limine.conf"),
+    ]
+    sftp = client.open_sftp()
+    try:
+        for remote_src, local_dst in payloads:
+            sftp.get(remote_src, str(local_dst))
+            print(f"Published update artifact: {local_dst}")
+    finally:
+        sftp.close()
+    write_update_manifest(update_dir=update_dir, repo_url=repo_url, version=update_version())
+
+
 def download_github_iso(
     *,
     repo_url: str,
@@ -214,6 +302,9 @@ def build_on_zimaos(
     deploy_vm: bool,
     publish: bool,
     output_iso: Path,
+    publish_payloads: bool,
+    update_dir: Path,
+    github_repo: str,
 ) -> None:
     cmd = [
         sys.executable,
@@ -239,10 +330,20 @@ def build_on_zimaos(
                 f"{remote_root.rstrip('/')}/workspace/"
                 f"{Path(source_dir).name}/orizonos-x86_64.iso"
             )
+            remote_project_root = (
+                f"{remote_root.rstrip('/')}/workspace/{Path(source_dir).name}"
+            )
             sftp = client.open_sftp()
             sftp.get(remote_iso, str(output_iso))
             sftp.close()
             print(f"Published ISO: {output_iso}")
+            if publish_payloads:
+                publish_update_payloads_from_zimaos(
+                    client=client,
+                    remote_project_root=remote_project_root,
+                    update_dir=update_dir,
+                    repo_url=github_repo,
+                )
         finally:
             client.close()
 
@@ -311,6 +412,16 @@ def main() -> int:
         help="Build/update without refreshing the root ISO artifact.",
     )
     parser.add_argument(
+        "--no-publish-update-payloads",
+        action="store_true",
+        help="Build/update without refreshing updates/x86_64 artifacts.",
+    )
+    parser.add_argument(
+        "--update-dir",
+        default=DEFAULT_UPDATE_DIR,
+        help="Directory where update payloads and manifest are published.",
+    )
+    parser.add_argument(
         "--env-file",
         default="config/hosts/zimaos.local.env",
         help="ZimaOS backend env file.",
@@ -336,6 +447,8 @@ def main() -> int:
     source_dir = REPO_ROOT / args.source_dir
     output_iso = REPO_ROOT / args.output_iso
     publish = not args.no_publish_root_iso
+    publish_payloads = not args.no_publish_update_payloads
+    update_dir = REPO_ROOT / args.update_dir
 
     if args.mode == "github-iso":
         download_github_iso(
@@ -347,6 +460,12 @@ def main() -> int:
         )
     elif args.mode == "local-iso":
         build_local_iso(source_dir, output_iso, publish)
+        if publish_payloads:
+            publish_update_payloads_from_local_tree(
+                source_dir=source_dir,
+                update_dir=update_dir,
+                repo_url=args.github_repo,
+            )
     elif args.mode == "zimaos-iso":
         build_on_zimaos(
             env_file=args.env_file,
@@ -356,6 +475,9 @@ def main() -> int:
             deploy_vm=False,
             publish=publish,
             output_iso=output_iso,
+            publish_payloads=publish_payloads,
+            update_dir=update_dir,
+            github_repo=args.github_repo,
         )
     else:
         build_on_zimaos(
@@ -366,6 +488,9 @@ def main() -> int:
             deploy_vm=True,
             publish=publish,
             output_iso=output_iso,
+            publish_payloads=publish_payloads,
+            update_dir=update_dir,
+            github_repo=args.github_repo,
         )
 
     print("Orizon update complete.")

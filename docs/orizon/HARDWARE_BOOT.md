@@ -19,6 +19,9 @@ After boot, run:
 ```text
 sysinfo
 report
+hw
+pci
+input
 ```
 
 Check the timer line:
@@ -45,3 +48,5 @@ awake manually instead of freezing at the splash.
   not respond yet.
 - Take a photo of the `sysinfo` and `report` output after boot; those commands
   show timer, storage, network, USB, PS/2, and boot payload state.
+- Use `pci` and `input` for real laptops. They expose PCI driver hints and
+  pointer-bus candidates such as USB, SMBus, or Intel LPSS I2C.
