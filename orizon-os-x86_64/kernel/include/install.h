@@ -16,6 +16,8 @@ typedef struct {
 
 int orizon_install_run(const orizon_install_config_t *config, char *report,
                        size_t report_size);
+int orizon_install_boot_check(char *report, size_t report_size);
+int orizon_install_repair_boot(char *report, size_t report_size);
 int orizon_install_update_esp(const void *kernel, size_t kernel_size,
                               const void *efi, size_t efi_size,
                               const char *limine_conf,

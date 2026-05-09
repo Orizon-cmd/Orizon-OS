@@ -97,6 +97,19 @@ static void put64(uint8_t *p, uint64_t v) {
   put32(p + 4, (uint32_t)(v >> 32));
 }
 
+static uint16_t get16(const uint8_t *p) {
+  return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
+static uint32_t get32(const uint8_t *p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint64_t get64(const uint8_t *p) {
+  return (uint64_t)get32(p) | ((uint64_t)get32(p + 4) << 32);
+}
+
 static uint32_t crc32_update(uint32_t crc, const uint8_t *data, size_t len) {
   crc = ~crc;
   for (size_t i = 0; i < len; i++) {
@@ -110,6 +123,10 @@ static uint32_t crc32_update(uint32_t crc, const uint8_t *data, size_t len) {
 
 static int write_sector(uint64_t lba, const void *buf) {
   return storage_write(lba, buf, 1);
+}
+
+static int read_sector(uint64_t lba, void *buf) {
+  return storage_read(lba, buf, 1);
 }
 
 static int zero_sector(uint64_t lba) {
@@ -345,10 +362,16 @@ static void fat_dir_add_entry(uint8_t *dir, size_t *off,
   *off += 32;
 }
 
-static void fat_dir_add_dot(uint8_t *dir, size_t *off, uint32_t self,
-                            uint32_t parent) {
+static uint32_t fat_dotdot_cluster(const fat32_volume_t *vol,
+                                   uint32_t parent) {
+  return parent == vol->root_cluster ? 0 : parent;
+}
+
+static void fat_dir_add_dot(const fat32_volume_t *vol, uint8_t *dir,
+                            size_t *off, uint32_t self, uint32_t parent) {
   fat_dir_add_entry(dir, off, ".          ", 0x10, self, 0);
-  fat_dir_add_entry(dir, off, "..         ", 0x10, parent, 0);
+  fat_dir_add_entry(dir, off, "..         ", 0x10,
+                    fat_dotdot_cluster(vol, parent), 0);
 }
 
 static int fat_write_cluster(const fat32_volume_t *vol, uint32_t cluster,
@@ -408,10 +431,14 @@ static void fat_prepare_boot_sector(const fat32_volume_t *vol) {
 }
 
 static void fat_prepare_fsinfo(const fat32_volume_t *vol) {
+  uint32_t used_clusters = vol->next_cluster > 2 ? vol->next_cluster - 2 : 0;
+  uint32_t free_clusters = vol->cluster_count > used_clusters
+                               ? vol->cluster_count - used_clusters
+                               : 0;
   memset(sector_buf, 0, sizeof(sector_buf));
   put32(sector_buf, 0x41615252U);
   put32(sector_buf + 484, 0x61417272U);
-  put32(sector_buf + 488, 0xFFFFFFFFU);
+  put32(sector_buf + 488, free_clusters);
   put32(sector_buf + 492, vol->next_cluster);
   sector_buf[510] = 0x55;
   sector_buf[511] = 0xAA;
@@ -507,6 +534,7 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
 
   memset(cluster_buf, 0, sizeof(cluster_buf));
   off = 0;
+  fat_dir_add_entry(cluster_buf, &off, "ORIZON ESP ", 0x08, 0, 0);
   fat_dir_add_entry(cluster_buf, &off, "EFI        ", 0x10, efi_dir, 0);
   fat_dir_add_entry(cluster_buf, &off, "BOOT       ", 0x10, boot_dir, 0);
   fat_dir_add_lfn(cluster_buf, &off, "limine.conf", limine_short);
@@ -520,7 +548,7 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
 
   memset(cluster_buf, 0, sizeof(cluster_buf));
   off = 0;
-  fat_dir_add_dot(cluster_buf, &off, efi_dir, vol->root_cluster);
+  fat_dir_add_dot(vol, cluster_buf, &off, efi_dir, vol->root_cluster);
   fat_dir_add_entry(cluster_buf, &off, "BOOT       ", 0x10, efi_boot_dir, 0);
   if (fat_write_cluster(vol, efi_dir, cluster_buf) < 0) {
     return -1;
@@ -528,7 +556,7 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
 
   memset(cluster_buf, 0, sizeof(cluster_buf));
   off = 0;
-  fat_dir_add_dot(cluster_buf, &off, efi_boot_dir, efi_dir);
+  fat_dir_add_dot(vol, cluster_buf, &off, efi_boot_dir, efi_dir);
   fat_dir_add_entry(cluster_buf, &off, "BOOTX64 EFI", 0x20, bootx64_file,
                     payload->efi_size);
   if (has_rollback) {
@@ -544,7 +572,7 @@ static int fat32_write_boot_files(const fat32_volume_t *vol,
 
   memset(cluster_buf, 0, sizeof(cluster_buf));
   off = 0;
-  fat_dir_add_dot(cluster_buf, &off, boot_dir, vol->root_cluster);
+  fat_dir_add_dot(vol, cluster_buf, &off, boot_dir, vol->root_cluster);
   fat_dir_add_entry(cluster_buf, &off, "KERNEL  ELF", 0x20, kernel_file,
                     payload->kernel_size);
   if (has_rollback) {
@@ -595,13 +623,8 @@ static int fat32_format_esp_payload(uint64_t start_lba, uint32_t total_sectors,
       write_sector(start_lba + 6, sector_buf) < 0) {
     return -1;
   }
-  fat_prepare_fsinfo(&vol);
-  if (write_sector(start_lba + 1, sector_buf) < 0 ||
-      write_sector(start_lba + 7, sector_buf) < 0) {
-    return -1;
-  }
-  for (uint32_t i = 2; i < vol.reserved_sectors; i++) {
-    if (i == 6 || i == 7) {
+  for (uint32_t i = 1; i < vol.reserved_sectors; i++) {
+    if (i == 6) {
       continue;
     }
     if (zero_sector(start_lba + i) < 0) {
@@ -609,7 +632,17 @@ static int fat32_format_esp_payload(uint64_t start_lba, uint32_t total_sectors,
     }
   }
 
-  return fat32_write_boot_files(&vol, payload);
+  if (fat32_write_boot_files(&vol, payload) < 0) {
+    return -1;
+  }
+
+  fat_prepare_fsinfo(&vol);
+  if (write_sector(start_lba + 1, sector_buf) < 0 ||
+      write_sector(start_lba + 7, sector_buf) < 0) {
+    return -1;
+  }
+
+  return 0;
 }
 
 static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
@@ -635,6 +668,372 @@ static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
   payload.rollback_efi = NULL;
   payload.rollback_efi_size = 0;
   return fat32_format_esp_payload(start_lba, total_sectors, &payload);
+}
+
+static void append_check_line(char *report, size_t report_size,
+                              const char *label, int ok) {
+  char line[192];
+  snprintf(line, sizeof(line), "%s %s", ok ? "[OK]" : "[!!]", label);
+  append_report(report, report_size, line);
+}
+
+static int installed_gpt_layout_valid(char *report, size_t report_size,
+                                      int verbose) {
+  static const uint8_t esp_type[16] = {0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8,
+                                      0xd2, 0x11, 0xba, 0x4b, 0x00, 0xa0,
+                                      0xc9, 0x3e, 0xc9, 0x3b};
+  static const uint8_t data_type[16] = {0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84,
+                                       0x72, 0x47, 0x8e, 0x79, 0x3d, 0x69,
+                                       0xd8, 0x47, 0x7d, 0xe4};
+  uint64_t sectors = storage_sector_count();
+  uint64_t esp_last = INSTALL_DATA_START_LBA - 1;
+  uint64_t data_last =
+      sectors > INSTALL_GPT_ENTRY_SECTORS + 1
+          ? sectors - INSTALL_GPT_ENTRY_SECTORS - 2
+          : 0;
+  int ok = 1;
+
+  if (!storage_available()) {
+    if (verbose) {
+      append_check_line(report, report_size, "writable AHCI/NVMe disk", 0);
+    }
+    return 0;
+  }
+  if (sectors < INSTALL_DATA_START_LBA + 65536 || data_last <= INSTALL_DATA_START_LBA) {
+    if (verbose) {
+      append_check_line(report, report_size, "disk large enough for Orizon layout", 0);
+    }
+    return 0;
+  }
+  if (verbose) {
+    append_check_line(report, report_size, "disk large enough for Orizon layout", 1);
+  }
+
+  if (read_sector(0, sector_buf) < 0 || sector_buf[510] != 0x55 ||
+      sector_buf[511] != 0xAA || sector_buf[446 + 4] != 0xEE) {
+    ok = 0;
+  }
+  if (verbose) {
+    append_check_line(report, report_size, "protective MBR", ok);
+  }
+  if (!ok) {
+    return 0;
+  }
+
+  ok = read_sector(1, sector_buf) == 0 &&
+       memcmp(sector_buf, "EFI PART", 8) == 0 &&
+       get64(sector_buf + 24) == 1 &&
+       get64(sector_buf + 32) == sectors - 1 &&
+       get64(sector_buf + 72) == 2 &&
+       get32(sector_buf + 80) >= 2 &&
+       get32(sector_buf + 84) == INSTALL_GPT_ENTRY_SIZE;
+  if (verbose) {
+    append_check_line(report, report_size, "primary GPT header", ok);
+  }
+  if (!ok) {
+    return 0;
+  }
+
+  ok = read_sector(2, gpt_entries) == 0 &&
+       memcmp(gpt_entries, esp_type, sizeof(esp_type)) == 0 &&
+       get64(gpt_entries + 32) == INSTALL_ESP_START_LBA &&
+       get64(gpt_entries + 40) == esp_last &&
+       memcmp(gpt_entries + INSTALL_GPT_ENTRY_SIZE, data_type,
+              sizeof(data_type)) == 0 &&
+       get64(gpt_entries + INSTALL_GPT_ENTRY_SIZE + 32) ==
+           INSTALL_DATA_START_LBA &&
+       get64(gpt_entries + INSTALL_GPT_ENTRY_SIZE + 40) == data_last;
+  if (verbose) {
+    append_check_line(report, report_size, "Orizon ESP/Data GPT entries", ok);
+  }
+  return ok;
+}
+
+static int fat32_mount_installed_esp(fat32_volume_t *vol, char *report,
+                                     size_t report_size) {
+  uint32_t total;
+  uint32_t data_sectors;
+  uint32_t cluster_bytes;
+
+  if (!vol || read_sector(INSTALL_ESP_START_LBA, sector_buf) < 0) {
+    append_check_line(report, report_size, "FAT32 ESP boot sector", 0);
+    return -1;
+  }
+
+  memset(vol, 0, sizeof(*vol));
+  vol->start_lba = INSTALL_ESP_START_LBA;
+  vol->sectors_per_cluster = sector_buf[13];
+  vol->reserved_sectors = get16(sector_buf + 14);
+  vol->fat_count = sector_buf[16];
+  total = get16(sector_buf + 19);
+  if (total == 0) {
+    total = get32(sector_buf + 32);
+  }
+  vol->total_sectors = total;
+  vol->sectors_per_fat = get32(sector_buf + 36);
+  vol->root_cluster = get32(sector_buf + 44);
+  vol->data_start_sector =
+      vol->reserved_sectors + vol->fat_count * vol->sectors_per_fat;
+  if (vol->data_start_sector < vol->total_sectors) {
+    data_sectors = vol->total_sectors - vol->data_start_sector;
+  } else {
+    data_sectors = 0;
+  }
+  vol->cluster_count =
+      vol->sectors_per_cluster ? data_sectors / vol->sectors_per_cluster : 0;
+  cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+
+  if (get16(sector_buf + 11) != ORIZON_SECTOR_SIZE ||
+      sector_buf[510] != 0x55 || sector_buf[511] != 0xAA ||
+      vol->total_sectors !=
+          (uint32_t)(INSTALL_DATA_START_LBA - INSTALL_ESP_START_LBA) ||
+      vol->sectors_per_cluster == 0 || cluster_bytes > INSTALL_CLUSTER_BYTES ||
+      vol->reserved_sectors < 8 || vol->fat_count != 2 ||
+      vol->sectors_per_fat == 0 || vol->root_cluster < 2 ||
+      vol->cluster_count < 65525) {
+    append_check_line(report, report_size, "FAT32 ESP boot sector", 0);
+    return -1;
+  }
+
+  append_check_line(report, report_size, "FAT32 ESP boot sector", 1);
+  return 0;
+}
+
+static int fat_read_cluster(const fat32_volume_t *vol, uint32_t cluster,
+                            uint8_t *out) {
+  if (!vol || !out || cluster < 2 ||
+      cluster >= vol->cluster_count + 2 ||
+      vol->sectors_per_cluster * ORIZON_SECTOR_SIZE > INSTALL_CLUSTER_BYTES) {
+    return -1;
+  }
+  return storage_read(fat_cluster_lba(vol, cluster), out,
+                      vol->sectors_per_cluster);
+}
+
+static int fat_find_entry_short(const fat32_volume_t *vol, uint32_t dir_cluster,
+                                const char short_name[11], uint8_t *attr,
+                                uint32_t *cluster, uint32_t *size) {
+  uint32_t cluster_bytes;
+
+  if (fat_read_cluster(vol, dir_cluster, cluster_buf) < 0) {
+    return -1;
+  }
+  cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+  for (uint32_t off = 0; off + 32 <= cluster_bytes; off += 32) {
+    uint8_t *entry = cluster_buf + off;
+    uint8_t entry_attr;
+    if (entry[0] == 0x00) {
+      break;
+    }
+    if (entry[0] == 0xE5) {
+      continue;
+    }
+    entry_attr = entry[11];
+    if (entry_attr == 0x0F) {
+      continue;
+    }
+    if (memcmp(entry, short_name, 11) != 0) {
+      continue;
+    }
+    if (attr) {
+      *attr = entry_attr;
+    }
+    if (cluster) {
+      *cluster = ((uint32_t)get16(entry + 20) << 16) | get16(entry + 26);
+    }
+    if (size) {
+      *size = get32(entry + 28);
+    }
+    return 0;
+  }
+  return -1;
+}
+
+static int boot_check_append_entry(char *report, size_t report_size,
+                                   const fat32_volume_t *vol,
+                                   uint32_t dir_cluster,
+                                   const char short_name[11],
+                                   const char *label, uint8_t required_attr,
+                                   uint32_t min_size, uint32_t *out_cluster) {
+  uint8_t attr = 0;
+  uint32_t cluster = 0;
+  uint32_t size = 0;
+  char line[192];
+  int ok = fat_find_entry_short(vol, dir_cluster, short_name, &attr, &cluster,
+                                &size) == 0;
+
+  if (ok && required_attr == 0x10) {
+    ok = (attr & 0x10) != 0 && cluster >= 2;
+  } else if (ok && required_attr == 0x20) {
+    ok = (attr & 0x10) == 0 && size >= min_size && cluster >= 2;
+  } else if (ok && required_attr) {
+    ok = (attr & required_attr) != 0;
+  }
+
+  if (out_cluster) {
+    *out_cluster = ok ? cluster : 0;
+  }
+  if (ok && required_attr == 0x20) {
+    snprintf(line, sizeof(line), "%s (%lu bytes)", label,
+             (unsigned long)size);
+    append_check_line(report, report_size, line, 1);
+  } else {
+    append_check_line(report, report_size, label, ok);
+  }
+  return ok ? 0 : -1;
+}
+
+static int boot_check_impl(char *report, size_t report_size, int reset_report) {
+  static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
+                                       '~', '1', 'C', 'O', 'N'};
+  fat32_volume_t vol;
+  uint32_t efi_dir = 0;
+  uint32_t efi_boot_dir = 0;
+  uint32_t boot_dir = 0;
+  int failures = 0;
+
+  if (reset_report && report && report_size > 0) {
+    report[0] = '\0';
+  }
+  append_report(report, report_size, "\033[1;36mOrizon boot check\033[0m");
+
+  if (!installed_gpt_layout_valid(report, report_size, 1)) {
+    append_report(report, report_size,
+                  "Boot check: FAILED. Run install or repair the disk layout.");
+    return -1;
+  }
+  if (fat32_mount_installed_esp(&vol, report, report_size) < 0) {
+    append_report(report, report_size,
+                  "Boot check: FAILED. Run repair-boot from the live ISO.");
+    return -2;
+  }
+
+  if (boot_check_append_entry(report, report_size, &vol, vol.root_cluster,
+                              "ORIZON ESP ", "ESP volume label", 0x08, 0,
+                              NULL) < 0) {
+    failures++;
+  }
+  if (boot_check_append_entry(report, report_size, &vol, vol.root_cluster,
+                              "EFI        ", "/EFI directory", 0x10, 0,
+                              &efi_dir) < 0) {
+    failures++;
+  }
+  if (boot_check_append_entry(report, report_size, &vol, vol.root_cluster,
+                              "BOOT       ", "/BOOT directory", 0x10, 0,
+                              &boot_dir) < 0) {
+    failures++;
+  }
+  if (boot_check_append_entry(report, report_size, &vol, vol.root_cluster,
+                              limine_short, "/limine.conf", 0x20, 32,
+                              NULL) < 0) {
+    failures++;
+  }
+  if (efi_dir &&
+      boot_check_append_entry(report, report_size, &vol, efi_dir,
+                              "BOOT       ", "/EFI/BOOT directory", 0x10, 0,
+                              &efi_boot_dir) < 0) {
+    failures++;
+  } else if (!efi_dir) {
+    failures++;
+  }
+  if (efi_boot_dir) {
+    if (boot_check_append_entry(report, report_size, &vol, efi_boot_dir,
+                                "BOOTX64 EFI", "/EFI/BOOT/BOOTX64.EFI",
+                                0x20, 8192, NULL) < 0) {
+      failures++;
+    }
+    if (boot_check_append_entry(report, report_size, &vol, efi_boot_dir,
+                                limine_short, "/EFI/BOOT/limine.conf",
+                                0x20, 32, NULL) < 0) {
+      failures++;
+    }
+  } else {
+    failures++;
+  }
+  if (boot_dir) {
+    if (boot_check_append_entry(report, report_size, &vol, boot_dir,
+                                "KERNEL  ELF", "/BOOT/KERNEL.ELF", 0x20,
+                                65536, NULL) < 0) {
+      failures++;
+    }
+    if (boot_check_append_entry(report, report_size, &vol, boot_dir,
+                                limine_short, "/BOOT/limine.conf", 0x20,
+                                32, NULL) < 0) {
+      failures++;
+    }
+  } else {
+    failures++;
+  }
+  if (boot_check_append_entry(report, report_size, &vol, vol.root_cluster,
+                              "INSTALL TXT", "/INSTALL.TXT marker", 0x20, 8,
+                              NULL) < 0) {
+    failures++;
+  }
+
+  if (failures == 0) {
+    append_report(report, report_size,
+                  "Boot check: OK. Installed disk has UEFI fallback boot files.");
+    return 0;
+  }
+  append_report(report, report_size,
+                "Boot check: FAILED. Run repair-boot from the live ISO.");
+  return -3;
+}
+
+int orizon_install_boot_check(char *report, size_t report_size) {
+  return boot_check_impl(report, report_size, 1);
+}
+
+int orizon_install_repair_boot(char *report, size_t report_size) {
+  uint32_t esp_sectors =
+      (uint32_t)(INSTALL_DATA_START_LBA - INSTALL_ESP_START_LBA);
+  char install_text[256];
+  install_boot_payload_t payload;
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  append_report(report, report_size, "\033[1;36mOrizon boot repair\033[0m");
+
+  if (!installed_gpt_layout_valid(report, report_size, 0)) {
+    append_report(report, report_size,
+                  "repair-boot: no installed Orizon GPT layout found.");
+    append_report(report, report_size,
+                  "repair-boot: run install first; repair will not repartition.");
+    return -1;
+  }
+  if (!boot_payloads_ready()) {
+    char line[160];
+    snprintf(line, sizeof(line), "repair-boot: %s", boot_payload_status());
+    append_report(report, report_size, line);
+    return -2;
+  }
+
+  snprintf(install_text, sizeof(install_text),
+           "Orizon OS boot repaired\nsource=repair-boot\n"
+           "next=reboot-installed-disk\n");
+  payload.kernel = boot_kernel_image();
+  payload.kernel_size = boot_kernel_image_size();
+  payload.efi = boot_efi_image();
+  payload.efi_size = boot_efi_image_size();
+  payload.limine_conf = install_limine_conf;
+  payload.limine_conf_size = sizeof(install_limine_conf) - 1;
+  payload.install_text = install_text;
+  payload.install_text_size = strlen(install_text);
+  payload.rollback_kernel = NULL;
+  payload.rollback_kernel_size = 0;
+  payload.rollback_efi = NULL;
+  payload.rollback_efi_size = 0;
+
+  append_report(report, report_size, "[1/3] Rewriting FAT32 ESP boot files");
+  if (fat32_format_esp_payload(INSTALL_ESP_START_LBA, esp_sectors,
+                               &payload) < 0) {
+    append_report(report, report_size, "repair-boot: ESP write failed");
+    return -3;
+  }
+  append_report(report, report_size, "[2/3] Preserved Orizon data partition");
+  append_report(report, report_size, "[3/3] Verifying installed boot files");
+  return boot_check_impl(report, report_size, 0);
 }
 
 int orizon_install_run(const orizon_install_config_t *config, char *report,
@@ -679,21 +1078,27 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
     return -4;
   }
 
-  append_report(report, report_size, "[1/5] Writing GPT layout");
+  append_report(report, report_size, "[1/6] Writing GPT layout");
   if (install_write_gpt(sectors) < 0) {
     append_report(report, report_size, "install: GPT write failed");
     return -5;
   }
 
-  append_report(report, report_size, "[2/5] Formatting ESP as FAT32");
+  append_report(report, report_size, "[2/6] Formatting ESP as FAT32");
   if (fat32_format_esp(INSTALL_ESP_START_LBA, esp_sectors, config) < 0) {
     append_report(report, report_size, "install: ESP/FAT32 write failed");
     return -6;
   }
 
-  append_report(report, report_size, "[3/5] Installing UEFI fallback loader");
-  append_report(report, report_size, "[4/5] Installing kernel and Limine config");
-  append_report(report, report_size, "[5/5] Preserving Orizon data partition");
+  append_report(report, report_size, "[3/6] Installing UEFI fallback loader");
+  append_report(report, report_size, "[4/6] Installing kernel and Limine config");
+  append_report(report, report_size, "[5/6] Verifying installed boot files");
+  if (boot_check_impl(report, report_size, 0) < 0) {
+    append_report(report, report_size,
+                  "install: boot verification failed before final marker");
+    return -7;
+  }
+  append_report(report, report_size, "[6/6] Preserving Orizon data partition");
   append_report(report, report_size,
                 "Install complete: shutdown will start so installer media can be removed.");
   return 0;
@@ -740,7 +1145,7 @@ static int orizon_install_update_esp_payload(
   snprintf(line, sizeof(line), "Payloads: kernel=%lu bytes, BOOTX64.EFI=%lu bytes",
            (unsigned long)kernel_size, (unsigned long)efi_size);
   append_report(report, report_size, line);
-  append_report(report, report_size, "[1/3] Formatting installed ESP");
+  append_report(report, report_size, "[1/4] Formatting installed ESP");
 
   payload.kernel = kernel;
   payload.kernel_size = kernel_size;
@@ -761,12 +1166,17 @@ static int orizon_install_update_esp_payload(
     return -4;
   }
 
-  append_report(report, report_size, "[2/3] Installed updated boot files");
+  append_report(report, report_size, "[2/4] Installed updated boot files");
   if (has_rollback) {
     append_report(report, report_size,
                   "Rollback slot: /boot/KROLLBK.ELF and /EFI/BOOT/BOOTX64.ROL");
   }
-  append_report(report, report_size, "[3/3] Preserved Orizon data partition");
+  append_report(report, report_size, "[3/4] Verifying installed boot files");
+  if (boot_check_impl(report, report_size, 0) < 0) {
+    append_report(report, report_size, "update: boot verification failed");
+    return -5;
+  }
+  append_report(report, report_size, "[4/4] Preserved Orizon data partition");
   return 0;
 }
 

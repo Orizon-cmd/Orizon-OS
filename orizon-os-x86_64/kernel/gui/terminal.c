@@ -673,11 +673,12 @@ static void term_reprint_input_after_output(terminal_t *term) {
 static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
-      "about", "append", "cat", "cd", "clear", "cp", "date", "dmesg", "edit",
-      "echo", "find", "free", "grep", "head", "help", "history", "hostname",
-      "hw", "id", "install", "install-status", "keyboard", "ls", "mkdir", "mv",
+      "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
+      "dmesg", "edit", "echo", "find", "free", "grep", "head", "help",
+      "history", "hostname", "hw", "id", "install", "install-status",
+      "keyboard", "ls", "mkdir", "mv",
       "neofetch", "net", "logs", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
-      "rollback-status", "rm", "shutdown", "stat", "storage", "sync",
+      "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
       "touch", "tree", "uname", "update", "uptime", "version", "whoami",
       "write"};
   const char *matches[16];
@@ -2532,6 +2533,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  net       - Show ethernet status\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
+    term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
+    term_puts_t(term, "  repair-boot - Rewrite installed boot files\n");
     term_puts_t(term, "  keyboard  - Show active keyboard layout\n");
     term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
     if (term_install_already_complete()) {
@@ -2977,6 +2980,14 @@ void term_execute(terminal_t *term, const char *cmd) {
         term_puts_t(term, "\n");
       }
     }
+  } else if (term_command_is(cmd, "boot-check")) {
+    static char boot_report[8192];
+    orizon_install_boot_check(boot_report, sizeof(boot_report));
+    term_puts_t(term, boot_report);
+  } else if (term_command_is(cmd, "repair-boot")) {
+    static char repair_report[8192];
+    orizon_install_repair_boot(repair_report, sizeof(repair_report));
+    term_puts_t(term, repair_report);
   } else if (term_command_is(cmd, "shutdown") ||
              term_command_is(cmd, "poweroff")) {
     vfs_persist_save();

@@ -28,6 +28,7 @@ The command performs a kernel-owned full-upgrade transaction:
 - install missing or changed `.opkg` packages after verifying the index hash
 - keep the currently booted kernel and UEFI loader as the ESP rollback slot
 - rewrite only the installed ESP boot files
+- verify the rewritten ESP with the same boot checks used by `boot-check`
 - preserve the Orizon data partition and `/workspace`
 - save update logs and success metadata
 

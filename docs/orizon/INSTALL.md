@@ -1,7 +1,7 @@
 # Orizon OS Installer
 
-The update system is paused while Orizon OS gets a real disk installation path.
-The live ISO cannot safely rewrite itself, so the next durable model is:
+The live ISO cannot safely rewrite itself, so durable updates begin with a real
+disk installation path:
 
 1. boot the live ISO,
 2. run `install`,
@@ -10,8 +10,9 @@ The live ISO cannot safely rewrite itself, so the next durable model is:
 5. save `/workspace` before touching the disk,
 6. write a GPT disk with a FAT32 ESP,
 7. copy the UEFI fallback loader, kernel, and Limine config,
-8. preserve the Orizon data partition used by `/workspace`,
-9. mark the system as installed and shut down so installer media can be removed.
+8. verify the installed UEFI boot files,
+9. preserve the Orizon data partition used by `/workspace`,
+10. mark the system as installed and shut down so installer media can be removed.
 
 ## Current In-OS Command
 
@@ -55,6 +56,24 @@ It also writes a bootable disk layout in `guided-full-disk` mode:
 Files and directories created during the live boot are saved before the ESP/GPT
 writer runs, so they survive the install path.
 
+Before the disk is marked installed, the installer runs the same boot validator
+exposed as:
+
+```text
+boot-check
+```
+
+It checks the protective MBR, GPT entries, FAT32 ESP, ESP volume label,
+`/EFI/BOOT/BOOTX64.EFI`, `/boot/kernel.elf`, Limine configs, and
+`/INSTALL.TXT`.
+
+If the Orizon GPT layout is already present but the ESP boot files are damaged,
+this command rewrites only the ESP boot files and keeps the data partition:
+
+```text
+repair-boot
+```
+
 After success the installer prints a shutdown notice:
 
 ```text
@@ -74,12 +93,12 @@ fallbacks until the console grows Unicode text support.
 The installer can now partition and install to the first AHCI/SATA disk or the
 first NVMe namespace with 512-byte LBAs. It is still intentionally narrow: UEFI
 fallback boot only, no multi-disk picker yet, no dual-boot preservation, and no
-A/B rollback slots yet.
+automatic boot-count recovery yet.
 
 ## Next Kernel Layers
 
 - Add an explicit multi-disk selector.
-- Add rollback-safe A/B system slots.
+- Add rollback-safe A/B system slots for full system images.
 - Add optional dual-boot/manual partitioning.
 - Add full Unicode keyboard/text rendering for accented keys.
 - Replace emulator poweroff fallback with full ACPI shutdown parsing.

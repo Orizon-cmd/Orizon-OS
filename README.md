@@ -13,7 +13,8 @@ le developpement noyau:
 - interface framebuffer simple avec splash `Orizon OS`
 - une seule console centrale avec historique persistant et autocompletion simple
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
-- installateur disque guide avec langue, clavier, GPT, ESP FAT32 et boot UEFI
+- installateur disque guide avec langue, clavier, GPT, ESP FAT32, verification
+  du boot UEFI et reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
   Ethernet Intel e1000/e1000e et Realtek RTL8139
@@ -43,7 +44,7 @@ Ce qui est volontairement absent du profil actif:
 
 ## Installation Disque
 
-Le prochain axe prioritaire est l'installation sur disque. Depuis la console:
+L'installation sur disque se lance depuis la console:
 
 ```text
 install
@@ -61,6 +62,22 @@ Apres une installation reussie, Orizon OS marque le disque comme installe,
 affiche une consigne de retrait/ejection de l'ISO ou de la cle USB, puis lance
 un shutdown. Au boot suivant, la commande `install` est bloquee pour proteger
 le disque et les donnees.
+
+L'installateur verifie maintenant le boot installe avant de marquer le disque
+comme pret: MBR protecteur, GPT, ESP FAT32, label, `EFI/BOOT/BOOTX64.EFI`,
+`boot/kernel.elf` et les configurations Limine. Pour refaire ce diagnostic:
+
+```text
+boot-check
+```
+
+Si le disque a deja une installation Orizon mais que l'ESP est abimee, la
+commande suivante reecrit uniquement les fichiers de boot et preserve la
+partition data:
+
+```text
+repair-boot
+```
 
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA, une ESP de 1 MiB a
