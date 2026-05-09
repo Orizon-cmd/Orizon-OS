@@ -104,8 +104,11 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/gui/terminal.c \
            $(KERNEL_DIR)/gui/compositor.c
 
+ASM_SOURCES := $(KERNEL_DIR)/drivers/wifi_firmware.S
+
 # Object files
 OBJECTS := $(patsubst $(KERNEL_DIR)/%.c,$(BUILD_DIR)/%.o,$(SOURCES))
+ASM_OBJECTS := $(patsubst $(KERNEL_DIR)/%.S,$(BUILD_DIR)/%.o,$(ASM_SOURCES))
 
 # Limine
 LIMINE_VERSION := 8.6.0
@@ -131,9 +134,13 @@ $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c | $(BUILD_DIR)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.S | $(BUILD_DIR)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 # Link kernel
-$(KERNEL): $(OBJECTS)
-	$(LD) $(LDFLAGS) $(OBJECTS) -o $@
+$(KERNEL): $(OBJECTS) $(ASM_OBJECTS)
+	$(LD) $(LDFLAGS) $(OBJECTS) $(ASM_OBJECTS) -o $@
 
 # Download and build Limine
 $(LIMINE_DIR):

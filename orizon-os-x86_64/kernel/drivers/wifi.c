@@ -50,12 +50,28 @@ static wifi_status_t wifi_status_state = {
     .firmware_inst_bytes = 0,
     .firmware_data_bytes = 0,
     .firmware_section_count = 0,
+    .firmware_runtime_sections = 0,
+    .firmware_init_sections = 0,
+    .firmware_wowlan_sections = 0,
+    .firmware_secure_sections = 0,
+    .firmware_load_bytes = 0,
+    .firmware_load_chunks = 0,
+    .firmware_largest_section = 0,
     .firmware_api_count = 0,
     .firmware_capa_count = 0,
     .firmware_parse_errors = 0,
+    .firmware_cpu_count = 0,
+    .firmware_first_dst = 0,
+    .firmware_load_plan_ready = 0,
     .firmware_human = "",
     .firmware_name = "none",
     .firmware_source = "none",
+    .dma_ready = 0,
+    .dma_phys = 0,
+    .dma_chunk_bytes = 0,
+    .dma_staged_bytes = 0,
+    .firmware_load_attempts = 0,
+    .load_state = "wifi: firmware loader idle",
 };
 
 #define IWL_TLV_UCODE_MAGIC 0x0a4c5749U
@@ -73,11 +89,18 @@ static wifi_status_t wifi_status_state = {
 #define IWL_UCODE_TLV_SECURE_SEC_RT 24U
 #define IWL_UCODE_TLV_SECURE_SEC_INIT 25U
 #define IWL_UCODE_TLV_SECURE_SEC_WOWLAN 26U
+#define IWL_UCODE_TLV_NUM_OF_CPU 27U
 #define IWL_UCODE_TLV_API_CHANGES_SET 29U
 #define IWL_UCODE_TLV_ENABLED_CAPABILITIES 30U
 
+#define IWLAGN_RTC_INST_LOWER_BOUND 0x00000000U
+#define IWLAGN_RTC_DATA_LOWER_BOUND 0x00800000U
+#define WIFI_FW_MAX_SECTIONS 48
+#define WIFI_DMA_CHUNK_BYTES (128U * 1024U)
+
 #define PCI_COMMAND_REG 0x04U
 #define PCI_COMMAND_MEMORY_SPACE (1U << 1)
+#define PCI_COMMAND_BUS_MASTER (1U << 2)
 
 #define CSR_HW_IF_CONFIG_REG 0x000U
 #define CSR_INT 0x008U
@@ -96,7 +119,32 @@ static wifi_status_t wifi_status_state = {
 #define CSR_GP_CNTRL_BUS_MASTER_DISABLED (1U << 28)
 #define CSR_GP_CNTRL_HW_RF_KILL_SW (1U << 27)
 
+typedef enum {
+  WIFI_FW_IMAGE_RUNTIME = 0,
+  WIFI_FW_IMAGE_INIT = 1,
+  WIFI_FW_IMAGE_WOWLAN = 2,
+  WIFI_FW_IMAGE_BOOT = 3,
+} wifi_fw_image_t;
+
+typedef struct {
+  uint32_t tlv_type;
+  wifi_fw_image_t image;
+  uint32_t dst;
+  uint32_t len;
+  const uint8_t *data;
+  int secure;
+} wifi_fw_section_t;
+
 static volatile uint8_t *wifi_mmio = NULL;
+static const uint8_t *wifi_firmware_blob = NULL;
+static size_t wifi_firmware_blob_size = 0;
+static wifi_fw_section_t wifi_fw_sections[WIFI_FW_MAX_SECTIONS];
+static int wifi_fw_section_count = 0;
+static uint8_t wifi_dma_chunk[WIFI_DMA_CHUNK_BYTES]
+    __attribute__((aligned(4096)));
+
+extern const uint8_t orizon_iwlwifi_so_a0_hr_b0_89_ucode_start[];
+extern const uint8_t orizon_iwlwifi_so_a0_hr_b0_89_ucode_end[];
 
 static const char *intel_fw_candidates[] = {
     "iwlwifi-so-a0-hr-b0-89.ucode", "iwlwifi-so-a0-hr-b0-86.ucode",
@@ -147,6 +195,17 @@ static void wifi_csr_write32(uint32_t reg, uint32_t value) {
   *(volatile uint32_t *)(uintptr_t)(wifi_mmio + reg) = value;
 }
 
+static uint64_t wifi_phys_addr(const void *ptr) {
+  uint64_t v = (uint64_t)(uintptr_t)ptr;
+  if (kernel_phys_base && kernel_virt_base && v >= kernel_virt_base) {
+    return kernel_phys_base + (v - kernel_virt_base);
+  }
+  if (hhdm_offset && v >= hhdm_offset) {
+    return v - hhdm_offset;
+  }
+  return 0;
+}
+
 static uint32_t wifi_read_le32(const uint8_t *p) {
   return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
          ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
@@ -168,30 +227,187 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.firmware_inst_bytes = 0;
   wifi_status_state.firmware_data_bytes = 0;
   wifi_status_state.firmware_section_count = 0;
+  wifi_status_state.firmware_runtime_sections = 0;
+  wifi_status_state.firmware_init_sections = 0;
+  wifi_status_state.firmware_wowlan_sections = 0;
+  wifi_status_state.firmware_secure_sections = 0;
+  wifi_status_state.firmware_load_bytes = 0;
+  wifi_status_state.firmware_load_chunks = 0;
+  wifi_status_state.firmware_largest_section = 0;
   wifi_status_state.firmware_api_count = 0;
   wifi_status_state.firmware_capa_count = 0;
   wifi_status_state.firmware_parse_errors = 0;
+  wifi_status_state.firmware_cpu_count = 0;
+  wifi_status_state.firmware_first_dst = 0;
+  wifi_status_state.firmware_load_plan_ready = 0;
+  wifi_status_state.dma_ready = 0;
+  wifi_status_state.dma_phys = 0;
+  wifi_status_state.dma_chunk_bytes = WIFI_DMA_CHUNK_BYTES;
+  wifi_status_state.dma_staged_bytes = 0;
+  wifi_status_state.load_state = "wifi: firmware loader idle";
   memset(wifi_status_state.firmware_human, 0,
          sizeof(wifi_status_state.firmware_human));
-}
-
-static int wifi_tlv_is_code_section(uint32_t type) {
-  return type == IWL_UCODE_TLV_INST || type == IWL_UCODE_TLV_INIT ||
-         type == IWL_UCODE_TLV_BOOT || type == IWL_UCODE_TLV_WOWLAN_INST ||
-         type == IWL_UCODE_TLV_SEC_RT || type == IWL_UCODE_TLV_SEC_INIT ||
-         type == IWL_UCODE_TLV_SEC_WOWLAN ||
-         type == IWL_UCODE_TLV_SECURE_SEC_RT ||
-         type == IWL_UCODE_TLV_SECURE_SEC_INIT ||
-         type == IWL_UCODE_TLV_SECURE_SEC_WOWLAN;
-}
-
-static int wifi_tlv_is_data_section(uint32_t type) {
-  return type == IWL_UCODE_TLV_DATA || type == IWL_UCODE_TLV_INIT_DATA ||
-         type == IWL_UCODE_TLV_WOWLAN_DATA;
+  wifi_fw_section_count = 0;
+  memset(wifi_fw_sections, 0, sizeof(wifi_fw_sections));
 }
 
 static const char *wifi_bit_text(uint32_t value, uint32_t bit) {
   return (value & bit) ? "set" : "clear";
+}
+
+static const char *wifi_fw_image_name(wifi_fw_image_t image) {
+  switch (image) {
+    case WIFI_FW_IMAGE_RUNTIME:
+      return "runtime";
+    case WIFI_FW_IMAGE_INIT:
+      return "init";
+    case WIFI_FW_IMAGE_WOWLAN:
+      return "wowlan";
+    case WIFI_FW_IMAGE_BOOT:
+      return "boot";
+    default:
+      return "unknown";
+  }
+}
+
+static void wifi_count_fw_image(wifi_fw_image_t image) {
+  switch (image) {
+    case WIFI_FW_IMAGE_RUNTIME:
+      wifi_status_state.firmware_runtime_sections++;
+      break;
+    case WIFI_FW_IMAGE_INIT:
+      wifi_status_state.firmware_init_sections++;
+      break;
+    case WIFI_FW_IMAGE_WOWLAN:
+      wifi_status_state.firmware_wowlan_sections++;
+      break;
+    default:
+      break;
+  }
+}
+
+static int wifi_fw_section_kind(uint32_t type, wifi_fw_image_t *image,
+                                uint32_t *dst, int *secure,
+                                int *is_data) {
+  *secure = 0;
+  *is_data = 0;
+  switch (type) {
+    case IWL_UCODE_TLV_INST:
+      *image = WIFI_FW_IMAGE_RUNTIME;
+      *dst = IWLAGN_RTC_INST_LOWER_BOUND;
+      return 1;
+    case IWL_UCODE_TLV_DATA:
+      *image = WIFI_FW_IMAGE_RUNTIME;
+      *dst = IWLAGN_RTC_DATA_LOWER_BOUND;
+      *is_data = 1;
+      return 1;
+    case IWL_UCODE_TLV_INIT:
+      *image = WIFI_FW_IMAGE_INIT;
+      *dst = IWLAGN_RTC_INST_LOWER_BOUND;
+      return 1;
+    case IWL_UCODE_TLV_INIT_DATA:
+      *image = WIFI_FW_IMAGE_INIT;
+      *dst = IWLAGN_RTC_DATA_LOWER_BOUND;
+      *is_data = 1;
+      return 1;
+    case IWL_UCODE_TLV_WOWLAN_INST:
+      *image = WIFI_FW_IMAGE_WOWLAN;
+      *dst = IWLAGN_RTC_INST_LOWER_BOUND;
+      return 1;
+    case IWL_UCODE_TLV_WOWLAN_DATA:
+      *image = WIFI_FW_IMAGE_WOWLAN;
+      *dst = IWLAGN_RTC_DATA_LOWER_BOUND;
+      *is_data = 1;
+      return 1;
+    case IWL_UCODE_TLV_SEC_RT:
+    case IWL_UCODE_TLV_SECURE_SEC_RT:
+      *image = WIFI_FW_IMAGE_RUNTIME;
+      *secure = 1;
+      return 1;
+    case IWL_UCODE_TLV_SEC_INIT:
+    case IWL_UCODE_TLV_SECURE_SEC_INIT:
+      *image = WIFI_FW_IMAGE_INIT;
+      *secure = 1;
+      return 1;
+    case IWL_UCODE_TLV_SEC_WOWLAN:
+    case IWL_UCODE_TLV_SECURE_SEC_WOWLAN:
+      *image = WIFI_FW_IMAGE_WOWLAN;
+      *secure = 1;
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static void wifi_record_fw_section(uint32_t type, const uint8_t *data,
+                                   uint32_t len) {
+  wifi_fw_image_t image = WIFI_FW_IMAGE_RUNTIME;
+  uint32_t dst = 0;
+  int secure = 0;
+  int is_data = 0;
+  uint32_t payload_len = len;
+  const uint8_t *payload = data;
+
+  if (!wifi_fw_section_kind(type, &image, &dst, &secure, &is_data)) {
+    return;
+  }
+
+  if (secure) {
+    if (len < 4) {
+      wifi_status_state.firmware_parse_errors++;
+      return;
+    }
+    dst = wifi_read_le32(data);
+    payload = data + 4;
+    payload_len = len - 4;
+    wifi_status_state.firmware_secure_sections++;
+  }
+
+  if (payload_len == 0) {
+    return;
+  }
+
+  if (wifi_fw_section_count >= WIFI_FW_MAX_SECTIONS) {
+    wifi_status_state.firmware_parse_errors++;
+    return;
+  }
+
+  wifi_fw_sections[wifi_fw_section_count].tlv_type = type;
+  wifi_fw_sections[wifi_fw_section_count].image = image;
+  wifi_fw_sections[wifi_fw_section_count].dst = dst;
+  wifi_fw_sections[wifi_fw_section_count].len = payload_len;
+  wifi_fw_sections[wifi_fw_section_count].data = payload;
+  wifi_fw_sections[wifi_fw_section_count].secure = secure;
+  wifi_fw_section_count++;
+
+  wifi_status_state.firmware_section_count++;
+  wifi_count_fw_image(image);
+  wifi_status_state.firmware_load_bytes += payload_len;
+  wifi_status_state.firmware_load_chunks +=
+      (payload_len + WIFI_DMA_CHUNK_BYTES - 1U) / WIFI_DMA_CHUNK_BYTES;
+  if (payload_len > wifi_status_state.firmware_largest_section) {
+    wifi_status_state.firmware_largest_section = payload_len;
+  }
+  if (wifi_fw_section_count == 1) {
+    wifi_status_state.firmware_first_dst = dst;
+  }
+  if (secure || !is_data) {
+    wifi_status_state.firmware_inst_bytes += payload_len;
+  } else {
+    wifi_status_state.firmware_data_bytes += payload_len;
+  }
+}
+
+static void wifi_record_fw_tlv(uint32_t type, const uint8_t *data,
+                               uint32_t len) {
+  if (type == IWL_UCODE_TLV_API_CHANGES_SET) {
+    wifi_status_state.firmware_api_count++;
+  } else if (type == IWL_UCODE_TLV_ENABLED_CAPABILITIES) {
+    wifi_status_state.firmware_capa_count++;
+  } else if (type == IWL_UCODE_TLV_NUM_OF_CPU && len >= 4) {
+    wifi_status_state.firmware_cpu_count = wifi_read_le32(data);
+  }
+  wifi_record_fw_section(type, data, len);
 }
 
 static void wifi_parse_firmware_blob(const void *data, size_t size) {
@@ -239,6 +455,7 @@ static void wifi_parse_firmware_blob(const void *data, size_t size) {
   while (offset + 8 <= size) {
     uint32_t type = wifi_read_le32(bytes + offset);
     uint32_t len = wifi_read_le32(bytes + offset + 4);
+    const uint8_t *tlv_data;
     size_t next;
 
     offset += 8;
@@ -247,18 +464,9 @@ static void wifi_parse_firmware_blob(const void *data, size_t size) {
       break;
     }
 
+    tlv_data = bytes + offset;
     wifi_status_state.firmware_tlv_count++;
-    if (wifi_tlv_is_code_section(type)) {
-      wifi_status_state.firmware_inst_bytes += len;
-      wifi_status_state.firmware_section_count++;
-    } else if (wifi_tlv_is_data_section(type)) {
-      wifi_status_state.firmware_data_bytes += len;
-      wifi_status_state.firmware_section_count++;
-    } else if (type == IWL_UCODE_TLV_API_CHANGES_SET) {
-      wifi_status_state.firmware_api_count++;
-    } else if (type == IWL_UCODE_TLV_ENABLED_CAPABILITIES) {
-      wifi_status_state.firmware_capa_count++;
-    }
+    wifi_record_fw_tlv(type, tlv_data, len);
 
     next = offset + wifi_align4((size_t)len);
     if (next < offset || next > size) {
@@ -275,6 +483,9 @@ static void wifi_parse_firmware_blob(const void *data, size_t size) {
   wifi_status_state.firmware_valid =
       wifi_status_state.firmware_tlv_count > 0 &&
       wifi_status_state.firmware_parse_errors == 0;
+  wifi_status_state.firmware_load_plan_ready =
+      wifi_status_state.firmware_valid && wifi_fw_section_count > 0 &&
+      wifi_status_state.firmware_load_bytes > 0;
 }
 
 static int firmware_name_is_candidate(const char *name) {
@@ -307,6 +518,8 @@ static int wifi_find_firmware_module(void) {
       wifi_status_state.firmware_size = size;
       wifi_status_state.firmware_name = intel_fw_candidates[i];
       wifi_status_state.firmware_source = path && path[0] ? path : "boot module";
+      wifi_firmware_blob = (const uint8_t *)addr;
+      wifi_firmware_blob_size = size;
       wifi_parse_firmware_blob(addr, size);
       return 0;
     }
@@ -319,10 +532,36 @@ static int wifi_find_firmware_module(void) {
     wifi_status_state.firmware_size = size;
     wifi_status_state.firmware_name = path;
     wifi_status_state.firmware_source = "boot module";
+    wifi_firmware_blob = (const uint8_t *)addr;
+    wifi_firmware_blob_size = size;
     wifi_parse_firmware_blob(addr, size);
     return 0;
   }
   return -1;
+}
+
+static int wifi_find_firmware_embedded(void) {
+  const uint8_t *start = orizon_iwlwifi_so_a0_hr_b0_89_ucode_start;
+  const uint8_t *end = orizon_iwlwifi_so_a0_hr_b0_89_ucode_end;
+  size_t size;
+
+  if (!start || !end || end <= start) {
+    return -1;
+  }
+
+  size = (size_t)(end - start);
+  if (size < IWL_TLV_HEADER_SIZE) {
+    return -1;
+  }
+
+  wifi_status_state.firmware_present = 1;
+  wifi_status_state.firmware_size = size;
+  wifi_status_state.firmware_name = "iwlwifi-so-a0-hr-b0-89.ucode";
+  wifi_status_state.firmware_source = "kernel embedded";
+  wifi_firmware_blob = start;
+  wifi_firmware_blob_size = size;
+  wifi_parse_firmware_blob(start, size);
+  return wifi_status_state.firmware_valid ? 0 : -1;
 }
 
 static int wifi_find_firmware_vfs_dir(const char *dir) {
@@ -347,6 +586,8 @@ static int wifi_find_firmware_vfs_dir(const char *dir) {
       wifi_status_state.firmware_size = size;
       wifi_status_state.firmware_name = entries[i].name;
       wifi_status_state.firmware_source = dir;
+      wifi_firmware_blob = NULL;
+      wifi_firmware_blob_size = 0;
       wifi_reset_firmware_parse();
       return 0;
     }
@@ -360,9 +601,14 @@ static int wifi_find_firmware(void) {
   wifi_status_state.firmware_size = 0;
   wifi_status_state.firmware_name = "none";
   wifi_status_state.firmware_source = "none";
+  wifi_firmware_blob = NULL;
+  wifi_firmware_blob_size = 0;
   wifi_reset_firmware_parse();
 
   if (wifi_find_firmware_module() == 0) {
+    return 0;
+  }
+  if (wifi_find_firmware_embedded() == 0) {
     return 0;
   }
   if (wifi_find_firmware_vfs_dir("/system/firmware") == 0 ||
@@ -458,6 +704,69 @@ static int wifi_probe_mmio(void) {
   return 0;
 }
 
+static int wifi_enable_bus_master_for_loader(void) {
+  uint32_t cmd;
+
+  cmd = pci_read32(wifi_status_state.bus, wifi_status_state.device,
+                   wifi_status_state.function, PCI_COMMAND_REG);
+  if ((cmd & (PCI_COMMAND_MEMORY_SPACE | PCI_COMMAND_BUS_MASTER)) !=
+      (PCI_COMMAND_MEMORY_SPACE | PCI_COMMAND_BUS_MASTER)) {
+    pci_write32(wifi_status_state.bus, wifi_status_state.device,
+                wifi_status_state.function, PCI_COMMAND_REG,
+                cmd | PCI_COMMAND_MEMORY_SPACE | PCI_COMMAND_BUS_MASTER);
+    cmd = pci_read32(wifi_status_state.bus, wifi_status_state.device,
+                     wifi_status_state.function, PCI_COMMAND_REG);
+  }
+  wifi_status_state.pci_command = cmd & 0xFFFFU;
+  return ((cmd & (PCI_COMMAND_MEMORY_SPACE | PCI_COMMAND_BUS_MASTER)) ==
+          (PCI_COMMAND_MEMORY_SPACE | PCI_COMMAND_BUS_MASTER))
+             ? 0
+             : -1;
+}
+
+static int wifi_stage_first_dma_chunk(const wifi_fw_section_t **section_out) {
+  const wifi_fw_section_t *section = NULL;
+  uint32_t copy_len;
+  uint64_t phys;
+
+  if (wifi_fw_section_count <= 0) {
+    return -1;
+  }
+
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    if (wifi_fw_sections[i].image == WIFI_FW_IMAGE_INIT) {
+      section = &wifi_fw_sections[i];
+      break;
+    }
+  }
+  if (!section) {
+    section = &wifi_fw_sections[0];
+  }
+
+  copy_len = section->len;
+  if (copy_len > WIFI_DMA_CHUNK_BYTES) {
+    copy_len = WIFI_DMA_CHUNK_BYTES;
+  }
+
+  memset(wifi_dma_chunk, 0, sizeof(wifi_dma_chunk));
+  memcpy(wifi_dma_chunk, section->data, copy_len);
+
+  phys = wifi_phys_addr(wifi_dma_chunk);
+  if (!phys) {
+    wifi_status_state.dma_ready = 0;
+    return -1;
+  }
+
+  wifi_status_state.dma_ready = 1;
+  wifi_status_state.dma_phys = phys;
+  wifi_status_state.dma_chunk_bytes = WIFI_DMA_CHUNK_BYTES;
+  wifi_status_state.dma_staged_bytes = copy_len;
+  if (section_out) {
+    *section_out = section;
+  }
+  return 0;
+}
+
 int wifi_init(void) {
   pci_device_info_t devs[8];
   int count;
@@ -532,7 +841,7 @@ void wifi_format_status(char *buf, size_t size) {
            "driver=%s present=%s ready=%s associated=%s pci=%04x:%04x "
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
-           "status=%s",
+           "plan=%s dma=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -543,7 +852,9 @@ void wifi_format_status(char *buf, size_t size) {
            s->firmware_present ? s->firmware_name : "missing",
            s->firmware_source, (unsigned long)s->firmware_size,
            s->firmware_valid ? "yes" : "no", s->firmware_tlv_count,
-           s->firmware_section_count, s->status);
+           s->firmware_section_count,
+           s->firmware_load_plan_ready ? "ready" : "no",
+           s->dma_ready ? "staged" : "idle", s->status);
 }
 
 int wifi_firmware_probe(char *report, size_t report_size) {
@@ -574,16 +885,22 @@ int wifi_firmware_probe(char *report, size_t report_size) {
                "size: %lu bytes\n"
                "human: %s\n"
                "version: 0x%08x build=%u\n"
-               "tlvs: %lu sections=%lu api=%lu capa=%lu\n"
-               "payload: inst=%lu bytes data=%lu bytes\n"
-               "next: implement Intel DMA command queues and alive check\n",
+               "tlvs: %lu sections=%lu runtime=%lu init=%lu wowlan=%lu secure=%lu\n"
+               "payload: inst=%lu bytes data=%lu bytes load=%lu bytes chunks=%lu\n"
+               "plan: %s first-dst=0x%08x cpus=%u largest=%lu\n"
+               "next: run wifi load to stage DMA, then implement FH upload/alive\n",
                s->firmware_name, s->firmware_source,
                (unsigned long)s->firmware_size,
                s->firmware_human[0] ? s->firmware_human : "unknown",
                s->firmware_version, s->firmware_build, s->firmware_tlv_count,
-               s->firmware_section_count, s->firmware_api_count,
-               s->firmware_capa_count, s->firmware_inst_bytes,
-               s->firmware_data_bytes);
+               s->firmware_section_count, s->firmware_runtime_sections,
+               s->firmware_init_sections, s->firmware_wowlan_sections,
+               s->firmware_secure_sections, s->firmware_inst_bytes,
+               s->firmware_data_bytes, s->firmware_load_bytes,
+               s->firmware_load_chunks,
+               s->firmware_load_plan_ready ? "ready" : "not-ready",
+               s->firmware_first_dst, s->firmware_cpu_count,
+               s->firmware_largest_section);
       return 0;
     }
 
@@ -656,8 +973,8 @@ int wifi_hw_probe(char *report, size_t report_size) {
            "irq: int=0x%08x mask=0x%08x fh=0x%08x masked=staging\n"
            "flags: mac-clock=%s init-done=%s sleep=%s mac-status=%s "
            "bus-master-disabled=%s rfkill-bit=%s\n"
-           "firmware: %s valid=%s tlvs=%lu\n"
-           "next: allocate DMA rings, upload firmware, wait for alive\n",
+           "firmware: %s valid=%s tlvs=%lu plan=%s\n"
+           "next: run wifi load to stage firmware DMA\n",
            s->bus, s->device, (unsigned int)s->function, s->vendor_id,
            s->device_id, s->pci_command, (unsigned long)s->mmio_phys,
            s->csr_hw_if_config, s->csr_hw_rev, s->csr_hw_rf_id,
@@ -671,7 +988,104 @@ int wifi_hw_probe(char *report, size_t report_size) {
                          CSR_GP_CNTRL_BUS_MASTER_DISABLED),
            wifi_bit_text(s->csr_gp_cntrl, CSR_GP_CNTRL_HW_RF_KILL_SW),
            s->firmware_present ? s->firmware_name : "missing",
-           s->firmware_valid ? "yes" : "no", s->firmware_tlv_count);
+           s->firmware_valid ? "yes" : "no", s->firmware_tlv_count,
+           s->firmware_load_plan_ready ? "ready" : "no");
+  return 0;
+}
+
+int wifi_load_firmware(char *report, size_t report_size) {
+  const wifi_status_t *s;
+  const wifi_fw_section_t *section = NULL;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_status_state.firmware_load_attempts++;
+  wifi_init();
+  wifi_find_firmware();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi load: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (!s->firmware_present) {
+    snprintf(report, report_size,
+             "wifi load: firmware missing for %s (%04x:%04x)\n"
+             "run: wifi firmware\n",
+             s->chipset, s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  if (!s->firmware_valid || !s->firmware_load_plan_ready ||
+      !wifi_firmware_blob || wifi_firmware_blob_size == 0) {
+    snprintf(report, report_size,
+             "wifi load: firmware is present but not load-plannable\n"
+             "valid=%s plan=%s source=%s parse-errors=%lu\n"
+             "hint: boot-module firmware is required for DMA upload staging\n",
+             s->firmware_valid ? "yes" : "no",
+             s->firmware_load_plan_ready ? "yes" : "no",
+             s->firmware_source, s->firmware_parse_errors);
+    return -1;
+  }
+
+  if (wifi_probe_mmio() != 0) {
+    s = &wifi_status_state;
+    snprintf(report, report_size,
+             "wifi load: MMIO probe failed before loader setup\n"
+             "bar0-phys: 0x%lx errors=%lu status=%s\n",
+             (unsigned long)s->mmio_phys, s->mmio_errors, s->status);
+    return -1;
+  }
+
+  if (wifi_enable_bus_master_for_loader() != 0) {
+    s = &wifi_status_state;
+    wifi_status_state.load_state =
+        "wifi: PCI bus mastering failed for firmware loader";
+    snprintf(report, report_size,
+             "wifi load: cannot enable PCI bus mastering\n"
+             "pci-command=0x%04x\n",
+             s->pci_command);
+    return -1;
+  }
+
+  if (wifi_stage_first_dma_chunk(&section) != 0 || !section) {
+    s = &wifi_status_state;
+    wifi_status_state.load_state =
+        "wifi: DMA staging failed for firmware loader";
+    snprintf(report, report_size,
+             "wifi load: DMA staging failed\n"
+             "sections=%lu bytes=%lu dma-phys=0x%lx\n",
+             s->firmware_section_count, s->firmware_load_bytes,
+             (unsigned long)s->dma_phys);
+    return -1;
+  }
+
+  wifi_status_state.load_state =
+      "wifi: firmware DMA staged; FH transfer not armed yet";
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi load: firmware loader staged\n"
+           "firmware: %s size=%lu human=%s\n"
+           "plan: sections=%lu runtime=%lu init=%lu wowlan=%lu secure=%lu "
+           "cpus=%u chunks=%lu bytes=%lu largest=%lu\n"
+           "first-dst=0x%08x first-section=%s tlv=%u dst=0x%08x len=%u\n"
+           "dma: phys=0x%lx chunk=%lu staged=%lu pci-command=0x%04x\n"
+           "state: staged only, hardware upload/alive IRQ still guarded\n"
+           "next: program FH transfer channel and wait for firmware alive\n",
+           s->firmware_name, (unsigned long)s->firmware_size,
+           s->firmware_human[0] ? s->firmware_human : "unknown",
+           s->firmware_section_count, s->firmware_runtime_sections,
+           s->firmware_init_sections, s->firmware_wowlan_sections,
+           s->firmware_secure_sections, s->firmware_cpu_count,
+           s->firmware_load_chunks, s->firmware_load_bytes,
+           s->firmware_largest_section, s->firmware_first_dst,
+           wifi_fw_image_name(section->image), section->tlv_type, section->dst,
+           section->len, (unsigned long)s->dma_phys, s->dma_chunk_bytes,
+           s->dma_staged_bytes, s->pci_command);
   return 0;
 }
 
@@ -702,12 +1116,14 @@ int wifi_scan(char *report, size_t report_size) {
 
   snprintf(report, report_size,
            "wifi scan: %s detected at %02x:%02x.%u\n"
-           "firmware: %s (%lu bytes, valid=%s)\n"
+           "firmware: %s (%lu bytes, valid=%s plan=%s dma=%s)\n"
            "wifi scan: radio scan is not available yet\n"
-           "next: start Intel command queues, then add 802.11 scan\n",
+           "next: run wifi load, then implement firmware alive + 802.11 scan\n",
            s->chipset, s->bus, s->device, (unsigned int)s->function,
            s->firmware_name, (unsigned long)s->firmware_size,
-           s->firmware_valid ? "yes" : "no");
+           s->firmware_valid ? "yes" : "no",
+           s->firmware_load_plan_ready ? "yes" : "no",
+           s->dma_ready ? "staged" : "idle");
   return -1;
 }
 

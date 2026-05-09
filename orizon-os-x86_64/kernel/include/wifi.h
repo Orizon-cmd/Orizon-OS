@@ -42,12 +42,28 @@ typedef struct {
   unsigned long firmware_inst_bytes;
   unsigned long firmware_data_bytes;
   unsigned long firmware_section_count;
+  unsigned long firmware_runtime_sections;
+  unsigned long firmware_init_sections;
+  unsigned long firmware_wowlan_sections;
+  unsigned long firmware_secure_sections;
+  unsigned long firmware_load_bytes;
+  unsigned long firmware_load_chunks;
+  unsigned long firmware_largest_section;
   unsigned long firmware_api_count;
   unsigned long firmware_capa_count;
   unsigned long firmware_parse_errors;
+  uint32_t firmware_cpu_count;
+  uint32_t firmware_first_dst;
+  int firmware_load_plan_ready;
   char firmware_human[65];
   const char *firmware_name;
   const char *firmware_source;
+  int dma_ready;
+  uint64_t dma_phys;
+  unsigned long dma_chunk_bytes;
+  unsigned long dma_staged_bytes;
+  unsigned long firmware_load_attempts;
+  const char *load_state;
 } wifi_status_t;
 
 int wifi_init(void);
@@ -56,6 +72,7 @@ const wifi_status_t *wifi_get_status(void);
 void wifi_format_status(char *buf, size_t size);
 int wifi_firmware_probe(char *report, size_t report_size);
 int wifi_hw_probe(char *report, size_t report_size);
+int wifi_load_firmware(char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
