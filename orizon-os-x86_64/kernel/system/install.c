@@ -69,23 +69,23 @@ static const char install_limine_conf[] =
     "    kernel_path: boot():/boot/kernel.elf\n"
     "    cmdline: orizon.safe=1\n"
     "    resolution: 1024x768x32\n"
-    "    module_path: boot():/EFI/BOOT/BOOTX64.EFI\n"
-    "    module_cmdline: orizon-bootx64\n"
+    "\n"
+    "/Orizon OS - Minimal display debug\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/boot/kernel.elf\n"
+    "    cmdline: orizon.minimal=1 orizon.notimer=1 orizon.nohw=1 orizon.noinput=1\n"
+    "    resolution: 1024x768x32\n"
     "\n"
     "/Orizon OS - Lenovo hardware probe\n"
     "    protocol: limine\n"
     "    kernel_path: boot():/boot/kernel.elf\n"
-    "    cmdline: orizon.i2chid=1\n"
+    "    cmdline: orizon.safe=1 orizon.i2chid=1\n"
     "    resolution: 1024x768x32\n"
-    "    module_path: boot():/EFI/BOOT/BOOTX64.EFI\n"
-    "    module_cmdline: orizon-bootx64\n"
     "\n"
     "/Orizon OS - Native display\n"
     "    protocol: limine\n"
     "    kernel_path: boot():/boot/kernel.elf\n"
-    "    cmdline: orizon.native=1\n"
-    "    module_path: boot():/EFI/BOOT/BOOTX64.EFI\n"
-    "    module_cmdline: orizon-bootx64\n";
+    "    cmdline: orizon.safe=1 orizon.native=1\n";
 
 static void append_report(char *report, size_t report_size, const char *line) {
   size_t used;

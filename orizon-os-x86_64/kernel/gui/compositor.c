@@ -6,6 +6,7 @@
  */
 
 #include "../include/gui.h"
+#include "../include/acpi.h"
 #include "../include/bootinfo.h"
 #include "../include/i2c_hid.h"
 #include "../include/input_layout.h"
@@ -58,7 +59,13 @@ static int splash_ticks_remaining = SPLASH_TICKS;
 static int timer_irq_seen = 0;
 static int timer_fallback_polling = 0;
 static uint64_t gui_loop_count = 0;
+static int core_services_done = 0;
+static int ps2_ready = 0;
+static int usb_ready = 0;
+static int net_ready = 0;
+static int i2c_hid_ready = 0;
 static int i2c_hid_deferred_probe = 0;
+static const char *boot_stage_hint = "Starting Orizon shell";
 
 static void draw_circle(int cx, int cy, int radius, color_t color) {
   for (int y = -radius; y <= radius; y++) {
@@ -120,6 +127,8 @@ static void draw_footer(void) {
 
   if (i2c_hid_deferred_probe == 1) {
     hint = "Lenovo I2C-HID probe selected. Boot UI is visible first; driver probe runs after startup.";
+  } else if (boot_stage_hint && boot_stage_hint[0]) {
+    hint = boot_stage_hint;
   } else if (boot_cmdline_has("orizon.safe=1")) {
     hint = "Safe laptop boot active. Risky hardware probes are disabled for this boot.";
   }
@@ -221,6 +230,9 @@ static void draw_splash(void) {
       font_draw_string(card_x + 28, card_y + 144,
                        "Timer IRQ fallback: continuing without hlt sleep.",
                        COLOR_TEXT_MUTED);
+    } else if (boot_stage_hint && boot_stage_hint[0]) {
+      font_draw_string(card_x + 28, card_y + 144, boot_stage_hint,
+                       COLOR_TEXT_MUTED);
     } else if (!timer_irq_seen) {
       font_draw_string(card_x + 28, card_y + 144,
                        "Waiting for firmware timer IRQ...",
@@ -291,28 +303,22 @@ void gui_init(void) {
   font_init();
   vfs_init();
   vfs_seed_content();
-  vfs_persist_load();
-  orizon_pkg_init();
-  input_load_keyboard_layout_from_vfs();
-  klog_persist_boot_if_installed();
-  net_init();
   layout_console();
 
   main_terminal = term_create(term_x, term_y);
   term_set_active(main_terminal);
 
-  ps2_init();
   ps2_set_screen_bounds((int)screen_width, (int)screen_height);
   ps2_set_mouse_scale(1);
   ps2_set_keyboard_callback(keyboard_callback);
   usb_set_keyboard_callback(keyboard_callback);
-  usb_init();
   i2c_hid_deferred_probe = boot_cmdline_has("orizon.i2chid=1") ? 1 : 0;
   if (i2c_hid_deferred_probe) {
     serial_puts("GUI: Lenovo I2C-HID probe deferred until after first render\n");
   } else {
     serial_puts("GUI: Lenovo I2C-HID probe disabled for safe boot\n");
   }
+  boot_stage_hint = "First screen ready. Core services will start after render.";
 
   mouse_x = ps2_get_mouse_x();
   mouse_y = ps2_get_mouse_y();
@@ -346,16 +352,91 @@ void gui_compose(void) {
   needs_redraw = 0;
 }
 
+static void gui_show_boot_stage(const char *stage) {
+  boot_stage_hint = stage;
+  needs_redraw = 1;
+  gui_compose();
+}
+
+static void gui_run_deferred_core_services(void) {
+  if (core_services_done) {
+    return;
+  }
+  core_services_done = 1;
+
+  if (!boot_cmdline_has("orizon.notimer=1") &&
+      !boot_cmdline_has("orizon.minimal=1")) {
+    gui_show_boot_stage("Initializing ACPI tables...");
+    if (boot_cmdline_has("orizon.noacpi=1")) {
+      acpi_init(NULL);
+    } else if (boot_rsdp_address()) {
+      acpi_init(boot_rsdp_address());
+    } else {
+      acpi_init(NULL);
+    }
+    gui_show_boot_stage("Initializing timer hardware...");
+    timer_init();
+  } else {
+    gui_show_boot_stage("Minimal boot: ACPI/timer initialization skipped.");
+  }
+
+  if (!boot_cmdline_has("orizon.nohw=1") &&
+      !boot_cmdline_has("orizon.minimal=1")) {
+    gui_show_boot_stage("Loading persistent workspace from disk...");
+    vfs_persist_load();
+    gui_show_boot_stage("Preparing package and keyboard state...");
+    orizon_pkg_init();
+    input_load_keyboard_layout_from_vfs();
+    klog_persist_boot_if_installed();
+    gui_show_boot_stage("Initializing Ethernet drivers...");
+    net_init();
+    net_ready = 1;
+  } else {
+    gui_show_boot_stage("Minimal boot: disk/network initialization skipped.");
+  }
+
+  if (!boot_cmdline_has("orizon.noinput=1") &&
+      !boot_cmdline_has("orizon.minimal=1")) {
+    gui_show_boot_stage("Initializing PS/2 keyboard and pointer...");
+    ps2_init();
+    ps2_ready = 1;
+    gui_show_boot_stage("Initializing USB keyboard support...");
+    usb_init();
+    usb_ready = 1;
+  } else {
+    gui_show_boot_stage("Minimal boot: input hardware initialization skipped.");
+  }
+
+  if (i2c_hid_deferred_probe == 1 && !boot_cmdline_has("orizon.minimal=1")) {
+    gui_show_boot_stage("Probing Lenovo I2C-HID touchpad/Wacom...");
+    i2c_hid_init();
+    i2c_hid_ready = 1;
+    i2c_hid_deferred_probe = 2;
+  }
+
+  boot_stage_hint = "Boot complete. Console, diagnostics and installer are ready.";
+  splash_ticks_remaining = 0;
+  needs_redraw = 1;
+}
+
 void gui_main_loop(void) {
   uint64_t last_tick = timer_ticks();
 
   while (1) {
     gui_loop_count++;
     sched_enter_process("gui-shell");
-    ps2_poll();
-    usb_poll();
-    i2c_hid_poll();
-    net_poll();
+    if (ps2_ready) {
+      ps2_poll();
+    }
+    if (usb_ready) {
+      usb_poll();
+    }
+    if (i2c_hid_ready) {
+      i2c_hid_poll();
+    }
+    if (net_ready) {
+      net_poll();
+    }
 
     uint64_t now = timer_ticks();
     if (now != last_tick) {
@@ -385,14 +466,8 @@ void gui_main_loop(void) {
     }
 
     gui_compose();
-
-    if (i2c_hid_deferred_probe == 1 && splash_ticks_remaining <= 0 &&
-        gui_loop_count > 4) {
-      sched_enter_process("i2c-hid-probe");
-      serial_puts("GUI: starting deferred Lenovo I2C-HID probe\n");
-      i2c_hid_init();
-      i2c_hid_deferred_probe = 2;
-      needs_redraw = 1;
+    if (!core_services_done) {
+      gui_run_deferred_core_services();
     }
 
     power_poll();

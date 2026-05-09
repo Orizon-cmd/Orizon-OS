@@ -15,5 +15,6 @@ const char *boot_payload_status(void);
 int boot_payloads_ready(void);
 const char *boot_cmdline(void);
 int boot_cmdline_has(const char *needle);
+void *boot_rsdp_address(void);
 
 #endif /* _BOOTINFO_H */

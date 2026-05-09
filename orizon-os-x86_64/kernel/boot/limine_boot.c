@@ -178,6 +178,12 @@ int boot_cmdline_has(const char *needle) {
   return needle && needle[0] && loaded_kernel_cmdline &&
          strstr(loaded_kernel_cmdline, needle) != NULL;
 }
+void *boot_rsdp_address(void) {
+  if (rsdp_request.response && rsdp_request.response->address) {
+    return rsdp_request.response->address;
+  }
+  return NULL;
+}
 
 /* ========== Early Serial Debug ========== */
 
@@ -265,69 +271,106 @@ static void halt(void) {
 
 /* ========== Direct Screen Test ========== */
 
-/* Draw directly to framebuffer without any library functions */
-static void direct_screen_test(void *fb_addr, uint64_t width, uint64_t height,
-                               uint64_t pitch) {
-  volatile uint8_t *fb = (volatile uint8_t *)fb_addr;
+static void direct_put_pixel(void *fb_addr, uint64_t pitch, uint16_t bpp,
+                             uint64_t x, uint64_t y, uint32_t argb) {
+  volatile uint8_t *row = (volatile uint8_t *)fb_addr + y * pitch;
 
+  if (bpp == 32) {
+    ((volatile uint32_t *)row)[x] = argb;
+  } else if (bpp == 24) {
+    volatile uint8_t *p = row + x * 3;
+    p[0] = (uint8_t)(argb & 0xFF);
+    p[1] = (uint8_t)((argb >> 8) & 0xFF);
+    p[2] = (uint8_t)((argb >> 16) & 0xFF);
+  } else if (bpp == 16) {
+    uint8_t r = (uint8_t)((argb >> 16) & 0xFF);
+    uint8_t g = (uint8_t)((argb >> 8) & 0xFF);
+    uint8_t b = (uint8_t)(argb & 0xFF);
+    ((volatile uint16_t *)row)[x] =
+        (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+  }
+}
+
+static void direct_fill_rect(void *fb_addr, uint64_t width, uint64_t height,
+                             uint64_t pitch, uint16_t bpp, uint64_t x,
+                             uint64_t y, uint64_t w, uint64_t h,
+                             uint32_t argb) {
+  if (!fb_addr || bpp < 16) {
+    return;
+  }
+  if (x >= width || y >= height) {
+    return;
+  }
+  if (x + w > width) {
+    w = width - x;
+  }
+  if (y + h > height) {
+    h = height - y;
+  }
+  for (uint64_t py = y; py < y + h; py++) {
+    for (uint64_t px = x; px < x + w; px++) {
+      direct_put_pixel(fb_addr, pitch, bpp, px, py, argb);
+    }
+  }
+}
+
+static void direct_boot_stage(uint32_t stage, uint32_t color) {
+  if (!fb) {
+    return;
+  }
+  direct_fill_rect(fb->address, fb->width, fb->height, fb->pitch, fb->bpp, 0, 0,
+                   fb->width, fb->height, 0xFF07101E);
+  direct_fill_rect(fb->address, fb->width, fb->height, fb->pitch, fb->bpp, 0, 0,
+                   fb->width, 28, 0xFF101A2A);
+  direct_fill_rect(fb->address, fb->width, fb->height, fb->pitch, fb->bpp, 0,
+                   28, fb->width, 2, color);
+  for (uint32_t i = 0; i < stage && i < 12; i++) {
+    direct_fill_rect(fb->address, fb->width, fb->height, fb->pitch, fb->bpp,
+                     24 + i * 28, 48, 18, 90, color);
+  }
+  direct_fill_rect(fb->address, fb->width, fb->height, fb->pitch, fb->bpp,
+                   fb->width / 2 - 120, fb->height / 2 - 70, 240, 140,
+                   0xFF121B2D);
+  direct_fill_rect(fb->address, fb->width, fb->height, fb->pitch, fb->bpp,
+                   fb->width / 2 - 120, fb->height / 2 - 70, 8, 140, color);
+}
+
+static void boot_draw_text_stage(const char *stage) {
+  if (!backbuffer) {
+    return;
+  }
+  fb_fill_gradient_v(0, 0, (int)screen_width, (int)screen_height,
+                     MAKE_COLOR(7, 13, 26), MAKE_COLOR(17, 25, 39));
+  font_draw_string(32, 36, "Orizon OS early boot", COLOR_WHITE);
+  font_draw_string(32, 68, stage ? stage : "Starting kernel services",
+                   MAKE_COLOR(148, 210, 255));
+  font_draw_string(32, 104,
+                   "If this screen freezes, tell Codex the last visible line.",
+                   MAKE_COLOR(176, 188, 204));
+  fb_swap_buffers();
+}
+
+/* Draw directly to framebuffer without relying on the GUI backbuffer. */
+static void direct_screen_test(void *fb_addr, uint64_t width, uint64_t height,
+                               uint64_t pitch, uint16_t bpp) {
   serial_puts("Drawing test pattern...\n");
 
-  /* Fill entire screen with a gradient - direct pixel writes */
   for (uint64_t y = 0; y < height; y++) {
-    volatile uint32_t *row = (volatile uint32_t *)(fb + y * pitch);
     for (uint64_t x = 0; x < width; x++) {
-      /* Create a nice gradient: purple to blue */
       uint8_t r = 50;
       uint8_t g = (y * 50 / height) + 20;
       uint8_t b = 100 + (y * 100 / height);
-      row[x] = 0xFF000000 | (r << 16) | (g << 8) | b;
+      direct_put_pixel(fb_addr, pitch, bpp, x, y,
+                       0xFF000000 | (r << 16) | (g << 8) | b);
     }
   }
 
   serial_puts("Test pattern complete!\n");
 
-  /* Draw a white rectangle in center as focus point */
-  uint64_t cx = width / 2 - 100;
-  uint64_t cy = height / 2 - 50;
-  for (uint64_t y = cy; y < cy + 100 && y < height; y++) {
-    volatile uint32_t *row = (volatile uint32_t *)(fb + y * pitch);
-    for (uint64_t x = cx; x < cx + 200 && x < width; x++) {
-      row[x] = 0xFFFFFFFF; /* White */
-    }
-  }
-
-  /* Draw "UEFI-OS" text approximation with colored blocks */
-  uint64_t text_y = height / 2 - 20;
-  uint64_t text_x = width / 2 - 80;
-  volatile uint32_t *text_row = (volatile uint32_t *)(fb + text_y * pitch);
-
-  /* U */
-  for (int i = 0; i < 30; i++)
-    text_row[text_x + i] = 0xFF00FF00;
-  text_x += 35;
-  /* E */
-  for (int i = 0; i < 25; i++)
-    text_row[text_x + i] = 0xFF00FF00;
-  text_x += 30;
-  /* F */
-  for (int i = 0; i < 20; i++)
-    text_row[text_x + i] = 0xFF00FF00;
-  text_x += 25;
-  /* I */
-  for (int i = 0; i < 10; i++)
-    text_row[text_x + i] = 0xFF00FF00;
-  text_x += 15;
-  /* - */
-  for (int i = 0; i < 15; i++)
-    text_row[text_x + i] = 0xFFFFFF00;
-  text_x += 20;
-  /* O */
-  for (int i = 0; i < 25; i++)
-    text_row[text_x + i] = 0xFF00FFFF;
-  text_x += 30;
-  /* S */
-  for (int i = 0; i < 20; i++)
-    text_row[text_x + i] = 0xFF00FFFF;
+  direct_fill_rect(fb_addr, width, height, pitch, bpp, width / 2 - 100,
+                   height / 2 - 50, 200, 100, 0xFFFFFFFF);
+  direct_fill_rect(fb_addr, width, height, pitch, bpp, width / 2 - 80,
+                   height / 2 - 20, 160, 18, 0xFF00E5FF);
 }
 
 /* ========== Kernel Main ========== */
@@ -338,8 +381,23 @@ void _start(void) {
   serial_puts("\n\n=== Orizon OS core-x86_64 ===\n");
   serial_puts("Kernel entry point reached!\n");
 
+  /* Put pixels on screen before ACPI/timers/storage/USB can block the boot. */
+  if (framebuffer_request.response == NULL ||
+      framebuffer_request.response->framebuffer_count < 1) {
+    serial_puts("ERROR: No framebuffer available before core init!\n");
+    halt();
+  }
+
+  fb = framebuffer_request.response->framebuffers[0];
+  g_fb_ptr = (uint32_t *)fb->address;
+  g_fb_width = (uint32_t)fb->width;
+  g_fb_height = (uint32_t)fb->height;
+  g_fb_pitch = (uint32_t)fb->pitch;
+  direct_boot_stage(1, 0xFF2B8CFF);
+
   /* Verify base revision was accepted */
   if (limine_base_revision[2] != 0) {
+    direct_boot_stage(1, 0xFFFF3232);
     serial_puts("ERROR: Limine base revision mismatch\n");
     serial_puts("Revision value: ");
     serial_puthex(limine_base_revision[2]);
@@ -367,38 +425,10 @@ void _start(void) {
     serial_puts("\n");
   }
 
-  /* Initialize IDT/PIC/timer after HHDM is known so LAPIC MMIO and ACPI work. */
-  idt_init();
-  pic_init();
-  sched_init();
-  if (rsdp_request.response && rsdp_request.response->address) {
-    acpi_init(rsdp_request.response->address);
-  } else {
-    acpi_init(NULL);
-  }
-  timer_init();
-
   capture_boot_payloads();
   serial_puts("Installer payload status: ");
   serial_puts(boot_payload_status());
   serial_puts("\n");
-
-  /* Get framebuffer */
-  if (framebuffer_request.response == NULL) {
-    serial_puts("ERROR: No framebuffer response!\n");
-    halt();
-  }
-
-  if (framebuffer_request.response->framebuffer_count < 1) {
-    serial_puts("ERROR: No framebuffers available!\n");
-    halt();
-  }
-
-  fb = framebuffer_request.response->framebuffers[0];
-  g_fb_ptr = (uint32_t *)fb->address;
-  g_fb_width = (uint32_t)fb->width;
-  g_fb_height = (uint32_t)fb->height;
-  g_fb_pitch = (uint32_t)fb->pitch;
 
   serial_puts("Framebuffer acquired:\n");
   serial_puts("  Address: ");
@@ -430,31 +460,31 @@ void _start(void) {
 
   /* First: Direct screen test to verify framebuffer works */
   serial_puts("Starting direct framebuffer test...\n");
-  direct_screen_test(fb->address, fb->width, fb->height, fb->pitch);
+  direct_screen_test(fb->address, fb->width, fb->height, fb->pitch, fb->bpp);
 
   /* Visual checkpoint: RED = starting fb_init */
+  direct_boot_stage(2, 0xFFFF4040);
   {
     volatile uint32_t *row = (volatile uint32_t *)((uint8_t *)fb->address + 10 * fb->pitch);
-    for (int i = 0; i < 50; i++) row[10 + i] = 0xFFFF0000;
+    if (fb->bpp == 32) {
+      for (int i = 0; i < 50; i++) row[10 + i] = 0xFFFF0000;
+    }
   }
 
   serial_puts("Initializing framebuffer...\n");
   fb_init(fb->address, fb->width, fb->height, fb->pitch);
+  font_init();
+  boot_draw_text_stage("Framebuffer online. Installing interrupt table...");
 
-  /* Visual checkpoint: GREEN = fb_init done, starting gui_init */
-  {
-    volatile uint32_t *row = (volatile uint32_t *)((uint8_t *)fb->address + 10 * fb->pitch);
-    for (int i = 0; i < 50; i++) row[70 + i] = 0xFF00FF00;
-  }
+  idt_init();
+  pic_init();
+  sched_init();
+  boot_draw_text_stage("Interrupt table ready. Starting Orizon shell...");
 
   serial_puts("Initializing GUI...\n");
   gui_init();
 
-  /* Visual checkpoint: BLUE = gui_init done, starting main loop */
-  {
-    volatile uint32_t *row = (volatile uint32_t *)((uint8_t *)fb->address + 10 * fb->pitch);
-    for (int i = 0; i < 50; i++) row[130 + i] = 0xFF0000FF;
-  }
+  boot_draw_text_stage("Shell created. Enabling interrupts...");
 
   /* Enable interrupts globally - REQUIRED for USB/PS2 to work! */
   serial_puts("Enabling interrupts...\n");
