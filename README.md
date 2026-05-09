@@ -26,6 +26,8 @@ le developpement noyau:
   installer des composants separes du kernel
 - console avec scrollback, support molette souris PS/2, `edit` ameliore et
   navigation historique `Up/Down`
+- diagnostic materiel `hw` pour voir CPU, memoire, stockage, reseau, USB/PS2,
+  installation, update et principaux peripheriques PCI
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
 

@@ -5,6 +5,7 @@
 
 #include "../include/idt.h"
 #include "../include/input_layout.h"
+#include "../include/string.h"
 #include "../include/types.h"
 
 /* ===================================================================== */
@@ -124,6 +125,9 @@ static int mouse_packet_size = 3;
 
 /* Extended scancode state */
 static int extended_scancode = 0;
+static int ps2_initialized = 0;
+static unsigned long ps2_keyboard_events = 0;
+static unsigned long ps2_mouse_packets = 0;
 
 /* Screen bounds for mouse */
 static int mouse_max_x = 1920;
@@ -266,6 +270,7 @@ void ps2_poll(void) {
       
       if (mouse_packet_index >= mouse_packet_size) {
         mouse_packet_index = 0;
+        ps2_mouse_packets++;
         
         uint8_t flags = mouse_packet[0];
         int dx = mouse_packet[1];
@@ -369,6 +374,7 @@ void ps2_poll(void) {
         default: continue;
         }
         if (key && key_callback) {
+          ps2_keyboard_events++;
           key_callback(key);
         }
         continue;
@@ -411,6 +417,7 @@ void ps2_poll(void) {
       
       /* Call callback if we have a valid key */
       if (key && key_callback) {
+        ps2_keyboard_events++;
         key_callback(key);
       }
     }
@@ -568,6 +575,7 @@ int ps2_init(void) {
   idt_register_handler(0x2C, ps2_mouse_irq);
   pic_set_mask(1);
   pic_set_mask(12);
+  ps2_initialized = 1;
   
   return 0;
 }
@@ -583,6 +591,17 @@ int ps2_consume_mouse_wheel(void) {
   int delta = ps2_mouse_wheel_delta;
   ps2_mouse_wheel_delta = 0;
   return delta;
+}
+
+void ps2_format_status(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  snprintf(buf, size,
+           "initialized=%s key_events=%lu mouse_packets=%lu mouse=%d,%d buttons=%d wheel=%d",
+           ps2_initialized ? "yes" : "no", ps2_keyboard_events,
+           ps2_mouse_packets, ps2_mouse_x, ps2_mouse_y, ps2_mouse_buttons,
+           ps2_mouse_wheel_delta);
 }
 
 /* Keep old handler functions for compatibility */

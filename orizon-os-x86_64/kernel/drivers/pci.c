@@ -100,3 +100,42 @@ int pci_scan_class(uint8_t class_code, uint8_t subclass, uint8_t prog_if,
   }
   return found;
 }
+
+int pci_scan_all(pci_device_info_t *out, int max_out) {
+  int found = 0;
+  for (uint16_t bus = 0; bus < 256; bus++) {
+    for (uint8_t device = 0; device < 32; device++) {
+      for (uint8_t function = 0; function < 8; function++) {
+        uint16_t vendor = pci_read16(bus, device, function, 0x00);
+        if (vendor == 0xFFFF) {
+          if (function == 0) {
+            break;
+          }
+          continue;
+        }
+
+        if (out && found < max_out) {
+          pci_device_info_t *info = &out[found];
+          info->bus = (uint8_t)bus;
+          info->device = device;
+          info->function = function;
+          info->vendor_id = vendor;
+          info->device_id = pci_read16(bus, device, function, 0x02);
+          info->class_code = pci_read8(bus, device, function, 0x0B);
+          info->subclass = pci_read8(bus, device, function, 0x0A);
+          info->prog_if = pci_read8(bus, device, function, 0x09);
+          pci_fill_bars(info);
+        }
+        found++;
+
+        if (function == 0) {
+          uint8_t header = pci_read8(bus, device, function, 0x0E);
+          if ((header & 0x80) == 0) {
+            break;
+          }
+        }
+      }
+    }
+  }
+  return found;
+}

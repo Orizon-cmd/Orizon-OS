@@ -9,6 +9,7 @@
 #include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/packages.h"
+#include "../include/pci.h"
 #include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
@@ -17,6 +18,7 @@
 #include "../include/terminal.h"
 #include "../include/timer.h"
 #include "../include/update.h"
+#include "../include/usb.h"
 #include "../include/vfs.h"
 
 /* Terminal colors (ANSI) */
@@ -95,6 +97,7 @@ typedef struct terminal {
 static terminal_t *active_term = NULL;
 
 static int term_install_already_complete(void);
+static int term_read_text_file_silent(const char *path, char *buf, size_t cap);
 
 /* External functions */
 extern void fb_fill_rect(int x, int y, int w, int h, uint32_t color);
@@ -669,7 +672,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
   static const char *commands[] = {
       "about", "append", "cat", "cd", "clear", "cp", "date", "edit",
       "echo", "find", "free", "grep", "head", "help", "history", "hostname",
-      "id", "install", "install-status", "keyboard", "ls", "mkdir", "mv",
+      "hw", "id", "install", "install-status", "keyboard", "ls", "mkdir", "mv",
       "neofetch", "net", "pkg", "poweroff", "ps", "pwd", "rollback",
       "rollback-status", "rm", "shutdown", "stat", "storage", "sync",
       "touch", "tree", "uname", "update", "uptime", "version", "whoami",
@@ -1352,6 +1355,162 @@ static void term_print_about(terminal_t *term) {
   term_puts_t(term, vfs_persist_status());
   term_puts_t(term, "\n");
   term_puts_t(term, "Built: " __DATE__ " " __TIME__ "\n");
+}
+
+static void term_cpuid(uint32_t leaf, uint32_t subleaf, uint32_t *a,
+                       uint32_t *b, uint32_t *c, uint32_t *d) {
+  uint32_t eax, ebx, ecx, edx;
+  __asm__ volatile("cpuid"
+                   : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+                   : "a"(leaf), "c"(subleaf));
+  if (a) *a = eax;
+  if (b) *b = ebx;
+  if (c) *c = ecx;
+  if (d) *d = edx;
+}
+
+static const char *term_pci_class_name(uint8_t cls, uint8_t sub) {
+  switch (cls) {
+    case 0x01:
+      if (sub == 0x06) return "storage-ahci";
+      if (sub == 0x08) return "storage-nvme";
+      return "storage";
+    case 0x02: return "network";
+    case 0x03: return "display";
+    case 0x06: return "bridge";
+    case 0x0C:
+      if (sub == 0x03) return "usb";
+      return "serial-bus";
+    default: return "device";
+  }
+}
+
+static void term_print_first_line_or(terminal_t *term, const char *label,
+                                     const char *path,
+                                     const char *fallback) {
+  char buf[160];
+  int n = term_read_text_file_silent(path, buf, sizeof(buf));
+  term_puts_t(term, label);
+  if (n > 0) {
+    for (int i = 0; i < n; i++) {
+      if (buf[i] == '\n' || buf[i] == '\r') {
+        buf[i] = '\0';
+        break;
+      }
+    }
+    term_puts_t(term, buf);
+  } else {
+    term_puts_t(term, fallback);
+  }
+  term_puts_t(term, "\n");
+}
+
+static void term_print_hw(terminal_t *term) {
+  char line[256];
+  char uptime[40];
+  char vendor[13];
+  uint32_t a, b, c, d;
+  kmalloc_stats_t stats;
+  pci_device_info_t devs[12];
+
+  term_puts_t(term, "\033[1;36mOrizon Hardware Diagnostics\033[0m\n");
+
+  term_cpuid(0, 0, &a, &b, &c, &d);
+  memcpy(vendor + 0, &b, 4);
+  memcpy(vendor + 4, &d, 4);
+  memcpy(vendor + 8, &c, 4);
+  vendor[12] = '\0';
+  term_cpuid(1, 0, &a, &b, &c, &d);
+  uint32_t stepping = a & 0x0FU;
+  uint32_t model = (a >> 4) & 0x0FU;
+  uint32_t family = (a >> 8) & 0x0FU;
+  uint32_t ext_model = (a >> 16) & 0x0FU;
+  uint32_t ext_family = (a >> 20) & 0xFFU;
+  if (family == 0x0F) {
+    family += ext_family;
+  }
+  if (family == 0x06 || family == 0x0F) {
+    model += ext_model << 4;
+  }
+  snprintf(line, sizeof(line),
+           "CPU: x86_64 vendor=%s family=%lu model=%lu stepping=%lu\n",
+           vendor, (unsigned long)family, (unsigned long)model,
+           (unsigned long)stepping);
+  term_puts_t(term, line);
+
+  term_format_duration(timer_uptime_seconds(), uptime, sizeof(uptime));
+  snprintf(line, sizeof(line), "Uptime: %s, ticks=%lu, hz=%lu\n", uptime,
+           (unsigned long)timer_ticks(), (unsigned long)timer_hz());
+  term_puts_t(term, line);
+
+  kmalloc_get_stats(&stats);
+  snprintf(line, sizeof(line),
+           "Heap: total=%lu KB used=%lu KB free=%lu KB largest=%lu KB\n",
+           (unsigned long)(stats.total / 1024),
+           (unsigned long)(stats.used / 1024),
+           (unsigned long)(stats.free / 1024),
+           (unsigned long)(stats.largest_free / 1024));
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Display: %lux%lu console=%dx%d\n",
+           (unsigned long)screen_width, (unsigned long)screen_height,
+           TERM_COLS, TERM_ROWS);
+  term_puts_t(term, line);
+
+  char capacity[64];
+  storage_format_capacity(capacity, sizeof(capacity));
+  snprintf(line, sizeof(line), "Disk: %s (%s)\n",
+           storage_available() ? storage_status() : "unavailable", capacity);
+  term_puts_t(term, line);
+  term_puts_t(term, "Workspace: ");
+  term_puts_t(term, vfs_persist_status());
+  term_puts_t(term, "\n");
+
+  net_format_status(line, sizeof(line));
+  term_puts_t(term, "Network: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  netstack_format_status(line, sizeof(line));
+  term_puts_t(term, "IPv4: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+
+  usb_format_status(line, sizeof(line));
+  term_puts_t(term, "USB: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  ps2_format_status(line, sizeof(line));
+  term_puts_t(term, "PS/2: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  term_puts_t(term, "Keyboard layout: ");
+  term_puts_t(term, input_keyboard_layout());
+  term_puts_t(term, "\n");
+
+  snprintf(line, sizeof(line), "Installed: %s\n",
+           term_install_already_complete() ? "yes" : "no");
+  term_puts_t(term, line);
+  term_print_first_line_or(term, "Install state: ",
+                           "/workspace/.orizon/install-state", "not installed");
+  term_print_first_line_or(term, "Update state: ",
+                           "/workspace/.orizon/update-state", "not run yet");
+
+  int total = pci_scan_all(devs, 12);
+  int shown = total < 12 ? total : 12;
+  snprintf(line, sizeof(line), "PCI: %d device(s), showing %d\n", total,
+           shown);
+  term_puts_t(term, line);
+  for (int i = 0; i < shown; i++) {
+    snprintf(line, sizeof(line),
+             "  %02x:%02x.%u %04x:%04x class=%02x/%02x/%02x %s\n",
+             devs[i].bus, devs[i].device, devs[i].function,
+             devs[i].vendor_id, devs[i].device_id, devs[i].class_code,
+             devs[i].subclass, devs[i].prog_if,
+             term_pci_class_name(devs[i].class_code, devs[i].subclass));
+    term_puts_t(term, line);
+  }
+  if (total > shown) {
+    term_puts_t(term, "  ... use future pci tools for the complete list\n");
+  }
 }
 
 static void term_print_stat(terminal_t *term, const char *display,
@@ -2113,7 +2272,8 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "  pkg install <file> - Install a verified package\n");
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
-    term_puts_t(term, "  storage   - Show persistence state\n");
+    term_puts_t(term, "  hw        - Hardware diagnostics\n");
+    term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  net       - Show ethernet status\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
@@ -2148,6 +2308,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_print_about(term);
   } else if (term_command_is(cmd, "version")) {
     term_print_version(term);
+  } else if (term_command_is(cmd, "hw")) {
+    term_print_hw(term);
   } else if (strncmp(cmd, "ls", 2) == 0) {
     char path[MAX_PATH];
     const char *requested = term->cwd[0] ? term->cwd : "/";

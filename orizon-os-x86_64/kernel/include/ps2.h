@@ -62,6 +62,7 @@ int ps2_get_mouse_x(void);
 int ps2_get_mouse_y(void);
 int ps2_get_mouse_buttons(void);
 int ps2_consume_mouse_wheel(void);
+void ps2_format_status(char *buf, size_t size);
 
 /* External mouse state (for direct access) */
 extern volatile int ps2_mouse_x;

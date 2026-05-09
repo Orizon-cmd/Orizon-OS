@@ -27,6 +27,8 @@ typedef struct {
 static usb_report_t report_queue[USB_REPORT_QUEUE_SIZE];
 static int report_head = 0;
 static int report_tail = 0;
+static unsigned long report_seen = 0;
+static unsigned long key_seen = 0;
 static unsigned long report_dropped = 0;
 
 void usb_set_keyboard_callback(usb_keyboard_callback_t cb) {
@@ -34,6 +36,7 @@ void usb_set_keyboard_callback(usb_keyboard_callback_t cb) {
 }
 
 void usb_hid_handle_key(int key) {
+  key_seen++;
   if (keyboard_cb) {
     keyboard_cb(key);
   }
@@ -43,6 +46,7 @@ void usb_submit_hid_report(const uint8_t *rep, int len) {
   if (!rep || len <= 0) {
     return;
   }
+  report_seen++;
   int next = (report_head + 1) % USB_REPORT_QUEUE_SIZE;
   if (next == report_tail) {
     report_tail = (report_tail + 1) % USB_REPORT_QUEUE_SIZE;
@@ -61,6 +65,17 @@ void usb_submit_hid_report(const uint8_t *rep, int len) {
   }
   report_queue[report_head].len = copy_len;
   report_head = next;
+}
+
+void usb_format_status(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  snprintf(buf, size,
+           "xhci=%s ehci=%s hid_reports=%lu hid_keys=%lu queue_drops=%lu",
+           usb_xhci_ready() ? "ready" : "no",
+           usb_ehci_ready() ? "ready" : "no", report_seen, key_seen,
+           report_dropped);
 }
 
 void usb_init(void) {

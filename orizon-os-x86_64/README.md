@@ -108,6 +108,8 @@ build.sh         # alternative build script
 - The active VM build is intentionally console-first.
 - The console supports `Up/Down` history, `Tab` command/path completion, and
   `edit <file>` with `.show`, `.insert`, `.replace`, `.del`, `.write`, `.save`.
+- `hw` prints a compact hardware report: CPU, heap, disk, network, USB/PS2,
+  install/update state, and the first PCI devices.
 - `/workspace` is saved to the reserved Orizon data area when the boot disk has
   been prepared for persistence.
 - New features should be reintroduced deliberately from this minimal base.

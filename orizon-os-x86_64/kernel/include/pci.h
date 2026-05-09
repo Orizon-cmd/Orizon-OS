@@ -24,5 +24,6 @@ void pci_write32(uint8_t bus, uint8_t device, uint8_t function, uint8_t offset, 
 
 int pci_scan_class(uint8_t class_code, uint8_t subclass, uint8_t prog_if,
                    pci_device_info_t *out, int max_out);
+int pci_scan_all(pci_device_info_t *out, int max_out);
 
 #endif /* _PCI_H */
