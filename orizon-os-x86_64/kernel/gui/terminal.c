@@ -2774,6 +2774,24 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "rx")) {
+    const char *rx_args = term_skip_spaces(args + 2);
+    int poll_rx = term_command_is(rx_args, "poll") ||
+                  term_command_is(rx_args, "wait");
+    wifi_rx_probe(poll_rx, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
+  if (term_command_is(args, "command")) {
+    const char *command_args = term_skip_spaces(args + 7);
+    int arm_command = term_command_is(command_args, "arm") ||
+                      term_command_is(command_args, "go");
+    wifi_command_probe(arm_command, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "connect")) {
     rest = term_skip_spaces(args + 7);
     rest = term_read_token(rest, ssid, sizeof(ssid));
@@ -2791,7 +2809,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|scan|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3385,6 +3403,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi queues [arm] - Stage Intel command/RX/TX host rings\n");
     term_puts_t(term, "  wifi context [arm] - Stage Intel firmware context-info\n");
     term_puts_t(term, "  wifi scheduler [arm] - Stage Intel scheduler command frame\n");
+    term_puts_t(term, "  wifi rx [poll] - Inspect Intel firmware RX responses\n");
+    term_puts_t(term, "  wifi command [arm] - Ring staged Intel command doorbell\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
