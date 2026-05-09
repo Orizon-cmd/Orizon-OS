@@ -13,5 +13,10 @@ void timer_init(void);
 uint64_t timer_ticks(void);
 uint64_t timer_uptime_seconds(void);
 uint64_t timer_hz(void);
+const char *timer_source(void);
+const char *timer_status(void);
+uint32_t timer_lapic_period_count(void);
+int timer_lapic_ready(void);
+void timer_format_status(char *buf, size_t size);
 
 #endif /* _TIMER_H */

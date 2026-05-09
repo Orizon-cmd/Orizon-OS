@@ -3,6 +3,7 @@
  */
 
 #include "../include/gui.h"
+#include "../include/acpi.h"
 #include "../include/bootinfo.h"
 #include "../include/input_layout.h"
 #include "../include/klog.h"
@@ -1440,6 +1441,14 @@ static void term_print_sysinfo(terminal_t *term) {
   snprintf(line, sizeof(line), "uptime %s ticks=%lu hz=%lu\n", uptime,
            (unsigned long)timer_ticks(), (unsigned long)timer_hz());
   term_puts_t(term, line);
+  timer_format_status(line, sizeof(line));
+  term_puts_t(term, "timer ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  acpi_format_status(line, sizeof(line));
+  term_puts_t(term, "acpi ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
   snprintf(line, sizeof(line), "timer irq=%s fallback=%s\n",
            gui_timer_irq_active() ? "active" : "not-seen",
            gui_timer_fallback_active() ? "polling" : "off");
@@ -1560,6 +1569,14 @@ static void term_print_hw(terminal_t *term) {
   snprintf(line, sizeof(line), "Uptime: %s, ticks=%lu, hz=%lu\n", uptime,
            (unsigned long)timer_ticks(), (unsigned long)timer_hz());
   term_puts_t(term, line);
+  timer_format_status(line, sizeof(line));
+  term_puts_t(term, "Timer: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  acpi_format_status(line, sizeof(line));
+  term_puts_t(term, "ACPI: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
 
   kmalloc_get_stats(&stats);
   snprintf(line, sizeof(line),
@@ -2020,6 +2037,14 @@ static void term_print_report(terminal_t *term) {
            (unsigned long)klog_size(), (unsigned long)klog_dropped_bytes(),
            klog_boot_persisted() ? "yes" : "no");
   term_puts_t(term, line);
+  timer_format_status(line, sizeof(line));
+  term_puts_t(term, "Timer: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  acpi_format_status(line, sizeof(line));
+  term_puts_t(term, "ACPI: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
   snprintf(line, sizeof(line), "Install: %s, payloads=%s\n",
            term_install_already_complete() ? "installed" : "live",
            boot_payload_status());

@@ -27,8 +27,8 @@
 ## Next Hardware Track
 
 1. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
-2. Add APIC/LAPIC timer support so real laptops do not need the PIT/PIC polling
-   fallback.
+2. Harden LAPIC timer calibration and add x2APIC support for newer firmware
+   modes.
 3. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 4. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 5. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and

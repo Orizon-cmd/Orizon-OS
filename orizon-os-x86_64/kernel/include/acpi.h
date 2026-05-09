@@ -40,5 +40,8 @@ typedef struct {
 
 void acpi_init(void *rsdp_ptr);
 const acpi_madt_t *acpi_get_madt(void);
+uint64_t acpi_lapic_address(void);
+int acpi_has_madt(void);
+void acpi_format_status(char *buf, size_t size);
 
 #endif /* _ACPI_H */

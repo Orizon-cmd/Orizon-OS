@@ -229,7 +229,8 @@ All three flows refresh the root `Orizon-OS.iso` artifact unless
   requests, and decrypted response bodies.
 - SHA-256 hashing for manifests and boot artifacts.
 - FAT32 ESP writer shared with the disk installer.
-- PIT timer at 100 Hz, idle `hlt`, and first scheduler/process accounting.
+- LAPIC timer first, PIT fallback, idle `hlt`, and first scheduler/process
+  accounting.
 
 ## Files Written By Update
 

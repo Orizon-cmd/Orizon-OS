@@ -55,6 +55,14 @@ static void idt_handle_irq(uint8_t irq, interrupt_frame_t *frame) {
   pic_send_eoi(irq);
 }
 
+static void idt_handle_vector(uint8_t vector, interrupt_frame_t *frame) {
+  if (isr_handlers[vector]) {
+    isr_handlers[vector](frame);
+  } else {
+    UNUSED(frame);
+  }
+}
+
 #define DEFINE_IRQ_HANDLER(n)                                                   \
   __attribute__((interrupt)) static void isr_irq##n(interrupt_frame_t *frame) { \
     idt_handle_irq((uint8_t)(n), frame);                                        \
@@ -76,6 +84,14 @@ DEFINE_IRQ_HANDLER(12)
 DEFINE_IRQ_HANDLER(13)
 DEFINE_IRQ_HANDLER(14)
 DEFINE_IRQ_HANDLER(15)
+
+__attribute__((interrupt)) static void isr_lapic_timer(interrupt_frame_t *frame) {
+  idt_handle_vector(0xF0, frame);
+}
+
+__attribute__((interrupt)) static void isr_lapic_spurious(interrupt_frame_t *frame) {
+  UNUSED(frame);
+}
 
 static void idt_set_gate(uint8_t vector, void *handler) {
   uint64_t addr = (uint64_t)handler;
@@ -121,6 +137,8 @@ void idt_init(void) {
   idt_set_gate(0x2D, isr_irq13);
   idt_set_gate(0x2E, isr_irq14);
   idt_set_gate(0x2F, isr_irq15);
+  idt_set_gate(0xF0, isr_lapic_timer);
+  idt_set_gate(0xFF, isr_lapic_spurious);
 
   idt_ptr_t idtr;
   idtr.limit = (uint16_t)(sizeof(idt) - 1);

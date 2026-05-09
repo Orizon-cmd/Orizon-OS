@@ -329,12 +329,6 @@ void _start(void) {
   serial_puts("\n\n=== Orizon OS core-x86_64 ===\n");
   serial_puts("Kernel entry point reached!\n");
 
-  /* Initialize IDT/PIC (interrupts still disabled by default) */
-  idt_init();
-  pic_init();
-  sched_init();
-  timer_init();
-
   /* Verify base revision was accepted */
   if (limine_base_revision[2] != 0) {
     serial_puts("ERROR: Limine base revision mismatch\n");
@@ -364,6 +358,17 @@ void _start(void) {
     serial_puts("\n");
   }
 
+  /* Initialize IDT/PIC/timer after HHDM is known so LAPIC MMIO and ACPI work. */
+  idt_init();
+  pic_init();
+  sched_init();
+  if (rsdp_request.response && rsdp_request.response->address) {
+    acpi_init(rsdp_request.response->address);
+  } else {
+    acpi_init(NULL);
+  }
+  timer_init();
+
   capture_boot_payloads();
   serial_puts("Installer payload status: ");
   serial_puts(boot_payload_status());
@@ -385,13 +390,6 @@ void _start(void) {
   g_fb_width = (uint32_t)fb->width;
   g_fb_height = (uint32_t)fb->height;
   g_fb_pitch = (uint32_t)fb->pitch;
-
-  /* Initialize ACPI if RSDP was provided */
-  if (rsdp_request.response && rsdp_request.response->address) {
-    acpi_init(rsdp_request.response->address);
-  } else {
-    acpi_init(NULL);
-  }
 
   serial_puts("Framebuffer acquired:\n");
   serial_puts("  Address: ");
