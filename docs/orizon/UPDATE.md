@@ -40,6 +40,11 @@ terminal receives each state line immediately and redraws the framebuffer, so
 long network downloads show Debian-like progress instead of leaving the OS
 visually frozen until the final report.
 
+The report also records rough elapsed timings for the package index, each
+downloaded artifact, and the full transaction. These timings are written to
+`/workspace/.orizon/update.log` and make slow DNS/TLS/download phases visible
+without external tools.
+
 Small boot payloads use a fast path: one TLS handshake and one HTTPS `Range`
 request per artifact. The older chunk path remains as fallback, now with larger
 64 KiB chunks.
@@ -145,9 +150,11 @@ package commands remain:
 ```text
 pkg list
 pkg status
+pkg info <name>
 pkg sample
 pkg hash <file.opkg>
 pkg install <file.opkg>
+pkg remove <name>
 ```
 
 Installed package metadata lives in:
@@ -160,8 +167,9 @@ Installed package metadata lives in:
 ```
 
 The boot rollback system remains responsible for kernel and UEFI loader
-changes. Package rollback will be added separately once package removal and
-per-file manifests exist.
+changes. Package removal now uses the stored package manifest to delete files
+owned by a package; automatic package rollback metadata is still a later
+hardening step.
 
 ## Live Boot Behavior
 

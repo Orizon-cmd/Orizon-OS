@@ -1,21 +1,43 @@
 # Orizon OS Roadmap
 
-## Immediate Track
+## Current Foundation
 
-1. Finish the remaining branding cleanup in code comments, helper APIs, and VM tooling.
-2. Decide whether Orizon should prioritize `x86_64` or `ARM64` first.
-3. Produce one reproducible local build path on Linux and document it.
-4. Build a minimal VM validation checklist before larger feature work starts.
+- Installed-disk boot flow with live ISO guardrails.
+- Persistent Orizon data roots: `/workspace`, `/home`, `/system`,
+  `/packages`, `/logs`, and `/tmp`.
+- In-kernel GitHub update path with SHA-256 verification, boot rollback slot,
+  streamed progress, and rough elapsed timings.
+- Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
+  `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
+- Console basics: scrollback, persistent history, simple autocomplete, editor,
+  `sysinfo`, `hw`, `mounts`, `logs`, `report`, `ps`, and `uptime`.
+- Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
+  Intel e1000/e1000e, RTL8139, and VirtIO-net Ethernet.
 
-## Near-Term Engineering
+## Next Stability Track
 
-1. Audit the `orizon-os-x86_64/` path as the fastest route to a bootable Orizon VM.
-2. Identify where boot labels, terminal banners, and interface text are hardcoded.
-3. Add a small release or artifact layout for test ISOs and kernels.
-4. Define the first Orizon OS versioning and release naming scheme.
+1. Add a boot-count guard so a failed updated boot can automatically select or
+   restore the rollback slot.
+2. Add package rollback metadata before package updates overwrite files.
+3. Make the package repository signed, not only SHA-256 verified through the
+   public manifest/index.
+4. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
+   bridge/DHCP failure messages.
 
-## Lab Discipline
+## Next Hardware Track
 
-1. Keep secrets in ignored local env files only.
-2. Save server facts locally after each important infrastructure change.
-3. Watch the ZimaOS root filesystem carefully because it is currently full.
+1. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
+2. Harden NVMe and AHCI writes with more error reporting and timeout handling.
+3. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
+4. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
+   at least one non-ZimaOS host.
+
+## Next Userland Track
+
+1. Split more features into packages so update can refresh components without
+   replacing the whole kernel payload.
+2. Add `pkg upgrade` once package rollback exists.
+3. Add a small service/init registry for boot tasks that should not live in the
+   terminal command path.
+4. Improve the editor with save confirmation, file size warnings, and simple
+   search.

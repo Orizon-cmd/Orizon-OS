@@ -16,14 +16,17 @@ https://github.com/Orizon-cmd/Orizon-Packages
 pkg help
 pkg list
 pkg status
+pkg info orizon-hello
 pkg sample
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
+pkg remove orizon-hello
 ```
 
-`pkg install` is available only after Orizon OS has been installed to disk.
-Live boot can create and hash package files, but it refuses persistent package
-installation because the live ISO is not the installed system.
+`pkg install` and `pkg remove` are available only after Orizon OS has been
+installed to disk. Live boot can inspect, create and hash package files, but it
+refuses persistent package changes because the live ISO is not the installed
+system.
 
 ## Package Format
 
@@ -104,5 +107,11 @@ packages/x86_64/<name>.opkg
 `.opkg` files, verifies their SHA-256 from the index, and then lets `pkg`
 verify the internal payload SHA-256 before installation.
 
-The next package-manager upgrades are `pkg info`, `pkg remove`, and package
-rollback metadata.
+`pkg info <name>` shows stored package metadata and the files owned by an
+installed package. `pkg remove <name>` removes files declared by the stored
+manifest, deletes the package metadata, refreshes `/system/installed`, and
+persists the package database.
+
+The next package-manager upgrade is package rollback metadata, so a package
+update can restore its previous file set automatically if a post-install step
+or later boot check fails.

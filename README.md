@@ -28,8 +28,9 @@ le developpement noyau:
   installer des composants separes du kernel
 - console avec scrollback, support molette souris PS/2, `edit` ameliore et
   navigation historique `Up/Down`
-- diagnostic materiel `hw` pour voir CPU, memoire, stockage, reseau, USB/PS2,
-  installation, update et principaux peripheriques PCI
+- diagnostics `sysinfo`, `hw`, `mounts` et `report` pour voir CPU, memoire,
+  stockage, racines data, reseau, USB/PS2, installation, update et principaux
+  peripheriques PCI
 - inspection stockage avec `disks`, `storage detail` et selection du disque
   actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
@@ -160,14 +161,17 @@ Commandes disponibles:
 ```text
 pkg list
 pkg status
+pkg info orizon-hello
 pkg sample
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
+pkg remove orizon-hello
 ```
 
-`pkg install` est reserve a un OS installe sur disque. Les paquets installes
-sont stockes dans `/workspace/.orizon/pkgdb`, puis rejoues au boot pour
-restaurer les fichiers systeme en RAM comme `/system/share/...`.
+`pkg install` et `pkg remove` sont reserves a un OS installe sur disque. Les
+paquets installes sont stockes dans `/workspace/.orizon/pkgdb`, puis rejoues
+au boot pour restaurer les fichiers systeme en RAM comme `/system/share/...`.
+`pkg info <name>` affiche les metadonnees et fichiers possedes par un paquet.
 
 Le depot officiel de paquets est:
 
@@ -203,7 +207,8 @@ partition data Orizon et `/workspace` sont preserves.
 Pendant l'operation, la console affiche les etapes en continu: etat courant,
 manifest recu, progression par pourcentage sur chaque artefact, verification
 SHA-256 et ecriture de l'ESP. L'ecran ne reste donc plus silencieux jusqu'a la
-fin de la transaction.
+fin de la transaction. Les timings par etape sont aussi sauvegardes dans
+`/workspace/.orizon/update.log`.
 
 Avant de remplacer le payload principal, Orizon garde le kernel et le loader
 actuellement demarres dans un slot rollback sur l'ESP:

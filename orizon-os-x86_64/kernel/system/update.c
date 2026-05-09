@@ -17,6 +17,7 @@
 #include "../include/sched.h"
 #include "../include/sha256.h"
 #include "../include/string.h"
+#include "../include/timer.h"
 #include "../include/vfs.h"
 
 #define UPDATE_STATE_PATH "/workspace/.orizon/update-state"
@@ -201,6 +202,23 @@ static void append_report(char *report, size_t report_size, const char *line) {
   }
   snprintf(report + used, report_size - used, "%s\n", line);
   update_progress_line(line);
+}
+
+static uint64_t update_elapsed_ms(uint64_t start_ticks) {
+  uint64_t hz = timer_hz();
+  if (hz == 0) {
+    return 0;
+  }
+  return ((timer_ticks() - start_ticks) * 1000ULL) / hz;
+}
+
+static void append_timing(char *report, size_t report_size, const char *label,
+                          uint64_t start_ticks) {
+  char line[160];
+  snprintf(line, sizeof(line), "Time: %s %lu ms", label,
+           (unsigned long)update_elapsed_ms(start_ticks));
+  append_report(report, report_size, line);
+  update_append_log(line);
 }
 
 static void append_report_block(char *report, size_t report_size,
@@ -586,6 +604,7 @@ static int download_verified_blob(const char *label, const char *prefix,
   char diag[192];
   char actual_hash[SHA256_HEX_SIZE];
   unsigned next_percent = 0;
+  uint64_t started_ticks = timer_ticks();
 
   if (!relative || !expected_hash || !dst || expected_size == 0 ||
       expected_size > dst_cap) {
@@ -696,6 +715,7 @@ verify_hash:
   snprintf(line, sizeof(line), "%s verified sha256 %s", label, actual_hash);
   append_report(report, report_size, line);
   update_append_log(line);
+  append_timing(report, report_size, label, started_ticks);
   return 0;
 }
 
@@ -717,6 +737,7 @@ static int update_install_remote_packages(char *report, size_t report_size) {
   size_t installed_count = 0;
   size_t skipped_count = 0;
   char index_hash[SHA256_HEX_SIZE];
+  uint64_t index_started_ticks = timer_ticks();
 
   update_set_state("update: downloading package index");
   append_report(report, report_size,
@@ -742,6 +763,7 @@ static int update_install_remote_packages(char *report, size_t report_size) {
   append_report(report, report_size, line);
   snprintf(line, sizeof(line), "package-index sha256 %s", index_hash);
   update_append_log(line);
+  append_timing(report, report_size, "package-index", index_started_ticks);
 
   if (parse_package_index(update_package_index_text, &index) < 0) {
     update_set_state("update: blocked - invalid package index");
@@ -802,6 +824,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   size_t manifest_len = 0;
   char update_text[512];
   char rollback_text[512];
+  uint64_t total_started_ticks = timer_ticks();
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -928,9 +951,10 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     }
     snprintf(update_text, sizeof(update_text),
              "Orizon OS already current\nsource=%s\nchannel=%s\nversion=%s\n"
-             "commit=%s\nkernel-sha256=%s\nefi-sha256=%s\n",
+             "commit=%s\nkernel-sha256=%s\nefi-sha256=%s\nelapsed-ms=%lu\n",
              UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
-             manifest.kernel_sha256, manifest.efi_sha256);
+             manifest.kernel_sha256, manifest.efi_sha256,
+             (unsigned long)update_elapsed_ms(total_started_ticks));
     update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text,
                       strlen(update_text));
     update_set_state("update: complete");
@@ -938,6 +962,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
                   "[7/8] Installed ESP already matches GitHub");
     append_report(report, report_size,
                   "[8/8] Update complete. No reboot required for boot payloads.");
+    append_timing(report, report_size, "full-upgrade total",
+                  total_started_ticks);
     update_append_log("Update complete: already current");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
@@ -985,9 +1011,10 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
 
   snprintf(update_text, sizeof(update_text),
            "Orizon OS updated\nsource=%s\nchannel=%s\nversion=%s\ncommit=%s\n"
-           "kernel-sha256=%s\nrollback-kernel-sha256=%s\n",
+           "kernel-sha256=%s\nrollback-kernel-sha256=%s\nelapsed-ms=%lu\n",
            UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
-           manifest.kernel_sha256, rollback_hash);
+           manifest.kernel_sha256, rollback_hash,
+           (unsigned long)update_elapsed_ms(total_started_ticks));
   snprintf(rollback_text, sizeof(rollback_text),
            "rollback-version 1\n"
            "state available\n"
@@ -1028,6 +1055,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
                 "[8/8] Update complete. Reboot to start the refreshed system.");
   append_report(report, report_size,
                 "Rollback ready: boot 'Orizon OS Rollback' or run rollback to restore it.");
+  append_timing(report, report_size, "full-upgrade total",
+                total_started_ticks);
   update_append_log("Update complete");
   vfs_persist_save();
   sched_set_process_state("update-manager", SCHED_SLEEPING);

@@ -679,10 +679,10 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
       "disks", "dmesg", "dns", "edit", "echo", "find", "free", "grep", "head", "help",
       "history", "hostname", "hw", "id", "install", "install-status",
-      "keyboard", "ls", "mkdir", "mv",
+      "keyboard", "ls", "mkdir", "mounts", "mv",
       "neofetch", "net", "network-status", "logs", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
-      "touch", "tree", "route", "uname", "update", "uptime", "version", "whoami",
+      "sysinfo", "touch", "tree", "route", "uname", "update", "uptime", "version", "whoami",
       "write"};
   const char *matches[16];
   int count = 0;
@@ -1411,6 +1411,94 @@ static const char *term_pci_class_name(uint8_t cls, uint8_t sub) {
   }
 }
 
+static void term_print_sysinfo(terminal_t *term) {
+  char line[256];
+  char uptime[40];
+  char capacity[64];
+  char vendor[13];
+  uint32_t a, b, c, d;
+  kmalloc_stats_t stats;
+
+  term_puts_t(term, "\033[1;36mOrizon sysinfo\033[0m\n");
+  term_format_duration(timer_uptime_seconds(), uptime, sizeof(uptime));
+  kmalloc_get_stats(&stats);
+  storage_format_capacity(capacity, sizeof(capacity));
+
+  term_cpuid(0, 0, &a, &b, &c, &d);
+  memcpy(vendor + 0, &b, 4);
+  memcpy(vendor + 4, &d, 4);
+  memcpy(vendor + 8, &c, 4);
+  vendor[12] = '\0';
+
+  snprintf(line, sizeof(line), "os Orizon OS Core\n");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "mode %s\n",
+           term_install_already_complete() ? "installed" : "live-boot");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "kernel core-x86_64 built " __DATE__ " " __TIME__ "\n");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "uptime %s ticks=%lu hz=%lu\n", uptime,
+           (unsigned long)timer_ticks(), (unsigned long)timer_hz());
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "cpu x86_64 vendor=%s\n", vendor);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line),
+           "memory heap=%luKB used=%luKB free=%luKB largest=%luKB\n",
+           (unsigned long)(stats.total / 1024),
+           (unsigned long)(stats.used / 1024),
+           (unsigned long)(stats.free / 1024),
+           (unsigned long)(stats.largest_free / 1024));
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "display %lux%lu console=%dx%d\n",
+           (unsigned long)screen_width, (unsigned long)screen_height,
+           TERM_COLS, TERM_ROWS);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "storage %s capacity=%s data=%s\n",
+           storage_available() ? storage_status() : "unavailable", capacity,
+           vfs_persist_status());
+  term_puts_t(term, line);
+  net_format_status(line, sizeof(line));
+  term_puts_t(term, "ethernet ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  netstack_format_status(line, sizeof(line));
+  term_puts_t(term, "ipv4 ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  snprintf(line, sizeof(line), "keyboard %s\n", input_keyboard_layout());
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "logs ring=%luB dropped=%lu boot-persisted=%s\n",
+           (unsigned long)klog_size(), (unsigned long)klog_dropped_bytes(),
+           klog_boot_persisted() ? "yes" : "no");
+  term_puts_t(term, line);
+}
+
+static void term_print_mounts(terminal_t *term) {
+  const char *mode = vfs_persist_available() ? "persistent" : "memory";
+
+  term_puts_t(term, "\033[1;36mOrizon data roots\033[0m\n");
+  term_puts_t(term, "/           kernel-vfs memory\n");
+  term_puts_t(term, "/workspace  ");
+  term_puts_t(term, mode);
+  term_puts_t(term, " user workspace\n");
+  term_puts_t(term, "/home       ");
+  term_puts_t(term, mode);
+  term_puts_t(term, " user data\n");
+  term_puts_t(term, "/system     ");
+  term_puts_t(term, mode);
+  term_puts_t(term, " system state/config\n");
+  term_puts_t(term, "/packages   ");
+  term_puts_t(term, mode);
+  term_puts_t(term, " package cache\n");
+  term_puts_t(term, "/logs       ");
+  term_puts_t(term, mode);
+  term_puts_t(term, " boot/install/update/network logs\n");
+  term_puts_t(term, "/tmp        memory scratch\n");
+  term_puts_t(term, "status      ");
+  term_puts_t(term, vfs_persist_status());
+  term_puts_t(term, "\n");
+}
+
 static void term_print_first_line_or(terminal_t *term, const char *label,
                                      const char *path,
                                      const char *fallback) {
@@ -2050,13 +2138,17 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "\033[1;36mOrizon packages\033[0m\n");
   term_puts_t(term, "  pkg list          - List installed packages\n");
   term_puts_t(term, "  pkg status        - Show package manager state\n");
+  term_puts_t(term, "  pkg info <name>   - Show package metadata/files\n");
   term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
   term_puts_t(term, "  pkg hash <file>   - Print package payload sha256\n");
   if (term_install_already_complete()) {
     term_puts_t(term, "  pkg install <file> - Install a verified local package\n");
+    term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
   } else {
     term_puts_t(term,
                 "  pkg install <file> - Available after disk install only\n");
+    term_puts_t(term,
+                "  pkg remove <name> - Available after disk install only\n");
   }
 }
 
@@ -2083,6 +2175,17 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "status")) {
     orizon_pkg_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "info")) {
+    const char *name = term_skip_spaces(args + 4);
+    if (*name == '\0') {
+      term_puts_t(term, "usage: pkg info <name>\n");
+      return;
+    }
+    orizon_pkg_info(name, report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -2126,6 +2229,22 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     orizon_pkg_install_file(path, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "remove")) {
+    const char *name = term_skip_spaces(args + 6);
+    if (!term_install_already_complete()) {
+      term_puts_t(term,
+                  "pkg remove: unavailable in live boot. Install Orizon OS first.\n");
+      return;
+    }
+    if (*name == '\0') {
+      term_puts_t(term, "usage: pkg remove <name>\n");
+      return;
+    }
+    orizon_pkg_remove(name, report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -2858,16 +2977,20 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  sync      - Save /workspace to disk\n");
     term_puts_t(term, "\033[33mPackages:\033[0m\n");
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
+    term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
     term_puts_t(term, "  pkg sample      - Create a sample .opkg package\n");
     term_puts_t(term, "  pkg hash <file> - Print package payload sha256\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  pkg install <file> - Install a verified package\n");
+      term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
+    term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
     term_puts_t(term, "  logs [name] - Read recent boot/network/update/install logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
+    term_puts_t(term, "  mounts    - Show Orizon data roots\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");
@@ -2916,6 +3039,8 @@ void term_execute(terminal_t *term, const char *cmd) {
       klog_persist_boot_if_installed();
     }
     term_print_klog(term, sizeof(term_diag_buf));
+  } else if (term_command_is(cmd, "sysinfo")) {
+    term_print_sysinfo(term);
   } else if (term_command_is(cmd, "hw")) {
     term_print_hw(term);
   } else if (term_command_is(cmd, "logs")) {
@@ -3286,6 +3411,8 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "disks")) {
     term_puts_t(term, "\033[1;36mDetected disks\033[0m\n");
     term_print_disks(term);
+  } else if (term_command_is(cmd, "mounts")) {
+    term_print_mounts(term);
   } else if (term_command_is(cmd, "storage")) {
     char capacity[64];
     const char *args = term_skip_spaces(cmd + 7);
