@@ -10,6 +10,7 @@
 #define TIMER_HZ 100ULL
 
 void timer_init(void);
+void timer_init_pit_only(void);
 uint64_t timer_ticks(void);
 uint64_t timer_uptime_seconds(void);
 uint64_t timer_hz(void);

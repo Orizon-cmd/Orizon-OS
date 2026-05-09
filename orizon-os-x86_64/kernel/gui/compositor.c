@@ -374,8 +374,15 @@ static void gui_run_deferred_core_services(void) {
     } else {
       acpi_init(NULL);
     }
-    gui_show_boot_stage("Initializing timer hardware...");
-    timer_init();
+    if (boot_cmdline_has("orizon.safe=1") ||
+        boot_cmdline_has("orizon.pit=1") ||
+        boot_cmdline_has("orizon.nolapic=1")) {
+      gui_show_boot_stage("Initializing safe PIT timer...");
+      timer_init_pit_only();
+    } else {
+      gui_show_boot_stage("Initializing LAPIC timer hardware...");
+      timer_init();
+    }
   } else {
     gui_show_boot_stage("Minimal boot: ACPI/timer initialization skipped.");
   }

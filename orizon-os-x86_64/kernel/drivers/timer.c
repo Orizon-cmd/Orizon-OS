@@ -247,6 +247,17 @@ void timer_init(void) {
   pit_init_timer();
 }
 
+void timer_init_pit_only(void) {
+  ticks = 0;
+  lapic = NULL;
+  lapic_ready = 0;
+  lapic_period = 0;
+  lapic_phys = 0;
+  timer_source_text = "pit";
+  timer_status_text = "safe PIT timer requested";
+  pit_init_timer();
+}
+
 uint64_t timer_ticks(void) {
   return ticks;
 }
