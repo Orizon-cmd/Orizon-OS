@@ -6,6 +6,7 @@
  */
 
 #include "../include/gui.h"
+#include "../include/i2c_hid.h"
 #include "../include/input_layout.h"
 #include "../include/klog.h"
 #include "../include/net.h"
@@ -297,6 +298,7 @@ void gui_init(void) {
   ps2_set_keyboard_callback(keyboard_callback);
   usb_set_keyboard_callback(keyboard_callback);
   usb_init();
+  i2c_hid_init();
 
   mouse_x = ps2_get_mouse_x();
   mouse_y = ps2_get_mouse_y();
@@ -338,6 +340,7 @@ void gui_main_loop(void) {
     sched_enter_process("gui-shell");
     ps2_poll();
     usb_poll();
+    i2c_hid_poll();
     net_poll();
 
     uint64_t now = timer_ticks();

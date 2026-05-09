@@ -94,6 +94,7 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/drivers/storage.c \
            $(KERNEL_DIR)/drivers/power.c \
            $(KERNEL_DIR)/drivers/acpi.c \
+           $(KERNEL_DIR)/drivers/i2c_hid.c \
            $(KERNEL_DIR)/drivers/usb.c \
            $(KERNEL_DIR)/drivers/usb_hid.c \
            $(KERNEL_DIR)/drivers/usb_xhci.c \

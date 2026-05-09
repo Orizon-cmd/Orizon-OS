@@ -170,7 +170,8 @@ input
 
 Le premier portable cible documente est le Lenovo 500w Yoga Gen 4. Son clavier
 interne passe par PS/2, son SSD par NVMe, et son pave tactile ELAN/Wacom passe
-par I2C-HID, ce qui guide la prochaine etape pilote.
+par I2C-HID. Orizon contient maintenant une premiere sonde Intel LPSS/I2C-HID
+pour ce chemin, avant le parseur multitouch complet.
 
 Details:
 [docs/orizon/HARDWARE_BOOT.md](docs/orizon/HARDWARE_BOOT.md) et

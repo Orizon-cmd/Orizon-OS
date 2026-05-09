@@ -28,10 +28,13 @@ development target, not a ZimaOS-only assumption.
 - Keyboard: The internal keyboard should work through the existing PS/2 path.
 - Display: Orizon uses the boot framebuffer only; there is no Intel graphics
   modesetting driver yet.
-- Touchpad: Not supported yet. This needs ACPI child-device enumeration,
-  Intel LPSS/Synopsys DesignWare I2C, then HID-over-I2C event parsing.
-- Touchscreen/stylus: Same I2C-HID stack as the touchpad, with Wacom input
-  interpretation later.
+- Touchpad: first Intel LPSS/Synopsys DesignWare I2C probe is present for
+  `8086:54e9` at I2C address `0x15`. Orizon can now try HID-over-I2C descriptor
+  reads and report polling. Full multitouch/absolute-coordinate parsing is the
+  next driver step.
+- Touchscreen/stylus: first I2C-HID probe is present for `8086:54e8` at I2C
+  address `0x0a`. Wacom pen/finger interpretation still needs a HID report
+  parser.
 - Wi-Fi: Not supported yet. Intel CNVi/iwlwifi is a large driver family, so use
   supported wired Ethernet in VMs or a future USB/Ethernet path for early
   internet tests on real laptops.
@@ -70,12 +73,13 @@ The local file is ignored by Git through `config/hosts/*.local.env`.
 
 1. Keep boot stability first: timer source, keyboard, framebuffer, NVMe, and
    installer must work without fallback surprises.
-2. Add better ACPI namespace walking to discover devices such as `ELAN0647` and
-   `WCOM508E` from Orizon itself.
-3. Add Intel LPSS/Synopsys DesignWare I2C MMIO support for PCI `8086:54e8` and
-   `8086:54e9`.
-4. Add HID-over-I2C descriptor/read support and convert basic relative/absolute
-   pointer events into the compositor cursor.
+2. Add ACPI namespace walking so Orizon discovers devices such as `ELAN0647`
+   and `WCOM508E` dynamically instead of relying on the first Lenovo target
+   table.
+3. Harden Intel LPSS/Synopsys DesignWare I2C with IRQ support, reset/power
+   commands, and clearer error counters.
+4. Add a real HID report descriptor parser for multitouch absolute coordinates,
+   pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
 6. Decide the real-network strategy for laptops: USB Ethernet first, then Wi-Fi

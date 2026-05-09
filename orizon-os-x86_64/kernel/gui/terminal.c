@@ -3,6 +3,7 @@
  */
 
 #include "../include/gui.h"
+#include "../include/i2c_hid.h"
 #include "../include/acpi.h"
 #include "../include/bootinfo.h"
 #include "../include/input_layout.h"
@@ -1572,11 +1573,15 @@ static void term_print_input_status(terminal_t *term) {
   term_puts_t(term, "USB HID: ");
   term_puts_t(term, line);
   term_puts_t(term, "\n");
+  i2c_hid_format_status(line, sizeof(line));
+  term_puts_t(term, "I2C-HID: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
 
   term_puts_t(term, "Pointer support:\n");
   term_puts_t(term, "  PS/2 mouse/touchpad: supported when firmware exposes i8042\n");
   term_puts_t(term, "  USB HID keyboard: supported; generic USB mouse is still pending\n");
-  term_puts_t(term, "  I2C-HID touchpad/stylus: pending Intel LPSS I2C + HID-over-I2C\n");
+  term_puts_t(term, "  I2C-HID: Lenovo ELAN/Wacom probe active; multitouch parser pending\n");
 
   total = pci_scan_all(devs, 96);
   term_puts_t(term, "Input bus candidates from PCI:\n");
@@ -1792,6 +1797,10 @@ static void term_print_hw(terminal_t *term) {
 
   usb_format_status(line, sizeof(line));
   term_puts_t(term, "USB: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  i2c_hid_format_status(line, sizeof(line));
+  term_puts_t(term, "I2C-HID: ");
   term_puts_t(term, line);
   term_puts_t(term, "\n");
   ps2_format_status(line, sizeof(line));
@@ -2246,6 +2255,10 @@ static void term_print_report(terminal_t *term) {
   term_puts_t(term, "\n");
   usb_format_status(line, sizeof(line));
   term_puts_t(term, "USB: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  i2c_hid_format_status(line, sizeof(line));
+  term_puts_t(term, "I2C-HID: ");
   term_puts_t(term, line);
   term_puts_t(term, "\n");
   ps2_format_status(line, sizeof(line));

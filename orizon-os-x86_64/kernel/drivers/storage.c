@@ -187,6 +187,7 @@ static nvme_cmd_t nvme_io_sq[NVME_IO_QUEUE_DEPTH]
 static nvme_cqe_t nvme_io_cq[NVME_IO_QUEUE_DEPTH]
     __attribute__((aligned(4096)));
 static uint8_t nvme_identify_buf[4096] __attribute__((aligned(4096)));
+static char nvme_model[64] = "NVMe namespace 1";
 
 static uint64_t storage_phys_addr(const void *ptr) {
   uint64_t v = (uint64_t)(uintptr_t)ptr;
@@ -393,6 +394,50 @@ static int nvme_identify_namespace(void) {
   return disk_sectors > 0 ? 0 : -1;
 }
 
+static void nvme_ascii_field(char *out, size_t out_size, const uint8_t *src,
+                             size_t src_len) {
+  size_t n;
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!src || src_len == 0) {
+    return;
+  }
+  n = src_len;
+  while (n > 0 && (src[n - 1] == ' ' || src[n - 1] == '\0')) {
+    n--;
+  }
+  if (n >= out_size) {
+    n = out_size - 1;
+  }
+  for (size_t i = 0; i < n; i++) {
+    char c = (char)src[i];
+    out[i] = (c >= 32 && c <= 126) ? c : ' ';
+  }
+  out[n] = '\0';
+}
+
+static void nvme_identify_controller(void) {
+  nvme_cmd_t cmd;
+  char model[48];
+
+  memset(nvme_identify_buf, 0, sizeof(nvme_identify_buf));
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.opcode = NVME_ADMIN_IDENTIFY;
+  cmd.nsid = 0;
+  cmd.prp1 = storage_phys_addr(nvme_identify_buf);
+  cmd.cdw10 = 1; /* CNS 1: identify controller. */
+  if (nvme_admin_cmd(&cmd) != 0) {
+    return;
+  }
+
+  nvme_ascii_field(model, sizeof(model), nvme_identify_buf + 24, 40);
+  if (model[0]) {
+    snprintf(nvme_model, sizeof(nvme_model), "%s", model);
+  }
+}
+
 static int nvme_io(uint64_t lba, void *buf, uint32_t sectors, int write) {
   if (!disk_ready || storage_driver != STORAGE_DRIVER_NVME || sectors == 0) {
     return disk_ready ? 0 : -1;
@@ -493,12 +538,15 @@ static int nvme_init_controller(void) {
     return -1;
   }
 
-  if (nvme_create_io_queues() != 0 || nvme_identify_namespace() != 0) {
+  if (nvme_create_io_queues() != 0) {
+    return -1;
+  }
+  nvme_identify_controller();
+  if (nvme_identify_namespace() != 0) {
     return -1;
   }
 
-  storage_add_device(STORAGE_DRIVER_NVME, NULL, disk_sectors,
-                     "NVMe namespace 1");
+  storage_add_device(STORAGE_DRIVER_NVME, NULL, disk_sectors, nvme_model);
   set_status("storage: NVMe namespace detected");
   return 0;
 }
@@ -819,6 +867,7 @@ int storage_init(void) {
   storage_driver = STORAGE_DRIVER_NONE;
   disk_port = NULL;
   disk_sectors = 0;
+  snprintf(nvme_model, sizeof(nvme_model), "NVMe namespace 1");
 
   nvme_init_controller();
   ahci_scan_controller();

@@ -31,8 +31,8 @@
 2. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
 3. Harden LAPIC timer calibration and add x2APIC support for newer firmware
    modes.
-4. Add ACPI namespace walking plus Intel LPSS/Synopsys DesignWare I2C for
-   ELAN/Wacom HID-over-I2C devices.
+4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
+   report parser for ELAN/Wacom multitouch and stylus events.
 5. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 6. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 7. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and

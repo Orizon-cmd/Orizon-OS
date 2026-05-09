@@ -136,6 +136,21 @@ static int mouse_max_x = 1920;
 static int mouse_max_y = 1080;
 static int mouse_scale = 2;
 
+static void ps2_apply_mouse_delta(int dx, int dy, int buttons, int wheel) {
+  ps2_mouse_x += dx * mouse_scale;
+  ps2_mouse_y -= dy * mouse_scale;
+
+  if (ps2_mouse_x < 0) ps2_mouse_x = 0;
+  if (ps2_mouse_x >= mouse_max_x) ps2_mouse_x = mouse_max_x - 1;
+  if (ps2_mouse_y < 0) ps2_mouse_y = 0;
+  if (ps2_mouse_y >= mouse_max_y) ps2_mouse_y = mouse_max_y - 1;
+
+  ps2_mouse_buttons = buttons & 0x07;
+  if (wheel != 0) {
+    ps2_mouse_wheel_delta += wheel;
+  }
+}
+
 /* ===================================================================== */
 /* PS/2 Controller Helper Functions                                      */
 /* ===================================================================== */
@@ -286,33 +301,19 @@ void ps2_poll(void) {
         if (flags & 0x40) dx = 0;
         if (flags & 0x80) dy = 0;
         
-        /* Sensitivity */
-        dx *= mouse_scale;
-        dy *= mouse_scale;
-        
-        /* Update position */
-        ps2_mouse_x += dx;
-        ps2_mouse_y -= dy;
-        
-        /* Clamp */
-        if (ps2_mouse_x < 0) ps2_mouse_x = 0;
-        if (ps2_mouse_x >= mouse_max_x) ps2_mouse_x = mouse_max_x - 1;
-        if (ps2_mouse_y < 0) ps2_mouse_y = 0;
-        if (ps2_mouse_y >= mouse_max_y) ps2_mouse_y = mouse_max_y - 1;
-        
-        /* Buttons */
-        ps2_mouse_buttons = 0;
-        if (flags & 0x01) ps2_mouse_buttons |= 1;
-        if (flags & 0x02) ps2_mouse_buttons |= 2;
-        if (flags & 0x04) ps2_mouse_buttons |= 4;
+        int buttons = 0;
+        if (flags & 0x01) buttons |= 1;
+        if (flags & 0x02) buttons |= 2;
+        if (flags & 0x04) buttons |= 4;
 
+        int wheel = 0;
         if (mouse_packet_size == 4) {
-          int wheel = mouse_packet[3] & 0x0F;
+          wheel = mouse_packet[3] & 0x0F;
           if (wheel & 0x08) {
             wheel -= 16;
           }
-          ps2_mouse_wheel_delta += wheel;
         }
+        ps2_apply_mouse_delta(dx, dy, buttons, wheel);
       }
     } else {
       /* ============ KEYBOARD DATA ============ */
@@ -605,6 +606,11 @@ int ps2_consume_mouse_wheel(void) {
   int delta = ps2_mouse_wheel_delta;
   ps2_mouse_wheel_delta = 0;
   return delta;
+}
+
+void ps2_inject_mouse_relative(int dx, int dy, int buttons, int wheel) {
+  ps2_apply_mouse_delta(dx, dy, buttons, wheel);
+  ps2_mouse_packets++;
 }
 
 void ps2_format_status(char *buf, size_t size) {

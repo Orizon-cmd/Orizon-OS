@@ -50,3 +50,5 @@ awake manually instead of freezing at the splash.
   show timer, storage, network, USB, PS/2, and boot payload state.
 - Use `pci` and `input` for real laptops. They expose PCI driver hints and
   pointer-bus candidates such as USB, SMBus, or Intel LPSS I2C.
+- On the Lenovo 500w Yoga Gen 4 target, `input` also shows the first I2C-HID
+  probe status for the ELAN touchpad and Wacom touch/stylus path.
