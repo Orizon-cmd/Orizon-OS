@@ -37,9 +37,11 @@ development target, not a ZimaOS-only assumption.
   parser.
 - Wi-Fi: Stage-0 detection is present. Orizon can detect the Intel CNVi
   controller (`8086:54f0`) and expose `wifi status`, `wifi scan`, and
-  `wifi connect` diagnostics. Real scans/connections still require the next
-  driver milestones: Intel firmware loading, DMA command queues, 802.11
-  management frames, and WPA association.
+  `wifi connect` diagnostics. Stage-1 firmware discovery is also present:
+  Orizon checks Limine boot modules, `/system/firmware`, and
+  `/packages/firmware` for `iwlwifi-*.ucode`. Real scans/connections still
+  require the next driver milestones: firmware alive/reset, DMA command queues,
+  802.11 management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -52,6 +54,7 @@ pci
 pci bars
 input
 wifi
+wifi firmware
 wifi scan
 storage
 disks
@@ -72,6 +75,18 @@ python scripts/orizon/inventory_laptop_hotspot.py
 ```
 
 The local file is ignored by Git through `config/hosts/*.local.env`.
+
+To import the Intel Wi-Fi firmware from the laptop Linux install into the local
+ISO tree, use:
+
+```powershell
+python scripts/orizon/import_intel_wifi_firmware.py
+python scripts/orizon/orizon_update.py --mode zimaos-vm
+```
+
+The firmware lands in `orizon-os-x86_64/firmware/`, which is ignored by Git.
+The Makefile copies it into the ISO and exposes it to the kernel as a Limine
+module.
 
 ## Driver Plan For This Laptop
 

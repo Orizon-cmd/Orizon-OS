@@ -159,6 +159,18 @@ $(ISO): $(KERNEL) $(LIMINE_DIR)
 	cp limine.conf $(ISO_ROOT)/boot/limine.conf
 	cp limine.conf $(ISO_ROOT)/limine/limine.conf
 	cp limine.conf $(ISO_ROOT)/EFI/BOOT/limine.conf
+	if [ -d firmware ]; then \
+		mkdir -p $(ISO_ROOT)/firmware; \
+		find firmware -maxdepth 1 -type f -name 'iwlwifi-*.ucode' -exec cp {} $(ISO_ROOT)/firmware/ \; ; \
+		for fw in $(ISO_ROOT)/firmware/iwlwifi-*.ucode; do \
+			[ -f "$$fw" ] || continue; \
+			name=$$(basename "$$fw"); \
+			for conf in $(ISO_ROOT)/limine.conf $(ISO_ROOT)/boot/limine.conf $(ISO_ROOT)/limine/limine.conf $(ISO_ROOT)/EFI/BOOT/limine.conf; do \
+				awk -v fwname="$$name" '{ print; if ($$1 == "kernel_path:") { print "    module_path: boot():/firmware/" fwname; print "    module_cmdline: orizon-firmware iwlwifi " fwname; } }' "$$conf" > "$$conf.tmp"; \
+				mv "$$conf.tmp" "$$conf"; \
+			done; \
+		done; \
+	fi
 	
 	# Copy Limine files
 	cp $(LIMINE_DIR)/bin/limine-bios.sys $(ISO_ROOT)/boot/ 2>/dev/null || true

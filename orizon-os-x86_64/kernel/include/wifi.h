@@ -19,12 +19,17 @@ typedef struct {
   const char *chipset;
   const char *driver;
   const char *status;
+  int firmware_present;
+  size_t firmware_size;
+  const char *firmware_name;
+  const char *firmware_source;
 } wifi_status_t;
 
 int wifi_init(void);
 void wifi_poll(void);
 const wifi_status_t *wifi_get_status(void);
 void wifi_format_status(char *buf, size_t size);
+int wifi_firmware_probe(char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);

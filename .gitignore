@@ -22,3 +22,4 @@ config/hosts/*.local.env
 config/hosts/*.local.json
 config/vm/*.local.json
 logs/
+orizon-os-x86_64/firmware/

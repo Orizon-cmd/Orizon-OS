@@ -184,6 +184,36 @@ void *boot_rsdp_address(void) {
   }
   return NULL;
 }
+int boot_find_module(const char *needle, const void **address, size_t *size,
+                     const char **path, const char **cmdline) {
+  if (!needle || !needle[0] || !module_request.response ||
+      !module_request.response->modules) {
+    return -1;
+  }
+  for (uint64_t i = 0; i < module_request.response->module_count; i++) {
+    struct limine_file *file = module_request.response->modules[i];
+    if (!file || !file->address || file->size == 0) {
+      continue;
+    }
+    if ((file->path && strstr(file->path, needle)) ||
+        (file->cmdline && strstr(file->cmdline, needle))) {
+      if (address) {
+        *address = file->address;
+      }
+      if (size) {
+        *size = file->size;
+      }
+      if (path) {
+        *path = file->path ? file->path : "";
+      }
+      if (cmdline) {
+        *cmdline = file->cmdline ? file->cmdline : "";
+      }
+      return 0;
+    }
+  }
+  return -1;
+}
 
 /* ========== Early Serial Debug ========== */
 

@@ -16,5 +16,7 @@ int boot_payloads_ready(void);
 const char *boot_cmdline(void);
 int boot_cmdline_has(const char *needle);
 void *boot_rsdp_address(void);
+int boot_find_module(const char *needle, const void **address, size_t *size,
+                     const char **path, const char **cmdline);
 
 #endif /* _BOOTINFO_H */

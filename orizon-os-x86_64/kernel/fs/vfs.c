@@ -404,6 +404,7 @@ static void vfs_ensure_data_roots(void) {
   vfs_mkdir("/workspace");
   vfs_mkdir("/system");
   vfs_mkdir("/system/share");
+  vfs_mkdir("/system/firmware");
   vfs_mkdir("/home");
   vfs_mkdir("/home/orizon");
   vfs_mkdir("/packages");
@@ -630,6 +631,7 @@ void vfs_persist_load(void) {
   vfs_write_default_file(
       "/system/data-layout",
       "version 1\nroots /system /home /packages /logs /workspace\n");
+  vfs_mkdir("/system/firmware");
   vfs_write_default_file("/system/hostname", "orizon-os");
   vfs_write_default_file("/system/version", "core-x86_64");
   vfs_write_default_file("/system/profile", "minimal-development\n");

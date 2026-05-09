@@ -175,7 +175,17 @@ interne passe par PS/2, son SSD par NVMe, et son pave tactile ELAN/Wacom passe
 par I2C-HID. Orizon contient maintenant une premiere sonde Intel LPSS/I2C-HID
 pour ce chemin, avant le parseur multitouch complet. Le Wi-Fi Intel CNVi est
 detecte par `wifi status`, mais les vraies connexions attendent encore le
-chargeur de firmware et la couche 802.11/WPA.
+demarrage complet du firmware et la couche 802.11/WPA. La commande
+`wifi firmware` verifie deja les firmwares `iwlwifi-*.ucode` fournis via module
+de boot ou `/system/firmware`.
+
+Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
+committer dans Git:
+
+```powershell
+python scripts/orizon/import_intel_wifi_firmware.py
+python scripts/orizon/orizon_update.py --mode zimaos-vm
+```
 
 Details:
 [docs/orizon/HARDWARE_BOOT.md](docs/orizon/HARDWARE_BOOT.md) et
