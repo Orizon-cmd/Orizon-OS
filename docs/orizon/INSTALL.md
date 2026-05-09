@@ -71,9 +71,10 @@ fallbacks until the console grows Unicode text support.
 
 ## Safety Boundary
 
-The installer can now partition and install to the first AHCI/SATA disk. It is
-still intentionally narrow: UEFI fallback boot only, no multi-disk picker yet,
-no dual-boot preservation, and no A/B rollback slots yet.
+The installer can now partition and install to the first AHCI/SATA disk or the
+first NVMe namespace with 512-byte LBAs. It is still intentionally narrow: UEFI
+fallback boot only, no multi-disk picker yet, no dual-boot preservation, and no
+A/B rollback slots yet.
 
 ## Next Kernel Layers
 

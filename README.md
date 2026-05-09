@@ -15,6 +15,8 @@ le developpement noyau:
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32 et boot UEFI
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
+- pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
+  Ethernet Intel e1000/e1000e et Realtek RTL8139
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
   les fichiers de boot installes
@@ -55,9 +57,9 @@ un shutdown. Au boot suivant, la commande `install` est bloquee pour proteger
 le disque et les donnees.
 
 La premiere version cible le cas le plus utile pour le labo et les machines
-UEFI simples: un disque AHCI/SATA, une ESP de 1 MiB a 512 MiB, et une partition
-data Orizon a partir de 512 MiB. Les installations multi-disques, dual-boot et
-boot-count automatique arriveront ensuite.
+UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA, une ESP de 1 MiB a
+512 MiB, et une partition data Orizon a partir de 512 MiB. Les installations
+multi-disques, dual-boot et boot-count automatique arriveront ensuite.
 
 Pour revoir le plan:
 
@@ -117,7 +119,7 @@ update
 
 La commande lance une transaction interne, facon `apt full-upgrade`, sans
 programme externe: preparation de la base packages, probe Ethernet Intel
-`e1000/e1000e`, DHCP, DNS, TCP, TLS vers GitHub, telechargement du manifeste
+`e1000/e1000e` ou `RTL8139`, DHCP, DNS, TCP, TLS vers GitHub, telechargement du manifeste
 public, telechargement des artefacts par requetes HTTP `Range`, verification
 SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
 `BOOTX64.EFI` et `limine.conf`, puis lecture de l'index public

@@ -1,9 +1,8 @@
 /*
- * Orizon OS x86_64 - Minimal AHCI block storage
+ * Orizon OS x86_64 - Minimal AHCI/NVMe block storage
  *
- * This driver intentionally supports the VM's first AHCI/SATA disk only.
- * It is enough for the first persistent /workspace backend and keeps the
- * storage surface small while the OS is still young.
+ * This keeps the storage surface small while the OS is still young: AHCI for
+ * the current VM path, plus a first NVMe namespace path for modern machines.
  */
 
 #include "../include/storage.h"
@@ -28,6 +27,31 @@
 #define ATA_CMD_IDENTIFY 0xEC
 #define ATA_CMD_READ_DMA_EXT 0x25
 #define ATA_CMD_WRITE_DMA_EXT 0x35
+
+#define NVME_ADMIN_QUEUE_DEPTH 32
+#define NVME_IO_QUEUE_DEPTH 64
+#define NVME_REG_CAP 0x0000
+#define NVME_REG_CC 0x0014
+#define NVME_REG_CSTS 0x001C
+#define NVME_REG_AQA 0x0024
+#define NVME_REG_ASQ 0x0028
+#define NVME_REG_ACQ 0x0030
+#define NVME_DOORBELL_BASE 0x1000
+#define NVME_CC_EN 0x00000001U
+#define NVME_CC_IOSQES_SHIFT 16
+#define NVME_CC_IOCQES_SHIFT 20
+#define NVME_CSTS_RDY 0x00000001U
+#define NVME_ADMIN_CREATE_IO_SQ 0x01
+#define NVME_ADMIN_CREATE_IO_CQ 0x05
+#define NVME_ADMIN_IDENTIFY 0x06
+#define NVME_CMD_WRITE 0x01
+#define NVME_CMD_READ 0x02
+
+typedef enum {
+  STORAGE_DRIVER_NONE = 0,
+  STORAGE_DRIVER_AHCI,
+  STORAGE_DRIVER_NVME,
+} storage_driver_t;
 
 typedef volatile struct {
   uint32_t clb;
@@ -91,8 +115,35 @@ typedef struct {
   ahci_prdt_t prdt[1];
 } __attribute__((packed)) ahci_cmd_table_t;
 
+typedef struct {
+  uint8_t opcode;
+  uint8_t flags;
+  uint16_t cid;
+  uint32_t nsid;
+  uint64_t rsv0;
+  uint64_t mptr;
+  uint64_t prp1;
+  uint64_t prp2;
+  uint32_t cdw10;
+  uint32_t cdw11;
+  uint32_t cdw12;
+  uint32_t cdw13;
+  uint32_t cdw14;
+  uint32_t cdw15;
+} __attribute__((packed)) nvme_cmd_t;
+
+typedef struct {
+  uint32_t result;
+  uint32_t rsv0;
+  uint16_t sq_head;
+  uint16_t sq_id;
+  uint16_t cid;
+  uint16_t status;
+} __attribute__((packed)) nvme_cqe_t;
+
 static ahci_mem_t *hba = NULL;
 static ahci_port_t *disk_port = NULL;
+static storage_driver_t storage_driver = STORAGE_DRIVER_NONE;
 static int disk_ready = 0;
 static uint64_t disk_sectors = 0;
 static const char *disk_status = "storage: not initialized";
@@ -100,6 +151,28 @@ static const char *disk_status = "storage: not initialized";
 static ahci_cmd_header_t cmd_list[32] __attribute__((aligned(1024)));
 static uint8_t fis_area[256] __attribute__((aligned(256)));
 static ahci_cmd_table_t cmd_tables[32] __attribute__((aligned(128)));
+
+static volatile uint8_t *nvme_mmio = NULL;
+static uint32_t nvme_db_stride = 4;
+static uint32_t nvme_namespace_id = 1;
+static uint32_t nvme_lba_size = ORIZON_SECTOR_SIZE;
+static uint16_t nvme_next_cid = 1;
+static uint16_t nvme_admin_sq_tail = 0;
+static uint16_t nvme_admin_cq_head = 0;
+static uint8_t nvme_admin_cq_phase = 1;
+static uint16_t nvme_io_sq_tail = 0;
+static uint16_t nvme_io_cq_head = 0;
+static uint8_t nvme_io_cq_phase = 1;
+
+static nvme_cmd_t nvme_admin_sq[NVME_ADMIN_QUEUE_DEPTH]
+    __attribute__((aligned(4096)));
+static nvme_cqe_t nvme_admin_cq[NVME_ADMIN_QUEUE_DEPTH]
+    __attribute__((aligned(4096)));
+static nvme_cmd_t nvme_io_sq[NVME_IO_QUEUE_DEPTH]
+    __attribute__((aligned(4096)));
+static nvme_cqe_t nvme_io_cq[NVME_IO_QUEUE_DEPTH]
+    __attribute__((aligned(4096)));
+static uint8_t nvme_identify_buf[4096] __attribute__((aligned(4096)));
 
 static uint64_t storage_phys_addr(const void *ptr) {
   uint64_t v = (uint64_t)(uintptr_t)ptr;
@@ -117,6 +190,257 @@ static void set_status(const char *status) {
   serial_puts("[storage] ");
   serial_puts(status);
   serial_puts("\n");
+}
+
+static uint32_t nvme_read32(uint32_t reg) {
+  return *(volatile uint32_t *)(nvme_mmio + reg);
+}
+
+static void nvme_write32(uint32_t reg, uint32_t value) {
+  *(volatile uint32_t *)(nvme_mmio + reg) = value;
+}
+
+static uint64_t nvme_read64(uint32_t reg) {
+  uint64_t lo = nvme_read32(reg);
+  uint64_t hi = nvme_read32(reg + 4);
+  return lo | (hi << 32);
+}
+
+static void nvme_write64(uint32_t reg, uint64_t value) {
+  nvme_write32(reg, (uint32_t)value);
+  nvme_write32(reg + 4, (uint32_t)(value >> 32));
+}
+
+static uint32_t nvme_doorbell(uint16_t qid, int completion_queue) {
+  return NVME_DOORBELL_BASE + ((uint32_t)qid * 2U +
+                               (completion_queue ? 1U : 0U)) *
+                                  nvme_db_stride;
+}
+
+static int nvme_wait_ready(int ready, int timeout) {
+  while (timeout-- > 0) {
+    int is_ready = (nvme_read32(NVME_REG_CSTS) & NVME_CSTS_RDY) ? 1 : 0;
+    if (is_ready == ready) {
+      return 0;
+    }
+    __asm__ volatile("pause");
+  }
+  return -1;
+}
+
+static int nvme_submit_sync(volatile nvme_cmd_t *sq, volatile nvme_cqe_t *cq,
+                            uint16_t qid, uint16_t depth, uint16_t *sq_tail,
+                            uint16_t *cq_head, uint8_t *cq_phase,
+                            const nvme_cmd_t *cmd_in) {
+  nvme_cmd_t cmd;
+  uint16_t cid = nvme_next_cid++;
+  if (nvme_next_cid == 0) {
+    nvme_next_cid = 1;
+  }
+
+  memcpy(&cmd, cmd_in, sizeof(cmd));
+  cmd.cid = cid;
+  memcpy((void *)&sq[*sq_tail], &cmd, sizeof(cmd));
+  *sq_tail = (uint16_t)((*sq_tail + 1) % depth);
+  nvme_write32(nvme_doorbell(qid, 0), *sq_tail);
+
+  for (int i = 0; i < 10000000; i++) {
+    volatile nvme_cqe_t *entry = &cq[*cq_head];
+    if ((entry->status & 1U) == *cq_phase) {
+      uint16_t status = (uint16_t)(entry->status >> 1);
+      if (entry->cid != cid) {
+        return -1;
+      }
+      *cq_head = (uint16_t)((*cq_head + 1) % depth);
+      if (*cq_head == 0) {
+        *cq_phase ^= 1U;
+      }
+      nvme_write32(nvme_doorbell(qid, 1), *cq_head);
+      return status == 0 ? 0 : -1;
+    }
+    __asm__ volatile("pause");
+  }
+  return -1;
+}
+
+static int nvme_admin_cmd(const nvme_cmd_t *cmd) {
+  return nvme_submit_sync(nvme_admin_sq, nvme_admin_cq, 0,
+                          NVME_ADMIN_QUEUE_DEPTH, &nvme_admin_sq_tail,
+                          &nvme_admin_cq_head, &nvme_admin_cq_phase, cmd);
+}
+
+static int nvme_io_cmd(const nvme_cmd_t *cmd) {
+  return nvme_submit_sync(nvme_io_sq, nvme_io_cq, 1, NVME_IO_QUEUE_DEPTH,
+                          &nvme_io_sq_tail, &nvme_io_cq_head,
+                          &nvme_io_cq_phase, cmd);
+}
+
+static uint64_t nvme_le64(const uint8_t *p) {
+  return ((uint64_t)p[0]) | ((uint64_t)p[1] << 8) |
+         ((uint64_t)p[2] << 16) | ((uint64_t)p[3] << 24) |
+         ((uint64_t)p[4] << 32) | ((uint64_t)p[5] << 40) |
+         ((uint64_t)p[6] << 48) | ((uint64_t)p[7] << 56);
+}
+
+static int nvme_create_io_queues(void) {
+  nvme_cmd_t cmd;
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.opcode = NVME_ADMIN_CREATE_IO_CQ;
+  cmd.prp1 = storage_phys_addr(nvme_io_cq);
+  cmd.cdw10 = 1U | ((NVME_IO_QUEUE_DEPTH - 1U) << 16);
+  cmd.cdw11 = 1U; /* Physically contiguous queue, interrupts disabled. */
+  if (nvme_admin_cmd(&cmd) != 0) {
+    return -1;
+  }
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.opcode = NVME_ADMIN_CREATE_IO_SQ;
+  cmd.prp1 = storage_phys_addr(nvme_io_sq);
+  cmd.cdw10 = 1U | ((NVME_IO_QUEUE_DEPTH - 1U) << 16);
+  cmd.cdw11 = 1U | (1U << 16); /* Physically contiguous, CQ id 1. */
+  return nvme_admin_cmd(&cmd);
+}
+
+static int nvme_identify_namespace(void) {
+  nvme_cmd_t cmd;
+  memset(nvme_identify_buf, 0, sizeof(nvme_identify_buf));
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.opcode = NVME_ADMIN_IDENTIFY;
+  cmd.nsid = nvme_namespace_id;
+  cmd.prp1 = storage_phys_addr(nvme_identify_buf);
+  cmd.cdw10 = 0; /* CNS 0: identify namespace. */
+  if (nvme_admin_cmd(&cmd) != 0) {
+    return -1;
+  }
+
+  uint8_t flbas = nvme_identify_buf[26] & 0x0F;
+  if (flbas >= 16) {
+    return -1;
+  }
+  uint8_t lba_shift = nvme_identify_buf[128 + flbas * 4 + 3];
+  if (lba_shift >= 32) {
+    return -1;
+  }
+  nvme_lba_size = 1U << lba_shift;
+  if (nvme_lba_size != ORIZON_SECTOR_SIZE) {
+    set_status("storage: NVMe namespace is not 512-byte LBA yet");
+    return -1;
+  }
+
+  disk_sectors = nvme_le64(nvme_identify_buf);
+  return disk_sectors > 0 ? 0 : -1;
+}
+
+static int nvme_io(uint64_t lba, void *buf, uint32_t sectors, int write) {
+  if (!disk_ready || storage_driver != STORAGE_DRIVER_NVME || sectors == 0) {
+    return disk_ready ? 0 : -1;
+  }
+
+  uint8_t *bytes = (uint8_t *)buf;
+  for (uint32_t i = 0; i < sectors; i++) {
+    nvme_cmd_t cmd;
+    uint64_t phys = storage_phys_addr(bytes + (uint64_t)i * ORIZON_SECTOR_SIZE);
+
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.opcode = write ? NVME_CMD_WRITE : NVME_CMD_READ;
+    cmd.nsid = nvme_namespace_id;
+    cmd.prp1 = phys;
+    if ((phys & 0xFFFU) + ORIZON_SECTOR_SIZE > 4096U) {
+      cmd.prp2 = (phys & ~0xFFFULL) + 4096U;
+    }
+    cmd.cdw10 = (uint32_t)(lba + i);
+    cmd.cdw11 = (uint32_t)((lba + i) >> 32);
+    cmd.cdw12 = 0; /* One logical block, zero based. */
+    if (nvme_io_cmd(&cmd) != 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+static int nvme_init_controller(void) {
+  pci_device_info_t devs[4];
+  int count = pci_scan_class(0x01, 0x08, 0x02, devs, 4);
+  if (count <= 0) {
+    return -1;
+  }
+
+  pci_device_info_t *dev = &devs[0];
+  uint32_t cmd_reg = pci_read32(dev->bus, dev->device, dev->function, 0x04);
+  cmd_reg |= (1U << 2) | (1U << 1);
+  pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd_reg);
+
+  if (dev->bar[0] & 0x01) {
+    set_status("storage: NVMe BAR is not MMIO");
+    return -1;
+  }
+
+  uint64_t bar = dev->bar[0] & ~0xFULL;
+  if (dev->bar[0] & 0x04) {
+    bar |= ((uint64_t)dev->bar[1] << 32);
+  }
+  if (!bar) {
+    set_status("storage: NVMe BAR missing");
+    return -1;
+  }
+
+  nvme_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(bar, 0x4000);
+  if (!nvme_mmio) {
+    set_status("storage: NVMe MMIO map failed");
+    return -1;
+  }
+
+  uint64_t cap = nvme_read64(NVME_REG_CAP);
+  uint32_t mps_min = (uint32_t)((cap >> 48) & 0x0F);
+  if (mps_min != 0) {
+    set_status("storage: NVMe requires page size above 4 KiB");
+    return -1;
+  }
+  nvme_db_stride = 4U << ((cap >> 32) & 0x0F);
+
+  uint32_t cc = nvme_read32(NVME_REG_CC);
+  if (cc & NVME_CC_EN) {
+    nvme_write32(NVME_REG_CC, cc & ~NVME_CC_EN);
+    if (nvme_wait_ready(0, 5000000) != 0) {
+      set_status("storage: NVMe disable timeout");
+      return -1;
+    }
+  }
+
+  memset(nvme_admin_sq, 0, sizeof(nvme_admin_sq));
+  memset(nvme_admin_cq, 0, sizeof(nvme_admin_cq));
+  memset(nvme_io_sq, 0, sizeof(nvme_io_sq));
+  memset(nvme_io_cq, 0, sizeof(nvme_io_cq));
+  nvme_admin_sq_tail = 0;
+  nvme_admin_cq_head = 0;
+  nvme_admin_cq_phase = 1;
+  nvme_io_sq_tail = 0;
+  nvme_io_cq_head = 0;
+  nvme_io_cq_phase = 1;
+
+  nvme_write32(NVME_REG_AQA, (NVME_ADMIN_QUEUE_DEPTH - 1U) |
+                                  ((NVME_ADMIN_QUEUE_DEPTH - 1U) << 16));
+  nvme_write64(NVME_REG_ASQ, storage_phys_addr(nvme_admin_sq));
+  nvme_write64(NVME_REG_ACQ, storage_phys_addr(nvme_admin_cq));
+
+  cc = (6U << NVME_CC_IOSQES_SHIFT) | (4U << NVME_CC_IOCQES_SHIFT) |
+       NVME_CC_EN;
+  nvme_write32(NVME_REG_CC, cc);
+  if (nvme_wait_ready(1, 5000000) != 0) {
+    set_status("storage: NVMe ready timeout");
+    return -1;
+  }
+
+  if (nvme_create_io_queues() != 0 || nvme_identify_namespace() != 0) {
+    return -1;
+  }
+
+  storage_driver = STORAGE_DRIVER_NVME;
+  disk_ready = 1;
+  disk_port = NULL;
+  set_status("storage: NVMe namespace ready");
+  return 0;
 }
 
 static int ahci_port_has_disk(ahci_port_t *port) {
@@ -319,7 +643,7 @@ static uint64_t identify_sector_count(const uint16_t *id) {
   return sectors;
 }
 
-int storage_init(void) {
+static int ahci_init_controller(void) {
   if (disk_ready) {
     return 0;
   }
@@ -371,6 +695,7 @@ int storage_init(void) {
     if (ahci_setup_port(&hba->ports[i]) == 0) {
       static uint16_t identify_words[256] __attribute__((aligned(4096)));
       disk_port = &hba->ports[i];
+      storage_driver = STORAGE_DRIVER_AHCI;
       disk_ready = 1;
       if (ahci_identify(disk_port, identify_words) == 0) {
         disk_sectors = identify_sector_count(identify_words);
@@ -382,6 +707,16 @@ int storage_init(void) {
 
   set_status("storage: no SATA disk");
   return -1;
+}
+
+int storage_init(void) {
+  if (disk_ready) {
+    return 0;
+  }
+  if (nvme_init_controller() == 0) {
+    return 0;
+  }
+  return ahci_init_controller();
 }
 
 int storage_available(void) {
@@ -423,12 +758,18 @@ int storage_read(uint64_t lba, void *buf, uint32_t sector_count) {
   if (!storage_available()) {
     return -1;
   }
+  if (storage_driver == STORAGE_DRIVER_NVME) {
+    return nvme_io(lba, buf, sector_count, 0);
+  }
   return ahci_io(lba, buf, sector_count, 0);
 }
 
 int storage_write(uint64_t lba, const void *buf, uint32_t sector_count) {
   if (!storage_available()) {
     return -1;
+  }
+  if (storage_driver == STORAGE_DRIVER_NVME) {
+    return nvme_io(lba, (void *)buf, sector_count, 1);
   }
   return ahci_io(lba, (void *)buf, sector_count, 1);
 }

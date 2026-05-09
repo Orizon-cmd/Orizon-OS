@@ -1777,7 +1777,7 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, "[3/5] Disk configuration\n");
     term_puts_t(term, "Detected storage: ");
     term_puts_t(term, storage_available() ? storage_status()
-                                          : "no writable AHCI disk");
+                                          : "no writable AHCI/NVMe disk");
     term_puts_t(term, "\n");
     term_puts_t(term, "  1. guided-full-disk\n");
     term_puts_t(term, "  2. manual-later\n");
@@ -2507,6 +2507,15 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "sync: persistence unavailable\n");
     }
   } else if (term_command_is(cmd, "storage")) {
+    char capacity[64];
+    storage_format_capacity(capacity, sizeof(capacity));
+    term_puts_t(term, "Disk: ");
+    term_puts_t(term, storage_available() ? storage_status()
+                                          : "no writable AHCI/NVMe disk");
+    term_puts_t(term, " (");
+    term_puts_t(term, capacity);
+    term_puts_t(term, ")\n");
+    term_puts_t(term, "Workspace: ");
     term_puts_t(term, vfs_persist_status());
     term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "keyboard")) {

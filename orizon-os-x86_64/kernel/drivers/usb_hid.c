@@ -4,82 +4,52 @@
 
 #include "../include/types.h"
 #include "../include/ps2.h"
-#include "../include/gui.h"
 #include "../include/input_layout.h"
+#include "../include/string.h"
 
 void usb_hid_handle_key(int key);
 
 static uint8_t prev_keys[6] = {0};
 static int caps_lock = 0;
 
-void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
-  static int call_count = 0;
-  call_count++;
-  
-  /* Show if this function is EVER called - TEAL block */
-  static int shown_called = 0;
-  if (call_count == 1 && !shown_called) {
-    for (int y = 0; y < 50; y++) {
-      for (int x = 0; x < 50; x++) {
-        debug_rect(110 + x, 100 + y, 1, 1, 0xFF00AAFF);
-      }
+static int usb_hid_key_is_down(uint8_t key) {
+  for (int i = 0; i < 6; i++) {
+    if (prev_keys[i] == key) {
+      return 1;
     }
-    shown_called = 1;
   }
-  
-  if (!rep || len < 8) {
-    /* Invalid report - show RED block */
-    static int shown_invalid = 0;
-    if (!shown_invalid) {
-      for (int y = 0; y < 50; y++) {
-        for (int x = 0; x < 50; x++) {
-          debug_rect(110 + x, 150 + y, 1, 1, 0xFFFF0000);
-        }
-      }
-      shown_invalid = 1;
+  return 0;
+}
+
+static int usb_hid_report_has_rollover(const uint8_t *keys) {
+  for (int i = 0; i < 6; i++) {
+    if (keys[i] >= 1 && keys[i] <= 3) {
+      return 1;
     }
+  }
+  return 0;
+}
+
+void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
+  if (!rep || len < 8) {
     return;
   }
 
-  static int first_handle = 1;
-  if (first_handle) {
-    /* [5] MAGENTA BLOCK - valid report processed */
-    for (int y = 0; y < 100; y++) {
-      for (int x = 0; x < 100; x++) {
-        debug_rect(x, 400 + y, 1, 1, 0xFFFF00FF);
-      }
-    }
-    first_handle = 0;
+  if (usb_hid_report_has_rollover(rep + 2)) {
+    memset(prev_keys, 0, sizeof(prev_keys));
+    return;
   }
 
   uint8_t mods = rep[0];
   int shift = (mods & 0x22) != 0; /* LSHIFT or RSHIFT */
 
   /* Check newly pressed keys */
-  static int shown_key_found = 0;
   for (int i = 2; i < 8; i++) {
     uint8_t key = rep[i];
-    
-    if (key != 0 && !shown_key_found) {
-      /* BROWN block - non-zero key in report */
-      for (int y = 0; y < 50; y++) {
-        for (int x = 0; x < 50; x++) {
-          debug_rect(110 + x, 200 + y, 1, 1, 0xFF884400);
-        }
-      }
-      shown_key_found = 1;
-    }
-    
+
     if (key == 0) continue;
 
-    int already = 0;
-    for (int j = 0; j < 6; j++) {
-      if (prev_keys[j] == key) {
-        already = 1;
-        break;
-      }
-    }
-    if (already) continue;
+    if (usb_hid_key_is_down(key)) continue;
 
     int out = 0;
     switch (key) {

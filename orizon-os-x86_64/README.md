@@ -10,6 +10,8 @@ with a restrained, development-first interface.
 - Uses a framebuffer UI with an `Orizon OS` splash and one core console with
   persistent history, Tab completion, and a small line editor
 - Keeps `/workspace` persistent when an Orizon data area is available
+- Probes AHCI/SATA and 512-byte LBA NVMe storage, plus Intel e1000/e1000e and
+  Realtek RTL8139 Ethernet controllers
 - Stays intentionally small so new features can be added deliberately
 
 ## Why it is minimal

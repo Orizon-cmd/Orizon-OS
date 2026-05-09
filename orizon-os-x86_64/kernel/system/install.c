@@ -656,7 +656,7 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
     return -1;
   }
   if (!storage_available()) {
-    append_report(report, report_size, "install: no writable AHCI disk");
+    append_report(report, report_size, "install: no writable AHCI/NVMe disk");
     return -2;
   }
   storage_format_capacity(capacity, sizeof(capacity));
@@ -728,7 +728,7 @@ static int orizon_install_update_esp_payload(
     return -1;
   }
   if (!storage_available()) {
-    append_report(report, report_size, "update: no writable AHCI disk");
+    append_report(report, report_size, "update: no writable AHCI/NVMe disk");
     return -2;
   }
   sectors = storage_sector_count();

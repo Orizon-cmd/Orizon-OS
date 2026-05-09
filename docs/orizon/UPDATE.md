@@ -196,7 +196,8 @@ All three flows refresh the root `Orizon-OS.iso` artifact unless
 
 ## Current Kernel Layers
 
-- Intel `e1000/e1000e` Ethernet probe for the VM and compatible hardware.
+- Intel `e1000/e1000e` and Realtek `RTL8139` Ethernet probes for the VM and
+  compatible hardware.
 - Raw Ethernet TX/RX rings.
 - ARP handling and gateway MAC resolution.
 - DHCP IPv4 configuration.
