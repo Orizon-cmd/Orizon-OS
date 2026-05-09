@@ -35,9 +35,11 @@ development target, not a ZimaOS-only assumption.
 - Touchscreen/stylus: first I2C-HID probe is present for `8086:54e8` at I2C
   address `0x0a`. Wacom pen/finger interpretation still needs a HID report
   parser.
-- Wi-Fi: Not supported yet. Intel CNVi/iwlwifi is a large driver family, so use
-  supported wired Ethernet in VMs or a future USB/Ethernet path for early
-  internet tests on real laptops.
+- Wi-Fi: Stage-0 detection is present. Orizon can detect the Intel CNVi
+  controller (`8086:54f0`) and expose `wifi status`, `wifi scan`, and
+  `wifi connect` diagnostics. Real scans/connections still require the next
+  driver milestones: Intel firmware loading, DMA command queues, 802.11
+  management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -49,6 +51,8 @@ hw
 pci
 pci bars
 input
+wifi
+wifi scan
 storage
 disks
 ```
@@ -82,5 +86,5 @@ The local file is ignored by Git through `config/hosts/*.local.env`.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Decide the real-network strategy for laptops: USB Ethernet first, then Wi-Fi
-   only after the kernel has a stronger driver/runtime foundation.
+6. Grow the Intel Wi-Fi path in order: firmware packaging/loader, safe device
+   reset, command queues, scan, association, then WPA2/WPA3.

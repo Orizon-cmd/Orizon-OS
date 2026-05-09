@@ -21,6 +21,7 @@
 #include "../include/timer.h"
 #include "../include/usb.h"
 #include "../include/vfs.h"
+#include "../include/wifi.h"
 
 #define TOP_BAR_HEIGHT 30
 #define FOOTER_HEIGHT 28
@@ -63,6 +64,7 @@ static int core_services_done = 0;
 static int ps2_ready = 0;
 static int usb_ready = 0;
 static int net_ready = 0;
+static int wifi_ready = 0;
 static int i2c_hid_ready = 0;
 static int i2c_hid_deferred_probe = 0;
 static const char *boot_stage_hint = "Starting Orizon shell";
@@ -398,6 +400,9 @@ static void gui_run_deferred_core_services(void) {
     gui_show_boot_stage("Initializing Ethernet drivers...");
     net_init();
     net_ready = 1;
+    gui_show_boot_stage("Detecting Wi-Fi hardware...");
+    wifi_init();
+    wifi_ready = 1;
   } else {
     gui_show_boot_stage("Minimal boot: disk/network initialization skipped.");
   }
@@ -443,6 +448,9 @@ void gui_main_loop(void) {
     }
     if (net_ready) {
       net_poll();
+    }
+    if (wifi_ready) {
+      wifi_poll();
     }
 
     uint64_t now = timer_ticks();

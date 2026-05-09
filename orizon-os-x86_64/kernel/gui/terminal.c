@@ -24,6 +24,7 @@
 #include "../include/update.h"
 #include "../include/usb.h"
 #include "../include/vfs.h"
+#include "../include/wifi.h"
 
 /* Terminal colors (ANSI) */
 static const uint32_t term_colors[16] = {
@@ -684,7 +685,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "input", "keyboard", "ls", "mkdir", "mounts", "mv",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
-      "sysinfo", "touch", "tree", "route", "uname", "update", "uptime", "version", "whoami",
+      "sysinfo", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write"};
   const char *matches[16];
   int count = 0;
@@ -1667,6 +1668,10 @@ static void term_print_sysinfo(terminal_t *term) {
   term_puts_t(term, "ethernet ");
   term_puts_t(term, line);
   term_puts_t(term, "\n");
+  wifi_format_status(line, sizeof(line));
+  term_puts_t(term, "wifi ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
   netstack_format_status(line, sizeof(line));
   term_puts_t(term, "ipv4 ");
   term_puts_t(term, line);
@@ -1798,6 +1803,10 @@ static void term_print_hw(terminal_t *term) {
 
   net_format_status(line, sizeof(line));
   term_puts_t(term, "Network: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  wifi_format_status(line, sizeof(line));
+  term_puts_t(term, "Wi-Fi: ");
   term_puts_t(term, line);
   term_puts_t(term, "\n");
   netstack_format_status(line, sizeof(line));
@@ -2262,6 +2271,10 @@ static void term_print_report(terminal_t *term) {
   term_puts_t(term, "Network: ");
   term_puts_t(term, line);
   term_puts_t(term, "\n");
+  wifi_format_status(line, sizeof(line));
+  term_puts_t(term, "Wi-Fi: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
   netstack_format_status(line, sizeof(line));
   term_puts_t(term, "IPv4: ");
   term_puts_t(term, line);
@@ -2490,6 +2503,9 @@ static void term_print_net_status(terminal_t *term) {
   net_format_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
+  wifi_format_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
   netstack_format_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
@@ -2652,6 +2668,47 @@ static void term_run_net(terminal_t *term, const char *cmd) {
   }
 
   term_print_net_status(term);
+}
+
+static void term_run_wifi(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 4);
+  char line[512];
+  char ssid[96];
+  char password[96];
+  const char *rest;
+
+  if (*args == '\0' || term_command_is(args, "status")) {
+    wifi_format_status(line, sizeof(line));
+    term_puts_t(term, line);
+    term_puts_t(term, "\n");
+    term_puts_t(term,
+                "Wi-Fi note: Intel CNVi support is staged only; scan/connect need firmware + WPA layer.\n");
+    return;
+  }
+
+  if (term_command_is(args, "scan")) {
+    wifi_scan(line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
+  if (term_command_is(args, "connect")) {
+    rest = term_skip_spaces(args + 7);
+    rest = term_read_token(rest, ssid, sizeof(ssid));
+    if (!rest) {
+      term_puts_t(term, "usage: wifi connect <ssid> [password]\n");
+      return;
+    }
+    password[0] = '\0';
+    if (*rest) {
+      term_read_token(rest, password, sizeof(password));
+    }
+    wifi_connect(ssid, password, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
+  term_puts_t(term, "usage: wifi [status|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3233,6 +3290,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
     term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
     term_puts_t(term, "  net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
+    term_puts_t(term, "  wifi      - Show Wi-Fi hardware status\n");
+    term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
@@ -3713,6 +3772,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     }
   } else if (term_command_is(cmd, "net")) {
     term_run_net(term, cmd);
+  } else if (term_command_is(cmd, "wifi")) {
+    term_run_wifi(term, cmd);
   } else if (term_command_is(cmd, "network-status")) {
     term_run_net(term, "net status");
   } else if (term_command_is(cmd, "ping")) {

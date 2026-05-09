@@ -18,7 +18,8 @@ le developpement noyau:
   du boot UEFI, selection explicite du disque cible et reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
-  Ethernet Intel e1000/e1000e, Realtek RTL8139 et VirtIO-net pour Proxmox/QEMU
+  Ethernet Intel e1000/e1000e, Realtek RTL8139, VirtIO-net pour Proxmox/QEMU,
+  et detection stage-0 du Wi-Fi Intel CNVi
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
   les fichiers de boot installes
@@ -166,12 +167,15 @@ report
 hw
 pci
 input
+wifi
 ```
 
 Le premier portable cible documente est le Lenovo 500w Yoga Gen 4. Son clavier
 interne passe par PS/2, son SSD par NVMe, et son pave tactile ELAN/Wacom passe
 par I2C-HID. Orizon contient maintenant une premiere sonde Intel LPSS/I2C-HID
-pour ce chemin, avant le parseur multitouch complet.
+pour ce chemin, avant le parseur multitouch complet. Le Wi-Fi Intel CNVi est
+detecte par `wifi status`, mais les vraies connexions attendent encore le
+chargeur de firmware et la couche 802.11/WPA.
 
 Details:
 [docs/orizon/HARDWARE_BOOT.md](docs/orizon/HARDWARE_BOOT.md) et
