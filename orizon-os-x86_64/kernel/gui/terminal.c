@@ -677,12 +677,12 @@ static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
       "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
-      "disks", "dmesg", "edit", "echo", "find", "free", "grep", "head", "help",
+      "disks", "dmesg", "dns", "edit", "echo", "find", "free", "grep", "head", "help",
       "history", "hostname", "hw", "id", "install", "install-status",
       "keyboard", "ls", "mkdir", "mv",
-      "neofetch", "net", "logs", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
+      "neofetch", "net", "network-status", "logs", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
-      "touch", "tree", "uname", "update", "uptime", "version", "whoami",
+      "touch", "tree", "route", "uname", "update", "uptime", "version", "whoami",
       "write"};
   const char *matches[16];
   int count = 0;
@@ -859,6 +859,25 @@ static int term_split_path_and_text(const char *args, char *path_arg,
 
   *text = args;
   return 0;
+}
+
+static const char *term_read_token(const char *args, char *out,
+                                   size_t out_size) {
+  size_t len = 0;
+
+  args = term_skip_spaces(args);
+  if (!args || *args == '\0' || !out || out_size == 0) {
+    return NULL;
+  }
+  while (args[len] && args[len] != ' ') {
+    len++;
+  }
+  if (len == 0 || len >= out_size) {
+    return NULL;
+  }
+  memcpy(out, args, len);
+  out[len] = '\0';
+  return term_skip_spaces(args + len);
 }
 
 static int term_split_two_paths(const char *args, char *first, char *second,
@@ -1789,7 +1808,8 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
 
   if (default_view) {
     term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
-    term_puts_t(term, "Use: logs boot | logs update | logs install | logs all\n");
+    term_puts_t(term,
+                "Use: logs boot | logs network | logs update | logs install | logs all\n");
     if (vfs_exists(KLOG_BOOT_PATH)) {
       term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
     } else {
@@ -1799,6 +1819,9 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     if (vfs_exists("/workspace/.orizon/update.log")) {
       term_print_file_tail(term, "/workspace/.orizon/update.log",
                            "/workspace/.orizon/update.log", 1024);
+    }
+    if (vfs_exists(netstack_log_path())) {
+      term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 1024);
     }
     return;
   }
@@ -1816,6 +1839,10 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
                          "/workspace/.orizon/update.log", 8192);
     return;
   }
+  if (term_command_is(args, "network") || term_command_is(args, "net")) {
+    term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 8192);
+    return;
+  }
   if (term_command_is(args, "install")) {
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 8192);
@@ -1829,6 +1856,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     }
     term_print_file_tail(term, "/workspace/.orizon/update.log",
                          "/workspace/.orizon/update.log", 4096);
+    term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 4096);
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 4096);
     term_print_file_tail(term, "/workspace/.orizon/rollback-info",
@@ -1856,7 +1884,7 @@ static void term_print_diagnostic_hints(terminal_t *term) {
       any = 1;
     }
     term_puts_t(term,
-                "  - Ethernet link is down; update needs wired network + DHCP.\n");
+                "  - Ethernet link is down; update needs wired network plus DHCP or static IPv4.\n");
   }
   if (!boot_payloads_ready()) {
     if (!any) {
@@ -2121,7 +2149,8 @@ static void term_run_net(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "dhcp")) {
     term_puts_t(term, "net: configuring IPv4 with DHCP...\n");
-    if (netstack_configure_ipv4() == 0) {
+    netstack_reset();
+    if (netstack_configure_ipv4_dhcp() == 0) {
       term_puts_t(term, "net: DHCP configured\n");
     } else {
       term_puts_t(term, "net: DHCP failed\n");
@@ -2132,7 +2161,204 @@ static void term_run_net(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "auto")) {
+    term_puts_t(term, "net: auto config DHCP, then static fallback...\n");
+    netstack_reset();
+    if (netstack_configure_ipv4() == 0) {
+      term_puts_t(term, "net: IPv4 configured\n");
+    } else {
+      term_puts_t(term, "net: IPv4 configuration failed\n");
+    }
+    netstack_format_status(line, sizeof(line));
+    term_puts_t(term, line);
+    term_puts_t(term, "\n");
+    return;
+  }
+
+  if (term_command_is(args, "reset")) {
+    netstack_reset();
+    term_puts_t(term, "net: IPv4 state reset\n");
+    return;
+  }
+
+  if (term_command_is(args, "status")) {
+    term_print_net_status(term);
+    netstack_format_route(line, sizeof(line));
+    term_puts_t(term, line);
+    term_puts_t(term, "\n");
+    netstack_format_dns(line, sizeof(line));
+    term_puts_t(term, line);
+    term_puts_t(term, "\n");
+    term_puts_t(term, "config: ");
+    term_puts_t(term, netstack_config_path());
+    term_puts_t(term, "\nlog: ");
+    term_puts_t(term, netstack_log_path());
+    term_puts_t(term, "\n");
+    return;
+  }
+
+  if (term_command_is(args, "config")) {
+    const char *cfg_args = term_skip_spaces(args + 6);
+    char token[32];
+    char ip_token[32];
+    char key[32];
+    char value[32];
+    uint32_t ip = 0;
+    uint32_t subnet = 0xffffff00U;
+    uint32_t gateway = 0;
+    uint32_t dns = 0;
+
+    if (term_command_is(cfg_args, "show") || *cfg_args == '\0') {
+      char cfg_text[512];
+      int n = term_read_text_file_silent(netstack_config_path(), cfg_text,
+                                         sizeof(cfg_text));
+      if (n > 0) {
+        cfg_text[n] = '\0';
+        term_puts_t(term, cfg_text);
+        if (cfg_text[n - 1] != '\n') {
+          term_puts_t(term, "\n");
+        }
+      } else {
+        term_puts_t(term, "net config: no config file yet\n");
+      }
+      return;
+    }
+
+    if (term_command_is(cfg_args, "dhcp")) {
+      if (netstack_save_dhcp_config() == 0) {
+        netstack_reset();
+        vfs_persist_save();
+        term_puts_t(term, "net config: saved DHCP mode\n");
+      } else {
+        term_puts_t(term, "net config: cannot save DHCP mode\n");
+      }
+      return;
+    }
+
+    cfg_args = term_read_token(cfg_args, token, sizeof(token));
+    if (!cfg_args || strcmp(token, "ip") != 0) {
+      term_puts_t(term,
+                  "usage: net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
+      return;
+    }
+    cfg_args = term_read_token(cfg_args, ip_token, sizeof(ip_token));
+    if (!cfg_args || netstack_parse_ipv4(ip_token, &ip) != 0) {
+      term_puts_t(term, "net config: invalid ip\n");
+      return;
+    }
+
+    while (*cfg_args) {
+      cfg_args = term_read_token(cfg_args, key, sizeof(key));
+      if (!cfg_args) {
+        break;
+      }
+      cfg_args = term_read_token(cfg_args, value, sizeof(value));
+      if (!cfg_args) {
+        term_puts_t(term, "net config: missing value\n");
+        return;
+      }
+      if (strcmp(key, "gateway") == 0) {
+        if (netstack_parse_ipv4(value, &gateway) != 0) {
+          term_puts_t(term, "net config: invalid gateway\n");
+          return;
+        }
+      } else if (strcmp(key, "dns") == 0) {
+        if (netstack_parse_ipv4(value, &dns) != 0) {
+          term_puts_t(term, "net config: invalid dns\n");
+          return;
+        }
+      } else if (strcmp(key, "subnet") == 0) {
+        if (netstack_parse_ipv4(value, &subnet) != 0) {
+          term_puts_t(term, "net config: invalid subnet\n");
+          return;
+        }
+      } else {
+        term_puts_t(term, "net config: unknown field\n");
+        return;
+      }
+    }
+
+    if (gateway == 0) {
+      term_puts_t(term, "net config: gateway is required\n");
+      return;
+    }
+    if (dns == 0) {
+      dns = gateway;
+    }
+    if (netstack_save_static_config(ip, subnet, gateway, dns) != 0) {
+      term_puts_t(term, "net config: save failed\n");
+      return;
+    }
+    netstack_reset();
+    if (netstack_configure_ipv4_static(ip, subnet, gateway, dns) == 0) {
+      vfs_persist_save();
+      term_puts_t(term, "net config: static IPv4 saved and applied\n");
+    } else {
+      term_puts_t(term, "net config: saved, but apply failed now\n");
+    }
+    return;
+  }
+
   term_print_net_status(term);
+}
+
+static void term_run_dns(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 3);
+  char host[128];
+  uint32_t ip = 0;
+  char ip_s[24];
+
+  if (!term_read_token(args, host, sizeof(host))) {
+    term_puts_t(term, "usage: dns <hostname>\n");
+    return;
+  }
+  if (netstack_resolve_a(host, &ip) != 0) {
+    term_puts_t(term, "dns: resolve failed\n");
+    return;
+  }
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  term_puts_t(term, host);
+  term_puts_t(term, " -> ");
+  term_puts_t(term, ip_s);
+  term_puts_t(term, "\n");
+}
+
+static void term_run_route(terminal_t *term) {
+  char line[256];
+  netstack_format_route(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+}
+
+static void term_run_ping(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 4);
+  char target[128];
+  uint32_t ip = 0;
+  char ip_s[24];
+
+  if (!term_read_token(args, target, sizeof(target))) {
+    term_puts_t(term, "usage: ping <ip-or-host>\n");
+    return;
+  }
+  if (netstack_parse_ipv4(target, &ip) != 0) {
+    term_puts_t(term, "ping: resolving host...\n");
+    if (netstack_resolve_a(target, &ip) != 0) {
+      term_puts_t(term, "ping: cannot resolve host\n");
+      return;
+    }
+  }
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  for (int i = 0; i < 4; i++) {
+    uint32_t ms = 0;
+    if (netstack_ping(ip, &ms) == 0) {
+      char line[96];
+      snprintf(line, sizeof(line), "reply from %s time=%lums\n", ip_s,
+               (unsigned long)ms);
+      term_puts_t(term, line);
+    } else {
+      term_puts_t(term, "request timeout\n");
+    }
+  }
 }
 
 static int term_write_text_file(const char *path, const char *text) {
@@ -2640,13 +2866,16 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
-    term_puts_t(term, "  logs [name] - Read recent boot/update/install logs\n");
+    term_puts_t(term, "  logs [name] - Read recent boot/network/update/install logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");
     term_puts_t(term, "  net       - Show ethernet/IP status\n");
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
+    term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
+    term_puts_t(term, "  net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
+    term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
@@ -3093,6 +3322,14 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "net")) {
     term_run_net(term, cmd);
+  } else if (term_command_is(cmd, "network-status")) {
+    term_run_net(term, "net status");
+  } else if (term_command_is(cmd, "ping")) {
+    term_run_ping(term, cmd);
+  } else if (term_command_is(cmd, "dns")) {
+    term_run_dns(term, cmd);
+  } else if (term_command_is(cmd, "route")) {
+    term_run_route(term);
   } else if (term_command_is(cmd, "install")) {
     term_start_installer(term);
     return;

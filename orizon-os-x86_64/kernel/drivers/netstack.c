@@ -12,6 +12,7 @@
 #include "../include/sha256.h"
 #include "../include/string.h"
 #include "../include/timer.h"
+#include "../include/vfs.h"
 
 #define ETH_TYPE_ARP 0x0806
 #define ETH_TYPE_IPV4 0x0800
@@ -34,9 +35,13 @@
 
 #define NETSTACK_MTU 1500
 #define TCP_WINDOW 8192
+#define NETWORK_CONFIG_PATH "/system/network.conf"
+#define NETWORK_LOG_PATH "/logs/network.log"
+#define DEFAULT_STATIC_SUBNET 0xffffff00U
 
 static netstack_status_t stack_status = {
     .ipv4_ready = 0,
+    .static_config_loaded = 0,
     .ip = 0,
     .subnet = 0,
     .gateway = 0,
@@ -49,6 +54,7 @@ static netstack_status_t stack_status = {
 static uint16_t ip_ident = 1;
 static uint16_t dns_ident = 0x4F5A;
 static uint16_t tcp_next_port = 40000;
+static uint16_t icmp_ident = 0x4F5A;
 static uint32_t arp_cached_ip = 0;
 static uint8_t arp_cached_mac[6] = {0};
 
@@ -138,16 +144,80 @@ static void short_wait(void) {
   __asm__ volatile("hlt");
 }
 
+const char *netstack_config_path(void) {
+  return NETWORK_CONFIG_PATH;
+}
+
+const char *netstack_log_path(void) {
+  return NETWORK_LOG_PATH;
+}
+
+static void network_log_line(const char *line) {
+  file_t *f;
+  if (!line) {
+    return;
+  }
+  vfs_mkdir("/logs");
+  f = vfs_open(NETWORK_LOG_PATH, O_CREAT | O_WRONLY | O_APPEND);
+  if (!f) {
+    return;
+  }
+  vfs_write(f, line, strlen(line));
+  vfs_write(f, "\n", 1);
+  vfs_close(f);
+}
+
 static void set_status(const char *status) {
   strncpy(stack_status.status, status, sizeof(stack_status.status) - 1);
   stack_status.status[sizeof(stack_status.status) - 1] = '\0';
   klog_info("netstack", status);
+  network_log_line(status);
 }
 
 void netstack_format_ipv4(uint32_t ip, char *buf, size_t size) {
   snprintf(buf, size, "%lu.%lu.%lu.%lu", (unsigned long)((ip >> 24) & 0xff),
            (unsigned long)((ip >> 16) & 0xff),
            (unsigned long)((ip >> 8) & 0xff), (unsigned long)(ip & 0xff));
+}
+
+int netstack_parse_ipv4(const char *text, uint32_t *out_ip) {
+  uint32_t parts[4] = {0, 0, 0, 0};
+  int part = 0;
+  int digits = 0;
+
+  if (!text || !out_ip) {
+    return -1;
+  }
+  while (*text == ' ') {
+    text++;
+  }
+  while (*text && *text != ' ') {
+    if (*text >= '0' && *text <= '9') {
+      parts[part] = parts[part] * 10U + (uint32_t)(*text - '0');
+      if (parts[part] > 255U) {
+        return -1;
+      }
+      digits++;
+    } else if (*text == '.') {
+      if (digits == 0 || part >= 3) {
+        return -1;
+      }
+      part++;
+      digits = 0;
+    } else {
+      return -1;
+    }
+    text++;
+  }
+  while (*text == ' ') {
+    text++;
+  }
+  if (*text != '\0' || part != 3 || digits == 0) {
+    return -1;
+  }
+
+  *out_ip = (parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3];
+  return 0;
 }
 
 static uint16_t checksum16(const void *data, size_t len) {
@@ -356,6 +426,111 @@ static int send_udp(uint32_t dst_ip, uint16_t src_port, uint16_t dst_port,
                       payload, payload_len);
 }
 
+static int parse_ipv4_basic(const uint8_t *packet, size_t len, uint32_t *src_ip,
+                            uint32_t *dst_ip, uint8_t *proto,
+                            const uint8_t **payload, size_t *payload_len) {
+  if (len < 20 || (packet[0] >> 4) != 4) {
+    return -1;
+  }
+  size_t ihl = (size_t)(packet[0] & 0x0f) * 4;
+  size_t total_len = get_be16(packet + 2);
+  if (ihl < 20 || total_len > len || total_len < ihl) {
+    return -1;
+  }
+  if (checksum16(packet, ihl) != 0) {
+    return -1;
+  }
+  *src_ip = get_be32(packet + 12);
+  *dst_ip = get_be32(packet + 16);
+  *proto = packet[9];
+  *payload = packet + ihl;
+  *payload_len = total_len - ihl;
+  return 0;
+}
+
+int netstack_ping(uint32_t target_ip, uint32_t *reply_ms) {
+  uint32_t next_hop;
+  uint8_t dst_mac[6];
+  uint8_t icmp[32];
+  uint16_t id;
+  uint16_t seq;
+  uint64_t start;
+  uint64_t deadline;
+
+  if (target_ip == 0) {
+    return -1;
+  }
+  if (netstack_configure_ipv4() != 0) {
+    return -1;
+  }
+
+  next_hop = same_subnet(stack_status.ip, target_ip) ? target_ip
+                                                     : stack_status.gateway;
+  if (next_hop == 0 || arp_resolve(next_hop, dst_mac) != 0) {
+    set_status("icmp: gateway arp failed");
+    return -1;
+  }
+
+  id = ++icmp_ident;
+  seq = (uint16_t)(timer_ticks() & 0xffffU);
+  memset(icmp, 0, sizeof(icmp));
+  icmp[0] = 8; /* echo request */
+  icmp[1] = 0;
+  put_be16(icmp + 4, id);
+  put_be16(icmp + 6, seq);
+  memcpy(icmp + 8, "OrizonPing", 10);
+  put_be16(icmp + 2, checksum16(icmp, sizeof(icmp)));
+
+  set_status("icmp: echo request");
+  if (send_ipv4_raw(dst_mac, stack_status.ip, target_ip, IP_PROTO_ICMP, icmp,
+                    sizeof(icmp)) < 0) {
+    set_status("icmp: send failed");
+    return -1;
+  }
+
+  start = timer_ticks();
+  deadline = deadline_from_ms(2000);
+  while (before_deadline(deadline)) {
+    uint8_t src_mac[6];
+    uint16_t eth_type = 0;
+    int n = recv_frame(src_mac, &eth_type, frame_buf, sizeof(frame_buf));
+    if (n <= 0) {
+      short_wait();
+      continue;
+    }
+    if (eth_type == ETH_TYPE_ARP) {
+      handle_arp(src_mac, frame_buf, (size_t)n);
+      continue;
+    }
+    if (eth_type != ETH_TYPE_IPV4) {
+      continue;
+    }
+
+    uint32_t src_ip = 0;
+    uint32_t dst_ip = 0;
+    uint8_t proto = 0;
+    const uint8_t *payload = NULL;
+    size_t payload_len = 0;
+    if (parse_ipv4_basic(frame_buf, (size_t)n, &src_ip, &dst_ip, &proto,
+                         &payload, &payload_len) != 0 ||
+        proto != IP_PROTO_ICMP || payload_len < 8) {
+      continue;
+    }
+    UNUSED(dst_ip);
+    if (src_ip == target_ip && payload[0] == 0 && get_be16(payload + 4) == id &&
+        get_be16(payload + 6) == seq) {
+      if (reply_ms) {
+        *reply_ms = (uint32_t)(((timer_ticks() - start) * 1000ULL) / TIMER_HZ);
+      }
+      set_status("icmp: reply received");
+      return 0;
+    }
+  }
+
+  set_status("icmp: timeout");
+  return -1;
+}
+
 static int dhcp_add_option(uint8_t *opts, size_t *off, uint8_t code,
                            const void *data, uint8_t len) {
   if (*off + 2 + len >= 312) {
@@ -498,7 +673,205 @@ static int wait_dhcp(uint32_t xid, uint8_t wanted_type, uint32_t *yiaddr,
   return -1;
 }
 
-int netstack_configure_ipv4(void) {
+static int read_text_file(const char *path, char *buf, size_t cap) {
+  file_t *f;
+  ssize_t n;
+  size_t used = 0;
+
+  if (!path || !buf || cap == 0) {
+    return -1;
+  }
+  buf[0] = '\0';
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    return -1;
+  }
+  while (used + 1 < cap &&
+         (n = vfs_read(f, buf + used, (cap - 1) - used)) > 0) {
+    used += (size_t)n;
+  }
+  vfs_close(f);
+  buf[used] = '\0';
+  return (int)used;
+}
+
+static int config_line_key_matches(const char *line, const char *key,
+                                   size_t key_len) {
+  return strncmp(line, key, key_len) == 0 &&
+         (line[key_len] == ' ' || line[key_len] == '\t');
+}
+
+static int config_read_value(const char *text, const char *key, char *out,
+                             size_t out_size) {
+  size_t key_len = strlen(key);
+  const char *p = text;
+
+  if (!text || !key || !out || out_size == 0) {
+    return -1;
+  }
+  while (*p) {
+    const char *line = p;
+    const char *value;
+    size_t len = 0;
+
+    while (*p && *p != '\n') {
+      p++;
+    }
+    if (config_line_key_matches(line, key, key_len)) {
+      value = line + key_len;
+      while (*value == ' ' || *value == '\t') {
+        value++;
+      }
+      while (value[len] && value[len] != '\n' && value[len] != '\r' &&
+             value[len] != ' ' && value[len] != '\t') {
+        len++;
+      }
+      if (len == 0 || len >= out_size) {
+        return -1;
+      }
+      memcpy(out, value, len);
+      out[len] = '\0';
+      return 0;
+    }
+    if (*p == '\n') {
+      p++;
+    }
+  }
+  return -1;
+}
+
+static int config_read_ip(const char *text, const char *key, uint32_t *out) {
+  char value[32];
+  if (config_read_value(text, key, value, sizeof(value)) != 0) {
+    return -1;
+  }
+  return netstack_parse_ipv4(value, out);
+}
+
+static int network_config_is_static(const char *text) {
+  char mode[16];
+  return config_read_value(text, "mode", mode, sizeof(mode)) == 0 &&
+         strcmp(mode, "static") == 0;
+}
+
+int netstack_configure_ipv4_static(uint32_t ip, uint32_t subnet,
+                                   uint32_t gateway, uint32_t dns) {
+  if (ip == 0 || gateway == 0) {
+    set_status("ipv4: invalid static config");
+    return -1;
+  }
+  if (net_init() != 0 || !net_link_up()) {
+    set_status("ipv4: ethernet link unavailable");
+    return -1;
+  }
+
+  stack_status.ip = ip;
+  stack_status.subnet = subnet ? subnet : DEFAULT_STATIC_SUBNET;
+  stack_status.gateway = gateway;
+  stack_status.dns = dns ? dns : gateway;
+  stack_status.ipv4_ready = 1;
+  stack_status.static_config_loaded = 1;
+  arp_cached_ip = 0;
+  set_status("ipv4: configured static");
+  return 0;
+}
+
+int netstack_configure_static_from_vfs(void) {
+  char text[512];
+  uint32_t ip = 0;
+  uint32_t subnet = DEFAULT_STATIC_SUBNET;
+  uint32_t gateway = 0;
+  uint32_t dns = 0;
+
+  if (read_text_file(NETWORK_CONFIG_PATH, text, sizeof(text)) <= 0 ||
+      !network_config_is_static(text)) {
+    set_status("ipv4: no static config");
+    return -1;
+  }
+  if (config_read_ip(text, "ip", &ip) != 0 ||
+      config_read_ip(text, "gateway", &gateway) != 0) {
+    set_status("ipv4: invalid static config file");
+    return -1;
+  }
+  config_read_ip(text, "subnet", &subnet);
+  config_read_ip(text, "dns", &dns);
+  return netstack_configure_ipv4_static(ip, subnet, gateway, dns);
+}
+
+int netstack_save_static_config(uint32_t ip, uint32_t subnet, uint32_t gateway,
+                                uint32_t dns) {
+  char ip_s[24];
+  char subnet_s[24];
+  char gateway_s[24];
+  char dns_s[24];
+  char text[256];
+  file_t *f;
+
+  if (ip == 0 || gateway == 0) {
+    return -1;
+  }
+  if (subnet == 0) {
+    subnet = DEFAULT_STATIC_SUBNET;
+  }
+  if (dns == 0) {
+    dns = gateway;
+  }
+
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  netstack_format_ipv4(subnet, subnet_s, sizeof(subnet_s));
+  netstack_format_ipv4(gateway, gateway_s, sizeof(gateway_s));
+  netstack_format_ipv4(dns, dns_s, sizeof(dns_s));
+  snprintf(text, sizeof(text),
+           "mode static\nip %s\nsubnet %s\ngateway %s\ndns %s\n", ip_s,
+           subnet_s, gateway_s, dns_s);
+
+  vfs_mkdir("/system");
+  f = vfs_open(NETWORK_CONFIG_PATH, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return -1;
+  }
+  if (vfs_write(f, text, strlen(text)) < 0) {
+    vfs_close(f);
+    return -1;
+  }
+  vfs_close(f);
+  network_log_line("network: saved static config");
+  return 0;
+}
+
+int netstack_save_dhcp_config(void) {
+  file_t *f;
+  const char *text = "mode dhcp\n";
+
+  vfs_mkdir("/system");
+  f = vfs_open(NETWORK_CONFIG_PATH, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return -1;
+  }
+  if (vfs_write(f, text, strlen(text)) < 0) {
+    vfs_close(f);
+    return -1;
+  }
+  vfs_close(f);
+  network_log_line("network: saved dhcp config");
+  return 0;
+}
+
+void netstack_reset(void) {
+  stack_status.ipv4_ready = 0;
+  stack_status.static_config_loaded = 0;
+  stack_status.ip = 0;
+  stack_status.subnet = 0;
+  stack_status.gateway = 0;
+  stack_status.dns = 0;
+  stack_status.last_resolved_ip = 0;
+  stack_status.last_host[0] = '\0';
+  arp_cached_ip = 0;
+  memset(arp_cached_mac, 0, sizeof(arp_cached_mac));
+  set_status("ipv4: reset");
+}
+
+int netstack_configure_ipv4_dhcp(void) {
   uint8_t dhcp[548];
   uint32_t xid = 0x4f5a0000U ^ (uint32_t)timer_ticks();
   uint32_t offered_ip = 0;
@@ -540,9 +913,28 @@ int netstack_configure_ipv4(void) {
   stack_status.gateway = router;
   stack_status.dns = dns ? dns : router;
   stack_status.ipv4_ready = 1;
+  stack_status.static_config_loaded = 0;
   arp_cached_ip = 0;
   set_status("ipv4: configured by dhcp");
   return 0;
+}
+
+int netstack_configure_ipv4(void) {
+  if (stack_status.ipv4_ready) {
+    return 0;
+  }
+
+  if (netstack_configure_ipv4_dhcp() == 0) {
+    return 0;
+  }
+
+  network_log_line("network: DHCP failed, trying static config");
+  if (netstack_configure_static_from_vfs() == 0) {
+    return 0;
+  }
+
+  set_status("ipv4: dhcp failed, no static fallback");
+  return -1;
 }
 
 static int dns_write_name(uint8_t *buf, size_t cap, size_t *off,
@@ -3960,8 +4352,39 @@ void netstack_format_status(char *buf, size_t size) {
   netstack_format_ipv4(stack_status.gateway, gw, sizeof(gw));
   netstack_format_ipv4(stack_status.dns, dns, sizeof(dns));
   netstack_format_ipv4(stack_status.last_resolved_ip, resolved, sizeof(resolved));
-  snprintf(buf, size, "ipv4=%s ip=%s gateway=%s dns=%s host=%s resolved=%s",
-           stack_status.ipv4_ready ? "yes" : "no", ip, gw, dns,
+  snprintf(buf, size,
+           "ipv4=%s mode=%s ip=%s gateway=%s dns=%s host=%s resolved=%s",
+           stack_status.ipv4_ready ? "yes" : "no",
+           stack_status.static_config_loaded ? "static" : "dhcp",
+           ip, gw, dns,
+           stack_status.last_host[0] ? stack_status.last_host : "none",
+           resolved);
+}
+
+void netstack_format_route(char *buf, size_t size) {
+  char ip[24];
+  char subnet[24];
+  char gw[24];
+
+  netstack_format_ipv4(stack_status.ip, ip, sizeof(ip));
+  netstack_format_ipv4(stack_status.subnet, subnet, sizeof(subnet));
+  netstack_format_ipv4(stack_status.gateway, gw, sizeof(gw));
+  if (!stack_status.ipv4_ready) {
+    snprintf(buf, size, "route: IPv4 not configured");
+    return;
+  }
+  snprintf(buf, size, "route: local %s mask %s, default via %s", ip, subnet,
+           gw);
+}
+
+void netstack_format_dns(char *buf, size_t size) {
+  char dns[24];
+  char resolved[24];
+
+  netstack_format_ipv4(stack_status.dns, dns, sizeof(dns));
+  netstack_format_ipv4(stack_status.last_resolved_ip, resolved,
+                       sizeof(resolved));
+  snprintf(buf, size, "dns: server=%s last-host=%s resolved=%s", dns,
            stack_status.last_host[0] ? stack_status.last_host : "none",
            resolved);
 }

@@ -826,12 +826,15 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     return -1;
   }
 
-  update_set_state("update: configuring ipv4 with dhcp");
+  update_set_state("update: configuring ipv4 (dhcp/static)");
   if (netstack_configure_ipv4() != 0) {
     netstack_format_status(net_line, sizeof(net_line));
-    update_set_state("update: blocked - dhcp failed");
-    append_report(report, report_size, "[3/8] DHCP/IPv4 failed");
+    update_set_state("update: blocked - ipv4 failed");
+    append_report(report, report_size, "[3/8] IPv4 failed");
     append_report(report, report_size, net_line);
+    append_report(report, report_size,
+                  "Hint: run 'net', 'net dhcp' or configure static IPv4 with "
+                  "'net config ip <ip> gateway <gw> dns <dns>'.");
     update_append_log(net_line);
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
@@ -839,7 +842,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     return -2;
   }
   netstack_format_status(net_line, sizeof(net_line));
-  append_report(report, report_size, "[3/8] DHCP/IPv4 ready");
+  append_report(report, report_size, "[3/8] IPv4 ready");
   append_report(report, report_size, net_line);
   update_append_log(net_line);
 
@@ -851,6 +854,11 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
       manifest_len == 0) {
     update_set_state("update: blocked - manifest download failed");
     append_report(report, report_size, "[4/8] GitHub manifest download failed");
+    netstack_format_status(net_line, sizeof(net_line));
+    append_report(report, report_size, net_line);
+    append_report(report, report_size,
+                  "Hint: check DNS/gateway with 'dns raw.githubusercontent.com', "
+                  "'route' and 'ping 8.8.8.8'.");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");

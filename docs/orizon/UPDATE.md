@@ -18,7 +18,8 @@ update
 The command performs a kernel-owned full-upgrade transaction:
 
 - prepare the local package database under `/system` and `/workspace/.orizon`
-- probe Ethernet and configure IPv4 with DHCP
+- probe Ethernet and configure IPv4 with DHCP, then static fallback from
+  `/system/network.conf` if DHCP is unavailable
 - resolve `raw.githubusercontent.com`
 - open TCP/TLS to GitHub without launching host tools
 - download `updates/x86_64/manifest.txt` from the public repository
@@ -203,7 +204,9 @@ All three flows refresh the root `Orizon-OS.iso` artifact unless
 - Raw Ethernet TX/RX rings.
 - ARP handling and gateway MAC resolution.
 - DHCP IPv4 configuration.
+- Persistent static IPv4 fallback through `/system/network.conf`.
 - DNS A-record resolver.
+- ICMP `ping`, route, DNS and network log diagnostics.
 - Minimal blocking TCP client.
 - TLS 1.2 GitHub path with SNI, certificate metadata, RSA leaf signature proof,
   X25519 key agreement, AES-128-GCM application data, encrypted HTTP `Range`
@@ -232,6 +235,7 @@ Runtime files:
 
 ```text
 /system/packages
+/system/network.conf
 /system/update-state
 /system/update-source
 /system/update-manifest

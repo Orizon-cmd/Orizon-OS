@@ -473,6 +473,7 @@ void vfs_seed_content(void) {
   vfs_write_default_file(
       "/system/data-layout",
       "version 1\nroots /system /home /packages /logs /workspace\n");
+  vfs_write_default_file("/system/network.conf", "mode dhcp\n");
   vfs_write_default_file("/home/orizon/README.txt",
                          "Home directory for Orizon OS user files.\n");
   vfs_write_default_file(
@@ -632,6 +633,7 @@ void vfs_persist_load(void) {
   vfs_write_default_file("/system/hostname", "orizon-os");
   vfs_write_default_file("/system/version", "core-x86_64");
   vfs_write_default_file("/system/profile", "minimal-development\n");
+  vfs_write_default_file("/system/network.conf", "mode dhcp\n");
   vfs_write_default_file("/home/orizon/README.txt",
                          "Home directory for Orizon OS user files.\n");
   vfs_write_default_file(

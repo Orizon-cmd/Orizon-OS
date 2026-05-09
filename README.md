@@ -96,10 +96,26 @@ DHCP: active sur le LAN
 ```
 
 Le bridge ne remplace pas DHCP: il branche simplement la VM sur le meme reseau
-que l'hote. Si le reseau local ne distribue pas d'adresse, `update` ne pourra
-pas joindre GitHub tant qu'une configuration IP statique Orizon n'existe pas.
-Dans Orizon, `net` affiche le pilote detecte et `net dhcp` teste l'obtention
-d'une adresse IPv4 sans lancer une mise a jour.
+que l'hote. Si le reseau local ne distribue pas d'adresse, Orizon peut utiliser
+une IP statique persistante dans `/system/network.conf`.
+Dans Orizon, `net` affiche le pilote detecte, `net dhcp` teste l'obtention
+d'une adresse IPv4 sans lancer une mise a jour, et `net auto` tente DHCP puis
+la configuration statique si DHCP echoue.
+
+Exemple IP statique:
+
+```text
+net config ip 192.168.1.50 gateway 192.168.1.1 dns 192.168.1.1
+net auto
+ping 8.8.8.8
+dns raw.githubusercontent.com
+route
+logs network
+```
+
+La configuration est sauvegardee dans `/system/network.conf` et le journal
+reseau dans `/logs/network.log`, donc une machine Proxmox en bridge sans NAT
+peut rester connectee a GitHub si son LAN autorise la passerelle et le DNS.
 En cas de machine Proxmox configuree en VirtIO moderne-only, choisir le modele
 `Intel E1000` reste un fallback compatible.
 
@@ -176,9 +192,9 @@ update
 
 La commande lance une transaction interne, facon `apt full-upgrade`, sans
 programme externe: preparation de la base packages, probe Ethernet Intel
-`e1000/e1000e`, `RTL8139` ou `VirtIO-net`, DHCP, DNS, TCP, TLS vers GitHub,
-telechargement du manifeste public, telechargement des artefacts par requetes
-HTTP `Range`, verification
+`e1000/e1000e`, `RTL8139` ou `VirtIO-net`, configuration IPv4 DHCP avec fallback
+IP statique, DNS, TCP, TLS vers GitHub, telechargement du manifeste public,
+telechargement des artefacts par requetes HTTP `Range`, verification
 SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
 `BOOTX64.EFI` et `limine.conf`, puis lecture de l'index public
 `Orizon-Packages` pour installer ou mettre a jour les paquets `.opkg`. La
