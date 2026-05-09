@@ -113,6 +113,32 @@ static wifi_status_t wifi_status_state = {
     .context_csr_target = 0,
     .context_csr_value_lo = 0,
     .context_csr_value_hi = 0,
+    .scheduler_ready = 0,
+    .scheduler_armed = 0,
+    .scheduler_failed = 0,
+    .scheduler_errors = 0,
+    .scheduler_generation = 0,
+    .cmd_bc_phys = 0,
+    .tx_bc_phys = 0,
+    .mtr_ring_phys = 0,
+    .mcr_ring_phys = 0,
+    .cr_head_phys = 0,
+    .cr_tail_phys = 0,
+    .tr_head_phys = 0,
+    .tr_tail_phys = 0,
+    .mtr_entries = 0,
+    .mcr_entries = 0,
+    .msg_ring_bytes = 0,
+    .scheduler_cmd_id = 0,
+    .scheduler_cmd_group = 0,
+    .scheduler_cmd_version = 0,
+    .scheduler_cmd_len = 0,
+    .scheduler_cmd_sequence = 0,
+    .scheduler_cmd_queue = 0,
+    .scheduler_cmd_index = 0,
+    .scheduler_cmd_tbs = 0,
+    .scheduler_cmd_tb_len = 0,
+    .scheduler_wptr_value = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -294,6 +320,17 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CONTEXT_DRAM_CHUNK_BYTES (32U * 1024U)
 #define WIFI_CONTEXT_MODE_LEGACY 1U
 #define WIFI_CONTEXT_MODE_V2_LITE 2U
+#define WIFI_MSG_RING_ENTRIES 32U
+#define WIFI_MSG_RING_BYTES 256U
+#define WIFI_TFH_NUM_TBS 25U
+#define WIFI_DQA_CMD_QUEUE 0U
+#define WIFI_CMD_SCD_QUEUE_CFG 0x1dU
+#define WIFI_CMD_GROUP_LONG 0x01U
+#define WIFI_CMD_VERSION_TX_QUEUE_CFG 2U
+#define WIFI_TX_QUEUE_CFG_ENABLE_QUEUE 0x0001U
+#define WIFI_CMD_QUEUE_CB_SIZE_VALUE 2U
+#define HBUS_TARG_WRPTR 0x460U
+#define HBUS_TARG_WRPTR_Q_SHIFT 16U
 
 #define CSR_CTXT_INFO_BA 0x040U
 #define CSR_CTXT_INFO_BOOT_CTRL 0x000U
@@ -328,6 +365,44 @@ typedef struct {
   uint32_t bytes;
   uint32_t flags;
 } wifi_queue_desc_t;
+
+typedef struct __attribute__((packed)) {
+  uint16_t tb_len;
+  uint64_t addr;
+} wifi_tfh_tb_t;
+
+typedef struct __attribute__((packed)) {
+  uint16_t num_tbs;
+  wifi_tfh_tb_t tbs[WIFI_TFH_NUM_TBS];
+  uint32_t pad;
+} wifi_tfh_tfd_t;
+
+typedef struct __attribute__((packed)) {
+  uint16_t tfd_offset;
+} wifi_bc_tbl_entry_t;
+
+typedef struct __attribute__((packed)) {
+  uint8_t cmd;
+  uint8_t group_id;
+  uint16_t sequence;
+  uint16_t length;
+  uint8_t reserved;
+  uint8_t version;
+} wifi_cmd_header_wide_t;
+
+typedef struct __attribute__((packed)) {
+  uint8_t sta_id;
+  uint8_t tid;
+  uint16_t flags;
+  uint32_t cb_size;
+  uint64_t byte_cnt_addr;
+  uint64_t tfdq_addr;
+} wifi_tx_queue_cfg_cmd_t;
+
+typedef struct __attribute__((packed)) {
+  wifi_cmd_header_wide_t header;
+  wifi_tx_queue_cfg_cmd_t queue_cfg;
+} wifi_scheduler_cmd_frame_t;
 
 typedef struct __attribute__((packed)) {
   uint16_t mac_id;
@@ -485,6 +560,10 @@ static wifi_queue_desc_t wifi_rx_used_desc[WIFI_RX_QUEUE_ENTRIES]
     __attribute__((aligned(4096)));
 static uint32_t wifi_rx_status[WIFI_RX_STATUS_WORDS]
     __attribute__((aligned(4096)));
+static wifi_bc_tbl_entry_t wifi_cmd_bc_tbl[WIFI_CMD_QUEUE_ENTRIES]
+    __attribute__((aligned(4096)));
+static wifi_bc_tbl_entry_t wifi_tx_bc_tbl[WIFI_TX_QUEUE_ENTRIES]
+    __attribute__((aligned(4096)));
 static uint8_t wifi_cmd_buffers[WIFI_CMD_QUEUE_ENTRIES][WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_tx_buffers[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_BUFFER_BYTES]
@@ -497,6 +576,14 @@ static wifi_context_info_v2_t wifi_context_v2 __attribute__((aligned(4096)));
 static wifi_prph_info_v2_t wifi_prph_info_v2 __attribute__((aligned(4096)));
 static wifi_prph_scratch_v2_t wifi_prph_scratch_v2
     __attribute__((aligned(4096)));
+static uint8_t wifi_mtr_ring[WIFI_MSG_RING_ENTRIES][WIFI_MSG_RING_BYTES]
+    __attribute__((aligned(4096)));
+static uint8_t wifi_mcr_ring[WIFI_MSG_RING_ENTRIES][WIFI_MSG_RING_BYTES]
+    __attribute__((aligned(4096)));
+static uint16_t wifi_cr_head_idx[1] __attribute__((aligned(4096)));
+static uint16_t wifi_cr_tail_idx[1] __attribute__((aligned(4096)));
+static uint16_t wifi_tr_head_idx[1] __attribute__((aligned(4096)));
+static uint16_t wifi_tr_tail_idx[1] __attribute__((aligned(4096)));
 
 extern const uint8_t orizon_iwlwifi_so_a0_hr_b0_89_ucode_start[];
 extern const uint8_t orizon_iwlwifi_so_a0_hr_b0_89_ucode_end[];
@@ -785,6 +872,32 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.context_csr_target = 0;
   wifi_status_state.context_csr_value_lo = 0;
   wifi_status_state.context_csr_value_hi = 0;
+  wifi_status_state.scheduler_ready = 0;
+  wifi_status_state.scheduler_armed = 0;
+  wifi_status_state.scheduler_failed = 0;
+  wifi_status_state.scheduler_errors = 0;
+  wifi_status_state.scheduler_generation = 0;
+  wifi_status_state.cmd_bc_phys = 0;
+  wifi_status_state.tx_bc_phys = 0;
+  wifi_status_state.mtr_ring_phys = 0;
+  wifi_status_state.mcr_ring_phys = 0;
+  wifi_status_state.cr_head_phys = 0;
+  wifi_status_state.cr_tail_phys = 0;
+  wifi_status_state.tr_head_phys = 0;
+  wifi_status_state.tr_tail_phys = 0;
+  wifi_status_state.mtr_entries = 0;
+  wifi_status_state.mcr_entries = 0;
+  wifi_status_state.msg_ring_bytes = 0;
+  wifi_status_state.scheduler_cmd_id = 0;
+  wifi_status_state.scheduler_cmd_group = 0;
+  wifi_status_state.scheduler_cmd_version = 0;
+  wifi_status_state.scheduler_cmd_len = 0;
+  wifi_status_state.scheduler_cmd_sequence = 0;
+  wifi_status_state.scheduler_cmd_queue = 0;
+  wifi_status_state.scheduler_cmd_index = 0;
+  wifi_status_state.scheduler_cmd_tbs = 0;
+  wifi_status_state.scheduler_cmd_tb_len = 0;
+  wifi_status_state.scheduler_wptr_value = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -1889,6 +2002,30 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.context_csr_target = 0;
   wifi_status_state.context_csr_value_lo = 0;
   wifi_status_state.context_csr_value_hi = 0;
+  wifi_status_state.scheduler_ready = 0;
+  wifi_status_state.scheduler_armed = 0;
+  wifi_status_state.scheduler_failed = 0;
+  wifi_status_state.cmd_bc_phys = 0;
+  wifi_status_state.tx_bc_phys = 0;
+  wifi_status_state.mtr_ring_phys = 0;
+  wifi_status_state.mcr_ring_phys = 0;
+  wifi_status_state.cr_head_phys = 0;
+  wifi_status_state.cr_tail_phys = 0;
+  wifi_status_state.tr_head_phys = 0;
+  wifi_status_state.tr_tail_phys = 0;
+  wifi_status_state.mtr_entries = 0;
+  wifi_status_state.mcr_entries = 0;
+  wifi_status_state.msg_ring_bytes = 0;
+  wifi_status_state.scheduler_cmd_id = 0;
+  wifi_status_state.scheduler_cmd_group = 0;
+  wifi_status_state.scheduler_cmd_version = 0;
+  wifi_status_state.scheduler_cmd_len = 0;
+  wifi_status_state.scheduler_cmd_sequence = 0;
+  wifi_status_state.scheduler_cmd_queue = 0;
+  wifi_status_state.scheduler_cmd_index = 0;
+  wifi_status_state.scheduler_cmd_tbs = 0;
+  wifi_status_state.scheduler_cmd_tb_len = 0;
+  wifi_status_state.scheduler_wptr_value = 0;
 }
 
 static int wifi_prepare_host_queues(void) {
@@ -1897,6 +2034,8 @@ static int wifi_prepare_host_queues(void) {
   memset(wifi_rx_desc, 0, sizeof(wifi_rx_desc));
   memset(wifi_rx_used_desc, 0, sizeof(wifi_rx_used_desc));
   memset(wifi_rx_status, 0, sizeof(wifi_rx_status));
+  memset(wifi_cmd_bc_tbl, 0, sizeof(wifi_cmd_bc_tbl));
+  memset(wifi_tx_bc_tbl, 0, sizeof(wifi_tx_bc_tbl));
   memset(wifi_cmd_buffers, 0, sizeof(wifi_cmd_buffers));
   memset(wifi_tx_buffers, 0, sizeof(wifi_tx_buffers));
   memset(wifi_rx_buffers, 0, sizeof(wifi_rx_buffers));
@@ -1910,12 +2049,16 @@ static int wifi_prepare_host_queues(void) {
   wifi_status_state.rx_used_desc_phys = wifi_phys_addr(wifi_rx_used_desc);
   wifi_status_state.rx_status_phys = wifi_phys_addr(wifi_rx_status);
   wifi_status_state.rx_buffer_phys = wifi_phys_addr(wifi_rx_buffers);
+  wifi_status_state.cmd_bc_phys = wifi_phys_addr(wifi_cmd_bc_tbl);
+  wifi_status_state.tx_bc_phys = wifi_phys_addr(wifi_tx_bc_tbl);
 
   if (!wifi_status_state.cmd_tfd_phys || !wifi_status_state.cmd_buffer_phys ||
       !wifi_status_state.tx_tfd_phys || !wifi_status_state.tx_buffer_phys ||
       !wifi_status_state.rx_desc_phys ||
       !wifi_status_state.rx_used_desc_phys ||
       !wifi_status_state.rx_status_phys ||
+      !wifi_status_state.cmd_bc_phys ||
+      !wifi_status_state.tx_bc_phys ||
       !wifi_status_state.rx_buffer_phys) {
     wifi_status_state.queues_failed = 1;
     wifi_status_state.queue_errors++;
@@ -2047,6 +2190,33 @@ static void wifi_context_mark_failure(const char *status) {
   wifi_status_state.status = status;
 }
 
+static int wifi_prepare_message_rings(void) {
+  memset(wifi_mtr_ring, 0, sizeof(wifi_mtr_ring));
+  memset(wifi_mcr_ring, 0, sizeof(wifi_mcr_ring));
+  memset(wifi_cr_head_idx, 0, sizeof(wifi_cr_head_idx));
+  memset(wifi_cr_tail_idx, 0, sizeof(wifi_cr_tail_idx));
+  memset(wifi_tr_head_idx, 0, sizeof(wifi_tr_head_idx));
+  memset(wifi_tr_tail_idx, 0, sizeof(wifi_tr_tail_idx));
+
+  wifi_status_state.mtr_ring_phys = wifi_phys_addr(wifi_mtr_ring);
+  wifi_status_state.mcr_ring_phys = wifi_phys_addr(wifi_mcr_ring);
+  wifi_status_state.cr_head_phys = wifi_phys_addr(wifi_cr_head_idx);
+  wifi_status_state.cr_tail_phys = wifi_phys_addr(wifi_cr_tail_idx);
+  wifi_status_state.tr_head_phys = wifi_phys_addr(wifi_tr_head_idx);
+  wifi_status_state.tr_tail_phys = wifi_phys_addr(wifi_tr_tail_idx);
+
+  if (!wifi_status_state.mtr_ring_phys || !wifi_status_state.mcr_ring_phys ||
+      !wifi_status_state.cr_head_phys || !wifi_status_state.cr_tail_phys ||
+      !wifi_status_state.tr_head_phys || !wifi_status_state.tr_tail_phys) {
+    return -1;
+  }
+
+  wifi_status_state.mtr_entries = WIFI_MSG_RING_ENTRIES;
+  wifi_status_state.mcr_entries = WIFI_MSG_RING_ENTRIES;
+  wifi_status_state.msg_ring_bytes = WIFI_MSG_RING_BYTES;
+  return 0;
+}
+
 static int wifi_prepare_context_info(void) {
   uint32_t rx_cb_exponent = 6U;
   uint32_t control_flags;
@@ -2123,12 +2293,31 @@ static int wifi_prepare_context_info(void) {
         "wifi: context-info firmware DRAM map overflow/translation failed");
     return -1;
   }
+  if (wifi_prepare_message_rings() != 0) {
+    wifi_context_mark_failure(
+        "wifi: context-info message-ring DMA translation failed");
+    return -1;
+  }
 
   wifi_context_v2.version = 0;
   wifi_context_v2.size =
       (uint16_t)(sizeof(wifi_context_v2) / sizeof(uint32_t));
   wifi_context_v2.config = 0;
   wifi_context_v2.prph_info_base_addr = wifi_status_state.prph_info_phys;
+  wifi_context_v2.cr_head_idx_arr_base_addr =
+      wifi_status_state.cr_head_phys;
+  wifi_context_v2.tr_tail_idx_arr_base_addr =
+      wifi_status_state.tr_tail_phys;
+  wifi_context_v2.cr_tail_idx_arr_base_addr =
+      wifi_status_state.cr_tail_phys;
+  wifi_context_v2.tr_head_idx_arr_base_addr =
+      wifi_status_state.tr_head_phys;
+  wifi_context_v2.cr_idx_arr_size = 1;
+  wifi_context_v2.tr_idx_arr_size = 1;
+  wifi_context_v2.mtr_base_addr = wifi_status_state.mtr_ring_phys;
+  wifi_context_v2.mcr_base_addr = wifi_status_state.mcr_ring_phys;
+  wifi_context_v2.mtr_size = WIFI_MSG_RING_ENTRIES;
+  wifi_context_v2.mcr_size = WIFI_MSG_RING_ENTRIES;
   wifi_context_v2.prph_scratch_base_addr =
       wifi_status_state.prph_scratch_phys;
   wifi_context_v2.prph_scratch_size =
@@ -2239,7 +2428,7 @@ void wifi_format_status(char *buf, size_t size) {
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
-           "status=%s",
+           "scheduler=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -2260,6 +2449,8 @@ void wifi_format_status(char *buf, size_t size) {
                             : (s->queues_failed ? "failed" : "idle"),
            s->context_ready ? (s->context_armed ? "armed" : "staged")
                             : (s->context_failed ? "failed" : "idle"),
+           s->scheduler_ready ? (s->scheduler_armed ? "armed" : "staged")
+                              : (s->scheduler_failed ? "failed" : "idle"),
            s->status);
 }
 
@@ -3070,7 +3261,7 @@ int wifi_queue_probe(int arm, char *report, size_t report_size) {
            "rx-desc=%lu rx-buf=%lu\n"
            "dma: cmd-tfd=0x%lx cmd-buf=0x%lx tx-tfd=0x%lx tx-buf=0x%lx\n"
            "dma: rx-desc=0x%lx rx-used=0x%lx rx-status=0x%lx "
-           "rx-buf=0x%lx first-rx=0x%lx\n"
+           "rx-buf=0x%lx cmd-bc=0x%lx tx-bc=0x%lx first-rx=0x%lx\n"
            "ptrs: cmd-w=%u tx-w=%u rx-w=%u armed=%s errors=%lu\n"
            "state: host-side rings only; hardware context/scheduler registers "
            "are not programmed yet\n"
@@ -3085,6 +3276,8 @@ int wifi_queue_probe(int arm, char *report, size_t report_size) {
            (unsigned long)s->rx_used_desc_phys,
            (unsigned long)s->rx_status_phys,
            (unsigned long)s->rx_buffer_phys,
+           (unsigned long)s->cmd_bc_phys,
+           (unsigned long)s->tx_bc_phys,
            (unsigned long)wifi_rx_desc[0].phys, s->cmd_write_ptr,
            s->tx_write_ptr, s->rx_write_ptr,
            s->queues_armed ? "yes" : "no", s->queue_errors);
@@ -3169,6 +3362,8 @@ int wifi_context_probe(int arm, char *report, size_t report_size) {
            "mode=%s generation=%lu legacy-size=%u v2-size=%u scratch-size=%u\n"
            "dram-map: lmac=%lu umac=%lu paging=%lu chunks of up to %u bytes\n"
            "dma: legacy=0x%lx v2=0x%lx prph-info=0x%lx scratch=0x%lx\n"
+           "rings: mtr=0x%lx mcr=0x%lx entries=%u/%u msg-bytes=%u\n"
+           "idx: cr-head=0x%lx cr-tail=0x%lx tr-head=0x%lx tr-tail=0x%lx\n"
            "queues: cmd=0x%lx rx-free=0x%lx rx-used=0x%lx "
            "rx-status=0x%lx entries cmd=%lu rx=%lu\n"
            "flags: legacy=0x%08x prph=0x%08x planned-csr=0x%03x "
@@ -3184,6 +3379,11 @@ int wifi_context_probe(int arm, char *report, size_t report_size) {
            (unsigned long)s->v2_context_phys,
            (unsigned long)s->prph_info_phys,
            (unsigned long)s->prph_scratch_phys,
+           (unsigned long)s->mtr_ring_phys,
+           (unsigned long)s->mcr_ring_phys, s->mtr_entries, s->mcr_entries,
+           s->msg_ring_bytes, (unsigned long)s->cr_head_phys,
+           (unsigned long)s->cr_tail_phys, (unsigned long)s->tr_head_phys,
+           (unsigned long)s->tr_tail_phys,
            (unsigned long)s->cmd_tfd_phys,
            (unsigned long)s->rx_desc_phys,
            (unsigned long)s->rx_used_desc_phys,
@@ -3192,6 +3392,199 @@ int wifi_context_probe(int arm, char *report, size_t report_size) {
            s->context_control_flags, s->context_v2_control_flags,
            s->context_csr_target, s->context_csr_value_hi,
            s->context_csr_value_lo, planned_boot_ctrl);
+  return 0;
+}
+
+static uint16_t wifi_gen2_byte_count(uint32_t bytes, uint32_t tbs) {
+  uint32_t len_dw = (bytes + 3U) / 4U;
+  uint32_t filled_tfd = sizeof(uint16_t) + (tbs * sizeof(wifi_tfh_tb_t));
+  uint32_t fetch_chunks = (filled_tfd + 63U) / 64U;
+
+  if (fetch_chunks > 0) {
+    fetch_chunks--;
+  }
+  if (len_dw > 0x0fffU) {
+    len_dw = 0x0fffU;
+  }
+  return (uint16_t)(len_dw | ((fetch_chunks & 0x3U) << 12));
+}
+
+static void wifi_scheduler_mark_failure(const char *status) {
+  wifi_status_state.scheduler_ready = 0;
+  wifi_status_state.scheduler_armed = 0;
+  wifi_status_state.scheduler_failed = 1;
+  wifi_status_state.scheduler_errors++;
+  wifi_status_state.status = status;
+}
+
+static int wifi_prepare_scheduler_command(void) {
+  uint32_t idx;
+  uint32_t next_idx;
+  uint32_t command_len;
+  uint64_t frame_phys;
+  wifi_scheduler_cmd_frame_t *frame;
+  wifi_tfh_tfd_t *tfd;
+
+  if (!wifi_status_state.context_ready && wifi_prepare_context_info() != 0) {
+    wifi_scheduler_mark_failure(
+        "wifi: scheduler setup needs firmware context first");
+    return -1;
+  }
+  if (!wifi_status_state.context_ready || !wifi_status_state.queues_ready) {
+    wifi_scheduler_mark_failure(
+        "wifi: scheduler setup needs staged queues and context");
+    return -1;
+  }
+
+  if (!wifi_status_state.cmd_bc_phys) {
+    wifi_status_state.cmd_bc_phys = wifi_phys_addr(wifi_cmd_bc_tbl);
+  }
+  if (!wifi_status_state.cmd_bc_phys) {
+    wifi_scheduler_mark_failure(
+        "wifi: scheduler byte-count DMA address missing");
+    return -1;
+  }
+
+  idx = wifi_status_state.cmd_write_ptr % WIFI_CMD_QUEUE_ENTRIES;
+  next_idx = (idx + 1U) % WIFI_CMD_QUEUE_ENTRIES;
+  frame = (wifi_scheduler_cmd_frame_t *)wifi_cmd_buffers[idx];
+  tfd = (wifi_tfh_tfd_t *)wifi_cmd_tfd[idx];
+  command_len = sizeof(*frame);
+  frame_phys = wifi_phys_addr(frame);
+
+  if (!frame_phys) {
+    wifi_scheduler_mark_failure(
+        "wifi: scheduler command DMA address translation failed");
+    return -1;
+  }
+
+  memset(frame, 0, sizeof(*frame));
+  memset(tfd, 0, sizeof(*tfd));
+
+  frame->header.cmd = WIFI_CMD_SCD_QUEUE_CFG;
+  frame->header.group_id = WIFI_CMD_GROUP_LONG;
+  frame->header.sequence =
+      (uint16_t)((WIFI_DQA_CMD_QUEUE << 8) | (idx & 0xffU));
+  frame->header.length = sizeof(frame->queue_cfg);
+  frame->header.version = WIFI_CMD_VERSION_TX_QUEUE_CFG;
+  frame->queue_cfg.sta_id = 0;
+  frame->queue_cfg.tid = 0;
+  frame->queue_cfg.flags = WIFI_TX_QUEUE_CFG_ENABLE_QUEUE;
+  frame->queue_cfg.cb_size = WIFI_CMD_QUEUE_CB_SIZE_VALUE;
+  frame->queue_cfg.byte_cnt_addr = wifi_status_state.cmd_bc_phys;
+  frame->queue_cfg.tfdq_addr = wifi_status_state.cmd_tfd_phys;
+
+  tfd->num_tbs = 1;
+  tfd->tbs[0].tb_len = (uint16_t)command_len;
+  tfd->tbs[0].addr = frame_phys;
+  wifi_cmd_bc_tbl[idx].tfd_offset =
+      wifi_gen2_byte_count(command_len, tfd->num_tbs);
+
+  wifi_status_state.scheduler_ready = 1;
+  wifi_status_state.scheduler_failed = 0;
+  wifi_status_state.scheduler_generation++;
+  wifi_status_state.scheduler_cmd_id = WIFI_CMD_SCD_QUEUE_CFG;
+  wifi_status_state.scheduler_cmd_group = WIFI_CMD_GROUP_LONG;
+  wifi_status_state.scheduler_cmd_version = WIFI_CMD_VERSION_TX_QUEUE_CFG;
+  wifi_status_state.scheduler_cmd_len = command_len;
+  wifi_status_state.scheduler_cmd_sequence = frame->header.sequence;
+  wifi_status_state.scheduler_cmd_queue = WIFI_DQA_CMD_QUEUE;
+  wifi_status_state.scheduler_cmd_index = idx;
+  wifi_status_state.scheduler_cmd_tbs = tfd->num_tbs;
+  wifi_status_state.scheduler_cmd_tb_len = command_len;
+  wifi_status_state.scheduler_wptr_value =
+      (WIFI_DQA_CMD_QUEUE << HBUS_TARG_WRPTR_Q_SHIFT) | next_idx;
+  wifi_status_state.status =
+      "wifi: scheduler command frame staged for firmware command queue";
+  return 0;
+}
+
+int wifi_scheduler_probe(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi scheduler: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (s->vendor_id != 0x8086) {
+    snprintf(report, report_size,
+             "wifi scheduler: unsupported controller %04x:%04x\n",
+             s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  rc = wifi_prepare_scheduler_command();
+  s = &wifi_status_state;
+  if (rc != 0) {
+    snprintf(report, report_size,
+             "wifi scheduler: staging failed\n"
+             "errors=%lu queues=%s context=%s cmd-bc=0x%lx tx-bc=0x%lx\n"
+             "rings: mtr=0x%lx mcr=0x%lx cr-head=0x%lx tr-tail=0x%lx\n",
+             s->scheduler_errors,
+             s->queues_ready ? (s->queues_armed ? "armed" : "staged")
+                             : "idle",
+             s->context_ready ? (s->context_armed ? "armed" : "staged")
+                              : "idle",
+             (unsigned long)s->cmd_bc_phys, (unsigned long)s->tx_bc_phys,
+             (unsigned long)s->mtr_ring_phys,
+             (unsigned long)s->mcr_ring_phys,
+             (unsigned long)s->cr_head_phys,
+             (unsigned long)s->tr_tail_phys);
+    return -1;
+  }
+
+  if (arm) {
+    if (!s->context_armed) {
+      wifi_status_state.scheduler_errors++;
+      snprintf(report, report_size,
+               "wifi scheduler: command frame staged, but context is not armed\n"
+               "run: wifi context arm, then wifi scheduler arm\n"
+               "planned-doorbell: CSR[0x%03x]=0x%08x queue=%u index=%u\n",
+               HBUS_TARG_WRPTR, s->scheduler_wptr_value,
+               s->scheduler_cmd_queue, s->scheduler_cmd_index);
+      return -1;
+    }
+    wifi_status_state.scheduler_armed = 1;
+    wifi_status_state.status =
+        "wifi: scheduler command armed; doorbell deferred";
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi scheduler: %s\n"
+           "cmd: id=0x%02x group=0x%02x version=%u len=%u "
+           "seq=0x%04x queue=%u index=%u tbs=%u tb-len=%u\n"
+           "dma: cmd-tfd=0x%lx cmd-buf=0x%lx cmd-bc=0x%lx "
+           "tx-bc=0x%lx\n"
+           "rings: mtr=0x%lx mcr=0x%lx entries=%u/%u msg-bytes=%u\n"
+           "idx: cr-head=0x%lx cr-tail=0x%lx tr-head=0x%lx tr-tail=0x%lx\n"
+           "doorbell: planned CSR[0x%03x]=0x%08x generation=%lu errors=%lu\n"
+           "state: command frame and byte-count table are ready; actual "
+           "doorbell waits for RX response handling\n",
+           arm ? "scheduler command armed" : "scheduler command staged",
+           s->scheduler_cmd_id, s->scheduler_cmd_group,
+           s->scheduler_cmd_version, s->scheduler_cmd_len,
+           s->scheduler_cmd_sequence, s->scheduler_cmd_queue,
+           s->scheduler_cmd_index, s->scheduler_cmd_tbs,
+           s->scheduler_cmd_tb_len, (unsigned long)s->cmd_tfd_phys,
+           (unsigned long)s->cmd_buffer_phys, (unsigned long)s->cmd_bc_phys,
+           (unsigned long)s->tx_bc_phys, (unsigned long)s->mtr_ring_phys,
+           (unsigned long)s->mcr_ring_phys, s->mtr_entries, s->mcr_entries,
+           s->msg_ring_bytes, (unsigned long)s->cr_head_phys,
+           (unsigned long)s->cr_tail_phys, (unsigned long)s->tr_head_phys,
+           (unsigned long)s->tr_tail_phys, HBUS_TARG_WRPTR,
+           s->scheduler_wptr_value, s->scheduler_generation,
+           s->scheduler_errors);
   return 0;
 }
 

@@ -2765,6 +2765,15 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "scheduler")) {
+    const char *scheduler_args = term_skip_spaces(args + 9);
+    int arm_scheduler = term_command_is(scheduler_args, "arm") ||
+                        term_command_is(scheduler_args, "go");
+    wifi_scheduler_probe(arm_scheduler, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "connect")) {
     rest = term_skip_spaces(args + 7);
     rest = term_read_token(rest, ssid, sizeof(ssid));
@@ -2782,7 +2791,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scan|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3375,6 +3384,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi alive - Poll for Intel firmware alive interrupt\n");
     term_puts_t(term, "  wifi queues [arm] - Stage Intel command/RX/TX host rings\n");
     term_puts_t(term, "  wifi context [arm] - Stage Intel firmware context-info\n");
+    term_puts_t(term, "  wifi scheduler [arm] - Stage Intel scheduler command frame\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
