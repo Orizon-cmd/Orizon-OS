@@ -63,6 +63,22 @@ typedef struct {
   unsigned long dma_chunk_bytes;
   unsigned long dma_staged_bytes;
   unsigned long firmware_load_attempts;
+  int fh_plan_ready;
+  int fh_armed;
+  int fh_complete;
+  int fh_timeout;
+  unsigned long fh_errors;
+  uint32_t fh_channel;
+  uint32_t fh_dst_addr;
+  uint32_t fh_byte_count;
+  uint32_t fh_ctrl0_value;
+  uint32_t fh_ctrl1_value;
+  uint32_t fh_buf_status_value;
+  uint32_t fh_tx_config_value;
+  uint32_t fh_last_csr_int;
+  uint32_t fh_last_fh_int;
+  uint32_t fh_last_tx_status;
+  uint32_t fh_last_tx_error;
   const char *load_state;
 } wifi_status_t;
 
@@ -73,6 +89,7 @@ void wifi_format_status(char *buf, size_t size);
 int wifi_firmware_probe(char *report, size_t report_size);
 int wifi_hw_probe(char *report, size_t report_size);
 int wifi_load_firmware(char *report, size_t report_size);
+int wifi_upload_firmware(int arm, char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);

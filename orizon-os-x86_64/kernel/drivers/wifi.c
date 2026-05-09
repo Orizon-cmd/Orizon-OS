@@ -71,6 +71,22 @@ static wifi_status_t wifi_status_state = {
     .dma_chunk_bytes = 0,
     .dma_staged_bytes = 0,
     .firmware_load_attempts = 0,
+    .fh_plan_ready = 0,
+    .fh_armed = 0,
+    .fh_complete = 0,
+    .fh_timeout = 0,
+    .fh_errors = 0,
+    .fh_channel = 0,
+    .fh_dst_addr = 0,
+    .fh_byte_count = 0,
+    .fh_ctrl0_value = 0,
+    .fh_ctrl1_value = 0,
+    .fh_buf_status_value = 0,
+    .fh_tx_config_value = 0,
+    .fh_last_csr_int = 0,
+    .fh_last_fh_int = 0,
+    .fh_last_tx_status = 0,
+    .fh_last_tx_error = 0,
     .load_state = "wifi: firmware loader idle",
 };
 
@@ -112,12 +128,46 @@ static wifi_status_t wifi_status_state = {
 #define CSR_HW_RF_ID 0x09cU
 #define CSR_GPIO_IN 0x0a0U
 
+#define CSR_INT_BIT_FH_TX (1U << 27)
+#define CSR_INT_BIT_HW_ERR (1U << 29)
+#define CSR_INT_BIT_SW_ERR (1U << 25)
+
 #define CSR_GP_CNTRL_MAC_CLOCK_READY (1U << 0)
 #define CSR_GP_CNTRL_INIT_DONE (1U << 2)
 #define CSR_GP_CNTRL_GOING_TO_SLEEP (1U << 4)
 #define CSR_GP_CNTRL_MAC_STATUS (1U << 20)
 #define CSR_GP_CNTRL_BUS_MASTER_DISABLED (1U << 28)
 #define CSR_GP_CNTRL_HW_RF_KILL_SW (1U << 27)
+
+#define FH_MEM_LOWER_BOUND 0x1000U
+#define FH_SRVC_CHNL 9U
+#define FH_TFDIB_CTRL0_REG(ch) (FH_MEM_LOWER_BOUND + 0x900U + (0x8U * (ch)))
+#define FH_TFDIB_CTRL1_REG(ch) (FH_MEM_LOWER_BOUND + 0x904U + (0x8U * (ch)))
+#define FH_SRVC_CHNL_SRAM_ADDR_REG(ch) \
+  (FH_MEM_LOWER_BOUND + 0x9c8U + (0x4U * ((ch) - FH_SRVC_CHNL)))
+#define FH_TCSR_CHNL_TX_CONFIG_REG(ch) \
+  (FH_MEM_LOWER_BOUND + 0xd00U + (0x20U * (ch)))
+#define FH_TCSR_CHNL_TX_BUF_STS_REG(ch) \
+  (FH_MEM_LOWER_BOUND + 0xd08U + (0x20U * (ch)))
+#define FH_TCSR_CHNL_TX_ERROR_REG(ch) \
+  (FH_MEM_LOWER_BOUND + 0xd18U + (0x20U * (ch)))
+
+#define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_ENABLE (1U << 31)
+#define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CREDIT_DISABLE (1U << 3)
+#define FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_HOST_ENDTFD (1U << 20)
+#define FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_RTC_NOINT 0U
+#define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE 0U
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID (1U << 20)
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_BIT_TFDB_WPTR 12U
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM 0U
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX 3U
+#define FH_MEM_TFDIB_DRAM_ADDR_LSB_MSK 0xffffffffU
+#define FH_MEM_TFDIB_REG1_ADDR_BITSHIFT 28U
+#define FH_MEM_TFDIB_REG1_ADDR_MASK 0xfU
+#define FH_MEM_TFDIB_REG1_LENGTH_MASK 0x000fffffU
+#define FH_INT_TX_MASK 0x0000ffffU
+#define FH_INT_ERR_MASK 0xfff00000U
+#define WIFI_FH_POLL_LOOPS 1000000U
 
 typedef enum {
   WIFI_FW_IMAGE_RUNTIME = 0,
@@ -244,6 +294,22 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.dma_phys = 0;
   wifi_status_state.dma_chunk_bytes = WIFI_DMA_CHUNK_BYTES;
   wifi_status_state.dma_staged_bytes = 0;
+  wifi_status_state.fh_plan_ready = 0;
+  wifi_status_state.fh_armed = 0;
+  wifi_status_state.fh_complete = 0;
+  wifi_status_state.fh_timeout = 0;
+  wifi_status_state.fh_errors = 0;
+  wifi_status_state.fh_channel = 0;
+  wifi_status_state.fh_dst_addr = 0;
+  wifi_status_state.fh_byte_count = 0;
+  wifi_status_state.fh_ctrl0_value = 0;
+  wifi_status_state.fh_ctrl1_value = 0;
+  wifi_status_state.fh_buf_status_value = 0;
+  wifi_status_state.fh_tx_config_value = 0;
+  wifi_status_state.fh_last_csr_int = 0;
+  wifi_status_state.fh_last_fh_int = 0;
+  wifi_status_state.fh_last_tx_status = 0;
+  wifi_status_state.fh_last_tx_error = 0;
   wifi_status_state.load_state = "wifi: firmware loader idle";
   memset(wifi_status_state.firmware_human, 0,
          sizeof(wifi_status_state.firmware_human));
@@ -683,7 +749,7 @@ static int wifi_probe_mmio(void) {
   wifi_status_state.pci_command = cmd & 0xFFFFU;
 
   if (!wifi_mmio) {
-    wifi_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(phys, 0x1000);
+    wifi_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(phys, 0x2000);
   }
   if (!wifi_mmio) {
     wifi_status_state.mmio_ready = 0;
@@ -765,6 +831,134 @@ static int wifi_stage_first_dma_chunk(const wifi_fw_section_t **section_out) {
     *section_out = section;
   }
   return 0;
+}
+
+static uint32_t wifi_dma_hi_addr(uint64_t phys) {
+  return (uint32_t)((phys >> 32) & FH_MEM_TFDIB_REG1_ADDR_MASK);
+}
+
+static uint32_t wifi_fh_buf_status_value(void) {
+  return FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID |
+         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_BIT_TFDB_WPTR) |
+         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM) |
+         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX);
+}
+
+static uint32_t wifi_fh_tx_config_enable_value(void) {
+  return FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_ENABLE |
+         FH_TCSR_TX_CONFIG_REG_VAL_DMA_CREDIT_DISABLE |
+         FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_HOST_ENDTFD |
+         FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_RTC_NOINT;
+}
+
+static int wifi_prepare_fh_plan(const wifi_fw_section_t **section_out) {
+  const wifi_fw_section_t *section = NULL;
+  uint32_t byte_count;
+
+  if (wifi_stage_first_dma_chunk(&section) != 0 || !section) {
+    return -1;
+  }
+
+  byte_count = (uint32_t)wifi_status_state.dma_staged_bytes;
+  if (byte_count == 0 || byte_count > FH_MEM_TFDIB_REG1_LENGTH_MASK) {
+    wifi_status_state.fh_errors++;
+    return -1;
+  }
+
+  wifi_status_state.fh_channel = FH_SRVC_CHNL;
+  wifi_status_state.fh_dst_addr = section->dst;
+  wifi_status_state.fh_byte_count = byte_count;
+  wifi_status_state.fh_ctrl0_value =
+      (uint32_t)(wifi_status_state.dma_phys &
+                 FH_MEM_TFDIB_DRAM_ADDR_LSB_MSK);
+  wifi_status_state.fh_ctrl1_value =
+      ((wifi_dma_hi_addr(wifi_status_state.dma_phys)
+        & FH_MEM_TFDIB_REG1_ADDR_MASK)
+       << FH_MEM_TFDIB_REG1_ADDR_BITSHIFT) |
+      (byte_count & FH_MEM_TFDIB_REG1_LENGTH_MASK);
+  wifi_status_state.fh_buf_status_value = wifi_fh_buf_status_value();
+  wifi_status_state.fh_tx_config_value = wifi_fh_tx_config_enable_value();
+  wifi_status_state.fh_plan_ready = 1;
+  wifi_status_state.fh_armed = 0;
+  wifi_status_state.fh_complete = 0;
+  wifi_status_state.fh_timeout = 0;
+  wifi_status_state.fh_last_csr_int = wifi_csr_read32(CSR_INT);
+  wifi_status_state.fh_last_fh_int = wifi_csr_read32(CSR_FH_INT_STATUS);
+  wifi_status_state.fh_last_tx_status =
+      wifi_csr_read32(FH_TCSR_CHNL_TX_BUF_STS_REG(FH_SRVC_CHNL));
+  wifi_status_state.fh_last_tx_error =
+      wifi_csr_read32(FH_TCSR_CHNL_TX_ERROR_REG(FH_SRVC_CHNL));
+
+  if (section_out) {
+    *section_out = section;
+  }
+  return 0;
+}
+
+static int wifi_arm_fh_first_chunk(void) {
+  uint32_t done = CSR_INT_BIT_FH_TX;
+  uint32_t errors = CSR_INT_BIT_HW_ERR | CSR_INT_BIT_SW_ERR;
+
+  if (!wifi_status_state.fh_plan_ready || !wifi_mmio) {
+    return -1;
+  }
+
+  wifi_status_state.fh_armed = 1;
+  wifi_status_state.fh_complete = 0;
+  wifi_status_state.fh_timeout = 0;
+
+  /* Ack stale status before arming the service DMA channel. */
+  wifi_csr_write32(CSR_INT, CSR_INT_BIT_FH_TX | CSR_INT_BIT_HW_ERR |
+                            CSR_INT_BIT_SW_ERR);
+  wifi_csr_write32(CSR_FH_INT_STATUS, FH_INT_TX_MASK | FH_INT_ERR_MASK);
+
+  wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+                   FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+  wifi_csr_write32(FH_SRVC_CHNL_SRAM_ADDR_REG(FH_SRVC_CHNL),
+                   wifi_status_state.fh_dst_addr);
+  wifi_csr_write32(FH_TFDIB_CTRL0_REG(FH_SRVC_CHNL),
+                   wifi_status_state.fh_ctrl0_value);
+  wifi_csr_write32(FH_TFDIB_CTRL1_REG(FH_SRVC_CHNL),
+                   wifi_status_state.fh_ctrl1_value);
+  wifi_csr_write32(FH_TCSR_CHNL_TX_BUF_STS_REG(FH_SRVC_CHNL),
+                   wifi_status_state.fh_buf_status_value);
+  wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+                   wifi_status_state.fh_tx_config_value);
+
+  for (uint32_t i = 0; i < WIFI_FH_POLL_LOOPS; i++) {
+    uint32_t csr_int = wifi_csr_read32(CSR_INT);
+    uint32_t fh_int = wifi_csr_read32(CSR_FH_INT_STATUS);
+    uint32_t tx_error = wifi_csr_read32(FH_TCSR_CHNL_TX_ERROR_REG(FH_SRVC_CHNL));
+    wifi_status_state.fh_last_csr_int = csr_int;
+    wifi_status_state.fh_last_fh_int = fh_int;
+    wifi_status_state.fh_last_tx_status =
+        wifi_csr_read32(FH_TCSR_CHNL_TX_BUF_STS_REG(FH_SRVC_CHNL));
+    wifi_status_state.fh_last_tx_error = tx_error;
+
+    if ((csr_int & errors) || (fh_int & FH_INT_ERR_MASK) || tx_error) {
+      wifi_status_state.fh_errors++;
+      wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+                       FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+      return -1;
+    }
+
+    if ((csr_int & done) || (fh_int & FH_INT_TX_MASK)) {
+      wifi_status_state.fh_complete = 1;
+      wifi_csr_write32(CSR_INT, CSR_INT_BIT_FH_TX);
+      wifi_csr_write32(CSR_FH_INT_STATUS, fh_int & FH_INT_TX_MASK);
+      wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+                       FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+      return 0;
+    }
+
+    __asm__ volatile("pause");
+  }
+
+  wifi_status_state.fh_timeout = 1;
+  wifi_status_state.fh_errors++;
+  wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
+                   FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+  return -1;
 }
 
 int wifi_init(void) {
@@ -1087,6 +1281,64 @@ int wifi_load_firmware(char *report, size_t report_size) {
            section->len, (unsigned long)s->dma_phys, s->dma_chunk_bytes,
            s->dma_staged_bytes, s->pci_command);
   return 0;
+}
+
+int wifi_upload_firmware(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  const wifi_fw_section_t *section = NULL;
+  int rc = 0;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  if (wifi_load_firmware(report, report_size) != 0) {
+    return -1;
+  }
+
+  if (wifi_prepare_fh_plan(&section) != 0 || !section) {
+    s = &wifi_status_state;
+    wifi_status_state.load_state = "wifi: FH plan failed";
+    snprintf(report, report_size,
+             "wifi upload: FH transfer plan failed\n"
+             "dma=%s phys=0x%lx staged=%lu errors=%lu\n",
+             s->dma_ready ? "ready" : "not-ready",
+             (unsigned long)s->dma_phys, s->dma_staged_bytes,
+             s->fh_errors);
+    return -1;
+  }
+
+  if (arm) {
+    rc = wifi_arm_fh_first_chunk();
+    wifi_status_state.load_state =
+        rc == 0 ? "wifi: first FH firmware chunk completed"
+                : "wifi: first FH firmware chunk failed";
+  } else {
+    wifi_status_state.load_state =
+        "wifi: FH firmware upload plan ready; not armed";
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi upload: %s\n"
+           "section: %s tlv=%u dst=0x%08x bytes=%u secure=%s\n"
+           "dma: phys=0x%lx staged=%lu chunk=%lu\n"
+           "fh: ch=%u ctrl0=0x%08x ctrl1=0x%08x buf=0x%08x cfg=0x%08x\n"
+           "regs: csr-int=0x%08x fh-int=0x%08x tx-sts=0x%08x tx-err=0x%08x\n"
+           "result: armed=%s complete=%s timeout=%s errors=%lu\n"
+           "state: %s\n"
+           "next: full section loop, boot CPU release, firmware alive event\n",
+           arm ? "first FH transfer armed" : "FH transfer plan only",
+           wifi_fw_image_name(section->image), section->tlv_type, section->dst,
+           section->len, section->secure ? "yes" : "no",
+           (unsigned long)s->dma_phys, s->dma_staged_bytes,
+           s->dma_chunk_bytes, s->fh_channel, s->fh_ctrl0_value,
+           s->fh_ctrl1_value, s->fh_buf_status_value, s->fh_tx_config_value,
+           s->fh_last_csr_int, s->fh_last_fh_int, s->fh_last_tx_status,
+           s->fh_last_tx_error, s->fh_armed ? "yes" : "no",
+           s->fh_complete ? "yes" : "no", s->fh_timeout ? "yes" : "no",
+           s->fh_errors, s->load_state);
+  return rc;
 }
 
 int wifi_scan(char *report, size_t report_size) {
