@@ -39,7 +39,7 @@
 #define UPDATE_PACKAGE_SOURCE "https://github.com/Orizon-cmd/Orizon-Packages"
 #define UPDATE_PACKAGE_RAW_PREFIX "/Orizon-cmd/Orizon-Packages/main/"
 #define UPDATE_PACKAGE_INDEX_REMOTE "packages/x86_64/index.txt"
-#define UPDATE_CHUNK_BYTES 12288U
+#define UPDATE_CHUNK_BYTES 65536U
 #define UPDATE_RANGE_RETRIES 5U
 #define UPDATE_MANIFEST_MAX 4096U
 #define UPDATE_PACKAGE_INDEX_MAX 8192U
@@ -598,6 +598,31 @@ static int download_verified_blob(const char *label, const char *prefix,
   append_report(report, report_size, line);
   update_append_log(line);
 
+  snprintf(line, sizeof(line), "Get: %s single HTTPS request [%lu KiB]", label,
+           (unsigned long)((expected_size + 1023) / 1024));
+  update_progress_line(line);
+  update_append_log(line);
+  diag[0] = '\0';
+  if (download_range_prefixed(prefix, relative, 0,
+                              (uint64_t)(expected_size - 1), dst, dst_cap,
+                              &done, diag, sizeof(diag)) == 0 &&
+      done == expected_size) {
+    snprintf(line, sizeof(line), "Get: %s 100%% [%lu/%lu KiB]", label,
+             (unsigned long)((done + 1023) / 1024),
+             (unsigned long)((expected_size + 1023) / 1024));
+    update_progress_line(line);
+    update_append_log("update: single HTTPS range request complete");
+    goto verify_hash;
+  }
+
+  snprintf(line, sizeof(line),
+           "update: single range incomplete for %s got=%lu expected=%lu %s",
+           label, (unsigned long)done, (unsigned long)expected_size, diag);
+  update_append_log(line);
+  append_report(report, report_size,
+                "update: fast download fallback to ranged chunks");
+  done = 0;
+
   while (done < expected_size) {
     size_t wanted = expected_size - done;
     size_t got = 0;
@@ -655,6 +680,7 @@ static int download_verified_blob(const char *label, const char *prefix,
     }
   }
 
+verify_hash:
   sha256_buffer_hex(dst, expected_size, actual_hash);
   if (!hex_equal(actual_hash, expected_hash)) {
     snprintf(line, sizeof(line), "update: sha256 mismatch for %s", label);
@@ -772,6 +798,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   char line[256];
   char manifest_hash[SHA256_HEX_SIZE];
   char rollback_hash[SHA256_HEX_SIZE];
+  char current_efi_hash[SHA256_HEX_SIZE];
   size_t manifest_len = 0;
   char update_text[512];
   char rollback_text[512];
@@ -796,6 +823,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   }
   sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
                     rollback_hash);
+  sha256_buffer_hex(boot_efi_image(), boot_efi_image_size(),
+                    current_efi_hash);
 
   sched_enter_process("update-manager");
   update_write_file(UPDATE_LOG_PATH, "", 0);
@@ -885,6 +914,36 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
            manifest.version, manifest.commit);
   append_report(report, report_size, line);
   update_append_log(line);
+
+  if (hex_equal(rollback_hash, manifest.kernel_sha256) &&
+      hex_equal(current_efi_hash, manifest.efi_sha256)) {
+    update_set_state("update: boot payload already current");
+    append_report(report, report_size,
+                  "[5/8] Boot payload already current, skipping ESP rewrite");
+    if (update_install_remote_packages(report, report_size) < 0) {
+      vfs_persist_save();
+      sched_set_process_state("update-manager", SCHED_SLEEPING);
+      sched_enter_process("gui-shell");
+      return -6;
+    }
+    snprintf(update_text, sizeof(update_text),
+             "Orizon OS already current\nsource=%s\nchannel=%s\nversion=%s\n"
+             "commit=%s\nkernel-sha256=%s\nefi-sha256=%s\n",
+             UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
+             manifest.kernel_sha256, manifest.efi_sha256);
+    update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text,
+                      strlen(update_text));
+    update_set_state("update: complete");
+    append_report(report, report_size,
+                  "[7/8] Installed ESP already matches GitHub");
+    append_report(report, report_size,
+                  "[8/8] Update complete. No reboot required for boot payloads.");
+    update_append_log("Update complete: already current");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return 0;
+  }
 
   update_set_state("update: downloading boot payloads");
   append_report(report, report_size, "[5/8] Downloading verified artifacts");

@@ -23,7 +23,8 @@ The command performs a kernel-owned full-upgrade transaction:
 - resolve `raw.githubusercontent.com`
 - open TCP/TLS to GitHub without launching host tools
 - download `updates/x86_64/manifest.txt` from the public repository
-- download `kernel.elf`, `BOOTX64.EFI`, and `limine.conf` by HTTPS `Range`
+- download `kernel.elf`, `BOOTX64.EFI`, and `limine.conf` by one HTTPS
+  `Range` request per file, with chunk fallback if a full transfer fails
 - verify every artifact with SHA-256 from the manifest
 - download the package index from `Orizon-Packages`
 - install missing or changed `.opkg` packages after verifying the index hash
@@ -38,6 +39,13 @@ Progress is streamed to the console while the transaction is running. The
 terminal receives each state line immediately and redraws the framebuffer, so
 long network downloads show Debian-like progress instead of leaving the OS
 visually frozen until the final report.
+
+Small boot payloads use a fast path: one TLS handshake and one HTTPS `Range`
+request per artifact. The older chunk path remains as fallback, now with larger
+64 KiB chunks.
+
+If the booted kernel and UEFI loader already match the public manifest, `update`
+skips the boot artifact download and ESP rewrite, then only checks packages.
 
 After success, reboot to start the refreshed boot payload.
 

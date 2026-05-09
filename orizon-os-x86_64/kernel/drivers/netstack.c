@@ -35,6 +35,7 @@
 
 #define NETSTACK_MTU 1500
 #define TCP_WINDOW 8192
+#define NETSTACK_HTTPS_RX_MAX (5U * 1024U * 1024U)
 #define NETWORK_CONFIG_PATH "/system/network.conf"
 #define NETWORK_LOG_PATH "/logs/network.log"
 #define DEFAULT_STATIC_SUBNET 0xffffff00U
@@ -68,8 +69,8 @@ static uint8_t tls_tx_buf[512];
 static uint8_t tls_rx_buf[16384];
 static uint8_t tls_secure_rx_buf[2048];
 static uint8_t tls_server_plain_buf[2048];
-static uint8_t tls_app_rx_buf[32768];
-static uint8_t tls_app_plain_buf[32768];
+static uint8_t tls_app_rx_buf[NETSTACK_HTTPS_RX_MAX];
+static uint8_t tls_app_plain_buf[NETSTACK_HTTPS_RX_MAX];
 static uint8_t tls_client_random[32];
 static uint8_t tls_client_x25519_scalar[32];
 static size_t tls_client_hello_handshake_len = 0;
