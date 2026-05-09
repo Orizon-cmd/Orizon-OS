@@ -28,6 +28,9 @@ le developpement noyau:
   navigation historique `Up/Down`
 - diagnostic materiel `hw` pour voir CPU, memoire, stockage, reseau, USB/PS2,
   installation, update et principaux peripheriques PCI
+- journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
+  rapport compact `report`; apres installation, le boot log est conserve dans
+  `/logs/boot.log`
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
 
@@ -49,7 +52,8 @@ install
 L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
 peut installer Orizon OS sur le disque cible. Le mode `guided-full-disk` ecrit
 une GPT, formate une ESP FAT32, copie `BOOTX64.EFI`, `kernel.elf` et
-`limine.conf`, puis conserve une partition data Orizon pour `/workspace`.
+`limine.conf`, puis conserve une partition data Orizon pour `/workspace` et
+`/logs`.
 Avant l'ecriture disque, `/workspace` est synchronise pour garder les dossiers
 et fichiers crees pendant le live boot.
 

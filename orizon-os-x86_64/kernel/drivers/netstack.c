@@ -7,6 +7,7 @@
 
 #include "../include/netstack.h"
 #include "../include/aes_gcm.h"
+#include "../include/klog.h"
 #include "../include/net.h"
 #include "../include/sha256.h"
 #include "../include/string.h"
@@ -140,6 +141,7 @@ static void short_wait(void) {
 static void set_status(const char *status) {
   strncpy(stack_status.status, status, sizeof(stack_status.status) - 1);
   stack_status.status[sizeof(stack_status.status) - 1] = '\0';
+  klog_info("netstack", status);
 }
 
 void netstack_format_ipv4(uint32_t ip, char *buf, size_t size) {

@@ -9,9 +9,10 @@
 
 #define PERSIST_MAGIC "ORZPFS1"
 #define PERSIST_VERSION 1U
-#define PERSIST_BYTES (128U * 1024U)
+#define PERSIST_BYTES (256U * 1024U)
 #define PERSIST_SECTORS (PERSIST_BYTES / ORIZON_SECTOR_SIZE)
 #define PERSIST_HEADER_SIZE ORIZON_SECTOR_SIZE
+#define PERSIST_IO_MAX_SECTORS 128U
 
 /* Inode structure */
 typedef struct inode {
@@ -31,7 +32,7 @@ static file_t open_files[MAX_OPEN];
 static int vfs_initialized = 0;
 static int persist_ready = 0;
 static int persist_loading = 0;
-static const char *persist_status = "workspace persistence not loaded";
+static const char *persist_status = "workspace/log persistence not loaded";
 static uint8_t persist_buf[PERSIST_BYTES] __attribute__((aligned(4096)));
 
 static int create_inode(const char *path, int type);
@@ -111,7 +112,13 @@ static int path_is_inside(const char *path, const char *prefix) {
 }
 
 static int path_should_persist(const char *path) {
-  return path && path_is_inside(path, "/workspace");
+  return path &&
+         (path_is_inside(path, "/workspace") ||
+          path_is_inside(path, "/logs"));
+}
+
+static int path_is_persistent_root(const char *path) {
+  return path && (str_eq(path, "/workspace") || str_eq(path, "/logs"));
 }
 
 static int append_path_component(char *path, size_t size, const char *component,
@@ -200,6 +207,44 @@ static void persist_set_status(const char *status) {
   persist_status = status;
 }
 
+static int persist_storage_read(uint64_t lba, void *buf, uint32_t sectors) {
+  uint8_t *bytes = (uint8_t *)buf;
+  uint32_t done = 0;
+
+  while (done < sectors) {
+    uint32_t chunk = sectors - done;
+    if (chunk > PERSIST_IO_MAX_SECTORS) {
+      chunk = PERSIST_IO_MAX_SECTORS;
+    }
+    if (storage_read(lba + done, bytes + (uint64_t)done * ORIZON_SECTOR_SIZE,
+                     chunk) < 0) {
+      return -1;
+    }
+    done += chunk;
+  }
+  return 0;
+}
+
+static int persist_storage_write(uint64_t lba, const void *buf,
+                                 uint32_t sectors) {
+  const uint8_t *bytes = (const uint8_t *)buf;
+  uint32_t done = 0;
+
+  while (done < sectors) {
+    uint32_t chunk = sectors - done;
+    if (chunk > PERSIST_IO_MAX_SECTORS) {
+      chunk = PERSIST_IO_MAX_SECTORS;
+    }
+    if (storage_write(lba + done,
+                      bytes + (uint64_t)done * ORIZON_SECTOR_SIZE,
+                      chunk) < 0) {
+      return -1;
+    }
+    done += chunk;
+  }
+  return 0;
+}
+
 static int find_child_inode(int parent) {
   for (int i = 0; i < inode_count; i++) {
     if (inodes[i].parent == parent) {
@@ -237,20 +282,20 @@ static void delete_inode_index(int idx) {
   inode_count--;
 }
 
-static void clear_workspace_contents(void) {
-  int workspace = find_inode("/workspace");
-  if (workspace < 0) {
+static void clear_directory_contents(const char *path) {
+  int root = find_inode(path);
+  if (root < 0) {
     return;
   }
 
   while (1) {
-    int child = find_child_inode(workspace);
+    int child = find_child_inode(root);
     if (child < 0) {
       break;
     }
     delete_inode_index(child);
-    workspace = find_inode("/workspace");
-    if (workspace < 0) {
+    root = find_inode(path);
+    if (root < 0) {
       return;
     }
   }
@@ -411,7 +456,7 @@ int vfs_persist_save(void) {
     return -EINVAL;
   }
   if (!storage_available()) {
-    persist_set_status("workspace persistence unavailable");
+    persist_set_status("workspace/log persistence unavailable");
     return -EIO;
   }
 
@@ -425,9 +470,9 @@ int vfs_persist_save(void) {
   /* Directories first so loading can recreate parents before files. */
   for (int i = 0; i < inode_count; i++) {
     if (inodes[i].type == 1 && path_should_persist(inodes[i].path) &&
-        !str_eq(inodes[i].path, "/workspace")) {
+        !path_is_persistent_root(inodes[i].path)) {
       if (persist_append_entry(&offset, &entry_count, &inodes[i]) < 0) {
-        persist_set_status("workspace persistence full");
+        persist_set_status("workspace/log persistence full");
         return -ENOSPC;
       }
     }
@@ -435,7 +480,7 @@ int vfs_persist_save(void) {
   for (int i = 0; i < inode_count; i++) {
     if (inodes[i].type == 0 && path_should_persist(inodes[i].path)) {
       if (persist_append_entry(&offset, &entry_count, &inodes[i]) < 0) {
-        persist_set_status("workspace persistence full");
+        persist_set_status("workspace/log persistence full");
         return -ENOSPC;
       }
     }
@@ -452,12 +497,12 @@ int vfs_persist_save(void) {
   if (sectors == 0) {
     sectors = 1;
   }
-  if (storage_write(ORIZON_PERSIST_LBA, persist_buf, sectors) < 0) {
-    persist_set_status("workspace persistence write failed");
+  if (persist_storage_write(ORIZON_PERSIST_LBA, persist_buf, sectors) < 0) {
+    persist_set_status("workspace/log persistence write failed");
     return -EIO;
   }
 
-  persist_set_status("workspace persistence active");
+  persist_set_status("workspace/log persistence active");
   return 0;
 }
 
@@ -468,13 +513,13 @@ void vfs_persist_load(void) {
 
   if (!storage_available()) {
     persist_ready = 0;
-    persist_set_status("workspace persistence unavailable");
+    persist_set_status("workspace/log persistence unavailable");
     return;
   }
 
-  if (storage_read(ORIZON_PERSIST_LBA, persist_buf, PERSIST_SECTORS) < 0) {
+  if (persist_storage_read(ORIZON_PERSIST_LBA, persist_buf, PERSIST_SECTORS) < 0) {
     persist_ready = 0;
-    persist_set_status("workspace persistence read failed");
+    persist_set_status("workspace/log persistence read failed");
     return;
   }
 
@@ -484,7 +529,7 @@ void vfs_persist_load(void) {
   if (memcmp(persist_buf, PERSIST_MAGIC, 7) != 0 ||
       get_u32(persist_buf + 8) != PERSIST_VERSION) {
     persist_loading = 0;
-    persist_set_status("workspace persistence initialized");
+    persist_set_status("workspace/log persistence initialized");
     vfs_persist_save();
     return;
   }
@@ -497,11 +542,12 @@ void vfs_persist_load(void) {
       checksum != persist_checksum(persist_buf + PERSIST_HEADER_SIZE,
                                    payload_size)) {
     persist_loading = 0;
-    persist_set_status("workspace persistence checksum failed");
+    persist_set_status("workspace/log persistence checksum failed");
     return;
   }
 
-  clear_workspace_contents();
+  clear_directory_contents("/workspace");
+  clear_directory_contents("/logs");
 
   size_t offset = PERSIST_HEADER_SIZE;
   for (uint32_t entry = 0; entry < entry_count; entry++) {
@@ -524,7 +570,7 @@ void vfs_persist_load(void) {
     path[path_len] = '\0';
     offset += path_len;
 
-    if (!path_should_persist(path) || str_eq(path, "/workspace")) {
+    if (!path_should_persist(path) || path_is_persistent_root(path)) {
       offset += data_size;
       continue;
     }
@@ -546,7 +592,7 @@ void vfs_persist_load(void) {
   }
 
   persist_loading = 0;
-  persist_set_status("workspace persistence active");
+  persist_set_status("workspace/log persistence active");
 }
 
 int vfs_persist_available(void) {

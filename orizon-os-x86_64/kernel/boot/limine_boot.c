@@ -6,6 +6,7 @@
 #include "../include/gui.h"
 #include "../include/limine.h"
 #include "../include/bootinfo.h"
+#include "../include/klog.h"
 #include "../include/idt.h"
 #include "../include/acpi.h"
 #include "../include/sched.h"
@@ -200,6 +201,7 @@ static void serial_putc(char c) {
 }
 
 void serial_puts(const char *s) {
+  klog_write_raw(s);
   while (*s) {
     if (*s == '\n')
       serial_putc('\r');
@@ -209,10 +211,16 @@ void serial_puts(const char *s) {
 
 void serial_puthex(uint64_t val) {
   const char *hex = "0123456789ABCDEF";
+  char logged[17];
+  int pos = 0;
   serial_puts("0x");
   for (int i = 60; i >= 0; i -= 4) {
-    serial_putc(hex[(val >> i) & 0xF]);
+    char c = hex[(val >> i) & 0xF];
+    serial_putc(c);
+    logged[pos++] = c;
   }
+  logged[pos] = '\0';
+  klog_write_raw(logged);
 }
 
 /* Parse EDID to get physical size (mm). Returns 0 on success. */

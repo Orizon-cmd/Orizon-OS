@@ -10,6 +10,7 @@
 #include "../include/update.h"
 #include "../include/bootinfo.h"
 #include "../include/install.h"
+#include "../include/klog.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/packages.h"
@@ -182,6 +183,7 @@ static void update_write_line(const char *path, const char *line) {
 
 static void update_set_state(const char *state) {
   update_status_text = state;
+  klog_info("update", state);
   update_write_line(UPDATE_STATE_PATH, state);
   update_write_line(SYSTEM_STATE_PATH, state);
   update_append_log(state);

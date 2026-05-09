@@ -7,6 +7,7 @@
 
 #include "../include/gui.h"
 #include "../include/input_layout.h"
+#include "../include/klog.h"
 #include "../include/net.h"
 #include "../include/packages.h"
 #include "../include/power.h"
@@ -268,6 +269,7 @@ void gui_init(void) {
   vfs_persist_load();
   orizon_pkg_init();
   input_load_keyboard_layout_from_vfs();
+  klog_persist_boot_if_installed();
   net_init();
   layout_console();
 

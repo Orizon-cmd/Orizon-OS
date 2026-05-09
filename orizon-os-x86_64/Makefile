@@ -78,6 +78,7 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/mm/mmio.c \
            $(KERNEL_DIR)/fs/vfs.c \
            $(KERNEL_DIR)/system/sched.c \
+           $(KERNEL_DIR)/system/klog.c \
            $(KERNEL_DIR)/system/install.c \
            $(KERNEL_DIR)/system/packages.c \
            $(KERNEL_DIR)/system/update.c \

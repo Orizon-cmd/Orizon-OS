@@ -3,7 +3,9 @@
  */
 
 #include "../include/gui.h"
+#include "../include/bootinfo.h"
 #include "../include/input_layout.h"
+#include "../include/klog.h"
 #include "../include/kmalloc.h"
 #include "../include/install.h"
 #include "../include/net.h"
@@ -95,6 +97,7 @@ typedef struct terminal {
 } terminal_t;
 
 static terminal_t *active_term = NULL;
+static char term_diag_buf[32768];
 
 static int term_install_already_complete(void);
 static int term_read_text_file_silent(const char *path, char *buf, size_t cap);
@@ -670,10 +673,10 @@ static void term_reprint_input_after_output(terminal_t *term) {
 static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
-      "about", "append", "cat", "cd", "clear", "cp", "date", "edit",
+      "about", "append", "cat", "cd", "clear", "cp", "date", "dmesg", "edit",
       "echo", "find", "free", "grep", "head", "help", "history", "hostname",
       "hw", "id", "install", "install-status", "keyboard", "ls", "mkdir", "mv",
-      "neofetch", "net", "pkg", "poweroff", "ps", "pwd", "rollback",
+      "neofetch", "net", "logs", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "rm", "shutdown", "stat", "storage", "sync",
       "touch", "tree", "uname", "update", "uptime", "version", "whoami",
       "write"};
@@ -1685,6 +1688,254 @@ static void term_print_grep(terminal_t *term, const char *pattern,
   }
 }
 
+static void term_print_klog(terminal_t *term, size_t max_bytes) {
+  char line[160];
+  size_t cap = max_bytes;
+  size_t n;
+
+  if (cap == 0 || cap > sizeof(term_diag_buf)) {
+    cap = sizeof(term_diag_buf);
+  }
+  n = klog_snapshot(term_diag_buf, cap);
+  snprintf(line, sizeof(line),
+           "dmesg: ring=%lu bytes dropped=%lu saved=%s\n",
+           (unsigned long)klog_size(),
+           (unsigned long)klog_dropped_bytes(),
+           klog_boot_persisted() ? "yes" : "no");
+  term_puts_t(term, line);
+  if (n == 0) {
+    term_puts_t(term, "dmesg: no kernel messages captured yet\n");
+    return;
+  }
+  term_puts_t(term, term_diag_buf);
+  if (term_diag_buf[n - 1] != '\n') {
+    term_puts_t(term, "\n");
+  }
+}
+
+static void term_print_file_tail(terminal_t *term, const char *label,
+                                 const char *path, size_t max_bytes) {
+  char line[160];
+  size_t size = 0;
+  size_t want;
+  size_t used = 0;
+  int is_dir = 0;
+  file_t *f;
+  ssize_t n = 0;
+
+  if (vfs_stat(path, &size, &is_dir) < 0) {
+    term_puts_t(term, label);
+    term_puts_t(term, ": missing\n");
+    return;
+  }
+  if (is_dir) {
+    term_puts_t(term, label);
+    term_puts_t(term, ": is a directory\n");
+    return;
+  }
+
+  want = max_bytes;
+  if (want == 0 || want > sizeof(term_diag_buf) - 1) {
+    want = sizeof(term_diag_buf) - 1;
+  }
+
+  snprintf(line, sizeof(line), "== %s (%lu bytes) ==\n", label,
+           (unsigned long)size);
+  term_puts_t(term, line);
+
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    term_puts_t(term, "logs: open failed\n");
+    return;
+  }
+  if (size > want) {
+    size_t start = size - want;
+    snprintf(line, sizeof(line), "(last %lu bytes)\n", (unsigned long)want);
+    term_puts_t(term, line);
+    vfs_seek(f, (int)start, SEEK_SET);
+  }
+
+  while (used < want &&
+         (n = vfs_read(f, term_diag_buf + used, want - used)) > 0) {
+    used += (size_t)n;
+  }
+  vfs_close(f);
+  if (n < 0) {
+    term_puts_t(term, "logs: read error\n");
+    return;
+  }
+  term_diag_buf[used] = '\0';
+  if (used == 0) {
+    term_puts_t(term, "(empty)\n");
+    return;
+  }
+  term_puts_t(term, term_diag_buf);
+  if (term_diag_buf[used - 1] != '\n') {
+    term_puts_t(term, "\n");
+  }
+}
+
+static void term_print_log_summary(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 4);
+  int default_view = *args == '\0';
+
+  if (term_install_already_complete()) {
+    klog_persist_boot_if_installed();
+  }
+
+  if (default_view) {
+    term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
+    term_puts_t(term, "Use: logs boot | logs update | logs install | logs all\n");
+    if (vfs_exists(KLOG_BOOT_PATH)) {
+      term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
+    } else {
+      term_puts_t(term, "boot.log: not persisted yet, showing live dmesg tail\n");
+      term_print_klog(term, 768);
+    }
+    if (vfs_exists("/workspace/.orizon/update.log")) {
+      term_print_file_tail(term, "/workspace/.orizon/update.log",
+                           "/workspace/.orizon/update.log", 1024);
+    }
+    return;
+  }
+
+  if (term_command_is(args, "boot")) {
+    if (vfs_exists(KLOG_BOOT_PATH)) {
+      term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 8192);
+    } else {
+      term_print_klog(term, 8192);
+    }
+    return;
+  }
+  if (term_command_is(args, "update")) {
+    term_print_file_tail(term, "/workspace/.orizon/update.log",
+                         "/workspace/.orizon/update.log", 8192);
+    return;
+  }
+  if (term_command_is(args, "install")) {
+    term_print_file_tail(term, "/workspace/.orizon/install-log",
+                         "/workspace/.orizon/install-log", 8192);
+    return;
+  }
+  if (term_command_is(args, "all")) {
+    if (vfs_exists(KLOG_BOOT_PATH)) {
+      term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 4096);
+    } else {
+      term_print_klog(term, 4096);
+    }
+    term_print_file_tail(term, "/workspace/.orizon/update.log",
+                         "/workspace/.orizon/update.log", 4096);
+    term_print_file_tail(term, "/workspace/.orizon/install-log",
+                         "/workspace/.orizon/install-log", 4096);
+    term_print_file_tail(term, "/workspace/.orizon/rollback-info",
+                         "/workspace/.orizon/rollback-info", 4096);
+    return;
+  }
+
+  term_puts_t(term, "usage: logs [boot|update|install|all]\n");
+}
+
+static void term_print_diagnostic_hints(terminal_t *term) {
+  int any = 0;
+
+  if (!storage_available()) {
+    if (!any) {
+      term_puts_t(term, "Hints:\n");
+      any = 1;
+    }
+    term_puts_t(term,
+                "  - No AHCI/NVMe disk is ready; install/update need writable storage.\n");
+  }
+  if (!net_link_up()) {
+    if (!any) {
+      term_puts_t(term, "Hints:\n");
+      any = 1;
+    }
+    term_puts_t(term,
+                "  - Ethernet link is down; update needs wired network + DHCP.\n");
+  }
+  if (!boot_payloads_ready()) {
+    if (!any) {
+      term_puts_t(term, "Hints:\n");
+      any = 1;
+    }
+    term_puts_t(term,
+                "  - Boot payload capture is missing; installer/update rollback may be blocked.\n");
+  }
+  if (!term_install_already_complete()) {
+    if (!any) {
+      term_puts_t(term, "Hints:\n");
+      any = 1;
+    }
+    term_puts_t(term,
+                "  - Live boot detected; install Orizon OS before using update/pkg install.\n");
+  }
+  if (!any) {
+    term_puts_t(term, "Hints: no blocking issue detected by the compact checks.\n");
+  }
+}
+
+static void term_print_report(terminal_t *term) {
+  char line[256];
+  char uptime[40];
+  char capacity[64];
+  kmalloc_stats_t stats;
+  pci_device_info_t devs[16];
+  int pci_total;
+
+  term_puts_t(term, "\033[1;36mOrizon Health Report\033[0m\n");
+  term_format_duration(timer_uptime_seconds(), uptime, sizeof(uptime));
+  kmalloc_get_stats(&stats);
+  storage_format_capacity(capacity, sizeof(capacity));
+
+  snprintf(line, sizeof(line),
+           "Boot: uptime=%s ticks=%lu hz=%lu log=%luB dropped=%lu saved=%s\n",
+           uptime, (unsigned long)timer_ticks(), (unsigned long)timer_hz(),
+           (unsigned long)klog_size(), (unsigned long)klog_dropped_bytes(),
+           klog_boot_persisted() ? "yes" : "no");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Install: %s, payloads=%s\n",
+           term_install_already_complete() ? "installed" : "live",
+           boot_payload_status());
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line),
+           "Memory: total=%luKB used=%luKB free=%luKB largest=%luKB\n",
+           (unsigned long)(stats.total / 1024),
+           (unsigned long)(stats.used / 1024),
+           (unsigned long)(stats.free / 1024),
+           (unsigned long)(stats.largest_free / 1024));
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Disk: %s (%s), data=%s\n",
+           storage_available() ? storage_status() : "unavailable", capacity,
+           vfs_persist_status());
+  term_puts_t(term, line);
+  net_format_status(line, sizeof(line));
+  term_puts_t(term, "Network: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  netstack_format_status(line, sizeof(line));
+  term_puts_t(term, "IPv4: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  usb_format_status(line, sizeof(line));
+  term_puts_t(term, "USB: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  ps2_format_status(line, sizeof(line));
+  term_puts_t(term, "PS/2: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  term_print_first_line_or(term, "Update state: ",
+                           "/workspace/.orizon/update-state", "not run yet");
+
+  pci_total = pci_scan_all(devs, 16);
+  snprintf(line, sizeof(line), "PCI: %d device(s) detected\n", pci_total);
+  term_puts_t(term, line);
+  term_print_diagnostic_hints(term);
+  term_puts_t(term, "\nRecent kernel log tail:\n");
+  term_print_klog(term, 256);
+}
+
 static void term_find_recursive(terminal_t *term, const char *path,
                                 const char *pattern, int depth) {
   dirent_t entries[16];
@@ -2059,6 +2310,7 @@ static void term_install_write_plan(terminal_t *term) {
                          term->install_keyboard);
     term_write_text_file("/system/install-state", "install complete\n");
     term_write_text_file("/system/installed", "1\n");
+    klog_persist_boot_if_installed();
     vfs_persist_save();
     term_install_finish(term, 1);
     term_puts_t(term,
@@ -2272,7 +2524,10 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "  pkg install <file> - Install a verified package\n");
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
+    term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
+    term_puts_t(term, "  logs [name] - Read recent boot/update/install logs\n");
+    term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  net       - Show ethernet status\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
@@ -2308,8 +2563,20 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_print_about(term);
   } else if (term_command_is(cmd, "version")) {
     term_print_version(term);
+  } else if (term_command_is(cmd, "dmesg")) {
+    if (term_install_already_complete()) {
+      klog_persist_boot_if_installed();
+    }
+    term_print_klog(term, sizeof(term_diag_buf));
   } else if (term_command_is(cmd, "hw")) {
     term_print_hw(term);
+  } else if (term_command_is(cmd, "logs")) {
+    term_print_log_summary(term, cmd);
+  } else if (term_command_is(cmd, "report")) {
+    if (term_install_already_complete()) {
+      klog_persist_boot_if_installed();
+    }
+    term_print_report(term);
   } else if (strncmp(cmd, "ls", 2) == 0) {
     char path[MAX_PATH];
     const char *requested = term->cwd[0] ? term->cwd : "/";
