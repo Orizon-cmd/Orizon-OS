@@ -2712,9 +2712,16 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "upload")) {
     const char *upload_args = term_skip_spaces(args + 6);
-    int arm = term_command_is(upload_args, "arm") ||
-              term_command_is(upload_args, "first");
-    wifi_upload_firmware(arm, line, sizeof(line));
+    if (term_command_is(upload_args, "all")) {
+      const char *all_args = term_skip_spaces(upload_args + 3);
+      int arm_all = term_command_is(all_args, "arm") ||
+                    term_command_is(all_args, "go");
+      wifi_upload_all_firmware(arm_all, line, sizeof(line));
+    } else {
+      int arm = term_command_is(upload_args, "arm") ||
+                term_command_is(upload_args, "first");
+      wifi_upload_firmware(arm, line, sizeof(line));
+    }
     term_puts_t(term, line);
     return;
   }
@@ -2736,7 +2743,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|firmware|load|upload [arm]|scan|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|firmware|load|upload [arm|all [arm]]|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3323,6 +3330,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi firmware - Check Intel firmware availability\n");
     term_puts_t(term, "  wifi load - Stage Intel firmware DMA loader\n");
     term_puts_t(term, "  wifi upload [arm] - Prepare/arm first Intel FH firmware transfer\n");
+    term_puts_t(term, "  wifi upload all [arm] - Prepare/arm all Intel firmware chunks\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");

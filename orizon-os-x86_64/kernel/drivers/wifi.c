@@ -87,6 +87,14 @@ static wifi_status_t wifi_status_state = {
     .fh_last_fh_int = 0,
     .fh_last_tx_status = 0,
     .fh_last_tx_error = 0,
+    .fh_total_chunks = 0,
+    .fh_uploaded_chunks = 0,
+    .fh_uploaded_bytes = 0,
+    .fh_sections_done = 0,
+    .fh_last_section = 0,
+    .fh_last_offset = 0,
+    .fh_last_len = 0,
+    .fh_all_plan_ready = 0,
     .load_state = "wifi: firmware loader idle",
 };
 
@@ -310,6 +318,14 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.fh_last_fh_int = 0;
   wifi_status_state.fh_last_tx_status = 0;
   wifi_status_state.fh_last_tx_error = 0;
+  wifi_status_state.fh_total_chunks = 0;
+  wifi_status_state.fh_uploaded_chunks = 0;
+  wifi_status_state.fh_uploaded_bytes = 0;
+  wifi_status_state.fh_sections_done = 0;
+  wifi_status_state.fh_last_section = 0;
+  wifi_status_state.fh_last_offset = 0;
+  wifi_status_state.fh_last_len = 0;
+  wifi_status_state.fh_all_plan_ready = 0;
   wifi_status_state.load_state = "wifi: firmware loader idle";
   memset(wifi_status_state.firmware_human, 0,
          sizeof(wifi_status_state.firmware_human));
@@ -790,32 +806,56 @@ static int wifi_enable_bus_master_for_loader(void) {
              : -1;
 }
 
-static int wifi_stage_first_dma_chunk(const wifi_fw_section_t **section_out) {
-  const wifi_fw_section_t *section = NULL;
-  uint32_t copy_len;
-  uint64_t phys;
-
+static const wifi_fw_section_t *wifi_first_upload_section(void) {
   if (wifi_fw_section_count <= 0) {
-    return -1;
+    return NULL;
   }
 
   for (int i = 0; i < wifi_fw_section_count; i++) {
     if (wifi_fw_sections[i].image == WIFI_FW_IMAGE_INIT) {
-      section = &wifi_fw_sections[i];
-      break;
+      return &wifi_fw_sections[i];
     }
   }
+  return &wifi_fw_sections[0];
+}
+
+static int wifi_section_index(const wifi_fw_section_t *section) {
   if (!section) {
-    section = &wifi_fw_sections[0];
+    return -1;
+  }
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    if (section == &wifi_fw_sections[i]) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static unsigned long wifi_count_total_fw_chunks(void) {
+  unsigned long chunks = 0;
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    chunks += (wifi_fw_sections[i].len + WIFI_DMA_CHUNK_BYTES - 1U) /
+              WIFI_DMA_CHUNK_BYTES;
+  }
+  return chunks;
+}
+
+static int wifi_stage_dma_chunk(const wifi_fw_section_t *section,
+                                uint32_t offset) {
+  uint32_t copy_len;
+  uint64_t phys;
+
+  if (!section || offset >= section->len) {
+    return -1;
   }
 
-  copy_len = section->len;
+  copy_len = section->len - offset;
   if (copy_len > WIFI_DMA_CHUNK_BYTES) {
     copy_len = WIFI_DMA_CHUNK_BYTES;
   }
 
   memset(wifi_dma_chunk, 0, sizeof(wifi_dma_chunk));
-  memcpy(wifi_dma_chunk, section->data, copy_len);
+  memcpy(wifi_dma_chunk, section->data + offset, copy_len);
 
   phys = wifi_phys_addr(wifi_dma_chunk);
   if (!phys) {
@@ -827,6 +867,19 @@ static int wifi_stage_first_dma_chunk(const wifi_fw_section_t **section_out) {
   wifi_status_state.dma_phys = phys;
   wifi_status_state.dma_chunk_bytes = WIFI_DMA_CHUNK_BYTES;
   wifi_status_state.dma_staged_bytes = copy_len;
+  wifi_status_state.fh_dst_addr = section->dst + offset;
+  wifi_status_state.fh_byte_count = copy_len;
+  wifi_status_state.fh_last_offset = offset;
+  wifi_status_state.fh_last_len = copy_len;
+  return 0;
+}
+
+static int wifi_stage_first_dma_chunk(const wifi_fw_section_t **section_out) {
+  const wifi_fw_section_t *section = wifi_first_upload_section();
+
+  if (!section || wifi_stage_dma_chunk(section, 0) != 0) {
+    return -1;
+  }
   if (section_out) {
     *section_out = section;
   }
@@ -851,11 +904,13 @@ static uint32_t wifi_fh_tx_config_enable_value(void) {
          FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_RTC_NOINT;
 }
 
-static int wifi_prepare_fh_plan(const wifi_fw_section_t **section_out) {
-  const wifi_fw_section_t *section = NULL;
+static int wifi_prepare_fh_plan_for(const wifi_fw_section_t *section,
+                                    uint32_t offset,
+                                    const wifi_fw_section_t **section_out) {
   uint32_t byte_count;
+  int section_index;
 
-  if (wifi_stage_first_dma_chunk(&section) != 0 || !section) {
+  if (!section || wifi_stage_dma_chunk(section, offset) != 0) {
     return -1;
   }
 
@@ -865,9 +920,11 @@ static int wifi_prepare_fh_plan(const wifi_fw_section_t **section_out) {
     return -1;
   }
 
+  section_index = wifi_section_index(section);
   wifi_status_state.fh_channel = FH_SRVC_CHNL;
-  wifi_status_state.fh_dst_addr = section->dst;
   wifi_status_state.fh_byte_count = byte_count;
+  wifi_status_state.fh_last_section =
+      section_index >= 0 ? (uint32_t)section_index : 0;
   wifi_status_state.fh_ctrl0_value =
       (uint32_t)(wifi_status_state.dma_phys &
                  FH_MEM_TFDIB_DRAM_ADDR_LSB_MSK);
@@ -895,7 +952,12 @@ static int wifi_prepare_fh_plan(const wifi_fw_section_t **section_out) {
   return 0;
 }
 
-static int wifi_arm_fh_first_chunk(void) {
+static int wifi_prepare_fh_plan(const wifi_fw_section_t **section_out) {
+  const wifi_fw_section_t *section = wifi_first_upload_section();
+  return wifi_prepare_fh_plan_for(section, 0, section_out);
+}
+
+static int wifi_arm_fh_current_chunk(void) {
   uint32_t done = CSR_INT_BIT_FH_TX;
   uint32_t errors = CSR_INT_BIT_HW_ERR | CSR_INT_BIT_SW_ERR;
 
@@ -1309,7 +1371,7 @@ int wifi_upload_firmware(int arm, char *report, size_t report_size) {
   }
 
   if (arm) {
-    rc = wifi_arm_fh_first_chunk();
+    rc = wifi_arm_fh_current_chunk();
     wifi_status_state.load_state =
         rc == 0 ? "wifi: first FH firmware chunk completed"
                 : "wifi: first FH firmware chunk failed";
@@ -1338,6 +1400,109 @@ int wifi_upload_firmware(int arm, char *report, size_t report_size) {
            s->fh_last_tx_error, s->fh_armed ? "yes" : "no",
            s->fh_complete ? "yes" : "no", s->fh_timeout ? "yes" : "no",
            s->fh_errors, s->load_state);
+  return rc;
+}
+
+int wifi_upload_all_firmware(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int rc = 0;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  if (wifi_load_firmware(report, report_size) != 0) {
+    return -1;
+  }
+
+  wifi_status_state.fh_total_chunks = wifi_count_total_fw_chunks();
+  wifi_status_state.fh_uploaded_chunks = 0;
+  wifi_status_state.fh_uploaded_bytes = 0;
+  wifi_status_state.fh_sections_done = 0;
+  wifi_status_state.fh_all_plan_ready =
+      wifi_status_state.fh_total_chunks > 0 && wifi_fw_section_count > 0;
+
+  if (!wifi_status_state.fh_all_plan_ready) {
+    s = &wifi_status_state;
+    snprintf(report, report_size,
+             "wifi upload all: no firmware chunks to upload\n"
+             "sections=%lu chunks=%lu bytes=%lu\n",
+             s->firmware_section_count, s->fh_total_chunks,
+             s->firmware_load_bytes);
+    return -1;
+  }
+
+  if (!arm) {
+    const wifi_fw_section_t *first = wifi_first_upload_section();
+    if (first) {
+      wifi_prepare_fh_plan_for(first, 0, NULL);
+    }
+    s = &wifi_status_state;
+    wifi_status_state.load_state =
+        "wifi: full FH upload plan ready; not armed";
+    snprintf(report, report_size,
+             "wifi upload all: full FH plan ready\n"
+             "firmware: %s source=%s\n"
+             "sections=%lu runtime=%lu init=%lu wowlan=%lu secure=%lu\n"
+             "chunks=%lu bytes=%lu chunk-size=%lu first-dst=0x%08x\n"
+             "first-fh: ch=%u ctrl0=0x%08x ctrl1=0x%08x buf=0x%08x cfg=0x%08x\n"
+             "state: plan only; use 'wifi upload all arm' for guarded transfer\n",
+             s->firmware_name, s->firmware_source, s->firmware_section_count,
+             s->firmware_runtime_sections, s->firmware_init_sections,
+             s->firmware_wowlan_sections, s->firmware_secure_sections,
+             s->fh_total_chunks, s->firmware_load_bytes, s->dma_chunk_bytes,
+             s->firmware_first_dst, s->fh_channel, s->fh_ctrl0_value,
+             s->fh_ctrl1_value, s->fh_buf_status_value,
+             s->fh_tx_config_value);
+    return 0;
+  }
+
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    const wifi_fw_section_t *section = &wifi_fw_sections[i];
+    uint32_t offset = 0;
+
+    while (offset < section->len) {
+      if (wifi_prepare_fh_plan_for(section, offset, NULL) != 0) {
+        rc = -1;
+        break;
+      }
+      rc = wifi_arm_fh_current_chunk();
+      if (rc != 0) {
+        break;
+      }
+      wifi_status_state.fh_uploaded_chunks++;
+      wifi_status_state.fh_uploaded_bytes += wifi_status_state.fh_last_len;
+      offset += wifi_status_state.fh_last_len;
+    }
+
+    if (rc != 0) {
+      break;
+    }
+    wifi_status_state.fh_sections_done++;
+  }
+
+  wifi_status_state.load_state =
+      rc == 0 ? "wifi: all staged firmware FH chunks completed; alive pending"
+              : "wifi: full FH firmware upload stopped on error";
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi upload all: %s\n"
+           "progress: sections=%lu/%lu chunks=%lu/%lu bytes=%lu/%lu\n"
+           "last: section=%u offset=%u len=%u dst=0x%08x\n"
+           "fh: ch=%u ctrl0=0x%08x ctrl1=0x%08x buf=0x%08x cfg=0x%08x\n"
+           "regs: csr-int=0x%08x fh-int=0x%08x tx-sts=0x%08x tx-err=0x%08x\n"
+           "result: complete=%s timeout=%s errors=%lu\n"
+           "state: %s\n"
+           "next: boot/release device CPU and wait for firmware alive event\n",
+           rc == 0 ? "guarded transfer completed" : "guarded transfer failed",
+           s->fh_sections_done, s->firmware_section_count,
+           s->fh_uploaded_chunks, s->fh_total_chunks, s->fh_uploaded_bytes,
+           s->firmware_load_bytes, s->fh_last_section, s->fh_last_offset,
+           s->fh_last_len, s->fh_dst_addr, s->fh_channel, s->fh_ctrl0_value,
+           s->fh_ctrl1_value, s->fh_buf_status_value, s->fh_tx_config_value,
+           s->fh_last_csr_int, s->fh_last_fh_int, s->fh_last_tx_status,
+           s->fh_last_tx_error, s->fh_complete ? "yes" : "no",
+           s->fh_timeout ? "yes" : "no", s->fh_errors, s->load_state);
   return rc;
 }
 

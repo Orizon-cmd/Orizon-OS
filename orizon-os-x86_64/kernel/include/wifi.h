@@ -79,6 +79,14 @@ typedef struct {
   uint32_t fh_last_fh_int;
   uint32_t fh_last_tx_status;
   uint32_t fh_last_tx_error;
+  unsigned long fh_total_chunks;
+  unsigned long fh_uploaded_chunks;
+  unsigned long fh_uploaded_bytes;
+  unsigned long fh_sections_done;
+  uint32_t fh_last_section;
+  uint32_t fh_last_offset;
+  uint32_t fh_last_len;
+  int fh_all_plan_ready;
   const char *load_state;
 } wifi_status_t;
 
@@ -90,6 +98,7 @@ int wifi_firmware_probe(char *report, size_t report_size);
 int wifi_hw_probe(char *report, size_t report_size);
 int wifi_load_firmware(char *report, size_t report_size);
 int wifi_upload_firmware(int arm, char *report, size_t report_size);
+int wifi_upload_all_firmware(int arm, char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
