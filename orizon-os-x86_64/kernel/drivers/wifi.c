@@ -254,6 +254,11 @@ static wifi_status_t wifi_status_state = {
     .scan_complete_status = 0,
     .scan_complete_ebs_status = 0,
     .scan_complete_elapsed = 0,
+    .scan_result_truncated = 0,
+    .scan_result_count = 0,
+    .scan_result_reported = 0,
+    .scan_result_entries = 0,
+    .scan_result_bytes = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -685,6 +690,14 @@ typedef struct __attribute__((packed)) {
   uint8_t last_channel;
   uint64_t start_tsf;
 } wifi_umac_scan_iter_complete_t;
+
+typedef struct __attribute__((packed)) {
+  uint8_t channel;
+  uint8_t band;
+  uint8_t probe_status;
+  uint8_t num_probe_not_sent;
+  uint32_t duration;
+} wifi_scan_result_notif_t;
 
 typedef struct __attribute__((packed)) {
   uint16_t mac_id;
@@ -1301,6 +1314,21 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.scan_complete_status = 0;
   wifi_status_state.scan_complete_ebs_status = 0;
   wifi_status_state.scan_complete_elapsed = 0;
+  wifi_status_state.scan_result_truncated = 0;
+  wifi_status_state.scan_result_count = 0;
+  wifi_status_state.scan_result_reported = 0;
+  wifi_status_state.scan_result_entries = 0;
+  wifi_status_state.scan_result_bytes = 0;
+  memset(wifi_status_state.scan_result_channel, 0,
+         sizeof(wifi_status_state.scan_result_channel));
+  memset(wifi_status_state.scan_result_band, 0,
+         sizeof(wifi_status_state.scan_result_band));
+  memset(wifi_status_state.scan_result_probe_status, 0,
+         sizeof(wifi_status_state.scan_result_probe_status));
+  memset(wifi_status_state.scan_result_probe_not_sent, 0,
+         sizeof(wifi_status_state.scan_result_probe_not_sent));
+  memset(wifi_status_state.scan_result_duration, 0,
+         sizeof(wifi_status_state.scan_result_duration));
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -2533,6 +2561,21 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.scan_complete_status = 0;
   wifi_status_state.scan_complete_ebs_status = 0;
   wifi_status_state.scan_complete_elapsed = 0;
+  wifi_status_state.scan_result_truncated = 0;
+  wifi_status_state.scan_result_count = 0;
+  wifi_status_state.scan_result_reported = 0;
+  wifi_status_state.scan_result_entries = 0;
+  wifi_status_state.scan_result_bytes = 0;
+  memset(wifi_status_state.scan_result_channel, 0,
+         sizeof(wifi_status_state.scan_result_channel));
+  memset(wifi_status_state.scan_result_band, 0,
+         sizeof(wifi_status_state.scan_result_band));
+  memset(wifi_status_state.scan_result_probe_status, 0,
+         sizeof(wifi_status_state.scan_result_probe_status));
+  memset(wifi_status_state.scan_result_probe_not_sent, 0,
+         sizeof(wifi_status_state.scan_result_probe_not_sent));
+  memset(wifi_status_state.scan_result_duration, 0,
+         sizeof(wifi_status_state.scan_result_duration));
 }
 
 static int wifi_prepare_host_queues(void) {
@@ -4010,6 +4053,86 @@ static const char *wifi_scan_ebs_status_text(uint32_t status) {
   }
 }
 
+static const char *wifi_scan_band_text(uint32_t band) {
+  switch (band) {
+  case 0U:
+    return "5GHz";
+  case 1U:
+    return "2.4GHz";
+  default:
+    return "unknown";
+  }
+}
+
+static void wifi_scan_clear_channel_results(void) {
+  wifi_status_state.scan_result_truncated = 0;
+  wifi_status_state.scan_result_count = 0;
+  wifi_status_state.scan_result_reported = 0;
+  wifi_status_state.scan_result_entries = 0;
+  wifi_status_state.scan_result_bytes = 0;
+  memset(wifi_status_state.scan_result_channel, 0,
+         sizeof(wifi_status_state.scan_result_channel));
+  memset(wifi_status_state.scan_result_band, 0,
+         sizeof(wifi_status_state.scan_result_band));
+  memset(wifi_status_state.scan_result_probe_status, 0,
+         sizeof(wifi_status_state.scan_result_probe_status));
+  memset(wifi_status_state.scan_result_probe_not_sent, 0,
+         sizeof(wifi_status_state.scan_result_probe_not_sent));
+  memset(wifi_status_state.scan_result_duration, 0,
+         sizeof(wifi_status_state.scan_result_duration));
+}
+
+static int wifi_scan_parse_channel_results(const uint8_t *payload,
+                                           uint32_t payload_len) {
+  uint32_t result_offset = (uint32_t)sizeof(wifi_umac_scan_iter_complete_t);
+  uint32_t result_bytes;
+  uint32_t reported;
+  uint32_t entries;
+  uint32_t stored;
+  int malformed = 0;
+  int truncated = 0;
+
+  wifi_scan_clear_channel_results();
+  if (!payload || payload_len < result_offset) {
+    return 1;
+  }
+
+  reported = payload[4];
+  result_bytes = payload_len - result_offset;
+  entries = result_bytes / (uint32_t)sizeof(wifi_scan_result_notif_t);
+  stored = entries;
+  if (stored > reported) {
+    stored = reported;
+  }
+  if (stored > WIFI_SCAN_RESULT_SLOTS) {
+    stored = WIFI_SCAN_RESULT_SLOTS;
+    truncated = 1;
+  }
+  if (reported > entries ||
+      (result_bytes % (uint32_t)sizeof(wifi_scan_result_notif_t)) != 0U) {
+    truncated = 1;
+    malformed = 1;
+  }
+
+  wifi_status_state.scan_result_reported = reported;
+  wifi_status_state.scan_result_entries = entries;
+  wifi_status_state.scan_result_bytes = result_bytes;
+  wifi_status_state.scan_result_count = stored;
+  wifi_status_state.scan_result_truncated = truncated;
+
+  for (uint32_t i = 0; i < stored; i++) {
+    const uint8_t *entry =
+        payload + result_offset + i * sizeof(wifi_scan_result_notif_t);
+    wifi_status_state.scan_result_channel[i] = entry[0];
+    wifi_status_state.scan_result_band[i] = entry[1];
+    wifi_status_state.scan_result_probe_status[i] = entry[2];
+    wifi_status_state.scan_result_probe_not_sent[i] = entry[3];
+    wifi_status_state.scan_result_duration[i] = wifi_read_le32(entry + 4U);
+  }
+
+  return malformed;
+}
+
 static int wifi_stage_command_payload(uint8_t cmd_id, uint8_t group_id,
                                       uint8_t version, const void *payload,
                                       uint32_t payload_len,
@@ -4336,6 +4459,21 @@ static int wifi_prepare_scan_command(void) {
   wifi_status_state.scan_complete_status = 0;
   wifi_status_state.scan_complete_ebs_status = 0;
   wifi_status_state.scan_complete_elapsed = 0;
+  wifi_status_state.scan_result_truncated = 0;
+  wifi_status_state.scan_result_count = 0;
+  wifi_status_state.scan_result_reported = 0;
+  wifi_status_state.scan_result_entries = 0;
+  wifi_status_state.scan_result_bytes = 0;
+  memset(wifi_status_state.scan_result_channel, 0,
+         sizeof(wifi_status_state.scan_result_channel));
+  memset(wifi_status_state.scan_result_band, 0,
+         sizeof(wifi_status_state.scan_result_band));
+  memset(wifi_status_state.scan_result_probe_status, 0,
+         sizeof(wifi_status_state.scan_result_probe_status));
+  memset(wifi_status_state.scan_result_probe_not_sent, 0,
+         sizeof(wifi_status_state.scan_result_probe_not_sent));
+  memset(wifi_status_state.scan_result_duration, 0,
+         sizeof(wifi_status_state.scan_result_duration));
   return 0;
 }
 
@@ -4584,8 +4722,14 @@ static int wifi_rx_parse_one(void) {
       wifi_status_state.scan_iter_last_channel = payload[7];
       wifi_status_state.scan_iter_tsf_low = wifi_read_le32(payload + 8U);
       wifi_status_state.scan_iter_tsf_high = wifi_read_le32(payload + 12U);
-      wifi_status_state.status =
-          "wifi: UMAC scan iteration notification parsed";
+      if (wifi_scan_parse_channel_results(payload, payload_len)) {
+        wifi_status_state.scan_errors++;
+        wifi_status_state.status =
+            "wifi: UMAC scan iteration parsed with truncated channel results";
+      } else {
+        wifi_status_state.status =
+            "wifi: UMAC scan iteration notification parsed";
+      }
     } else {
       wifi_scan_mark_failure(
           "wifi: UMAC scan iteration notification too short");
@@ -5099,6 +5243,35 @@ static void wifi_report_step(char *report, size_t report_size,
   wifi_report_append(report, report_size, line);
 }
 
+static void wifi_scan_append_channel_results(char *report, size_t report_size) {
+  const wifi_status_t *s = &wifi_status_state;
+  char line[192];
+
+  snprintf(line, sizeof(line),
+           "results: reported=%u entries=%u stored=%u bytes=%u truncated=%s\n",
+           s->scan_result_reported, s->scan_result_entries,
+           s->scan_result_count, s->scan_result_bytes,
+           s->scan_result_truncated ? "yes" : "no");
+  wifi_report_append(report, report_size, line);
+
+  if (s->scan_result_count == 0) {
+    wifi_report_append(report, report_size,
+                       "result[0]: none yet; wait for scan iteration notify\n");
+    return;
+  }
+
+  for (uint32_t i = 0; i < s->scan_result_count; i++) {
+    snprintf(line, sizeof(line),
+             "result[%u]: channel=%u band=%s(%u) probe=%u not-sent=%u "
+             "duration-us=%u\n",
+             i, s->scan_result_channel[i],
+             wifi_scan_band_text(s->scan_result_band[i]),
+             s->scan_result_band[i], s->scan_result_probe_status[i],
+             s->scan_result_probe_not_sent[i], s->scan_result_duration[i]);
+    wifi_report_append(report, report_size, line);
+  }
+}
+
 int wifi_bringup_probe(char *report, size_t report_size) {
   char scratch[256];
   const wifi_status_t *s;
@@ -5315,6 +5488,7 @@ int wifi_scan(int arm, char *report, size_t report_size) {
            s->scan_complete_ebs_status,
            wifi_scan_ebs_status_text(s->scan_complete_ebs_status),
            s->scan_complete_elapsed);
+  wifi_scan_append_channel_results(report, report_size);
   return rc;
 }
 
@@ -5414,6 +5588,7 @@ int wifi_scan_poll(char *report, size_t report_size) {
            wifi_scan_ebs_status_text(s->scan_complete_ebs_status),
            s->scan_complete_elapsed, s->rx_last_cmd, s->rx_last_group,
            s->rx_last_sequence, s->rx_last_len);
+  wifi_scan_append_channel_results(report, report_size);
   return s->scan_failed ? -1 : 0;
 }
 

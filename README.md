@@ -192,9 +192,10 @@ valeurs TFD/byte-count pour diagnostiquer un blocage sur vrai materiel.
 `wifi scan` prepare maintenant un plan de scan passif et `wifi scan arm` tente
 la premiere requete UMAC scan minimale. `wifi scan poll` lit ensuite les
 notifications firmware UMAC de debut, iteration et fin de scan pour verifier
-que la carte parcourt bien les canaux. Les vraies connexions attendent encore
-le parsing des resultats beacon/probe, les commandes MAC/PHY, la couche 802.11
-et WPA.
+que la carte parcourt bien les canaux, avec un premier tableau `result[...]`
+indiquant canal, bande, statut probe et duree d'ecoute par canal. Les vraies
+connexions attendent encore le parsing des resultats beacon/probe, les commandes
+MAC/PHY, la couche 802.11 et WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

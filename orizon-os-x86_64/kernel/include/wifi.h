@@ -7,6 +7,8 @@
 
 #include "types.h"
 
+#define WIFI_SCAN_RESULT_SLOTS 8U
+
 typedef struct {
   int present;
   int driver_ready;
@@ -246,6 +248,16 @@ typedef struct {
   uint32_t scan_complete_status;
   uint32_t scan_complete_ebs_status;
   uint32_t scan_complete_elapsed;
+  int scan_result_truncated;
+  uint32_t scan_result_count;
+  uint32_t scan_result_reported;
+  uint32_t scan_result_entries;
+  uint32_t scan_result_bytes;
+  uint32_t scan_result_channel[WIFI_SCAN_RESULT_SLOTS];
+  uint32_t scan_result_band[WIFI_SCAN_RESULT_SLOTS];
+  uint32_t scan_result_probe_status[WIFI_SCAN_RESULT_SLOTS];
+  uint32_t scan_result_probe_not_sent[WIFI_SCAN_RESULT_SLOTS];
+  uint32_t scan_result_duration[WIFI_SCAN_RESULT_SLOTS];
   const char *chipset;
   const char *driver;
   const char *status;

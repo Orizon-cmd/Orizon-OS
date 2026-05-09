@@ -2672,7 +2672,7 @@ static void term_run_net(terminal_t *term, const char *cmd) {
 
 static void term_run_wifi(terminal_t *term, const char *cmd) {
   const char *args = term_skip_spaces(cmd + 4);
-  char line[2048];
+  char line[4096];
   char ssid[96];
   char password[96];
   const char *rest;
