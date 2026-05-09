@@ -259,6 +259,19 @@ static wifi_status_t wifi_status_state = {
     .scan_result_reported = 0,
     .scan_result_entries = 0,
     .scan_result_bytes = 0,
+    .scan_mpdu_packets = 0,
+    .scan_mgmt_frames = 0,
+    .scan_beacon_frames = 0,
+    .scan_probe_resp_frames = 0,
+    .scan_ssid_updates = 0,
+    .scan_last_mpdu_len = 0,
+    .scan_last_frame_offset = 0,
+    .scan_last_frame_len = 0,
+    .scan_last_frame_control = 0,
+    .scan_last_frame_subtype = 0,
+    .scan_last_frame_channel = 0,
+    .scan_ap_count = 0,
+    .scan_ap_overflow = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -454,6 +467,8 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CMD_SCAN_COMPLETE_UMAC 0x0fU
 #define WIFI_CMD_SCAN_START_NOTIFICATION_UMAC 0xb2U
 #define WIFI_CMD_SCAN_ITERATION_COMPLETE_UMAC 0xb5U
+#define WIFI_CMD_REPLY_RX_PHY 0xc0U
+#define WIFI_CMD_REPLY_RX_MPDU 0xc1U
 #define WIFI_CMD_GROUP_LONG 0x01U
 #define WIFI_CMD_GROUP_LEGACY 0x00U
 #define WIFI_CMD_GROUP_SCAN 0x06U
@@ -488,6 +503,16 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_SCAN_DWELL_FRAGMENTED 44U
 #define WIFI_SCAN_DWELL_EXTENDED 90U
 #define WIFI_SCAN_POLL_LOOPS 800000U
+#define WIFI_SCAN_DRAIN_LOOPS 100000U
+#define WIFI_RX_MPDU_DESC_SIZE_V1 48U
+#define WIFI_RX_MPDU_DESC_SIZE_V3 64U
+#define WIFI_80211_MGMT_HEADER_BYTES 24U
+#define WIFI_80211_BEACON_FIXED_BYTES 12U
+#define WIFI_80211_FC_TYPE_MASK 0x000cU
+#define WIFI_80211_FC_SUBTYPE_MASK 0x00f0U
+#define WIFI_80211_TYPE_MGMT 0U
+#define WIFI_80211_SUBTYPE_PROBE_RESP 5U
+#define WIFI_80211_SUBTYPE_BEACON 8U
 #define HBUS_TARG_WRPTR 0x460U
 #define HBUS_TARG_WRPTR_Q_SHIFT 16U
 #define FH_RSCSR_FRAME_SIZE_MSK 0x00003fffU
@@ -1075,6 +1100,34 @@ static int wifi_is_printable_ascii(uint8_t c) {
   return c >= 32 && c <= 126;
 }
 
+static void wifi_scan_clear_access_points(void) {
+  wifi_status_state.scan_mpdu_packets = 0;
+  wifi_status_state.scan_mgmt_frames = 0;
+  wifi_status_state.scan_beacon_frames = 0;
+  wifi_status_state.scan_probe_resp_frames = 0;
+  wifi_status_state.scan_ssid_updates = 0;
+  wifi_status_state.scan_last_mpdu_len = 0;
+  wifi_status_state.scan_last_frame_offset = 0;
+  wifi_status_state.scan_last_frame_len = 0;
+  wifi_status_state.scan_last_frame_control = 0;
+  wifi_status_state.scan_last_frame_subtype = 0;
+  wifi_status_state.scan_last_frame_channel = 0;
+  wifi_status_state.scan_ap_count = 0;
+  wifi_status_state.scan_ap_overflow = 0;
+  memset(wifi_status_state.scan_ap_channel, 0,
+         sizeof(wifi_status_state.scan_ap_channel));
+  memset(wifi_status_state.scan_ap_frame_subtype, 0,
+         sizeof(wifi_status_state.scan_ap_frame_subtype));
+  memset(wifi_status_state.scan_ap_seen_count, 0,
+         sizeof(wifi_status_state.scan_ap_seen_count));
+  memset(wifi_status_state.scan_ap_ssid_len, 0,
+         sizeof(wifi_status_state.scan_ap_ssid_len));
+  memset(wifi_status_state.scan_ap_bssid, 0,
+         sizeof(wifi_status_state.scan_ap_bssid));
+  memset(wifi_status_state.scan_ap_ssid, 0,
+         sizeof(wifi_status_state.scan_ap_ssid));
+}
+
 static void wifi_reset_firmware_parse(void) {
   wifi_status_state.firmware_valid = 0;
   wifi_status_state.firmware_version = 0;
@@ -1329,6 +1382,7 @@ static void wifi_reset_firmware_parse(void) {
          sizeof(wifi_status_state.scan_result_probe_not_sent));
   memset(wifi_status_state.scan_result_duration, 0,
          sizeof(wifi_status_state.scan_result_duration));
+  wifi_scan_clear_access_points();
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -2576,6 +2630,7 @@ static void wifi_reset_queue_runtime(void) {
          sizeof(wifi_status_state.scan_result_probe_not_sent));
   memset(wifi_status_state.scan_result_duration, 0,
          sizeof(wifi_status_state.scan_result_duration));
+  wifi_scan_clear_access_points();
 }
 
 static int wifi_prepare_host_queues(void) {
@@ -4133,6 +4188,198 @@ static int wifi_scan_parse_channel_results(const uint8_t *payload,
   return malformed;
 }
 
+static int wifi_scan_bssid_equal(uint32_t slot, const uint8_t *bssid) {
+  for (uint32_t i = 0; i < 6U; i++) {
+    if (wifi_status_state.scan_ap_bssid[slot][i] != bssid[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void wifi_scan_copy_ssid(uint32_t slot, const uint8_t *ssid,
+                                uint32_t ssid_len) {
+  uint32_t copy_len = ssid_len;
+
+  if (copy_len > WIFI_SCAN_SSID_MAX) {
+    copy_len = WIFI_SCAN_SSID_MAX;
+  }
+
+  for (uint32_t i = 0; i < copy_len; i++) {
+    uint8_t c = ssid[i];
+    wifi_status_state.scan_ap_ssid[slot][i] =
+        wifi_is_printable_ascii(c) ? (char)c : '.';
+  }
+  wifi_status_state.scan_ap_ssid[slot][copy_len] = '\0';
+  wifi_status_state.scan_ap_ssid_len[slot] = copy_len;
+}
+
+static int wifi_scan_store_ap(const uint8_t *bssid, const uint8_t *ssid,
+                              uint32_t ssid_len, uint32_t channel,
+                              uint32_t subtype) {
+  uint32_t slot = WIFI_SCAN_AP_SLOTS;
+
+  if (!bssid || !ssid) {
+    return -1;
+  }
+
+  for (uint32_t i = 0; i < wifi_status_state.scan_ap_count; i++) {
+    if (wifi_scan_bssid_equal(i, bssid)) {
+      slot = i;
+      break;
+    }
+  }
+
+  if (slot == WIFI_SCAN_AP_SLOTS) {
+    if (wifi_status_state.scan_ap_count >= WIFI_SCAN_AP_SLOTS) {
+      wifi_status_state.scan_ap_overflow++;
+      return -1;
+    }
+    slot = wifi_status_state.scan_ap_count++;
+    for (uint32_t i = 0; i < 6U; i++) {
+      wifi_status_state.scan_ap_bssid[slot][i] = bssid[i];
+    }
+  }
+
+  if (ssid_len > 0 || wifi_status_state.scan_ap_ssid_len[slot] == 0) {
+    wifi_scan_copy_ssid(slot, ssid, ssid_len);
+  }
+  wifi_status_state.scan_ap_channel[slot] = channel;
+  wifi_status_state.scan_ap_frame_subtype[slot] = subtype;
+  wifi_status_state.scan_ap_seen_count[slot]++;
+  wifi_status_state.scan_ssid_updates++;
+  return 0;
+}
+
+static int wifi_scan_parse_80211_ies(const uint8_t *frame, uint32_t frame_len,
+                                     uint32_t *channel,
+                                     const uint8_t **ssid,
+                                     uint32_t *ssid_len) {
+  uint32_t pos = WIFI_80211_MGMT_HEADER_BYTES + WIFI_80211_BEACON_FIXED_BYTES;
+  int ssid_seen = 0;
+
+  *channel = 0;
+  *ssid = 0;
+  *ssid_len = 0;
+
+  while (pos + 2U <= frame_len) {
+    uint8_t id = frame[pos];
+    uint8_t len = frame[pos + 1U];
+    const uint8_t *data = frame + pos + 2U;
+
+    if (pos + 2U + (uint32_t)len > frame_len) {
+      break;
+    }
+    if (id == 0U && len <= WIFI_SCAN_SSID_MAX) {
+      *ssid = data;
+      *ssid_len = len;
+      ssid_seen = 1;
+    } else if (id == 3U && len >= 1U) {
+      *channel = data[0];
+    }
+    pos += 2U + (uint32_t)len;
+  }
+
+  return ssid_seen;
+}
+
+static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
+                                       uint32_t frame_offset,
+                                       uint32_t mpdu_len) {
+  uint16_t fc;
+  uint32_t type;
+  uint32_t subtype;
+  uint32_t channel;
+  const uint8_t *ssid;
+  uint32_t ssid_len;
+
+  if (!frame || frame_len < WIFI_80211_MGMT_HEADER_BYTES +
+                              WIFI_80211_BEACON_FIXED_BYTES) {
+    return 0;
+  }
+
+  fc = wifi_read_le16(frame);
+  type = (fc & WIFI_80211_FC_TYPE_MASK) >> 2;
+  subtype = (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
+  if (type != WIFI_80211_TYPE_MGMT ||
+      (subtype != WIFI_80211_SUBTYPE_BEACON &&
+       subtype != WIFI_80211_SUBTYPE_PROBE_RESP)) {
+    return 0;
+  }
+
+  if (!wifi_scan_parse_80211_ies(frame, frame_len, &channel, &ssid,
+                                 &ssid_len)) {
+    return 0;
+  }
+  if (channel == 0) {
+    channel = wifi_status_state.scan_iter_last_channel;
+  }
+
+  wifi_status_state.scan_mgmt_frames++;
+  if (subtype == WIFI_80211_SUBTYPE_BEACON) {
+    wifi_status_state.scan_beacon_frames++;
+  } else {
+    wifi_status_state.scan_probe_resp_frames++;
+  }
+  wifi_status_state.scan_last_mpdu_len = mpdu_len;
+  wifi_status_state.scan_last_frame_offset = frame_offset;
+  wifi_status_state.scan_last_frame_len = frame_len;
+  wifi_status_state.scan_last_frame_control = fc;
+  wifi_status_state.scan_last_frame_subtype = subtype;
+  wifi_status_state.scan_last_frame_channel = channel;
+  wifi_scan_store_ap(frame + 16U, ssid, ssid_len, channel, subtype);
+  return 1;
+}
+
+static int wifi_scan_try_mpdu_candidate(const uint8_t *payload,
+                                        uint32_t payload_len,
+                                        uint32_t offset,
+                                        uint32_t mpdu_len) {
+  uint32_t frame_len;
+
+  if (!payload || offset >= payload_len) {
+    return 0;
+  }
+
+  frame_len = payload_len - offset;
+  if (mpdu_len > 0 && mpdu_len < frame_len) {
+    frame_len = mpdu_len;
+  }
+  if (frame_len < WIFI_80211_MGMT_HEADER_BYTES +
+                      WIFI_80211_BEACON_FIXED_BYTES) {
+    return 0;
+  }
+  return wifi_scan_parse_80211_frame(payload + offset, frame_len, offset,
+                                     mpdu_len);
+}
+
+static int wifi_scan_parse_rx_mpdu(const uint8_t *payload,
+                                   uint32_t payload_len) {
+  uint32_t mpdu_len = payload_len >= 2U ? wifi_read_le16(payload) : 0;
+  uint32_t candidates[] = {WIFI_RX_MPDU_DESC_SIZE_V3,
+                           WIFI_RX_MPDU_DESC_SIZE_V1, 20U, 0U};
+
+  wifi_status_state.scan_mpdu_packets++;
+  wifi_status_state.scan_last_mpdu_len = mpdu_len;
+
+  for (uint32_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
+    if (wifi_scan_try_mpdu_candidate(payload, payload_len, candidates[i],
+                                     mpdu_len)) {
+      return 1;
+    }
+  }
+
+  for (uint32_t off = 0; off + WIFI_80211_MGMT_HEADER_BYTES +
+                               WIFI_80211_BEACON_FIXED_BYTES <= payload_len;
+       off += 2U) {
+    if (wifi_scan_try_mpdu_candidate(payload, payload_len, off, 0)) {
+      return 1;
+    }
+  }
+
+  return 0;
+}
+
 static int wifi_stage_command_payload(uint8_t cmd_id, uint8_t group_id,
                                       uint8_t version, const void *payload,
                                       uint32_t payload_len,
@@ -4474,6 +4721,7 @@ static int wifi_prepare_scan_command(void) {
          sizeof(wifi_status_state.scan_result_probe_not_sent));
   memset(wifi_status_state.scan_result_duration, 0,
          sizeof(wifi_status_state.scan_result_duration));
+  wifi_scan_clear_access_points();
   return 0;
 }
 
@@ -4687,6 +4935,18 @@ static int wifi_rx_parse_one(void) {
     } else {
       wifi_status_state.nvm_info_errors++;
       wifi_status_state.status = "wifi: NVM_GET_INFO response too short";
+    }
+    specialized_status = 1;
+  }
+
+  if (pkt->header.cmd == WIFI_CMD_REPLY_RX_MPDU &&
+      wifi_is_scan_notification_group(pkt->header.group_id)) {
+    if (wifi_scan_parse_rx_mpdu(payload, payload_len)) {
+      wifi_status_state.status =
+          "wifi: 802.11 beacon/probe response SSID parsed";
+    } else {
+      wifi_status_state.status =
+          "wifi: RX MPDU observed; no beacon/probe SSID parsed yet";
     }
     specialized_status = 1;
   }
@@ -5272,6 +5532,58 @@ static void wifi_scan_append_channel_results(char *report, size_t report_size) {
   }
 }
 
+static const char *wifi_scan_frame_subtype_text(uint32_t subtype) {
+  switch (subtype) {
+  case WIFI_80211_SUBTYPE_BEACON:
+    return "beacon";
+  case WIFI_80211_SUBTYPE_PROBE_RESP:
+    return "probe-response";
+  default:
+    return "unknown";
+  }
+}
+
+static void wifi_scan_append_access_points(char *report, size_t report_size) {
+  const wifi_status_t *s = &wifi_status_state;
+  char line[224];
+
+  snprintf(line, sizeof(line),
+           "aps: count=%u overflow=%u mpdu=%lu mgmt=%lu beacon=%lu "
+           "probe-resp=%lu ssid-updates=%lu\n",
+           s->scan_ap_count, s->scan_ap_overflow, s->scan_mpdu_packets,
+           s->scan_mgmt_frames, s->scan_beacon_frames,
+           s->scan_probe_resp_frames, s->scan_ssid_updates);
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "last-frame: fc=0x%04x subtype=%u/%s offset=%u len=%u "
+           "mpdu-len=%u channel=%u\n",
+           s->scan_last_frame_control, s->scan_last_frame_subtype,
+           wifi_scan_frame_subtype_text(s->scan_last_frame_subtype),
+           s->scan_last_frame_offset, s->scan_last_frame_len,
+           s->scan_last_mpdu_len, s->scan_last_frame_channel);
+  wifi_report_append(report, report_size, line);
+
+  if (s->scan_ap_count == 0) {
+    wifi_report_append(report, report_size,
+                       "ap[0]: none yet; wait for beacon/probe RX packets\n");
+    return;
+  }
+
+  for (uint32_t i = 0; i < s->scan_ap_count; i++) {
+    const char *ssid = s->scan_ap_ssid_len[i] ? s->scan_ap_ssid[i] : "<hidden>";
+    snprintf(line, sizeof(line),
+             "ap[%u]: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
+             "channel=%u source=%s seen=%u\n",
+             i, ssid, s->scan_ap_bssid[i][0], s->scan_ap_bssid[i][1],
+             s->scan_ap_bssid[i][2], s->scan_ap_bssid[i][3],
+             s->scan_ap_bssid[i][4], s->scan_ap_bssid[i][5],
+             s->scan_ap_channel[i],
+             wifi_scan_frame_subtype_text(s->scan_ap_frame_subtype[i]),
+             s->scan_ap_seen_count[i]);
+    wifi_report_append(report, report_size, line);
+  }
+}
+
 int wifi_bringup_probe(char *report, size_t report_size) {
   char scratch[256];
   const wifi_status_t *s;
@@ -5458,8 +5770,8 @@ int wifi_scan(int arm, char *report, size_t report_size) {
            "iter: uid=%u channels=%u status=%u bt=%u last-channel=%u "
            "tsf=0x%08x%08x\n"
            "complete: uid=%u status=%u/%s ebs=%u/%s elapsed=%u\n"
-           "note: this is the first passive UMAC scan request; full AP list "
-           "parsing still needs beacon/probe result parsing and MAC context work\n"
+           "note: passive UMAC scan request sent; SSID parsing now watches "
+           "RX_MPDU beacon/probe-response frames\n"
            "next: run wifi scan poll until complete=yes\n",
            s->scan_response_seen
                ? "firmware accepted/answered scan command"
@@ -5489,6 +5801,7 @@ int wifi_scan(int arm, char *report, size_t report_size) {
            wifi_scan_ebs_status_text(s->scan_complete_ebs_status),
            s->scan_complete_elapsed);
   wifi_scan_append_channel_results(report, report_size);
+  wifi_scan_append_access_points(report, report_size);
   return rc;
 }
 
@@ -5496,6 +5809,9 @@ int wifi_scan_poll(char *report, size_t report_size) {
   const wifi_status_t *s;
   unsigned long notifications_before;
   unsigned long packets_before;
+  unsigned long ssids_before;
+  int complete_before;
+  uint32_t poll_limit;
   uint32_t loops = 0;
   int parsed = 0;
   int observed = 0;
@@ -5528,46 +5844,46 @@ int wifi_scan_poll(char *report, size_t report_size) {
 
   notifications_before = s->scan_notifications;
   packets_before = s->rx_packets;
+  ssids_before = s->scan_ssid_updates;
+  complete_before = s->scan_complete_seen;
+  poll_limit = complete_before ? WIFI_SCAN_DRAIN_LOOPS : WIFI_SCAN_POLL_LOOPS;
 
-  if (!s->scan_complete_seen) {
-    for (uint32_t i = 0; i < WIFI_SCAN_POLL_LOOPS; i++) {
-      int rc;
-      loops = i + 1U;
-      wifi_status_state.rx_polls++;
-      rc = wifi_rx_parse_one();
-      if (rc > 0) {
-        parsed++;
-        if (wifi_status_state.scan_notifications != notifications_before ||
-            wifi_status_state.scan_complete_seen) {
-          observed = 1;
-          break;
-        }
-      }
-      if (rc < 0) {
+  for (uint32_t i = 0; i < poll_limit; i++) {
+    int rc;
+    loops = i + 1U;
+    wifi_status_state.rx_polls++;
+    rc = wifi_rx_parse_one();
+    if (rc > 0) {
+      parsed++;
+      if (wifi_status_state.scan_notifications != notifications_before ||
+          wifi_status_state.scan_ssid_updates != ssids_before ||
+          (!complete_before && wifi_status_state.scan_complete_seen)) {
+        observed = 1;
         break;
       }
-      __asm__ volatile("pause");
     }
-  } else {
-    observed = 1;
+    if (rc < 0) {
+      break;
+    }
+    __asm__ volatile("pause");
   }
 
   s = &wifi_status_state;
   snprintf(report, report_size,
            "wifi scan poll: %s\n"
            "state: uid=%u sent=%s response=%s start=%s iter=%s complete=%s "
-           "inflight=%s notifications=%lu failed=%s errors=%lu\n"
+           "inflight=%s notifications=%lu aps=%u ssid-updates=%lu "
+           "failed=%s errors=%lu\n"
            "poll: loops=%u parsed=%d packets-before=%lu packets-after=%lu "
-           "notifications-before=%lu\n"
+           "notifications-before=%lu ssids-before=%lu\n"
            "start: uid=%u\n"
            "iter: uid=%u channels=%u status=%u bt=%u last-channel=%u "
            "tsf=0x%08x%08x\n"
            "complete: uid=%u schedule=%u iter=%u status=%u/%s ebs=%u/%s "
            "elapsed=%u\n"
            "rx-last: cmd=0x%02x group=0x%02x seq=0x%04x len=%u\n"
-           "next: if complete=no, repeat wifi scan poll; AP names need the "
-           "next RX beacon/probe parser step\n",
-           observed ? "scan notification observed"
+           "next: repeat wifi scan poll to drain more beacon/probe RX frames\n",
+           observed ? "scan/AP update observed"
                     : "no new scan notification in this poll window",
            s->scan_uid, s->command_sent ? "yes" : "no",
            s->scan_response_seen ? "yes" : "no",
@@ -5575,8 +5891,9 @@ int wifi_scan_poll(char *report, size_t report_size) {
            s->scan_iter_seen ? "yes" : "no",
            s->scan_complete_seen ? "yes" : "no",
            s->scan_inflight ? "yes" : "no", s->scan_notifications,
+           s->scan_ap_count, s->scan_ssid_updates,
            s->scan_failed ? "yes" : "no", s->scan_errors, loops, parsed,
-           packets_before, s->rx_packets, notifications_before,
+           packets_before, s->rx_packets, notifications_before, ssids_before,
            s->scan_start_uid, s->scan_iter_uid, s->scan_iter_channels,
            s->scan_iter_status, s->scan_iter_bt_status,
            s->scan_iter_last_channel, s->scan_iter_tsf_high,
@@ -5589,6 +5906,7 @@ int wifi_scan_poll(char *report, size_t report_size) {
            s->scan_complete_elapsed, s->rx_last_cmd, s->rx_last_group,
            s->rx_last_sequence, s->rx_last_len);
   wifi_scan_append_channel_results(report, report_size);
+  wifi_scan_append_access_points(report, report_size);
   return s->scan_failed ? -1 : 0;
 }
 
@@ -5619,13 +5937,14 @@ int wifi_connect(const char *ssid, const char *password, char *report,
            "wifi connect: association/WPA is not available yet\n"
            "target: ssid='%s' password=%s\n"
            "detected: %s (%04x:%04x)\n"
-           "state: firmware=%s boot=%s alive=%s scan=%s\n"
-           "next: complete scan notifications, MAC context, auth/assoc frames, WPA\n",
+           "state: firmware=%s boot=%s alive=%s scan=%s aps=%u\n"
+           "next: MAC context, auth/assoc management frames, WPA\n",
            ssid ? ssid : "", password && password[0] ? "provided" : "none",
            s->chipset, s->vendor_id, s->device_id,
            s->firmware_present ? s->firmware_name : "missing",
            s->boot_ready ? "ready" : "not-ready",
            s->alive_seen ? "seen" : "not-seen",
-           s->scan_response_seen ? "started" : "not-started");
+           s->scan_response_seen ? "started" : "not-started",
+           s->scan_ap_count);
   return -1;
 }

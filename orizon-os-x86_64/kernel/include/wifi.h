@@ -8,6 +8,8 @@
 #include "types.h"
 
 #define WIFI_SCAN_RESULT_SLOTS 8U
+#define WIFI_SCAN_AP_SLOTS 8U
+#define WIFI_SCAN_SSID_MAX 32U
 
 typedef struct {
   int present;
@@ -258,6 +260,25 @@ typedef struct {
   uint32_t scan_result_probe_status[WIFI_SCAN_RESULT_SLOTS];
   uint32_t scan_result_probe_not_sent[WIFI_SCAN_RESULT_SLOTS];
   uint32_t scan_result_duration[WIFI_SCAN_RESULT_SLOTS];
+  unsigned long scan_mpdu_packets;
+  unsigned long scan_mgmt_frames;
+  unsigned long scan_beacon_frames;
+  unsigned long scan_probe_resp_frames;
+  unsigned long scan_ssid_updates;
+  uint32_t scan_last_mpdu_len;
+  uint32_t scan_last_frame_offset;
+  uint32_t scan_last_frame_len;
+  uint32_t scan_last_frame_control;
+  uint32_t scan_last_frame_subtype;
+  uint32_t scan_last_frame_channel;
+  uint32_t scan_ap_count;
+  uint32_t scan_ap_overflow;
+  uint32_t scan_ap_channel[WIFI_SCAN_AP_SLOTS];
+  uint32_t scan_ap_frame_subtype[WIFI_SCAN_AP_SLOTS];
+  uint32_t scan_ap_seen_count[WIFI_SCAN_AP_SLOTS];
+  uint32_t scan_ap_ssid_len[WIFI_SCAN_AP_SLOTS];
+  uint8_t scan_ap_bssid[WIFI_SCAN_AP_SLOTS][6];
+  char scan_ap_ssid[WIFI_SCAN_AP_SLOTS][WIFI_SCAN_SSID_MAX + 1U];
   const char *chipset;
   const char *driver;
   const char *status;

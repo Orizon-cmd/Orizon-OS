@@ -52,9 +52,11 @@ development target, not a ZimaOS-only assumption.
   parses UMAC scan-start, iteration-complete, and complete notifications
   so we can confirm firmware scan progress on the Lenovo. It also stores the
   first per-channel scan telemetry rows: channel, band, probe status, skipped
-  probes, and dwell duration. Real scans/connections still require the next
-  driver milestones: beacon/probe result parsing, MAC context setup, 802.11
-  management frames, and WPA association.
+  probes, and dwell duration. Orizon now also watches `REPLY_RX_MPDU` packets
+  during scan polling and records the first SSID/BSSID/channel rows from
+  beacon/probe-response management frames. Real connections still require the
+  next driver milestones: MAC context setup, 802.11 association management
+  frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware

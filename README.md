@@ -193,9 +193,11 @@ valeurs TFD/byte-count pour diagnostiquer un blocage sur vrai materiel.
 la premiere requete UMAC scan minimale. `wifi scan poll` lit ensuite les
 notifications firmware UMAC de debut, iteration et fin de scan pour verifier
 que la carte parcourt bien les canaux, avec un premier tableau `result[...]`
-indiquant canal, bande, statut probe et duree d'ecoute par canal. Les vraies
-connexions attendent encore le parsing des resultats beacon/probe, les commandes
-MAC/PHY, la couche 802.11 et WPA.
+indiquant canal, bande, statut probe et duree d'ecoute par canal. Le poll RX
+surveille aussi les premieres trames beacon/probe-response pour remplir une
+table `ap[...]` avec SSID, BSSID, canal et source de detection. Les vraies
+connexions attendent encore les commandes MAC/PHY, la couche 802.11 active et
+WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
