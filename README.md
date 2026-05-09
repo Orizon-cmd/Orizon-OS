@@ -18,7 +18,7 @@ le developpement noyau:
   du boot UEFI, selection explicite du disque cible et reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
-  Ethernet Intel e1000/e1000e et Realtek RTL8139
+  Ethernet Intel e1000/e1000e, Realtek RTL8139 et VirtIO-net pour Proxmox/QEMU
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
   les fichiers de boot installes
@@ -83,6 +83,27 @@ partition data:
 ```text
 repair-boot
 ```
+
+## Reseau Bridge Et Proxmox
+
+Orizon OS peut utiliser une carte reseau VM en NAT ou en bridge. Pour Proxmox,
+la configuration recommandee est:
+
+```text
+Bridge: vmbr0
+Model: VirtIO (paravirtualized)
+DHCP: active sur le LAN
+```
+
+Le bridge ne remplace pas DHCP: il branche simplement la VM sur le meme reseau
+que l'hote. Si le reseau local ne distribue pas d'adresse, `update` ne pourra
+pas joindre GitHub tant qu'une configuration IP statique Orizon n'existe pas.
+Dans Orizon, `net` affiche le pilote detecte et `net dhcp` teste l'obtention
+d'une adresse IPv4 sans lancer une mise a jour.
+En cas de machine Proxmox configuree en VirtIO moderne-only, choisir le modele
+`Intel E1000` reste un fallback compatible.
+
+Details: [docs/orizon/NETWORK.md](docs/orizon/NETWORK.md).
 
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA, une ESP de 1 MiB a
@@ -155,8 +176,9 @@ update
 
 La commande lance une transaction interne, facon `apt full-upgrade`, sans
 programme externe: preparation de la base packages, probe Ethernet Intel
-`e1000/e1000e` ou `RTL8139`, DHCP, DNS, TCP, TLS vers GitHub, telechargement du manifeste
-public, telechargement des artefacts par requetes HTTP `Range`, verification
+`e1000/e1000e`, `RTL8139` ou `VirtIO-net`, DHCP, DNS, TCP, TLS vers GitHub,
+telechargement du manifeste public, telechargement des artefacts par requetes
+HTTP `Range`, verification
 SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
 `BOOTX64.EFI` et `limine.conf`, puis lecture de l'index public
 `Orizon-Packages` pour installer ou mettre a jour les paquets `.opkg`. La

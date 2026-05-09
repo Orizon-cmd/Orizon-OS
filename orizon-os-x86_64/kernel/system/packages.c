@@ -56,7 +56,7 @@ static const builtin_package_t builtin_packages[] = {
     {"orizon-core", "core-x86_64", "builtin"},
     {"orizon-console", "minimal-shell", "builtin"},
     {"orizon-vfs", "workspace-persistence-ahci-nvme", "builtin"},
-    {"orizon-net", "ethernet-e1000-rtl8139", "builtin"},
+    {"orizon-net", "ethernet-e1000-rtl8139-virtio", "builtin"},
     {"orizon-ipv4", "dhcp-dns-tcp-bootstrap", "builtin"},
     {"orizon-tls", "github-https-range", "builtin"},
     {"orizon-sha256", "artifact-verification", "builtin"},

@@ -2115,6 +2115,26 @@ static void term_print_net_status(terminal_t *term) {
   term_puts_t(term, "\n");
 }
 
+static void term_run_net(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 3);
+  char line[256];
+
+  if (term_command_is(args, "dhcp")) {
+    term_puts_t(term, "net: configuring IPv4 with DHCP...\n");
+    if (netstack_configure_ipv4() == 0) {
+      term_puts_t(term, "net: DHCP configured\n");
+    } else {
+      term_puts_t(term, "net: DHCP failed\n");
+    }
+    netstack_format_status(line, sizeof(line));
+    term_puts_t(term, line);
+    term_puts_t(term, "\n");
+    return;
+  }
+
+  term_print_net_status(term);
+}
+
 static int term_write_text_file(const char *path, const char *text) {
   file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
   if (!f) {
@@ -2625,7 +2645,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");
-    term_puts_t(term, "  net       - Show ethernet status\n");
+    term_puts_t(term, "  net       - Show ethernet/IP status\n");
+    term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
@@ -3071,7 +3092,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, input_keyboard_layout());
     term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "net")) {
-    term_print_net_status(term);
+    term_run_net(term, cmd);
   } else if (term_command_is(cmd, "install")) {
     term_start_installer(term);
     return;
