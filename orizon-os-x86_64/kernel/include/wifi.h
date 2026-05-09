@@ -198,6 +198,20 @@ typedef struct {
   uint32_t nvm_resp_word1;
   uint32_t nvm_resp_word2;
   uint32_t nvm_resp_word3;
+  int nvm_info_ready;
+  int nvm_info_failed;
+  int nvm_info_response_seen;
+  unsigned long nvm_info_errors;
+  unsigned long nvm_info_generation;
+  uint32_t nvm_info_flags;
+  uint32_t nvm_info_version;
+  uint32_t nvm_info_board_type;
+  uint32_t nvm_info_hw_addrs;
+  uint32_t nvm_info_mac_sku_flags;
+  uint32_t nvm_info_tx_chains;
+  uint32_t nvm_info_rx_chains;
+  uint32_t nvm_info_lar_enabled;
+  uint32_t nvm_info_n_channels;
   const char *chipset;
   const char *driver;
   const char *status;
@@ -276,6 +290,7 @@ int wifi_scheduler_probe(int arm, char *report, size_t report_size);
 int wifi_rx_probe(int poll, char *report, size_t report_size);
 int wifi_command_probe(int arm, char *report, size_t report_size);
 int wifi_nvm_probe(int arm, char *report, size_t report_size);
+int wifi_nvm_info_probe(int arm, char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);

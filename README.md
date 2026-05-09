@@ -176,14 +176,15 @@ par I2C-HID. Orizon contient maintenant une premiere sonde Intel LPSS/I2C-HID
 pour ce chemin, avant le parseur multitouch complet. Le Wi-Fi Intel CNVi est
 detecte par `wifi status`; `wifi firmware`, `wifi apm`, `wifi boot arm`,
 `wifi alive`, `wifi queues arm`, `wifi context arm`, `wifi scheduler arm`,
-`wifi rx poll`, `wifi command arm` et `wifi nvm arm` couvrent maintenant la chaine de
+`wifi rx poll`, `wifi command arm`, `wifi nvm arm` et `wifi nvm-info arm`
+couvrent maintenant la chaine de
 diagnostic
 firmware: presence du blob Intel, reveil APM du controleur, release CPU
 firmware, transfert FH DMA garde, attente du signal firmware alive, puis
 preparation des rings commande/RX/TX cote hote, du context-info firmware,
 des anneaux message MTR/MCR, de la premiere trame de commande scheduler, du
 polling RX de reponse firmware, du doorbell commande explicite et d'une
-premiere lecture NVM cache firmware. `wifi command`
+premiere lecture NVM cache/capacites radio firmware. `wifi command`
 affiche aussi les snapshots avant/apres, les mots bruts RX/completion et les
 valeurs TFD/byte-count pour diagnostiquer un blocage sur vrai materiel. Les
 vraies connexions attendent encore les commandes de configuration MAC/PHY, la

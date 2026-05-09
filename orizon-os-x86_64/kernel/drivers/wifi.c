@@ -206,6 +206,20 @@ static wifi_status_t wifi_status_state = {
     .nvm_resp_word1 = 0,
     .nvm_resp_word2 = 0,
     .nvm_resp_word3 = 0,
+    .nvm_info_ready = 0,
+    .nvm_info_failed = 0,
+    .nvm_info_response_seen = 0,
+    .nvm_info_errors = 0,
+    .nvm_info_generation = 0,
+    .nvm_info_flags = 0,
+    .nvm_info_version = 0,
+    .nvm_info_board_type = 0,
+    .nvm_info_hw_addrs = 0,
+    .nvm_info_mac_sku_flags = 0,
+    .nvm_info_tx_chains = 0,
+    .nvm_info_rx_chains = 0,
+    .nvm_info_lar_enabled = 0,
+    .nvm_info_n_channels = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -395,16 +409,25 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_DQA_CMD_QUEUE 0U
 #define WIFI_CMD_SCD_QUEUE_CFG 0x1dU
 #define WIFI_CMD_NVM_ACCESS 0x88U
+#define WIFI_CMD_NVM_GET_INFO 0x02U
 #define WIFI_CMD_GROUP_LONG 0x01U
 #define WIFI_CMD_GROUP_LEGACY 0x00U
+#define WIFI_CMD_GROUP_REGULATORY_NVM 0x0cU
 #define WIFI_CMD_VERSION_TX_QUEUE_CFG 2U
 #define WIFI_CMD_VERSION_NVM_ACCESS 0U
+#define WIFI_CMD_VERSION_NVM_GET_INFO 1U
 #define WIFI_TX_QUEUE_CFG_ENABLE_QUEUE 0x0001U
 #define WIFI_CMD_QUEUE_CB_SIZE_VALUE 2U
 #define WIFI_NVM_READ 0U
 #define WIFI_NVM_TARGET_CACHE 0U
 #define WIFI_NVM_SECTION_SW 1U
 #define WIFI_NVM_DEFAULT_READ_BYTES 64U
+#define WIFI_NVM_MAC_SKU_2GHZ (1U << 0)
+#define WIFI_NVM_MAC_SKU_5GHZ (1U << 1)
+#define WIFI_NVM_MAC_SKU_11N (1U << 2)
+#define WIFI_NVM_MAC_SKU_11AC (1U << 3)
+#define WIFI_NVM_MAC_SKU_11AX (1U << 4)
+#define WIFI_NVM_MAC_SKU_MIMO_DISABLED (1U << 5)
 #define HBUS_TARG_WRPTR 0x460U
 #define HBUS_TARG_WRPTR_Q_SHIFT 16U
 #define FH_RSCSR_FRAME_SIZE_MSK 0x00003fffU
@@ -517,6 +540,10 @@ typedef struct __attribute__((packed)) {
   uint16_t type;
   uint16_t status;
 } wifi_nvm_access_resp_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t reserved;
+} wifi_nvm_get_info_cmd_t;
 
 typedef struct __attribute__((packed)) {
   uint16_t mac_id;
@@ -880,6 +907,10 @@ static uint32_t wifi_read_le32(const uint8_t *p) {
          ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
+static uint16_t wifi_read_le16(const uint8_t *p) {
+  return (uint16_t)p[0] | (uint16_t)((uint16_t)p[1] << 8);
+}
+
 static size_t wifi_align4(size_t value) {
   return (value + 3U) & ~(size_t)3U;
 }
@@ -1079,6 +1110,20 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.nvm_resp_word1 = 0;
   wifi_status_state.nvm_resp_word2 = 0;
   wifi_status_state.nvm_resp_word3 = 0;
+  wifi_status_state.nvm_info_ready = 0;
+  wifi_status_state.nvm_info_failed = 0;
+  wifi_status_state.nvm_info_response_seen = 0;
+  wifi_status_state.nvm_info_errors = 0;
+  wifi_status_state.nvm_info_generation = 0;
+  wifi_status_state.nvm_info_flags = 0;
+  wifi_status_state.nvm_info_version = 0;
+  wifi_status_state.nvm_info_board_type = 0;
+  wifi_status_state.nvm_info_hw_addrs = 0;
+  wifi_status_state.nvm_info_mac_sku_flags = 0;
+  wifi_status_state.nvm_info_tx_chains = 0;
+  wifi_status_state.nvm_info_rx_chains = 0;
+  wifi_status_state.nvm_info_lar_enabled = 0;
+  wifi_status_state.nvm_info_n_channels = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -2267,6 +2312,18 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.nvm_resp_word1 = 0;
   wifi_status_state.nvm_resp_word2 = 0;
   wifi_status_state.nvm_resp_word3 = 0;
+  wifi_status_state.nvm_info_ready = 0;
+  wifi_status_state.nvm_info_failed = 0;
+  wifi_status_state.nvm_info_response_seen = 0;
+  wifi_status_state.nvm_info_flags = 0;
+  wifi_status_state.nvm_info_version = 0;
+  wifi_status_state.nvm_info_board_type = 0;
+  wifi_status_state.nvm_info_hw_addrs = 0;
+  wifi_status_state.nvm_info_mac_sku_flags = 0;
+  wifi_status_state.nvm_info_tx_chains = 0;
+  wifi_status_state.nvm_info_rx_chains = 0;
+  wifi_status_state.nvm_info_lar_enabled = 0;
+  wifi_status_state.nvm_info_n_channels = 0;
 }
 
 static int wifi_prepare_host_queues(void) {
@@ -2671,7 +2728,7 @@ void wifi_format_status(char *buf, size_t size) {
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
-           "scheduler=%s rx=%s command=%s nvm=%s status=%s",
+           "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -2704,6 +2761,11 @@ void wifi_format_status(char *buf, size_t size) {
                                 : (s->nvm_ready
                                        ? "ready"
                                        : (s->nvm_failed ? "failed" : "idle")),
+           s->nvm_info_response_seen
+               ? "response"
+               : (s->nvm_info_ready
+                      ? "ready"
+                      : (s->nvm_info_failed ? "failed" : "idle")),
            s->status);
 }
 
@@ -3678,6 +3740,14 @@ static void wifi_nvm_mark_failure(const char *status) {
   wifi_status_state.status = status;
 }
 
+static void wifi_nvm_info_mark_failure(const char *status) {
+  wifi_status_state.nvm_info_ready = 0;
+  wifi_status_state.nvm_info_failed = 1;
+  wifi_status_state.nvm_info_response_seen = 0;
+  wifi_status_state.nvm_info_errors++;
+  wifi_status_state.status = status;
+}
+
 static int wifi_stage_command_payload(uint8_t cmd_id, uint8_t group_id,
                                       uint8_t version, const void *payload,
                                       uint32_t payload_len,
@@ -3852,6 +3922,35 @@ static int wifi_prepare_nvm_command(void) {
   return 0;
 }
 
+static int wifi_prepare_nvm_info_command(void) {
+  wifi_nvm_get_info_cmd_t cmd;
+
+  memset(&cmd, 0, sizeof(cmd));
+
+  if (wifi_stage_command_payload(
+          WIFI_CMD_NVM_GET_INFO, WIFI_CMD_GROUP_REGULATORY_NVM,
+          WIFI_CMD_VERSION_NVM_GET_INFO, &cmd, sizeof(cmd),
+          "wifi: NVM_GET_INFO command staged for firmware command queue") != 0) {
+    wifi_nvm_info_mark_failure("wifi: NVM_GET_INFO command staging failed");
+    return -1;
+  }
+
+  wifi_status_state.nvm_info_ready = 1;
+  wifi_status_state.nvm_info_failed = 0;
+  wifi_status_state.nvm_info_response_seen = 0;
+  wifi_status_state.nvm_info_generation++;
+  wifi_status_state.nvm_info_flags = 0;
+  wifi_status_state.nvm_info_version = 0;
+  wifi_status_state.nvm_info_board_type = 0;
+  wifi_status_state.nvm_info_hw_addrs = 0;
+  wifi_status_state.nvm_info_mac_sku_flags = 0;
+  wifi_status_state.nvm_info_tx_chains = 0;
+  wifi_status_state.nvm_info_rx_chains = 0;
+  wifi_status_state.nvm_info_lar_enabled = 0;
+  wifi_status_state.nvm_info_n_channels = 0;
+  return 0;
+}
+
 int wifi_scheduler_probe(int arm, char *report, size_t report_size) {
   const wifi_status_t *s;
   int rc;
@@ -3955,6 +4054,7 @@ static int wifi_rx_parse_one(void) {
   uint32_t payload_len;
   uint32_t payload_available;
   const uint8_t *payload;
+  int specialized_status = 0;
 
   wifi_status_state.rx_closed_rb = closed;
   if (idx == closed) {
@@ -4032,10 +4132,37 @@ static int wifi_rx_parse_one(void) {
         data_len >= 12U ? wifi_read_le32(data + 8U) : 0;
     wifi_status_state.nvm_resp_word3 =
         data_len >= 16U ? wifi_read_le32(data + 12U) : 0;
+    wifi_status_state.status = resp->status
+                                   ? "wifi: NVM firmware response reported error"
+                                   : "wifi: NVM firmware response parsed";
+    specialized_status = 1;
     if (resp->status) {
       wifi_status_state.nvm_errors++;
-      wifi_status_state.status = "wifi: NVM firmware response reported error";
     }
+  }
+
+  if (pkt->header.cmd == WIFI_CMD_NVM_GET_INFO &&
+      pkt->header.group_id == WIFI_CMD_GROUP_REGULATORY_NVM) {
+    wifi_status_state.nvm_info_response_seen = 1;
+    wifi_status_state.nvm_info_ready = 0;
+    wifi_status_state.nvm_info_failed = payload_len < 24U ? 1 : 0;
+    if (payload_len >= 24U) {
+      wifi_status_state.nvm_info_flags = wifi_read_le32(payload);
+      wifi_status_state.nvm_info_version = wifi_read_le16(payload + 4U);
+      wifi_status_state.nvm_info_board_type = payload[6];
+      wifi_status_state.nvm_info_hw_addrs = payload[7];
+      wifi_status_state.nvm_info_mac_sku_flags = wifi_read_le32(payload + 8U);
+      wifi_status_state.nvm_info_tx_chains = wifi_read_le32(payload + 12U);
+      wifi_status_state.nvm_info_rx_chains = wifi_read_le32(payload + 16U);
+      wifi_status_state.nvm_info_lar_enabled = wifi_read_le32(payload + 20U);
+      wifi_status_state.nvm_info_n_channels =
+          payload_len >= 28U ? wifi_read_le32(payload + 24U) : 0;
+      wifi_status_state.status = "wifi: NVM_GET_INFO response parsed";
+    } else {
+      wifi_status_state.nvm_info_errors++;
+      wifi_status_state.status = "wifi: NVM_GET_INFO response too short";
+    }
+    specialized_status = 1;
   }
 
   wifi_status_state.rx_read_ptr =
@@ -4043,8 +4170,7 @@ static int wifi_rx_parse_one(void) {
   wifi_status_state.rx_packets++;
   wifi_status_state.rx_path_ready = 1;
   wifi_status_state.rx_path_failed = 0;
-  if (!(pkt->header.cmd == WIFI_CMD_NVM_ACCESS &&
-        wifi_status_state.nvm_failed)) {
+  if (!specialized_status) {
     wifi_status_state.status = "wifi: RX firmware response parsed";
   }
   return 1;
@@ -4392,6 +4518,100 @@ int wifi_nvm_probe(int arm, char *report, size_t report_size) {
            s->nvm_resp_word3,
            arm ? "" : "run: wifi nvm arm to ring the command queue doorbell\n");
   return rc;
+}
+
+int wifi_nvm_info_probe(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi nvm-info: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (s->vendor_id != 0x8086) {
+    snprintf(report, report_size,
+             "wifi nvm-info: unsupported controller %04x:%04x\n",
+             s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  rc = wifi_prepare_nvm_info_command();
+  s = &wifi_status_state;
+  if (rc != 0) {
+    snprintf(report, report_size,
+             "wifi nvm-info: command staging failed\n"
+             "queues=%s context=%s command=%s errors=%lu\n"
+             "run: wifi queues arm, wifi context arm, wifi rx, then wifi nvm-info arm\n",
+             s->queues_ready ? (s->queues_armed ? "armed" : "staged")
+                             : "idle",
+             s->context_ready ? (s->context_armed ? "armed" : "staged")
+                              : "idle",
+             s->command_ready ? "ready" : "not-ready",
+             s->nvm_info_errors);
+    return -1;
+  }
+
+  if (arm) {
+    rc = wifi_command_probe(1, report, report_size);
+    if (rc != 0 && !wifi_status_state.nvm_info_response_seen) {
+      wifi_status_state.nvm_info_ready = 0;
+      wifi_status_state.nvm_info_failed = 1;
+    }
+  } else {
+    rc = 0;
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi nvm-info: %s\n"
+           "cmd: id=0x%02x group=0x%02x version=%u seq=0x%04x "
+           "queue=%u index=%u doorbell=0x%08x generation=%lu errors=%lu\n"
+           "general: flags=0x%08x nvm-version=0x%04x board=%u hw-addrs=%u\n"
+           "capabilities: sku=0x%08x 2ghz=%s 5ghz=%s 11n=%s 11ac=%s "
+           "11ax=%s mimo=%s\n"
+           "phy: tx-chains=0x%08x rx-chains=0x%08x lar=%u channels=%u\n"
+           "state: context=%s rx=%s command-sent=%s command-failed=%s "
+           "response=%s\n"
+           "%s",
+           s->nvm_info_response_seen
+               ? (s->nvm_info_failed ? "response parse failed"
+                                      : "radio capabilities parsed")
+               : (arm ? (s->command_failed ? "command failed/timeout"
+                                           : "command sent")
+                      : "command staged, not sent"),
+           s->scheduler_cmd_id, s->scheduler_cmd_group,
+           s->scheduler_cmd_version, s->scheduler_cmd_sequence,
+           s->scheduler_cmd_queue, s->scheduler_cmd_index,
+           s->command_doorbell_value, s->nvm_info_generation,
+           s->nvm_info_errors, s->nvm_info_flags, s->nvm_info_version,
+           s->nvm_info_board_type, s->nvm_info_hw_addrs,
+           s->nvm_info_mac_sku_flags,
+           (s->nvm_info_mac_sku_flags & WIFI_NVM_MAC_SKU_2GHZ) ? "yes" : "no",
+           (s->nvm_info_mac_sku_flags & WIFI_NVM_MAC_SKU_5GHZ) ? "yes" : "no",
+           (s->nvm_info_mac_sku_flags & WIFI_NVM_MAC_SKU_11N) ? "yes" : "no",
+           (s->nvm_info_mac_sku_flags & WIFI_NVM_MAC_SKU_11AC) ? "yes" : "no",
+           (s->nvm_info_mac_sku_flags & WIFI_NVM_MAC_SKU_11AX) ? "yes" : "no",
+           (s->nvm_info_mac_sku_flags & WIFI_NVM_MAC_SKU_MIMO_DISABLED)
+               ? "disabled"
+               : "enabled",
+           s->nvm_info_tx_chains, s->nvm_info_rx_chains,
+           s->nvm_info_lar_enabled, s->nvm_info_n_channels,
+           s->context_armed ? "armed" : (s->context_ready ? "staged" : "idle"),
+           s->rx_path_ready ? "ready" : "not-ready",
+           s->command_sent ? "yes" : "no",
+           s->command_failed ? "yes" : "no",
+           s->nvm_info_response_seen ? "yes" : "no",
+           arm ? "" : "run: wifi nvm-info arm to ring the command queue doorbell\n");
+  return (rc != 0 || s->nvm_info_failed) ? -1 : 0;
 }
 
 int wifi_scan(char *report, size_t report_size) {
