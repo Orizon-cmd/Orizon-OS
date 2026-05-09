@@ -38,6 +38,21 @@ static wifi_status_t wifi_status_state = {
     .csr_int_mask = 0,
     .csr_fh_int_status = 0,
     .mmio_errors = 0,
+    .apm_ready = 0,
+    .apm_timeout = 0,
+    .apm_attempts = 0,
+    .apm_poll_ready_mask = 0,
+    .apm_last_gp = 0,
+    .apm_last_hw_if = 0,
+    .apm_last_gio = 0,
+    .apm_last_hpet = 0,
+    .alive_seen = 0,
+    .alive_timeout = 0,
+    .alive_polls = 0,
+    .alive_errors = 0,
+    .alive_last_csr_int = 0,
+    .alive_last_fh_int = 0,
+    .alive_last_gp = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -135,17 +150,28 @@ static wifi_status_t wifi_status_state = {
 #define CSR_HW_REV 0x028U
 #define CSR_HW_RF_ID 0x09cU
 #define CSR_GPIO_IN 0x0a0U
+#define CSR_GIO_CHICKEN_BITS 0x100U
+#define CSR_DBG_HPET_MEM_REG 0x240U
 
+#define CSR_HW_IF_CONFIG_REG_HAP_WAKE 0x00080000U
+
+#define CSR_INT_BIT_ALIVE (1U << 0)
 #define CSR_INT_BIT_FH_TX (1U << 27)
 #define CSR_INT_BIT_HW_ERR (1U << 29)
 #define CSR_INT_BIT_SW_ERR (1U << 25)
 
 #define CSR_GP_CNTRL_MAC_CLOCK_READY (1U << 0)
 #define CSR_GP_CNTRL_INIT_DONE (1U << 2)
+#define CSR_GP_CNTRL_MAC_ACCESS_REQ (1U << 3)
 #define CSR_GP_CNTRL_GOING_TO_SLEEP (1U << 4)
+#define CSR_GP_CNTRL_MAC_INIT (1U << 6)
 #define CSR_GP_CNTRL_MAC_STATUS (1U << 20)
+#define CSR_GP_CNTRL_BZ_MAC_ACCESS_REQ (1U << 21)
 #define CSR_GP_CNTRL_BUS_MASTER_DISABLED (1U << 28)
 #define CSR_GP_CNTRL_HW_RF_KILL_SW (1U << 27)
+
+#define CSR_GIO_CHICKEN_BITS_L1A_NO_L0S_RX 0x00800000U
+#define CSR_DBG_HPET_MEM_REG_VAL 0xffff0000U
 
 #define FH_MEM_LOWER_BOUND 0x1000U
 #define FH_SRVC_CHNL 9U
@@ -176,6 +202,8 @@ static wifi_status_t wifi_status_state = {
 #define FH_INT_TX_MASK 0x0000ffffU
 #define FH_INT_ERR_MASK 0xfff00000U
 #define WIFI_FH_POLL_LOOPS 1000000U
+#define WIFI_APM_POLL_LOOPS 250000U
+#define WIFI_ALIVE_POLL_LOOPS 2000000U
 
 typedef enum {
   WIFI_FW_IMAGE_RUNTIME = 0,
@@ -302,6 +330,20 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.dma_phys = 0;
   wifi_status_state.dma_chunk_bytes = WIFI_DMA_CHUNK_BYTES;
   wifi_status_state.dma_staged_bytes = 0;
+  wifi_status_state.apm_ready = 0;
+  wifi_status_state.apm_timeout = 0;
+  wifi_status_state.apm_poll_ready_mask = 0;
+  wifi_status_state.apm_last_gp = 0;
+  wifi_status_state.apm_last_hw_if = 0;
+  wifi_status_state.apm_last_gio = 0;
+  wifi_status_state.apm_last_hpet = 0;
+  wifi_status_state.alive_seen = 0;
+  wifi_status_state.alive_timeout = 0;
+  wifi_status_state.alive_polls = 0;
+  wifi_status_state.alive_errors = 0;
+  wifi_status_state.alive_last_csr_int = 0;
+  wifi_status_state.alive_last_fh_int = 0;
+  wifi_status_state.alive_last_gp = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -806,6 +848,114 @@ static int wifi_enable_bus_master_for_loader(void) {
              : -1;
 }
 
+static int wifi_uses_bz_apm_profile(void) {
+  switch (wifi_status_state.device_id) {
+    case 0xA840:
+    case 0x7740:
+    case 0x4D40:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static void wifi_capture_apm_registers(void) {
+  if (!wifi_mmio) {
+    return;
+  }
+
+  wifi_status_state.apm_last_gp = wifi_csr_read32(CSR_GP_CNTRL);
+  wifi_status_state.apm_last_hw_if = wifi_csr_read32(CSR_HW_IF_CONFIG_REG);
+  wifi_status_state.apm_last_gio = wifi_csr_read32(CSR_GIO_CHICKEN_BITS);
+  wifi_status_state.apm_last_hpet = wifi_csr_read32(CSR_DBG_HPET_MEM_REG);
+  wifi_capture_csr_registers();
+}
+
+static void wifi_apply_safe_apm_config(void) {
+  uint32_t value;
+
+  /*
+   * Keep this intentionally small: these are the Linux iwlwifi PCIe staging
+   * knobs that do not require command queues or firmware-side protocols yet.
+   */
+  value = wifi_csr_read32(CSR_GIO_CHICKEN_BITS);
+  wifi_csr_write32(CSR_GIO_CHICKEN_BITS,
+                   value | CSR_GIO_CHICKEN_BITS_L1A_NO_L0S_RX);
+
+  value = wifi_csr_read32(CSR_DBG_HPET_MEM_REG);
+  wifi_csr_write32(CSR_DBG_HPET_MEM_REG, value | CSR_DBG_HPET_MEM_REG_VAL);
+
+  value = wifi_csr_read32(CSR_HW_IF_CONFIG_REG);
+  wifi_csr_write32(CSR_HW_IF_CONFIG_REG,
+                   value | CSR_HW_IF_CONFIG_REG_HAP_WAKE);
+}
+
+static int wifi_wait_apm_ready(uint32_t ready_mask) {
+  for (uint32_t i = 0; i < WIFI_APM_POLL_LOOPS; i++) {
+    uint32_t gp = wifi_csr_read32(CSR_GP_CNTRL);
+    wifi_status_state.apm_last_gp = gp;
+    if (gp & ready_mask) {
+      return 0;
+    }
+    __asm__ volatile("pause");
+  }
+  return -1;
+}
+
+static int wifi_activate_nic(void) {
+  uint32_t request_bits;
+  uint32_t ready_mask;
+
+  if (wifi_probe_mmio() != 0) {
+    return -1;
+  }
+
+  if (wifi_enable_bus_master_for_loader() != 0) {
+    wifi_status_state.load_state =
+        "wifi: PCI bus mastering failed during APM wake";
+    wifi_status_state.apm_timeout = 1;
+    wifi_capture_apm_registers();
+    return -1;
+  }
+
+  wifi_status_state.apm_attempts++;
+  wifi_status_state.apm_ready = 0;
+  wifi_status_state.apm_timeout = 0;
+
+  wifi_apply_safe_apm_config();
+
+  if (wifi_uses_bz_apm_profile()) {
+    request_bits = CSR_GP_CNTRL_BZ_MAC_ACCESS_REQ | CSR_GP_CNTRL_MAC_INIT;
+    ready_mask = CSR_GP_CNTRL_MAC_STATUS;
+  } else {
+    request_bits = CSR_GP_CNTRL_INIT_DONE;
+    ready_mask = CSR_GP_CNTRL_MAC_CLOCK_READY;
+  }
+
+  wifi_status_state.apm_poll_ready_mask = ready_mask;
+  wifi_csr_write32(CSR_INT,
+                   CSR_INT_BIT_ALIVE | CSR_INT_BIT_FH_TX |
+                       CSR_INT_BIT_HW_ERR | CSR_INT_BIT_SW_ERR);
+  wifi_csr_write32(CSR_FH_INT_STATUS, FH_INT_TX_MASK | FH_INT_ERR_MASK);
+  wifi_csr_write32(CSR_GP_CNTRL,
+                   wifi_csr_read32(CSR_GP_CNTRL) | request_bits);
+
+  if (wifi_wait_apm_ready(ready_mask) == 0) {
+    wifi_status_state.apm_ready = 1;
+    wifi_status_state.apm_timeout = 0;
+    wifi_status_state.status =
+        "wifi: NIC APM awake; firmware service DMA can be tested";
+    wifi_capture_apm_registers();
+    return 0;
+  }
+
+  wifi_status_state.apm_ready = 0;
+  wifi_status_state.apm_timeout = 1;
+  wifi_status_state.status = "wifi: NIC APM wake timed out";
+  wifi_capture_apm_registers();
+  return -1;
+}
+
 static const wifi_fw_section_t *wifi_first_upload_section(void) {
   if (wifi_fw_section_count <= 0) {
     return NULL;
@@ -1097,7 +1247,7 @@ void wifi_format_status(char *buf, size_t size) {
            "driver=%s present=%s ready=%s associated=%s pci=%04x:%04x "
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
-           "plan=%s dma=%s status=%s",
+           "plan=%s dma=%s apm=%s alive=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -1110,7 +1260,10 @@ void wifi_format_status(char *buf, size_t size) {
            s->firmware_valid ? "yes" : "no", s->firmware_tlv_count,
            s->firmware_section_count,
            s->firmware_load_plan_ready ? "ready" : "no",
-           s->dma_ready ? "staged" : "idle", s->status);
+           s->dma_ready ? "staged" : "idle",
+           s->apm_ready ? "awake" : (s->apm_timeout ? "timeout" : "idle"),
+           s->alive_seen ? "seen" : (s->alive_timeout ? "timeout" : "idle"),
+           s->status);
 }
 
 int wifi_firmware_probe(char *report, size_t report_size) {
@@ -1249,6 +1402,53 @@ int wifi_hw_probe(char *report, size_t report_size) {
   return 0;
 }
 
+int wifi_apm_probe(char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  wifi_find_firmware();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi apm: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (s->vendor_id != 0x8086) {
+    snprintf(report, report_size,
+             "wifi apm: unsupported controller %04x:%04x\n",
+             s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  rc = wifi_activate_nic();
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi apm: %s\n"
+           "profile: %s pci=%02x:%02x.%u command=0x%04x\n"
+           "bar0: phys=0x%lx mmio=%s\n"
+           "poll: ready-mask=0x%08x ready=%s timeout=%s attempts=%lu\n"
+           "csr: gp=0x%08x hw-if=0x%08x gio=0x%08x hpet=0x%08x\n"
+           "irq: int=0x%08x mask=0x%08x fh=0x%08x\n"
+           "next: run 'wifi upload all arm', then 'wifi alive'\n",
+           rc == 0 ? "NIC awake" : "NIC wake failed",
+           wifi_uses_bz_apm_profile() ? "bz/mac-init" : "legacy/init-done",
+           s->bus, s->device, (unsigned int)s->function, s->pci_command,
+           (unsigned long)s->mmio_phys, s->mmio_ready ? "ready" : "failed",
+           s->apm_poll_ready_mask, s->apm_ready ? "yes" : "no",
+           s->apm_timeout ? "yes" : "no", s->apm_attempts,
+           s->apm_last_gp, s->apm_last_hw_if, s->apm_last_gio,
+           s->apm_last_hpet, s->csr_int, s->csr_int_mask,
+           s->csr_fh_int_status);
+  return rc;
+}
+
 int wifi_load_firmware(char *report, size_t report_size) {
   const wifi_status_t *s;
   const wifi_fw_section_t *section = NULL;
@@ -1371,6 +1571,20 @@ int wifi_upload_firmware(int arm, char *report, size_t report_size) {
   }
 
   if (arm) {
+    if (wifi_activate_nic() != 0) {
+      s = &wifi_status_state;
+      wifi_status_state.load_state =
+          "wifi: NIC APM wake failed before first FH transfer";
+      snprintf(report, report_size,
+               "wifi upload: NIC APM wake failed before transfer\n"
+               "ready=%s timeout=%s gp=0x%08x hw-if=0x%08x gio=0x%08x "
+               "hpet=0x%08x\n"
+               "hint: run 'wifi apm' for detailed register state\n",
+               s->apm_ready ? "yes" : "no",
+               s->apm_timeout ? "yes" : "no", s->apm_last_gp,
+               s->apm_last_hw_if, s->apm_last_gio, s->apm_last_hpet);
+      return -1;
+    }
     rc = wifi_arm_fh_current_chunk();
     wifi_status_state.load_state =
         rc == 0 ? "wifi: first FH firmware chunk completed"
@@ -1457,6 +1671,24 @@ int wifi_upload_all_firmware(int arm, char *report, size_t report_size) {
     return 0;
   }
 
+  if (wifi_activate_nic() != 0) {
+    s = &wifi_status_state;
+    wifi_status_state.load_state =
+        "wifi: NIC APM wake failed before full FH transfer";
+    snprintf(report, report_size,
+             "wifi upload all: NIC APM wake failed before transfer\n"
+             "ready=%s timeout=%s gp=0x%08x hw-if=0x%08x gio=0x%08x "
+             "hpet=0x%08x\n"
+             "progress: sections=0/%lu chunks=0/%lu bytes=0/%lu\n"
+             "hint: run 'wifi apm' for detailed register state\n",
+             s->apm_ready ? "yes" : "no",
+             s->apm_timeout ? "yes" : "no", s->apm_last_gp,
+             s->apm_last_hw_if, s->apm_last_gio, s->apm_last_hpet,
+             s->firmware_section_count, s->fh_total_chunks,
+             s->firmware_load_bytes);
+    return -1;
+  }
+
   for (int i = 0; i < wifi_fw_section_count; i++) {
     const wifi_fw_section_t *section = &wifi_fw_sections[i];
     uint32_t offset = 0;
@@ -1504,6 +1736,123 @@ int wifi_upload_all_firmware(int arm, char *report, size_t report_size) {
            s->fh_last_tx_error, s->fh_complete ? "yes" : "no",
            s->fh_timeout ? "yes" : "no", s->fh_errors, s->load_state);
   return rc;
+}
+
+int wifi_alive_probe(char *report, size_t report_size) {
+  const wifi_status_t *s;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi alive: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (!s->firmware_present) {
+    wifi_find_firmware();
+    s = &wifi_status_state;
+  }
+
+  if (!s->firmware_present) {
+    snprintf(report, report_size,
+             "wifi alive: firmware missing for %s (%04x:%04x)\n"
+             "run: wifi firmware\n",
+             s->chipset, s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  if (!s->apm_ready && wifi_activate_nic() != 0) {
+    s = &wifi_status_state;
+    snprintf(report, report_size,
+             "wifi alive: NIC is not awake, cannot wait for firmware alive\n"
+             "apm: ready=%s timeout=%s gp=0x%08x hw-if=0x%08x\n"
+             "hint: run 'wifi apm' then 'wifi upload all arm'\n",
+             s->apm_ready ? "yes" : "no",
+             s->apm_timeout ? "yes" : "no", s->apm_last_gp,
+             s->apm_last_hw_if);
+    return -1;
+  }
+
+  wifi_status_state.alive_seen = 0;
+  wifi_status_state.alive_timeout = 0;
+  wifi_status_state.alive_polls = 0;
+
+  for (uint32_t i = 0; i < WIFI_ALIVE_POLL_LOOPS; i++) {
+    uint32_t csr_int = wifi_csr_read32(CSR_INT);
+    uint32_t fh_int = wifi_csr_read32(CSR_FH_INT_STATUS);
+    uint32_t gp = wifi_csr_read32(CSR_GP_CNTRL);
+
+    wifi_status_state.alive_last_csr_int = csr_int;
+    wifi_status_state.alive_last_fh_int = fh_int;
+    wifi_status_state.alive_last_gp = gp;
+    wifi_status_state.alive_polls++;
+
+    if (csr_int & CSR_INT_BIT_ALIVE) {
+      wifi_status_state.alive_seen = 1;
+      wifi_status_state.alive_timeout = 0;
+      wifi_status_state.status =
+          "wifi: firmware alive interrupt observed; queues pending";
+      wifi_csr_write32(CSR_INT, CSR_INT_BIT_ALIVE);
+      s = &wifi_status_state;
+      snprintf(report, report_size,
+               "wifi alive: firmware alive interrupt observed\n"
+               "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
+               "apm: ready=%s profile=%s mask=0x%08x\n"
+               "fh: uploaded=%lu/%lu chunks bytes=%lu/%lu complete=%s errors=%lu\n"
+               "state: command/RX/TX queues still need implementation\n",
+               s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
+               s->alive_last_gp, s->apm_ready ? "yes" : "no",
+               wifi_uses_bz_apm_profile() ? "bz/mac-init" : "legacy/init-done",
+               s->apm_poll_ready_mask, s->fh_uploaded_chunks,
+               s->fh_total_chunks, s->fh_uploaded_bytes,
+               s->firmware_load_bytes, s->fh_complete ? "yes" : "no",
+               s->fh_errors);
+      return 0;
+    }
+
+    if (csr_int & (CSR_INT_BIT_HW_ERR | CSR_INT_BIT_SW_ERR)) {
+      wifi_status_state.alive_errors++;
+      wifi_status_state.status =
+          "wifi: firmware alive wait stopped on hardware/software error";
+      s = &wifi_status_state;
+      snprintf(report, report_size,
+               "wifi alive: stopped on hardware/software error\n"
+               "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
+               "errors=%lu hw-err=%s sw-err=%s alive=%s\n"
+               "hint: capture this output; next step is reset/CPU-release sequencing\n",
+               s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
+               s->alive_last_gp, s->alive_errors,
+               wifi_bit_text(s->alive_last_csr_int, CSR_INT_BIT_HW_ERR),
+               wifi_bit_text(s->alive_last_csr_int, CSR_INT_BIT_SW_ERR),
+               wifi_bit_text(s->alive_last_csr_int, CSR_INT_BIT_ALIVE));
+      return -1;
+    }
+
+    __asm__ volatile("pause");
+  }
+
+  wifi_status_state.alive_timeout = 1;
+  wifi_status_state.status = "wifi: firmware alive wait timed out";
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi alive: timeout waiting for firmware alive\n"
+           "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
+           "apm: ready=%s timeout=%s mask=0x%08x\n"
+           "fh: uploaded=%lu/%lu chunks bytes=%lu/%lu complete=%s errors=%lu\n"
+           "next: implement reset/CPU-release sequence before alive wait\n",
+           s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
+           s->alive_last_gp, s->apm_ready ? "yes" : "no",
+           s->apm_timeout ? "yes" : "no", s->apm_poll_ready_mask,
+           s->fh_uploaded_chunks, s->fh_total_chunks, s->fh_uploaded_bytes,
+           s->firmware_load_bytes, s->fh_complete ? "yes" : "no",
+           s->fh_errors);
+  return -1;
 }
 
 int wifi_scan(char *report, size_t report_size) {

@@ -174,10 +174,11 @@ Le premier portable cible documente est le Lenovo 500w Yoga Gen 4. Son clavier
 interne passe par PS/2, son SSD par NVMe, et son pave tactile ELAN/Wacom passe
 par I2C-HID. Orizon contient maintenant une premiere sonde Intel LPSS/I2C-HID
 pour ce chemin, avant le parseur multitouch complet. Le Wi-Fi Intel CNVi est
-detecte par `wifi status`, mais les vraies connexions attendent encore le
-demarrage complet du firmware et la couche 802.11/WPA. La commande
-`wifi firmware` verifie deja les firmwares `iwlwifi-*.ucode` fournis via module
-de boot ou `/system/firmware`.
+detecte par `wifi status`; `wifi firmware`, `wifi apm`, `wifi upload all arm`
+et `wifi alive` couvrent maintenant la chaine de diagnostic firmware: presence
+du blob Intel, reveil APM du controleur, transfert FH DMA garde, puis attente
+du signal firmware alive. Les vraies connexions attendent encore les files de
+commandes/RX/TX, la couche 802.11 et WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
