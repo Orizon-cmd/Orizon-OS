@@ -47,8 +47,10 @@ development target, not a ZimaOS-only assumption.
   poll `CSR_INT` for the firmware `ALIVE` bit with `wifi alive`, and stage
   host-side command/RX/TX rings with `wifi queues arm`. `wifi bringup` now runs
   the full readiness sequence through `wifi nvm-info arm` and reports the first
-  failed stage. Real scans/connections still require the next driver milestones:
-  scan command construction, 802.11 management frames, and WPA association.
+  failed stage. `wifi scan` now builds a passive channel plan from NVM data and
+  `wifi scan arm` sends the first experimental UMAC scan request. Real
+  scans/connections still require the next driver milestones: scan notification
+  parsing, MAC context setup, 802.11 management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -74,6 +76,7 @@ wifi nvm arm
 wifi nvm-info arm
 wifi bringup
 wifi scan
+wifi scan arm
 storage
 disks
 ```

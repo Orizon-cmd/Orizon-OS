@@ -212,6 +212,22 @@ typedef struct {
   uint32_t nvm_info_rx_chains;
   uint32_t nvm_info_lar_enabled;
   uint32_t nvm_info_n_channels;
+  int scan_ready;
+  int scan_failed;
+  int scan_response_seen;
+  int scan_inflight;
+  unsigned long scan_errors;
+  unsigned long scan_generation;
+  uint32_t scan_uid;
+  uint32_t scan_cmd_len;
+  uint32_t scan_version;
+  uint32_t scan_flags;
+  uint32_t scan_general_flags;
+  uint32_t scan_channel_count;
+  uint32_t scan_channel_first;
+  uint32_t scan_channel_last;
+  uint32_t scan_dwell_active;
+  uint32_t scan_dwell_passive;
   const char *chipset;
   const char *driver;
   const char *status;
@@ -292,7 +308,7 @@ int wifi_command_probe(int arm, char *report, size_t report_size);
 int wifi_nvm_probe(int arm, char *report, size_t report_size);
 int wifi_nvm_info_probe(int arm, char *report, size_t report_size);
 int wifi_bringup_probe(char *report, size_t report_size);
-int wifi_scan(char *report, size_t report_size);
+int wifi_scan(int arm, char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 
