@@ -13,5 +13,7 @@ const void *boot_efi_image(void);
 size_t boot_efi_image_size(void);
 const char *boot_payload_status(void);
 int boot_payloads_ready(void);
+const char *boot_cmdline(void);
+int boot_cmdline_has(const char *needle);
 
 #endif /* _BOOTINFO_H */

@@ -17,6 +17,8 @@
 #define I2C_MAX_CONTROLLERS 4
 #define I2C_HID_MAX_DEVICES 4
 #define I2C_HID_MAX_REPORT 64
+#define DW_WAIT_ENABLE_LOOPS 12000
+#define DW_WAIT_IO_LOOPS 8000
 
 #define DW_IC_CON 0x00
 #define DW_IC_TAR 0x04
@@ -114,7 +116,7 @@ static int dw_wait_bits(const i2c_controller_t *ctl, uint32_t reg,
 static int dw_set_enabled(i2c_controller_t *ctl, int enabled) {
   dw_write32(ctl, DW_IC_ENABLE, enabled ? 1U : 0U);
   if (dw_wait_bits(ctl, DW_IC_ENABLE_STATUS, 1U, enabled ? 1U : 0U,
-                   200000) != 0) {
+                   DW_WAIT_ENABLE_LOOPS) != 0) {
     ctl->errors++;
     return -1;
   }
@@ -122,7 +124,8 @@ static int dw_set_enabled(i2c_controller_t *ctl, int enabled) {
 }
 
 static int dw_wait_idle(const i2c_controller_t *ctl) {
-  return dw_wait_bits(ctl, DW_IC_STATUS, DW_STATUS_ACTIVITY, 0, 200000);
+  return dw_wait_bits(ctl, DW_IC_STATUS, DW_STATUS_ACTIVITY, 0,
+                      DW_WAIT_IO_LOOPS);
 }
 
 static int dw_init_controller(i2c_controller_t *ctl) {
@@ -173,12 +176,12 @@ static int dw_set_target(i2c_controller_t *ctl, uint8_t addr) {
 
 static int dw_wait_tx_room(const i2c_controller_t *ctl) {
   return dw_wait_bits(ctl, DW_IC_STATUS, DW_STATUS_TFNF, DW_STATUS_TFNF,
-                      200000);
+                      DW_WAIT_IO_LOOPS);
 }
 
 static int dw_wait_rx_data(const i2c_controller_t *ctl) {
   return dw_wait_bits(ctl, DW_IC_STATUS, DW_STATUS_RFNE, DW_STATUS_RFNE,
-                      200000);
+                      DW_WAIT_IO_LOOPS);
 }
 
 static int i2c_read_reg(i2c_controller_t *ctl, uint8_t addr, uint16_t reg,

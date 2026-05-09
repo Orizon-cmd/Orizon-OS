@@ -6,6 +6,7 @@
  */
 
 #include "../include/gui.h"
+#include "../include/bootinfo.h"
 #include "../include/i2c_hid.h"
 #include "../include/input_layout.h"
 #include "../include/klog.h"
@@ -57,6 +58,7 @@ static int splash_ticks_remaining = SPLASH_TICKS;
 static int timer_irq_seen = 0;
 static int timer_fallback_polling = 0;
 static uint64_t gui_loop_count = 0;
+static int i2c_hid_deferred_probe = 0;
 
 static void draw_circle(int cx, int cy, int radius, color_t color) {
   for (int y = -radius; y <= radius; y++) {
@@ -110,10 +112,17 @@ static void draw_top_bar(void) {
 }
 
 static void draw_footer(void) {
-  const char *hint = timer_fallback_polling
-                         ? "Timer IRQ fallback active. Boot continues in polling mode; APIC timer support is next."
-                         : "Core development profile active. Console, workspace and low-level tools are ready.";
+  const char *hint =
+      timer_fallback_polling
+          ? "Timer IRQ fallback active. Boot continues in polling mode; APIC timer support is next."
+          : "Core development profile active. Console, workspace and low-level tools are ready.";
   int y = (int)screen_height - FOOTER_HEIGHT;
+
+  if (i2c_hid_deferred_probe == 1) {
+    hint = "Lenovo I2C-HID probe selected. Boot UI is visible first; driver probe runs after startup.";
+  } else if (boot_cmdline_has("orizon.safe=1")) {
+    hint = "Safe laptop boot active. Risky hardware probes are disabled for this boot.";
+  }
 
   fb_fill_rect_alpha(0, y, (int)screen_width, FOOTER_HEIGHT,
                      MAKE_ARGB(200, 8, 12, 20));
@@ -298,7 +307,12 @@ void gui_init(void) {
   ps2_set_keyboard_callback(keyboard_callback);
   usb_set_keyboard_callback(keyboard_callback);
   usb_init();
-  i2c_hid_init();
+  i2c_hid_deferred_probe = boot_cmdline_has("orizon.i2chid=1") ? 1 : 0;
+  if (i2c_hid_deferred_probe) {
+    serial_puts("GUI: Lenovo I2C-HID probe deferred until after first render\n");
+  } else {
+    serial_puts("GUI: Lenovo I2C-HID probe disabled for safe boot\n");
+  }
 
   mouse_x = ps2_get_mouse_x();
   mouse_y = ps2_get_mouse_y();
@@ -371,6 +385,16 @@ void gui_main_loop(void) {
     }
 
     gui_compose();
+
+    if (i2c_hid_deferred_probe == 1 && splash_ticks_remaining <= 0 &&
+        gui_loop_count > 4) {
+      sched_enter_process("i2c-hid-probe");
+      serial_puts("GUI: starting deferred Lenovo I2C-HID probe\n");
+      i2c_hid_init();
+      i2c_hid_deferred_probe = 2;
+      needs_redraw = 1;
+    }
+
     power_poll();
 
     sched_enter_idle();

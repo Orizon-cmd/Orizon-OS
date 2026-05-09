@@ -1581,7 +1581,11 @@ static void term_print_input_status(terminal_t *term) {
   term_puts_t(term, "Pointer support:\n");
   term_puts_t(term, "  PS/2 mouse/touchpad: supported when firmware exposes i8042\n");
   term_puts_t(term, "  USB HID keyboard: supported; generic USB mouse is still pending\n");
-  term_puts_t(term, "  I2C-HID: Lenovo ELAN/Wacom probe active; multitouch parser pending\n");
+  if (boot_cmdline_has("orizon.i2chid=1")) {
+    term_puts_t(term, "  I2C-HID: Lenovo ELAN/Wacom probe selected; multitouch parser pending\n");
+  } else {
+    term_puts_t(term, "  I2C-HID: disabled in safe boot; select Lenovo hardware probe at boot\n");
+  }
 
   total = pci_scan_all(devs, 96);
   term_puts_t(term, "Input bus candidates from PCI:\n");
@@ -1621,6 +1625,9 @@ static void term_print_sysinfo(terminal_t *term) {
   term_puts_t(term, line);
   snprintf(line, sizeof(line), "mode %s\n",
            term_install_already_complete() ? "installed" : "live-boot");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "cmdline %s\n",
+           boot_cmdline()[0] ? boot_cmdline() : "(none)");
   term_puts_t(term, line);
   snprintf(line, sizeof(line), "kernel core-x86_64 built " __DATE__ " " __TIME__ "\n");
   term_puts_t(term, line);
@@ -1727,6 +1734,9 @@ static void term_print_hw(terminal_t *term) {
   pci_device_info_t devs[24];
 
   term_puts_t(term, "\033[1;36mOrizon Hardware Diagnostics\033[0m\n");
+  snprintf(line, sizeof(line), "Boot cmdline: %s\n",
+           boot_cmdline()[0] ? boot_cmdline() : "(none)");
+  term_puts_t(term, line);
 
   term_cpuid(0, 0, &a, &b, &c, &d);
   memcpy(vendor + 0, &b, 4);
@@ -2221,6 +2231,9 @@ static void term_print_report(terminal_t *term) {
            gui_timer_fallback_active() ? "poll" : "hlt",
            (unsigned long)klog_size(), (unsigned long)klog_dropped_bytes(),
            klog_boot_persisted() ? "yes" : "no");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "Cmdline: %s\n",
+           boot_cmdline()[0] ? boot_cmdline() : "(none)");
   term_puts_t(term, line);
   timer_format_status(line, sizeof(line));
   term_puts_t(term, "Timer: ");

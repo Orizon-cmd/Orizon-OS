@@ -96,6 +96,7 @@ static size_t loaded_kernel_image_size = 0;
 static const void *loaded_boot_efi_image = NULL;
 static size_t loaded_boot_efi_image_size = 0;
 static const char *loaded_payload_status = "boot payloads not captured";
+static const char *loaded_kernel_cmdline = "";
 
 /* Debug framebuffer access */
 uint32_t *g_fb_ptr = NULL;
@@ -128,13 +129,16 @@ static void capture_boot_payloads(void) {
   loaded_kernel_image_size = 0;
   loaded_boot_efi_image = NULL;
   loaded_boot_efi_image_size = 0;
+  loaded_kernel_cmdline = "";
 
   if (kernel_file_request.response &&
       kernel_file_request.response->kernel_file &&
       kernel_file_request.response->kernel_file->address &&
       kernel_file_request.response->kernel_file->size > 0) {
-    loaded_kernel_image = kernel_file_request.response->kernel_file->address;
-    loaded_kernel_image_size = kernel_file_request.response->kernel_file->size;
+    struct limine_file *kernel_file = kernel_file_request.response->kernel_file;
+    loaded_kernel_image = kernel_file->address;
+    loaded_kernel_image_size = kernel_file->size;
+    loaded_kernel_cmdline = kernel_file->cmdline ? kernel_file->cmdline : "";
   }
 
   if (module_request.response && module_request.response->modules) {
@@ -168,6 +172,11 @@ const char *boot_payload_status(void) { return loaded_payload_status; }
 int boot_payloads_ready(void) {
   return loaded_kernel_image && loaded_boot_efi_image &&
          loaded_kernel_image_size > 0 && loaded_boot_efi_image_size > 0;
+}
+const char *boot_cmdline(void) { return loaded_kernel_cmdline; }
+int boot_cmdline_has(const char *needle) {
+  return needle && needle[0] && loaded_kernel_cmdline &&
+         strstr(loaded_kernel_cmdline, needle) != NULL;
 }
 
 /* ========== Early Serial Debug ========== */
