@@ -114,6 +114,11 @@ SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
 `BOOTX64.EFI` et `limine.conf`. La partition data Orizon et `/workspace` sont
 preserves.
 
+Pendant l'operation, la console affiche les etapes en continu: etat courant,
+manifest recu, progression par pourcentage sur chaque artefact, verification
+SHA-256 et ecriture de l'ESP. L'ecran ne reste donc plus silencieux jusqu'a la
+fin de la transaction.
+
 Avant de remplacer le payload principal, Orizon garde le kernel et le loader
 actuellement demarres dans un slot rollback sur l'ESP:
 

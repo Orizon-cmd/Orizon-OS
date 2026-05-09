@@ -1060,6 +1060,17 @@ static void term_find_recursive(terminal_t *term, const char *path,
 
 static int term_install_already_complete(void);
 
+static void term_update_progress(const char *line, void *ctx) {
+  terminal_t *term = (terminal_t *)ctx;
+  if (!term || !line) {
+    return;
+  }
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  term_render(term);
+  fb_swap_buffers();
+}
+
 static void term_run_update(terminal_t *term) {
   static char report[8192];
 
@@ -1068,8 +1079,15 @@ static void term_run_update(terminal_t *term) {
                 "update: unavailable in live boot. Install Orizon OS first.\n");
     return;
   }
+  term_puts_t(term, "\033[1;36mStarting Orizon update...\033[0m\n");
+  term_render(term);
+  fb_swap_buffers();
+  orizon_update_set_progress(term_update_progress, term);
   orizon_update_full_upgrade(report, sizeof(report));
-  term_puts_t(term, report);
+  orizon_update_set_progress(NULL, NULL);
+  if (report[0] == '\0') {
+    term_puts_t(term, "update: no output produced\n");
+  }
 }
 
 static void term_run_rollback(terminal_t *term) {

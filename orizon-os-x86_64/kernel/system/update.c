@@ -61,6 +61,8 @@ static uint8_t update_kernel[UPDATE_KERNEL_MAX] __attribute__((aligned(4096)));
 static uint8_t update_efi[UPDATE_EFI_MAX] __attribute__((aligned(4096)));
 static char update_limine_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
 static uint8_t update_chunk[UPDATE_CHUNK_BYTES] __attribute__((aligned(4096)));
+static orizon_update_progress_fn update_progress_fn = NULL;
+static void *update_progress_ctx = NULL;
 
 static const char rollback_limine_entry[] =
     "\n"
@@ -94,6 +96,17 @@ static void update_write_file(const char *path, const char *text, int append) {
   vfs_close(f);
 }
 
+void orizon_update_set_progress(orizon_update_progress_fn fn, void *ctx) {
+  update_progress_fn = fn;
+  update_progress_ctx = ctx;
+}
+
+static void update_progress_line(const char *line) {
+  if (update_progress_fn && line) {
+    update_progress_fn(line, update_progress_ctx);
+  }
+}
+
 static void update_write_blob(const char *path, const void *data, size_t size) {
   file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
   if (!f) {
@@ -120,6 +133,7 @@ static void update_set_state(const char *state) {
   update_write_line(UPDATE_STATE_PATH, state);
   update_write_line(SYSTEM_STATE_PATH, state);
   update_append_log(state);
+  update_progress_line(state);
 }
 
 static void append_report(char *report, size_t report_size, const char *line) {
@@ -132,6 +146,32 @@ static void append_report(char *report, size_t report_size, const char *line) {
     return;
   }
   snprintf(report + used, report_size - used, "%s\n", line);
+  update_progress_line(line);
+}
+
+static void update_emit_report_tail(const char *report, size_t start) {
+  char line[256];
+  size_t pos = start;
+
+  if (!report || !update_progress_fn) {
+    return;
+  }
+  while (report[pos]) {
+    size_t len = 0;
+    while (report[pos + len] && report[pos + len] != '\n') {
+      len++;
+    }
+    if (len > 0) {
+      size_t copy = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
+      memcpy(line, report + pos, copy);
+      line[copy] = '\0';
+      update_progress_line(line);
+    }
+    pos += len;
+    if (report[pos] == '\n') {
+      pos++;
+    }
+  }
 }
 
 static int update_installed_marker_present(void) {
@@ -295,6 +335,7 @@ static int download_artifact(const char *label, const char *relative,
   char line[224];
   char diag[192];
   char actual_hash[SHA256_HEX_SIZE];
+  unsigned next_percent = 0;
 
   if (!relative || !expected_hash || !dst || expected_size == 0 ||
       expected_size > dst_cap) {
@@ -348,6 +389,20 @@ static int download_artifact(const char *label, const char *relative,
     }
     memcpy((uint8_t *)dst + done, update_chunk, got);
     done += got;
+
+    if (update_progress_fn) {
+      unsigned percent =
+          (unsigned)((done * 100ULL) / (uint64_t)expected_size);
+      if (percent >= next_percent || done == expected_size) {
+        snprintf(line, sizeof(line), "Get: %s %u%% [%lu/%lu KiB]", label,
+                 percent, (unsigned long)((done + 1023) / 1024),
+                 (unsigned long)((expected_size + 1023) / 1024));
+        update_progress_line(line);
+        while (next_percent <= percent && next_percent < 100) {
+          next_percent += 10;
+        }
+      }
+    }
   }
 
   sha256_buffer_hex(dst, expected_size, actual_hash);
@@ -459,6 +514,9 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     return -3;
   }
   update_manifest_text[manifest_len] = '\0';
+  snprintf(line, sizeof(line), "Get: manifest.txt [%lu bytes]",
+           (unsigned long)manifest_len);
+  update_progress_line(line);
   sha256_buffer_hex(update_manifest_text, manifest_len, manifest_hash);
   update_write_blob(UPDATE_PROOF_PATH, update_manifest_text, manifest_len);
   update_write_line(UPDATE_PROOF_HASH_PATH, manifest_hash);
@@ -528,17 +586,20 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
 
   update_set_state("update: writing installed ESP");
   append_report(report, report_size, "[6/7] Rewriting installed boot partition");
+  size_t esp_report_start = report ? strlen(report) : 0;
   if (orizon_install_update_esp_with_rollback(
           update_kernel, manifest.kernel_size, update_efi, manifest.efi_size,
           boot_kernel_image(), boot_kernel_image_size(), boot_efi_image(),
           boot_efi_image_size(), update_limine_conf, strlen(update_limine_conf),
           update_text, strlen(update_text), report, report_size) != 0) {
+    update_emit_report_tail(report, esp_report_start);
     update_set_state("update: blocked - ESP write failed");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
     return -6;
   }
+  update_emit_report_tail(report, esp_report_start);
 
   update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text, strlen(update_text));
   update_write_blob(UPDATE_ROLLBACK_INFO_PATH, rollback_text,

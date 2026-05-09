@@ -29,6 +29,11 @@ The command performs a kernel-owned full-upgrade transaction:
 - preserve the Orizon data partition and `/workspace`
 - save update logs and success metadata
 
+Progress is streamed to the console while the transaction is running. The
+terminal receives each state line immediately and redraws the framebuffer, so
+long network downloads show Debian-like progress instead of leaving the OS
+visually frozen until the final report.
+
 After success, reboot to start the refreshed boot payload.
 
 ## Rollback
