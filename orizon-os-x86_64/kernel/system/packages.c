@@ -704,11 +704,11 @@ int orizon_pkg_init(void) {
   return orizon_pkg_refresh_database();
 }
 
-int orizon_pkg_install_file(const char *path, char *report, size_t report_size) {
+static int pkg_install_loaded(const char *source_name, const char *data,
+                              size_t size, char *report, size_t report_size) {
   pkg_manifest_t pkg;
   char actual_hash[SHA256_HEX_SIZE];
   char line[256];
-  size_t size = 0;
   int result;
 
   if (report && report_size > 0) {
@@ -717,11 +717,11 @@ int orizon_pkg_install_file(const char *path, char *report, size_t report_size) 
   if (!pkg_initialized) {
     orizon_pkg_init();
   }
-  if (pkg_read_file(path, pkg_buf, sizeof(pkg_buf), &size) < 0 || size == 0) {
-    pkg_append_line(report, report_size, "pkg: cannot read package file");
+  if (!data || size == 0 || size > PKG_MAX_BYTES) {
+    pkg_append_line(report, report_size, "pkg: invalid package buffer");
     return -1;
   }
-  result = parse_manifest(pkg_buf, size, &pkg, actual_hash);
+  result = parse_manifest(data, size, &pkg, actual_hash);
   if (result == -2) {
     pkg_append_line(report, report_size, "pkg: sha256 mismatch");
     return -2;
@@ -740,7 +740,7 @@ int orizon_pkg_install_file(const char *path, char *report, size_t report_size) 
     pkg_append_line(report, report_size, "pkg: payload install failed");
     return -4;
   }
-  if (store_installed_package(path, &pkg, actual_hash, pkg_buf, size) < 0) {
+  if (store_installed_package(source_name, &pkg, actual_hash, data, size) < 0) {
     pkg_append_line(report, report_size, "pkg: cannot update installed db");
     return -5;
   }
@@ -750,6 +750,36 @@ int orizon_pkg_install_file(const char *path, char *report, size_t report_size) 
   snprintf(line, sizeof(line), "Installed %s %s", pkg.name, pkg.version);
   pkg_append_line(report, report_size, line);
   return 0;
+}
+
+int orizon_pkg_install_file(const char *path, char *report, size_t report_size) {
+  size_t size = 0;
+
+  if (pkg_read_file(path, pkg_buf, sizeof(pkg_buf), &size) < 0 || size == 0) {
+    if (report && report_size > 0) {
+      report[0] = '\0';
+    }
+    pkg_append_line(report, report_size, "pkg: cannot read package file");
+    return -1;
+  }
+  return pkg_install_loaded(path, pkg_buf, size, report, report_size);
+}
+
+int orizon_pkg_install_buffer(const char *source_name, const void *data,
+                              size_t size, char *report, size_t report_size) {
+  if (!data || size == 0 || size > PKG_MAX_BYTES) {
+    if (report && report_size > 0) {
+      report[0] = '\0';
+    }
+    pkg_append_line(report, report_size, "pkg: invalid package buffer");
+    return -1;
+  }
+  if (data != pkg_buf) {
+    memcpy(pkg_buf, data, size);
+    pkg_buf[size] = '\0';
+  }
+  return pkg_install_loaded(source_name ? source_name : "memory", pkg_buf, size,
+                            report, report_size);
 }
 
 int orizon_pkg_list(char *out, size_t out_size) {

@@ -24,6 +24,8 @@ The command performs a kernel-owned full-upgrade transaction:
 - download `updates/x86_64/manifest.txt` from the public repository
 - download `kernel.elf`, `BOOTX64.EFI`, and `limine.conf` by HTTPS `Range`
 - verify every artifact with SHA-256 from the manifest
+- download the package index from `Orizon-Packages`
+- install missing or changed `.opkg` packages after verifying the index hash
 - keep the currently booted kernel and UEFI loader as the ESP rollback slot
 - rewrite only the installed ESP boot files
 - preserve the Orizon data partition and `/workspace`
@@ -106,8 +108,28 @@ and verifies all hashes before writing the ESP.
 ## Package Manager Link
 
 `update` now refreshes the Orizon package database through the in-kernel
-package manager instead of writing a fixed package list by itself. The first
-package layer is local and text based:
+package manager instead of writing a fixed package list by itself. It also
+reads the official package repository:
+
+```text
+https://github.com/Orizon-cmd/Orizon-Packages
+```
+
+The public index used by the kernel is:
+
+```text
+packages/x86_64/index.txt
+```
+
+Index entries use this first format:
+
+```text
+package <name> <version> <path> <size> <sha256>
+```
+
+The index SHA-256 verifies the full `.opkg` file. The package manager then
+checks the package's own payload SHA-256 before installing files. The local
+package commands remain:
 
 ```text
 pkg list
@@ -121,13 +143,14 @@ Installed package metadata lives in:
 
 ```text
 /workspace/.orizon/pkgdb
+/workspace/.orizon/package-index
 /system/packages
 /system/installed
 ```
 
-This prepares the next update model: GitHub can publish a package index and
-individual `.opkg` files, while the boot rollback system remains responsible
-for kernel and UEFI loader changes.
+The boot rollback system remains responsible for kernel and UEFI loader
+changes. Package rollback will be added separately once package removal and
+per-file manifests exist.
 
 ## Live Boot Behavior
 

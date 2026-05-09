@@ -1,8 +1,14 @@
 # Orizon OS Packages
 
 Orizon packages are intentionally small for the first implementation. The goal
-is to let Orizon update and install separate components later without turning
-the kernel updater into a giant boot-only replacement tool.
+is to let Orizon update and install separate components without turning the
+kernel updater into a giant boot-only replacement tool.
+
+Official repository:
+
+```text
+https://github.com/Orizon-cmd/Orizon-Packages
+```
 
 ## Commands
 
@@ -87,13 +93,16 @@ Runtime package views are mirrored to:
 
 ## Next Steps
 
-The next logical upgrade is a GitHub package index, for example:
+The first GitHub package index is now active:
 
 ```text
 packages/x86_64/index.txt
 packages/x86_64/<name>.opkg
 ```
 
-Then `update` can compare installed package versions, download only changed
-`.opkg` files, verify their SHA-256, install them, and keep the boot rollback
-only for kernel/loader changes.
+`update` compares installed package versions, downloads only missing or changed
+`.opkg` files, verifies their SHA-256 from the index, and then lets `pkg`
+verify the internal payload SHA-256 before installation.
+
+The next package-manager upgrades are `pkg info`, `pkg remove`, and package
+rollback metadata.

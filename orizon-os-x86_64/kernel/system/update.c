@@ -21,6 +21,7 @@
 #define UPDATE_STATE_PATH "/workspace/.orizon/update-state"
 #define UPDATE_LOG_PATH "/workspace/.orizon/update.log"
 #define UPDATE_MANIFEST_PATH "/workspace/.orizon/update-manifest"
+#define UPDATE_PACKAGE_INDEX_PATH "/workspace/.orizon/package-index"
 #define UPDATE_PROOF_PATH "/workspace/.orizon/github-https-manifest"
 #define UPDATE_PROOF_HASH_PATH "/workspace/.orizon/github-https-manifest.sha256"
 #define UPDATE_LAST_SUCCESS_PATH "/workspace/.orizon/last-update"
@@ -34,12 +35,32 @@
 #define UPDATE_RAW_HOST "raw.githubusercontent.com"
 #define UPDATE_RAW_PREFIX "/Orizon-cmd/Orizon-OS/main/"
 #define UPDATE_MANIFEST_REMOTE "updates/x86_64/manifest.txt"
+#define UPDATE_PACKAGE_SOURCE "https://github.com/Orizon-cmd/Orizon-Packages"
+#define UPDATE_PACKAGE_RAW_PREFIX "/Orizon-cmd/Orizon-Packages/main/"
+#define UPDATE_PACKAGE_INDEX_REMOTE "packages/x86_64/index.txt"
 #define UPDATE_CHUNK_BYTES 12288U
 #define UPDATE_RANGE_RETRIES 5U
 #define UPDATE_MANIFEST_MAX 4096U
+#define UPDATE_PACKAGE_INDEX_MAX 8192U
+#define UPDATE_PACKAGE_MAX (48U * 1024U)
+#define UPDATE_PACKAGE_MAX_ENTRIES 16U
+#define UPDATE_INSTALLED_DB_MAX 8192U
 #define UPDATE_KERNEL_MAX (4U * 1024U * 1024U)
 #define UPDATE_EFI_MAX (512U * 1024U)
 #define UPDATE_CONF_MAX 4096U
+
+typedef struct {
+  char name[64];
+  char version[64];
+  char path[180];
+  char sha256[SHA256_HEX_SIZE];
+  size_t size;
+} update_package_index_entry_t;
+
+typedef struct {
+  update_package_index_entry_t entries[UPDATE_PACKAGE_MAX_ENTRIES];
+  size_t count;
+} update_package_index_t;
 
 typedef struct {
   char version[64];
@@ -57,6 +78,9 @@ typedef struct {
 
 static const char *update_status_text = "update: not run";
 static char update_manifest_text[UPDATE_MANIFEST_MAX];
+static char update_package_index_text[UPDATE_PACKAGE_INDEX_MAX];
+static char update_installed_db_text[UPDATE_INSTALLED_DB_MAX];
+static uint8_t update_package_blob[UPDATE_PACKAGE_MAX] __attribute__((aligned(4096)));
 static uint8_t update_kernel[UPDATE_KERNEL_MAX] __attribute__((aligned(4096)));
 static uint8_t update_efi[UPDATE_EFI_MAX] __attribute__((aligned(4096)));
 static char update_limine_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
@@ -118,6 +142,34 @@ static void update_write_blob(const char *path, const void *data, size_t size) {
   vfs_close(f);
 }
 
+static int update_read_file(const char *path, char *buf, size_t cap,
+                            size_t *out_len) {
+  file_t *f;
+  size_t used = 0;
+  ssize_t n = 0;
+
+  if (!path || !buf || cap < 2) {
+    return -1;
+  }
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    return -1;
+  }
+  while (used < cap - 1 &&
+         (n = vfs_read(f, buf + used, (cap - 1) - used)) > 0) {
+    used += (size_t)n;
+  }
+  vfs_close(f);
+  if (n < 0) {
+    return -1;
+  }
+  buf[used] = '\0';
+  if (out_len) {
+    *out_len = used;
+  }
+  return 0;
+}
+
 static void update_append_log(const char *line) {
   update_write_file(UPDATE_LOG_PATH, line, 1);
   update_write_file(UPDATE_LOG_PATH, "\n", 1);
@@ -147,6 +199,32 @@ static void append_report(char *report, size_t report_size, const char *line) {
   }
   snprintf(report + used, report_size - used, "%s\n", line);
   update_progress_line(line);
+}
+
+static void append_report_block(char *report, size_t report_size,
+                                const char *text) {
+  const char *p = text;
+  char line[256];
+
+  if (!text) {
+    return;
+  }
+  while (*p) {
+    size_t len = 0;
+    while (p[len] && p[len] != '\n') {
+      len++;
+    }
+    if (len > 0) {
+      size_t copy = len < sizeof(line) - 1 ? len : sizeof(line) - 1;
+      memcpy(line, p, copy);
+      line[copy] = '\0';
+      append_report(report, report_size, line);
+    }
+    p += len;
+    if (*p == '\n') {
+      p++;
+    }
+  }
 }
 
 static void update_emit_report_tail(const char *report, size_t start) {
@@ -302,35 +380,205 @@ static int parse_update_manifest(const char *text, update_manifest_t *manifest) 
   return 0;
 }
 
-static int build_raw_path(const char *relative, char *out, size_t out_size) {
+static const char *copy_token(const char *p, char *out, size_t out_size) {
+  size_t len = 0;
+
+  if (!p || !out || out_size == 0) {
+    return NULL;
+  }
+  while (*p == ' ' || *p == '\t') {
+    p++;
+  }
+  while (p[len] && p[len] != ' ' && p[len] != '\t' && p[len] != '\r' &&
+         p[len] != '\n') {
+    len++;
+  }
+  if (len == 0 || len >= out_size) {
+    return NULL;
+  }
+  memcpy(out, p, len);
+  out[len] = '\0';
+  return p + len;
+}
+
+static int sha256_text_valid(const char *text) {
+  if (!text || strlen(text) != SHA256_HEX_SIZE - 1) {
+    return 0;
+  }
+  for (size_t i = 0; i < SHA256_HEX_SIZE - 1; i++) {
+    char c = text[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+          (c >= 'A' && c <= 'F'))) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int package_name_safe(const char *name) {
+  int seen = 0;
+  if (!name) {
+    return 0;
+  }
+  while (*name) {
+    char c = *name++;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.') {
+      seen = 1;
+      continue;
+    }
+    return 0;
+  }
+  return seen;
+}
+
+static int package_path_safe(const char *path) {
+  if (!path || path[0] == '/' || !strstr(path, ".opkg") ||
+      strncmp(path, "packages/x86_64/", 16) != 0) {
+    return 0;
+  }
+  while (*path) {
+    if (path[0] == '.' && path[1] == '.') {
+      return 0;
+    }
+    path++;
+  }
+  return 1;
+}
+
+static int parse_package_index_line(const char *line,
+                                    update_package_index_entry_t *entry) {
+  const char *p = line + 8;
+  char size_text[32];
+
+  memset(entry, 0, sizeof(*entry));
+  p = copy_token(p, entry->name, sizeof(entry->name));
+  if (!p) {
+    return -1;
+  }
+  p = copy_token(p, entry->version, sizeof(entry->version));
+  if (!p) {
+    return -1;
+  }
+  p = copy_token(p, entry->path, sizeof(entry->path));
+  if (!p) {
+    return -1;
+  }
+  p = copy_token(p, size_text, sizeof(size_text));
+  if (!p || parse_size_value(size_text, &entry->size) < 0) {
+    return -1;
+  }
+  p = copy_token(p, entry->sha256, sizeof(entry->sha256));
+  if (!p || !package_name_safe(entry->name) ||
+      !package_path_safe(entry->path) || entry->version[0] == '\0' ||
+      entry->size == 0 || entry->size > UPDATE_PACKAGE_MAX ||
+      !sha256_text_valid(entry->sha256)) {
+    return -1;
+  }
+  return 0;
+}
+
+static int parse_package_index(const char *text,
+                               update_package_index_t *index) {
+  const char *p = text;
+
+  if (!text || !index || !strstr(text, "index-version 1") ||
+      !strstr(text, "os Orizon OS")) {
+    return -1;
+  }
+  memset(index, 0, sizeof(*index));
+  while (*p) {
+    const char *line = p;
+    size_t len = 0;
+    char copy[320];
+
+    while (p[len] && p[len] != '\n') {
+      len++;
+    }
+    if (len > 0 && len < sizeof(copy)) {
+      memcpy(copy, line, len);
+      copy[len] = '\0';
+      if (len > 8 && strncmp(copy, "package ", 8) == 0) {
+        if (index->count >= UPDATE_PACKAGE_MAX_ENTRIES ||
+            parse_package_index_line(copy, &index->entries[index->count]) < 0) {
+          return -1;
+        }
+        index->count++;
+      }
+    }
+    p += len;
+    if (*p == '\n') {
+      p++;
+    }
+  }
+  return 0;
+}
+
+static int installed_package_version_is(const char *name, const char *version) {
+  const char *p = update_installed_db_text;
+  size_t name_len = strlen(name);
+  size_t version_len = strlen(version);
+
+  while (*p) {
+    const char *line = p;
+    size_t len = 0;
+    while (p[len] && p[len] != '\n') {
+      len++;
+    }
+    if (len > name_len + 1 + version_len &&
+        strncmp(line, name, name_len) == 0 && line[name_len] == ' ' &&
+        strncmp(line + name_len + 1, version, version_len) == 0 &&
+        (line[name_len + 1 + version_len] == ' ' ||
+         line[name_len + 1 + version_len] == '\r')) {
+      return 1;
+    }
+    p += len;
+    if (*p == '\n') {
+      p++;
+    }
+  }
+  return 0;
+}
+
+static int build_prefixed_raw_path(const char *prefix, const char *relative,
+                                   char *out, size_t out_size) {
   const char *rel = relative;
-  if (!relative || !out || out_size == 0) {
+  if (!prefix || !relative || !out || out_size == 0) {
     return -1;
   }
   while (*rel == '/') {
     rel++;
   }
-  return snprintf(out, out_size, UPDATE_RAW_PREFIX "%s", rel) < (int)out_size
+  return snprintf(out, out_size, "%s%s", prefix, rel) < (int)out_size
              ? 0
              : -1;
 }
 
-static int download_range_path(const char *relative, uint64_t start,
-                               uint64_t end, void *out, size_t out_cap,
-                               size_t *out_len, char *diag,
-                               size_t diag_cap) {
+static int download_range_prefixed(const char *prefix, const char *relative,
+                                   uint64_t start, uint64_t end, void *out,
+                                   size_t out_cap, size_t *out_len, char *diag,
+                                   size_t diag_cap) {
   char path[240];
-  if (build_raw_path(relative, path, sizeof(path)) < 0) {
+  if (build_prefixed_raw_path(prefix, relative, path, sizeof(path)) < 0) {
     return -1;
   }
   return netstack_https_range_get(UPDATE_RAW_HOST, path, start, end, out,
                                   out_cap, out_len, diag, diag_cap);
 }
 
-static int download_artifact(const char *label, const char *relative,
-                             size_t expected_size, const char *expected_hash,
-                             void *dst, size_t dst_cap, char *report,
-                             size_t report_size) {
+static int download_range_path(const char *relative, uint64_t start,
+                               uint64_t end, void *out, size_t out_cap,
+                               size_t *out_len, char *diag,
+                               size_t diag_cap) {
+  return download_range_prefixed(UPDATE_RAW_PREFIX, relative, start, end, out,
+                                 out_cap, out_len, diag, diag_cap);
+}
+
+static int download_verified_blob(const char *label, const char *prefix,
+                                  const char *relative, size_t expected_size,
+                                  const char *expected_hash, void *dst,
+                                  size_t dst_cap, char *report,
+                                  size_t report_size) {
   size_t done = 0;
   char line[224];
   char diag[192];
@@ -360,10 +608,10 @@ static int download_artifact(const char *label, const char *relative,
     for (unsigned attempt = 1; attempt <= UPDATE_RANGE_RETRIES; attempt++) {
       got = 0;
       diag[0] = '\0';
-      rc = download_range_path(relative, (uint64_t)done,
-                               (uint64_t)(done + wanted - 1), update_chunk,
-                               sizeof(update_chunk), &got, diag,
-                               sizeof(diag));
+      rc = download_range_prefixed(prefix, relative, (uint64_t)done,
+                                   (uint64_t)(done + wanted - 1),
+                                   update_chunk, sizeof(update_chunk), &got,
+                                   diag, sizeof(diag));
       if (rc == 0 && got > 0 && got <= wanted) {
         ok = 1;
         break;
@@ -423,6 +671,99 @@ static int download_artifact(const char *label, const char *relative,
   return 0;
 }
 
+static int download_artifact(const char *label, const char *relative,
+                             size_t expected_size, const char *expected_hash,
+                             void *dst, size_t dst_cap, char *report,
+                             size_t report_size) {
+  return download_verified_blob(label, UPDATE_RAW_PREFIX, relative,
+                                expected_size, expected_hash, dst, dst_cap,
+                                report, report_size);
+}
+
+static int update_install_remote_packages(char *report, size_t report_size) {
+  update_package_index_t index;
+  char line[256];
+  char pkg_report[2048];
+  size_t index_len = 0;
+  size_t installed_len = 0;
+  size_t installed_count = 0;
+  size_t skipped_count = 0;
+  char index_hash[SHA256_HEX_SIZE];
+
+  update_set_state("update: downloading package index");
+  append_report(report, report_size,
+                "[6/8] Checking Orizon package repository");
+  append_report(report, report_size, "Package source: " UPDATE_PACKAGE_SOURCE);
+  if (download_range_prefixed(UPDATE_PACKAGE_RAW_PREFIX,
+                              UPDATE_PACKAGE_INDEX_REMOTE, 0,
+                              UPDATE_PACKAGE_INDEX_MAX - 2,
+                              update_package_index_text,
+                              sizeof(update_package_index_text) - 1,
+                              &index_len, line, sizeof(line)) != 0 ||
+      index_len == 0) {
+    update_set_state("update: blocked - package index download failed");
+    append_report(report, report_size, "update: package index download failed");
+    return -1;
+  }
+  update_package_index_text[index_len] = '\0';
+  sha256_buffer_hex(update_package_index_text, index_len, index_hash);
+  update_write_blob(UPDATE_PACKAGE_INDEX_PATH, update_package_index_text,
+                    index_len);
+  snprintf(line, sizeof(line), "Get: package index [%lu bytes]",
+           (unsigned long)index_len);
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "package-index sha256 %s", index_hash);
+  update_append_log(line);
+
+  if (parse_package_index(update_package_index_text, &index) < 0) {
+    update_set_state("update: blocked - invalid package index");
+    append_report(report, report_size, "update: invalid package index");
+    return -2;
+  }
+
+  orizon_pkg_refresh_database();
+  if (update_read_file("/system/installed", update_installed_db_text,
+                       sizeof(update_installed_db_text), &installed_len) < 0) {
+    update_installed_db_text[0] = '\0';
+  }
+
+  for (size_t i = 0; i < index.count; i++) {
+    const update_package_index_entry_t *entry = &index.entries[i];
+    if (installed_package_version_is(entry->name, entry->version)) {
+      skipped_count++;
+      snprintf(line, sizeof(line), "Skip: %s %s already installed",
+               entry->name, entry->version);
+      append_report(report, report_size, line);
+      continue;
+    }
+
+    snprintf(line, sizeof(line), "Inst: %s %s", entry->name, entry->version);
+    append_report(report, report_size, line);
+    if (download_verified_blob(entry->name, UPDATE_PACKAGE_RAW_PREFIX,
+                               entry->path, entry->size, entry->sha256,
+                               update_package_blob, sizeof(update_package_blob),
+                               report, report_size) < 0) {
+      update_set_state("update: blocked - package download failed");
+      return -3;
+    }
+
+    if (orizon_pkg_install_buffer(entry->path, update_package_blob, entry->size,
+                                  pkg_report, sizeof(pkg_report)) != 0) {
+      append_report_block(report, report_size, pkg_report);
+      update_set_state("update: blocked - package install failed");
+      return -4;
+    }
+    append_report_block(report, report_size, pkg_report);
+    installed_count++;
+  }
+
+  orizon_pkg_refresh_database();
+  snprintf(line, sizeof(line), "Packages: %lu installed, %lu already current",
+           (unsigned long)installed_count, (unsigned long)skipped_count);
+  append_report(report, report_size, line);
+  return 0;
+}
+
 int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_manifest_t manifest;
   char net_line[256];
@@ -466,12 +807,12 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_set_state("update: preparing installed package database");
   orizon_pkg_init();
   orizon_pkg_refresh_database();
-  append_report(report, report_size, "[1/7] Installed package database ready");
+  append_report(report, report_size, "[1/8] Installed package database ready");
 
   update_set_state("update: probing ethernet");
   net_init();
   net_format_status(net_line, sizeof(net_line));
-  append_report(report, report_size, "[2/7] Ethernet probe");
+  append_report(report, report_size, "[2/8] Ethernet probe");
   append_report(report, report_size, net_line);
   update_append_log(net_line);
   if (!net_link_up()) {
@@ -487,7 +828,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   if (netstack_configure_ipv4() != 0) {
     netstack_format_status(net_line, sizeof(net_line));
     update_set_state("update: blocked - dhcp failed");
-    append_report(report, report_size, "[3/7] DHCP/IPv4 failed");
+    append_report(report, report_size, "[3/8] DHCP/IPv4 failed");
     append_report(report, report_size, net_line);
     update_append_log(net_line);
     vfs_persist_save();
@@ -496,7 +837,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     return -2;
   }
   netstack_format_status(net_line, sizeof(net_line));
-  append_report(report, report_size, "[3/7] DHCP/IPv4 ready");
+  append_report(report, report_size, "[3/8] DHCP/IPv4 ready");
   append_report(report, report_size, net_line);
   update_append_log(net_line);
 
@@ -507,7 +848,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
                           net_line, sizeof(net_line)) != 0 ||
       manifest_len == 0) {
     update_set_state("update: blocked - manifest download failed");
-    append_report(report, report_size, "[4/7] GitHub manifest download failed");
+    append_report(report, report_size, "[4/8] GitHub manifest download failed");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
@@ -522,7 +863,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_write_line(UPDATE_PROOF_HASH_PATH, manifest_hash);
   if (parse_update_manifest(update_manifest_text, &manifest) < 0) {
     update_set_state("update: blocked - invalid manifest");
-    append_report(report, report_size, "[4/7] Invalid GitHub update manifest");
+    append_report(report, report_size, "[4/8] Invalid GitHub update manifest");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
@@ -530,13 +871,13 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   }
   update_write_blob(UPDATE_MANIFEST_PATH, update_manifest_text, manifest_len);
   update_write_blob(SYSTEM_MANIFEST_PATH, update_manifest_text, manifest_len);
-  snprintf(line, sizeof(line), "[4/7] Manifest %s commit %s",
+  snprintf(line, sizeof(line), "[4/8] Manifest %s commit %s",
            manifest.version, manifest.commit);
   append_report(report, report_size, line);
   update_append_log(line);
 
   update_set_state("update: downloading boot payloads");
-  append_report(report, report_size, "[5/7] Downloading verified artifacts");
+  append_report(report, report_size, "[5/8] Downloading verified artifacts");
   if (download_artifact("kernel.elf", manifest.kernel_path,
                         manifest.kernel_size, manifest.kernel_sha256,
                         update_kernel, sizeof(update_kernel), report,
@@ -566,6 +907,13 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     return -5;
   }
 
+  if (update_install_remote_packages(report, report_size) < 0) {
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -6;
+  }
+
   snprintf(update_text, sizeof(update_text),
            "Orizon OS updated\nsource=%s\nchannel=%s\nversion=%s\ncommit=%s\n"
            "kernel-sha256=%s\nrollback-kernel-sha256=%s\n",
@@ -585,7 +933,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
            rollback_hash);
 
   update_set_state("update: writing installed ESP");
-  append_report(report, report_size, "[6/7] Rewriting installed boot partition");
+  append_report(report, report_size, "[7/8] Rewriting installed boot partition");
   size_t esp_report_start = report ? strlen(report) : 0;
   if (orizon_install_update_esp_with_rollback(
           update_kernel, manifest.kernel_size, update_efi, manifest.efi_size,
@@ -597,7 +945,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
-    return -6;
+    return -7;
   }
   update_emit_report_tail(report, esp_report_start);
 
@@ -608,7 +956,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
                     "rollback available: choose Orizon OS Rollback at boot or run rollback");
   update_set_state("update: complete");
   append_report(report, report_size,
-                "[7/7] Update complete. Reboot to start the refreshed system.");
+                "[8/8] Update complete. Reboot to start the refreshed system.");
   append_report(report, report_size,
                 "Rollback ready: boot 'Orizon OS Rollback' or run rollback to restore it.");
   update_append_log("Update complete");

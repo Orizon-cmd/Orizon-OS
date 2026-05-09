@@ -20,6 +20,8 @@ le developpement noyau:
   les fichiers de boot installes
 - mini gestionnaire de paquets `pkg` avec format texte `.opkg`, SHA-256 du
   payload, installation de fichiers et script post-install minimal
+- depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
+  installer des composants separes du kernel
 - console avec scrollback et support molette souris PS/2
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
@@ -91,6 +93,12 @@ pkg install /workspace/packages/orizon-hello.opkg
 sont stockes dans `/workspace/.orizon/pkgdb`, puis rejoues au boot pour
 restaurer les fichiers systeme en RAM comme `/system/share/...`.
 
+Le depot officiel de paquets est:
+
+```text
+https://github.com/Orizon-cmd/Orizon-Packages
+```
+
 Details: [docs/orizon/PACKAGES.md](docs/orizon/PACKAGES.md).
 
 ## Update Dans Orizon OS
@@ -111,8 +119,9 @@ programme externe: preparation de la base packages, probe Ethernet Intel
 `e1000/e1000e`, DHCP, DNS, TCP, TLS vers GitHub, telechargement du manifeste
 public, telechargement des artefacts par requetes HTTP `Range`, verification
 SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
-`BOOTX64.EFI` et `limine.conf`. La partition data Orizon et `/workspace` sont
-preserves.
+`BOOTX64.EFI` et `limine.conf`, puis lecture de l'index public
+`Orizon-Packages` pour installer ou mettre a jour les paquets `.opkg`. La
+partition data Orizon et `/workspace` sont preserves.
 
 Pendant l'operation, la console affiche les etapes en continu: etat courant,
 manifest recu, progression par pourcentage sur chaque artefact, verification
@@ -160,6 +169,7 @@ La transaction ecrit ses etats et journaux ici:
 /workspace/.orizon/update.log
 /workspace/.orizon/update-state
 /workspace/.orizon/update-manifest
+/workspace/.orizon/package-index
 /workspace/.orizon/last-update
 /workspace/.orizon/pkgdb
 /system/installed
