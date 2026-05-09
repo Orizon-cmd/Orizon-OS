@@ -10,6 +10,7 @@
 #include "../include/wifi.h"
 #include "../include/bootinfo.h"
 #include "../include/gui.h"
+#include "../include/mmio.h"
 #include "../include/pci.h"
 #include "../include/string.h"
 #include "../include/vfs.h"
@@ -23,6 +24,20 @@ static wifi_status_t wifi_status_state = {
     .function = 0,
     .vendor_id = 0,
     .device_id = 0,
+    .mmio_probed = 0,
+    .mmio_ready = 0,
+    .mmio_phys = 0,
+    .pci_command = 0,
+    .csr_hw_if_config = 0,
+    .csr_hw_rev = 0,
+    .csr_hw_rf_id = 0,
+    .csr_gp_cntrl = 0,
+    .csr_gpio_in = 0,
+    .csr_reset = 0,
+    .csr_int = 0,
+    .csr_int_mask = 0,
+    .csr_fh_int_status = 0,
+    .mmio_errors = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -60,6 +75,28 @@ static wifi_status_t wifi_status_state = {
 #define IWL_UCODE_TLV_SECURE_SEC_WOWLAN 26U
 #define IWL_UCODE_TLV_API_CHANGES_SET 29U
 #define IWL_UCODE_TLV_ENABLED_CAPABILITIES 30U
+
+#define PCI_COMMAND_REG 0x04U
+#define PCI_COMMAND_MEMORY_SPACE (1U << 1)
+
+#define CSR_HW_IF_CONFIG_REG 0x000U
+#define CSR_INT 0x008U
+#define CSR_INT_MASK 0x00cU
+#define CSR_FH_INT_STATUS 0x010U
+#define CSR_RESET 0x020U
+#define CSR_GP_CNTRL 0x024U
+#define CSR_HW_REV 0x028U
+#define CSR_HW_RF_ID 0x09cU
+#define CSR_GPIO_IN 0x0a0U
+
+#define CSR_GP_CNTRL_MAC_CLOCK_READY (1U << 0)
+#define CSR_GP_CNTRL_INIT_DONE (1U << 2)
+#define CSR_GP_CNTRL_GOING_TO_SLEEP (1U << 4)
+#define CSR_GP_CNTRL_MAC_STATUS (1U << 20)
+#define CSR_GP_CNTRL_BUS_MASTER_DISABLED (1U << 28)
+#define CSR_GP_CNTRL_HW_RF_KILL_SW (1U << 27)
+
+static volatile uint8_t *wifi_mmio = NULL;
 
 static const char *intel_fw_candidates[] = {
     "iwlwifi-so-a0-hr-b0-89.ucode", "iwlwifi-so-a0-hr-b0-86.ucode",
@@ -100,6 +137,14 @@ static void wifi_set_status(const char *status) {
 static int name_has_ucode_suffix(const char *name) {
   size_t len = name ? strlen(name) : 0;
   return len > 6 && strcmp(name + len - 6, ".ucode") == 0;
+}
+
+static uint32_t wifi_csr_read32(uint32_t reg) {
+  return *(volatile uint32_t *)(uintptr_t)(wifi_mmio + reg);
+}
+
+static void wifi_csr_write32(uint32_t reg, uint32_t value) {
+  *(volatile uint32_t *)(uintptr_t)(wifi_mmio + reg) = value;
 }
 
 static uint32_t wifi_read_le32(const uint8_t *p) {
@@ -143,6 +188,10 @@ static int wifi_tlv_is_code_section(uint32_t type) {
 static int wifi_tlv_is_data_section(uint32_t type) {
   return type == IWL_UCODE_TLV_DATA || type == IWL_UCODE_TLV_INIT_DATA ||
          type == IWL_UCODE_TLV_WOWLAN_DATA;
+}
+
+static const char *wifi_bit_text(uint32_t value, uint32_t bit) {
+  return (value & bit) ? "set" : "clear";
 }
 
 static void wifi_parse_firmware_blob(const void *data, size_t size) {
@@ -323,6 +372,92 @@ static int wifi_find_firmware(void) {
   return -1;
 }
 
+static uint64_t wifi_bar0_phys(uint32_t bar0, uint32_t bar1) {
+  uint64_t phys;
+
+  if (bar0 & 0x1U) {
+    return 0;
+  }
+
+  phys = (uint64_t)(bar0 & ~0xFULL);
+  if ((bar0 & 0x6U) == 0x4U) {
+    phys |= ((uint64_t)bar1 << 32);
+  }
+  return phys;
+}
+
+static void wifi_capture_csr_registers(void) {
+  wifi_status_state.csr_hw_if_config = wifi_csr_read32(CSR_HW_IF_CONFIG_REG);
+  wifi_status_state.csr_hw_rev = wifi_csr_read32(CSR_HW_REV);
+  wifi_status_state.csr_hw_rf_id = wifi_csr_read32(CSR_HW_RF_ID);
+  wifi_status_state.csr_gp_cntrl = wifi_csr_read32(CSR_GP_CNTRL);
+  wifi_status_state.csr_gpio_in = wifi_csr_read32(CSR_GPIO_IN);
+  wifi_status_state.csr_reset = wifi_csr_read32(CSR_RESET);
+  wifi_status_state.csr_int = wifi_csr_read32(CSR_INT);
+  wifi_status_state.csr_int_mask = wifi_csr_read32(CSR_INT_MASK);
+  wifi_status_state.csr_fh_int_status = wifi_csr_read32(CSR_FH_INT_STATUS);
+}
+
+static int wifi_probe_mmio(void) {
+  uint32_t bar0;
+  uint32_t bar1;
+  uint32_t cmd;
+  uint64_t phys;
+
+  wifi_status_state.mmio_probed = 1;
+
+  if (!wifi_status_state.present || wifi_status_state.vendor_id != 0x8086) {
+    wifi_status_state.mmio_ready = 0;
+    wifi_status_state.mmio_errors++;
+    return -1;
+  }
+
+  bar0 = pci_read32(wifi_status_state.bus, wifi_status_state.device,
+                    wifi_status_state.function, 0x10);
+  bar1 = pci_read32(wifi_status_state.bus, wifi_status_state.device,
+                    wifi_status_state.function, 0x14);
+  phys = wifi_bar0_phys(bar0, bar1);
+  wifi_status_state.mmio_phys = phys;
+  if (!phys) {
+    wifi_status_state.mmio_ready = 0;
+    wifi_status_state.mmio_errors++;
+    wifi_set_status("wifi: Intel MMIO BAR missing");
+    return -1;
+  }
+
+  cmd = pci_read32(wifi_status_state.bus, wifi_status_state.device,
+                   wifi_status_state.function, PCI_COMMAND_REG);
+  if ((cmd & PCI_COMMAND_MEMORY_SPACE) == 0) {
+    pci_write32(wifi_status_state.bus, wifi_status_state.device,
+                wifi_status_state.function, PCI_COMMAND_REG,
+                cmd | PCI_COMMAND_MEMORY_SPACE);
+    cmd = pci_read32(wifi_status_state.bus, wifi_status_state.device,
+                     wifi_status_state.function, PCI_COMMAND_REG);
+  }
+  wifi_status_state.pci_command = cmd & 0xFFFFU;
+
+  if (!wifi_mmio) {
+    wifi_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(phys, 0x1000);
+  }
+  if (!wifi_mmio) {
+    wifi_status_state.mmio_ready = 0;
+    wifi_status_state.mmio_errors++;
+    wifi_set_status("wifi: Intel MMIO map failed");
+    return -1;
+  }
+
+  /*
+   * Keep interrupts masked during staging. The actual IRQ/MSI path should only
+   * be enabled after firmware upload, queue setup, and an alive notification.
+   */
+  wifi_csr_write32(CSR_INT_MASK, 0);
+  wifi_capture_csr_registers();
+  wifi_status_state.mmio_ready = 1;
+  wifi_status_state.status =
+      "wifi: Intel CSR MMIO ready; firmware upload pending";
+  return 0;
+}
+
 int wifi_init(void) {
   pci_device_info_t devs[8];
   int count;
@@ -395,12 +530,16 @@ void wifi_format_status(char *buf, size_t size) {
   s = wifi_get_status();
   snprintf(buf, size,
            "driver=%s present=%s ready=%s associated=%s pci=%04x:%04x "
-           "slot=%02x:%02x.%u chipset=%s firmware=%s source=%s size=%lu "
-           "valid=%s tlvs=%lu sections=%lu status=%s",
+           "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
+           "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
+           "status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
            (unsigned int)s->function, s->chipset,
+           s->mmio_probed ? (s->mmio_ready ? "ready" : "failed")
+                           : "untested",
+           (unsigned long)s->mmio_phys,
            s->firmware_present ? s->firmware_name : "missing",
            s->firmware_source, (unsigned long)s->firmware_size,
            s->firmware_valid ? "yes" : "no", s->firmware_tlv_count,
@@ -467,6 +606,73 @@ int wifi_firmware_probe(char *report, size_t report_size) {
            s->chipset, s->vendor_id, s->device_id, intel_fw_candidates[0],
            intel_fw_candidates[1]);
   return -1;
+}
+
+int wifi_hw_probe(char *report, size_t report_size) {
+  const wifi_status_t *s;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  wifi_find_firmware();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi hw: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (s->vendor_id != 0x8086) {
+    snprintf(report, report_size,
+             "wifi hw: unsupported controller %04x:%04x\n",
+             s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  if (wifi_probe_mmio() != 0) {
+    s = &wifi_status_state;
+    snprintf(report, report_size,
+             "wifi hw: Intel controller detected, but MMIO probe failed\n"
+             "pci: %02x:%02x.%u %04x:%04x\n"
+             "bar0-phys: 0x%lx\n"
+             "errors: %lu\n"
+             "status: %s\n",
+             s->bus, s->device, (unsigned int)s->function, s->vendor_id,
+             s->device_id, (unsigned long)s->mmio_phys, s->mmio_errors,
+             s->status);
+    return -1;
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi hw: Intel CSR MMIO ready\n"
+           "pci: %02x:%02x.%u %04x:%04x command=0x%04x\n"
+           "bar0: phys=0x%lx mapped=yes\n"
+           "csr: hw-if=0x%08x hw-rev=0x%08x rf-id=0x%08x\n"
+           "csr: gp=0x%08x reset=0x%08x gpio=0x%08x\n"
+           "irq: int=0x%08x mask=0x%08x fh=0x%08x masked=staging\n"
+           "flags: mac-clock=%s init-done=%s sleep=%s mac-status=%s "
+           "bus-master-disabled=%s rfkill-bit=%s\n"
+           "firmware: %s valid=%s tlvs=%lu\n"
+           "next: allocate DMA rings, upload firmware, wait for alive\n",
+           s->bus, s->device, (unsigned int)s->function, s->vendor_id,
+           s->device_id, s->pci_command, (unsigned long)s->mmio_phys,
+           s->csr_hw_if_config, s->csr_hw_rev, s->csr_hw_rf_id,
+           s->csr_gp_cntrl, s->csr_reset, s->csr_gpio_in, s->csr_int,
+           s->csr_int_mask, s->csr_fh_int_status,
+           wifi_bit_text(s->csr_gp_cntrl, CSR_GP_CNTRL_MAC_CLOCK_READY),
+           wifi_bit_text(s->csr_gp_cntrl, CSR_GP_CNTRL_INIT_DONE),
+           wifi_bit_text(s->csr_gp_cntrl, CSR_GP_CNTRL_GOING_TO_SLEEP),
+           wifi_bit_text(s->csr_gp_cntrl, CSR_GP_CNTRL_MAC_STATUS),
+           wifi_bit_text(s->csr_gp_cntrl,
+                         CSR_GP_CNTRL_BUS_MASTER_DISABLED),
+           wifi_bit_text(s->csr_gp_cntrl, CSR_GP_CNTRL_HW_RF_KILL_SW),
+           s->firmware_present ? s->firmware_name : "missing",
+           s->firmware_valid ? "yes" : "no", s->firmware_tlv_count);
+  return 0;
 }
 
 int wifi_scan(char *report, size_t report_size) {

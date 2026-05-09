@@ -2698,6 +2698,12 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "hw")) {
+    wifi_hw_probe(line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "connect")) {
     rest = term_skip_spaces(args + 7);
     rest = term_read_token(rest, ssid, sizeof(ssid));
@@ -2715,7 +2721,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|firmware|scan|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|firmware|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3298,6 +3304,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
     term_puts_t(term, "  net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
     term_puts_t(term, "  wifi      - Show Wi-Fi hardware status\n");
+    term_puts_t(term, "  wifi hw   - Probe Intel Wi-Fi CSR/MMIO registers\n");
     term_puts_t(term, "  wifi firmware - Check Intel firmware availability\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
