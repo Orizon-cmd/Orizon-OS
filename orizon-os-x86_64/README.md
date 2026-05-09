@@ -7,7 +7,8 @@ with a restrained, development-first interface.
 ## Current Shape
 
 - Boots on UEFI-capable `x86_64` hardware; ZimaOS is only the current lab VM
-- Uses a simple framebuffer UI with an `Orizon OS` splash and one core console
+- Uses a framebuffer UI with an `Orizon OS` splash and one core console with
+  persistent history, Tab completion, and a small line editor
 - Keeps `/workspace` persistent when an Orizon data area is available
 - Stays intentionally small so new features can be added deliberately
 
@@ -103,6 +104,8 @@ build.sh         # alternative build script
 ## Notes
 
 - The active VM build is intentionally console-first.
+- The console supports `Up/Down` history, `Tab` command/path completion, and
+  `edit <file>` with `.show`, `.insert`, `.replace`, `.del`, `.write`, `.save`.
 - `/workspace` is saved to the reserved Orizon data area when the boot disk has
   been prepared for persistence.
 - New features should be reintroduced deliberately from this minimal base.

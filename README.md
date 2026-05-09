@@ -11,7 +11,7 @@ le developpement noyau:
 
 - demarrage stable en VM et sur cible `x86_64` UEFI
 - interface framebuffer simple avec splash `Orizon OS`
-- une seule console centrale pour travailler proprement
+- une seule console centrale avec historique persistant et autocompletion simple
 - espace `/workspace` persistant quand une zone donnees Orizon est disponible
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32 et boot UEFI
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
@@ -22,7 +22,8 @@ le developpement noyau:
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
   installer des composants separes du kernel
-- console avec scrollback et support molette souris PS/2
+- console avec scrollback, support molette souris PS/2, `edit` ameliore et
+  navigation historique `Up/Down`
 - timer noyau PIT 100 Hz, uptime reel, boucle idle `hlt` pour eviter le CPU a 100%
 - debut de table processus/scheduler visible avec `ps`
 
