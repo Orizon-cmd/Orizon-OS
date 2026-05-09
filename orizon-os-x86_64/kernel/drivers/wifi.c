@@ -4614,6 +4614,121 @@ int wifi_nvm_info_probe(int arm, char *report, size_t report_size) {
   return (rc != 0 || s->nvm_info_failed) ? -1 : 0;
 }
 
+static void wifi_report_append(char *report, size_t report_size,
+                               const char *line) {
+  size_t len;
+
+  if (!report || report_size == 0 || !line) {
+    return;
+  }
+
+  len = strlen(report);
+  if (len >= report_size - 1U) {
+    return;
+  }
+
+  snprintf(report + len, report_size - len, "%s", line);
+}
+
+static void wifi_report_step(char *report, size_t report_size,
+                             const char *name, int rc) {
+  const wifi_status_t *s = &wifi_status_state;
+  char line[192];
+
+  snprintf(line, sizeof(line), "[%s] %s - %s\n", rc == 0 ? " ok " : "fail",
+           name, s->status ? s->status : "no status");
+  wifi_report_append(report, report_size, line);
+}
+
+int wifi_bringup_probe(char *report, size_t report_size) {
+  char scratch[256];
+  const wifi_status_t *s;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_report_append(report, report_size, "wifi bringup: Lenovo/Intel CNVi path\n");
+
+  rc = wifi_firmware_probe(scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "firmware", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_apm_probe(scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "apm", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_boot_firmware(1, scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "boot", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_alive_probe(scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "alive", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_queue_probe(1, scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "queues", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_context_probe(1, scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "context", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_scheduler_probe(1, scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "scheduler", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_rx_probe(1, scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "rx", rc);
+  if (rc != 0) {
+    goto done;
+  }
+
+  rc = wifi_nvm_info_probe(1, scratch, sizeof(scratch));
+  wifi_report_step(report, report_size, "nvm-info", rc);
+
+done:
+  s = &wifi_status_state;
+  {
+    char line[384];
+    snprintf(line, sizeof(line),
+             "summary: chipset=%s pci=%04x:%04x firmware=%s source=%s "
+             "boot=%s alive=%s queues=%s context=%s rx=%s nvm-info=%s\n"
+             "radio: sku=0x%08x tx=0x%08x rx=0x%08x channels=%u status=%s\n",
+             s->chipset, s->vendor_id, s->device_id,
+             s->firmware_present ? s->firmware_name : "missing",
+             s->firmware_source, s->boot_ready ? "ready" : "not-ready",
+             s->alive_seen ? "seen" : "not-seen",
+             s->queues_ready ? "ready" : "not-ready",
+             s->context_armed ? "armed" : "not-armed",
+             s->rx_path_ready ? "ready" : "not-ready",
+             s->nvm_info_response_seen
+                 ? (s->nvm_info_failed ? "failed" : "response")
+                 : "none",
+             s->nvm_info_mac_sku_flags, s->nvm_info_tx_chains,
+             s->nvm_info_rx_chains, s->nvm_info_n_channels,
+             s->status ? s->status : "no status");
+    wifi_report_append(report, report_size, line);
+  }
+  return rc;
+}
+
 int wifi_scan(char *report, size_t report_size) {
   const wifi_status_t *s;
 

@@ -11,6 +11,11 @@ development target, not a ZimaOS-only assumption.
 - Display: Intel Alder Lake-N UHD Graphics, PCI `8086:46d1`
 - USB: Intel Alder Lake-N xHCI controllers, PCI `8086:464e` and `8086:54ed`
 - Wi-Fi: Intel Alder Lake-N CNVi, PCI `8086:54f0`, Linux driver `iwlwifi`
+  - Verified from the live laptop over SSH on 2026-05-09.
+  - Linux identifies it as `Intel(R) Wi-Fi 6 AX201 160MHz`.
+  - PCI subsystem/revision: `8086:0074`, sysfs revision `0x00`,
+    Linux dmesg revision `0x370`.
+  - Firmware in use on Linux: `89.123cf747.0 so-a0-hr-b0-89.ucode`.
 - Bluetooth: Intel AX201 Bluetooth, USB `8087:0026`
 - Built-in keyboard: AT translated Set 2 keyboard through i8042/PS/2
 - Touchpad: ELAN I2C-HID `ELAN0647:00 04F3:31B2`
@@ -40,9 +45,10 @@ development target, not a ZimaOS-only assumption.
   `iwlwifi-*.ucode` firmware, wake the NIC APM path with `wifi apm`, run the
   PRPH CPU-release plus CPU1/CPU2 FH DMA load sequence with `wifi boot arm`,
   poll `CSR_INT` for the firmware `ALIVE` bit with `wifi alive`, and stage
-  host-side command/RX/TX rings with `wifi queues arm`. Real scans/connections
-  still require the next driver milestones: hardware context/scheduler
-  programming, 802.11 management frames, and WPA association.
+  host-side command/RX/TX rings with `wifi queues arm`. `wifi bringup` now runs
+  the full readiness sequence through `wifi nvm-info arm` and reports the first
+  failed stage. Real scans/connections still require the next driver milestones:
+  scan command construction, 802.11 management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -61,6 +67,12 @@ wifi boot arm
 wifi alive
 wifi queues
 wifi queues arm
+wifi context arm
+wifi scheduler arm
+wifi rx poll
+wifi nvm arm
+wifi nvm-info arm
+wifi bringup
 wifi scan
 storage
 disks

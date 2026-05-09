@@ -291,6 +291,7 @@ int wifi_rx_probe(int poll, char *report, size_t report_size);
 int wifi_command_probe(int arm, char *report, size_t report_size);
 int wifi_nvm_probe(int arm, char *report, size_t report_size);
 int wifi_nvm_info_probe(int arm, char *report, size_t report_size);
+int wifi_bringup_probe(char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
