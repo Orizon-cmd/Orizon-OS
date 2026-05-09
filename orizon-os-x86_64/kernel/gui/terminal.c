@@ -2732,6 +2732,15 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "boot")) {
+    const char *boot_args = term_skip_spaces(args + 4);
+    int arm_boot = term_command_is(boot_args, "arm") ||
+                   term_command_is(boot_args, "go");
+    wifi_boot_firmware(arm_boot, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "alive")) {
     wifi_alive_probe(line, sizeof(line));
     term_puts_t(term, line);
@@ -2755,7 +2764,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|alive|scan|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3344,6 +3353,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi load - Stage Intel firmware DMA loader\n");
     term_puts_t(term, "  wifi upload [arm] - Prepare/arm first Intel FH firmware transfer\n");
     term_puts_t(term, "  wifi upload all [arm] - Prepare/arm all Intel firmware chunks\n");
+    term_puts_t(term, "  wifi boot [arm] - Release/load Intel firmware CPU sequence\n");
     term_puts_t(term, "  wifi alive - Poll for Intel firmware alive interrupt\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");

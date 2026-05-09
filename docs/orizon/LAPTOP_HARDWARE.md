@@ -37,11 +37,11 @@ development target, not a ZimaOS-only assumption.
   parser.
 - Wi-Fi: Stage-0 detection and Stage-1 firmware staging are present. Orizon can
   detect the Intel CNVi controller (`8086:54f0`), validate embedded or module
-  `iwlwifi-*.ucode` firmware, wake the NIC APM path with `wifi apm`, program
-  guarded FH DMA transfers with `wifi upload all arm`, and poll `CSR_INT`
-  for the firmware `ALIVE` bit with `wifi alive`. Real scans/connections still
-  require the next driver milestones: reset/CPU-release sequencing, command
-  queues, RX/TX rings, 802.11 management frames, and WPA association.
+  `iwlwifi-*.ucode` firmware, wake the NIC APM path with `wifi apm`, run the
+  PRPH CPU-release plus CPU1/CPU2 FH DMA load sequence with `wifi boot arm`,
+  and poll `CSR_INT` for the firmware `ALIVE` bit with `wifi alive`. Real
+  scans/connections still require the next driver milestones: command queues,
+  RX/TX rings, 802.11 management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -56,7 +56,7 @@ input
 wifi
 wifi firmware
 wifi apm
-wifi upload all arm
+wifi boot arm
 wifi alive
 wifi scan
 storage
@@ -104,5 +104,5 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: reset/CPU release, command queues, RX/TX
-   rings, scan, association, then WPA2/WPA3.
+6. Grow the Intel Wi-Fi path in order: command queues, RX/TX rings, scan,
+   association, then WPA2/WPA3.

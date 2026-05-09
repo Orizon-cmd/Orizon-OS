@@ -45,6 +45,20 @@ typedef struct {
   uint32_t alive_last_csr_int;
   uint32_t alive_last_fh_int;
   uint32_t alive_last_gp;
+  int boot_ready;
+  int boot_released;
+  int boot_failed;
+  unsigned long boot_attempts;
+  unsigned long boot_cpu1_sections;
+  unsigned long boot_cpu2_sections;
+  unsigned long boot_paging_sections_skipped;
+  unsigned long boot_sections_loaded;
+  uint32_t boot_release_value;
+  uint32_t boot_fh_status;
+  uint32_t boot_ureg_status;
+  uint32_t boot_first_cpu2_index;
+  uint32_t boot_paging_index;
+  uint32_t boot_last_gp;
   const char *chipset;
   const char *driver;
   const char *status;
@@ -115,6 +129,7 @@ int wifi_apm_probe(char *report, size_t report_size);
 int wifi_load_firmware(char *report, size_t report_size);
 int wifi_upload_firmware(int arm, char *report, size_t report_size);
 int wifi_upload_all_firmware(int arm, char *report, size_t report_size);
+int wifi_boot_firmware(int arm, char *report, size_t report_size);
 int wifi_alive_probe(char *report, size_t report_size);
 int wifi_scan(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,

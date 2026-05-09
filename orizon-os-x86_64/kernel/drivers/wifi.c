@@ -53,6 +53,20 @@ static wifi_status_t wifi_status_state = {
     .alive_last_csr_int = 0,
     .alive_last_fh_int = 0,
     .alive_last_gp = 0,
+    .boot_ready = 0,
+    .boot_released = 0,
+    .boot_failed = 0,
+    .boot_attempts = 0,
+    .boot_cpu1_sections = 0,
+    .boot_cpu2_sections = 0,
+    .boot_paging_sections_skipped = 0,
+    .boot_sections_loaded = 0,
+    .boot_release_value = 0,
+    .boot_fh_status = 0,
+    .boot_ureg_status = 0,
+    .boot_first_cpu2_index = 0,
+    .boot_paging_index = 0,
+    .boot_last_gp = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -134,7 +148,9 @@ static wifi_status_t wifi_status_state = {
 
 #define IWLAGN_RTC_INST_LOWER_BOUND 0x00000000U
 #define IWLAGN_RTC_DATA_LOWER_BOUND 0x00800000U
-#define WIFI_FW_MAX_SECTIONS 48
+#define CPU1_CPU2_SEPARATOR_SECTION 0xffffccccU
+#define PAGING_SEPARATOR_SECTION 0xaaaabbbbU
+#define WIFI_FW_MAX_SECTIONS 96
 #define WIFI_DMA_CHUNK_BYTES (128U * 1024U)
 
 #define PCI_COMMAND_REG 0x04U
@@ -152,6 +168,10 @@ static wifi_status_t wifi_status_state = {
 #define CSR_GPIO_IN 0x0a0U
 #define CSR_GIO_CHICKEN_BITS 0x100U
 #define CSR_DBG_HPET_MEM_REG 0x240U
+#define HBUS_TARG_PRPH_WADDR 0x444U
+#define HBUS_TARG_PRPH_RADDR 0x448U
+#define HBUS_TARG_PRPH_WDAT 0x44cU
+#define HBUS_TARG_PRPH_RDAT 0x450U
 
 #define CSR_HW_IF_CONFIG_REG_HAP_WAKE 0x00080000U
 
@@ -172,6 +192,14 @@ static wifi_status_t wifi_status_state = {
 
 #define CSR_GIO_CHICKEN_BITS_L1A_NO_L0S_RX 0x00800000U
 #define CSR_DBG_HPET_MEM_REG_VAL 0xffff0000U
+#define PRPH_ADDR_SPACE_3 (3U << 24)
+#define PRPH_ADDR_MASK_LEGACY 0x000fffffU
+#define PRPH_ADDR_MASK_MODERN 0x00ffffffU
+#define RELEASE_CPU_RESET 0x300cU
+#define RELEASE_CPU_RESET_BIT (1U << 24)
+#define FH_UCODE_LOAD_STATUS 0x1af0U
+#define UREG_UCODE_LOAD_STATUS 0xa05c40U
+#define WFPM_GP2 0xa030b4U
 
 #define FH_MEM_LOWER_BOUND 0x1000U
 #define FH_SRVC_CHNL 9U
@@ -204,6 +232,7 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_FH_POLL_LOOPS 1000000U
 #define WIFI_APM_POLL_LOOPS 250000U
 #define WIFI_ALIVE_POLL_LOOPS 2000000U
+#define WIFI_NIC_ACCESS_POLL_LOOPS 150000U
 
 typedef enum {
   WIFI_FW_IMAGE_RUNTIME = 0,
@@ -261,6 +290,8 @@ static const char *intel_wifi_name(uint16_t device_id) {
   }
 }
 
+static int wifi_uses_bz_apm_profile(void);
+
 static void wifi_set_status(const char *status) {
   wifi_status_state.status = status;
   serial_puts("[wifi] ");
@@ -279,6 +310,117 @@ static uint32_t wifi_csr_read32(uint32_t reg) {
 
 static void wifi_csr_write32(uint32_t reg, uint32_t value) {
   *(volatile uint32_t *)(uintptr_t)(wifi_mmio + reg) = value;
+}
+
+static uint32_t wifi_prph_mask(void) {
+  switch (wifi_status_state.device_id) {
+    case 0x54F0:
+    case 0x51F0:
+    case 0x7AF0:
+    case 0x2725:
+    case 0x7740:
+    case 0x4D40:
+    case 0xA840:
+      return PRPH_ADDR_MASK_MODERN;
+    default:
+      return PRPH_ADDR_MASK_LEGACY;
+  }
+}
+
+static int wifi_grab_nic_access(void) {
+  uint32_t write;
+  uint32_t mask;
+  uint32_t poll;
+
+  if (!wifi_mmio || !wifi_status_state.apm_ready) {
+    return -1;
+  }
+
+  if (wifi_uses_bz_apm_profile()) {
+    write = CSR_GP_CNTRL_BZ_MAC_ACCESS_REQ;
+    mask = CSR_GP_CNTRL_MAC_STATUS;
+    poll = CSR_GP_CNTRL_MAC_STATUS;
+  } else {
+    write = CSR_GP_CNTRL_MAC_ACCESS_REQ;
+    mask = CSR_GP_CNTRL_MAC_CLOCK_READY | CSR_GP_CNTRL_GOING_TO_SLEEP;
+    poll = CSR_GP_CNTRL_MAC_CLOCK_READY;
+  }
+
+  wifi_csr_write32(CSR_GP_CNTRL, wifi_csr_read32(CSR_GP_CNTRL) | write);
+  for (uint32_t i = 0; i < WIFI_NIC_ACCESS_POLL_LOOPS; i++) {
+    uint32_t gp = wifi_csr_read32(CSR_GP_CNTRL);
+    wifi_status_state.boot_last_gp = gp;
+    if ((gp & mask) == poll) {
+      return 0;
+    }
+    __asm__ volatile("pause");
+  }
+  return -1;
+}
+
+static void wifi_release_nic_access(void) {
+  uint32_t clear_bit;
+  uint32_t gp;
+
+  if (!wifi_mmio) {
+    return;
+  }
+
+  clear_bit = wifi_uses_bz_apm_profile() ? CSR_GP_CNTRL_BZ_MAC_ACCESS_REQ
+                                         : CSR_GP_CNTRL_MAC_ACCESS_REQ;
+  gp = wifi_csr_read32(CSR_GP_CNTRL) & ~clear_bit;
+  wifi_csr_write32(CSR_GP_CNTRL, gp);
+  wifi_status_state.boot_last_gp = wifi_csr_read32(CSR_GP_CNTRL);
+}
+
+static int wifi_prph_read32(uint32_t addr, uint32_t *value) {
+  uint32_t mask;
+
+  if (!value || wifi_grab_nic_access() != 0) {
+    return -1;
+  }
+
+  mask = wifi_prph_mask();
+  wifi_csr_write32(HBUS_TARG_PRPH_RADDR,
+                   (addr & mask) | PRPH_ADDR_SPACE_3);
+  *value = wifi_csr_read32(HBUS_TARG_PRPH_RDAT);
+  wifi_release_nic_access();
+  return 0;
+}
+
+static int wifi_prph_write32(uint32_t addr, uint32_t value) {
+  uint32_t mask;
+
+  if (wifi_grab_nic_access() != 0) {
+    return -1;
+  }
+
+  mask = wifi_prph_mask();
+  wifi_csr_write32(HBUS_TARG_PRPH_WADDR,
+                   (addr & mask) | PRPH_ADDR_SPACE_3);
+  wifi_csr_write32(HBUS_TARG_PRPH_WDAT, value);
+  wifi_release_nic_access();
+  return 0;
+}
+
+static int wifi_direct_read32(uint32_t reg, uint32_t *value) {
+  if (!value || wifi_grab_nic_access() != 0) {
+    return -1;
+  }
+
+  *value = wifi_csr_read32(reg);
+  wifi_release_nic_access();
+  return 0;
+}
+
+static int wifi_direct_write32(uint32_t reg, uint32_t value) {
+  if (wifi_grab_nic_access() != 0) {
+    return -1;
+  }
+
+  wifi_csr_write32(reg, value);
+  wifi_release_nic_access();
+  return 0;
 }
 
 static uint64_t wifi_phys_addr(const void *ptr) {
@@ -344,6 +486,19 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.alive_last_csr_int = 0;
   wifi_status_state.alive_last_fh_int = 0;
   wifi_status_state.alive_last_gp = 0;
+  wifi_status_state.boot_ready = 0;
+  wifi_status_state.boot_released = 0;
+  wifi_status_state.boot_failed = 0;
+  wifi_status_state.boot_cpu1_sections = 0;
+  wifi_status_state.boot_cpu2_sections = 0;
+  wifi_status_state.boot_paging_sections_skipped = 0;
+  wifi_status_state.boot_sections_loaded = 0;
+  wifi_status_state.boot_release_value = 0;
+  wifi_status_state.boot_fh_status = 0;
+  wifi_status_state.boot_ureg_status = 0;
+  wifi_status_state.boot_first_cpu2_index = 0;
+  wifi_status_state.boot_paging_index = 0;
+  wifi_status_state.boot_last_gp = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -981,13 +1136,51 @@ static int wifi_section_index(const wifi_fw_section_t *section) {
   return -1;
 }
 
+static int wifi_section_is_separator(const wifi_fw_section_t *section) {
+  return section &&
+         (section->dst == CPU1_CPU2_SEPARATOR_SECTION ||
+          section->dst == PAGING_SEPARATOR_SECTION);
+}
+
 static unsigned long wifi_count_total_fw_chunks(void) {
   unsigned long chunks = 0;
   for (int i = 0; i < wifi_fw_section_count; i++) {
+    if (wifi_section_is_separator(&wifi_fw_sections[i])) {
+      continue;
+    }
     chunks += (wifi_fw_sections[i].len + WIFI_DMA_CHUNK_BYTES - 1U) /
               WIFI_DMA_CHUNK_BYTES;
   }
   return chunks;
+}
+
+static unsigned long wifi_count_boot_fw_chunks(void) {
+  unsigned long chunks = 0;
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    if (wifi_fw_sections[i].dst == PAGING_SEPARATOR_SECTION) {
+      break;
+    }
+    if (wifi_section_is_separator(&wifi_fw_sections[i])) {
+      continue;
+    }
+    chunks += (wifi_fw_sections[i].len + WIFI_DMA_CHUNK_BYTES - 1U) /
+              WIFI_DMA_CHUNK_BYTES;
+  }
+  return chunks;
+}
+
+static unsigned long wifi_count_boot_fw_bytes(void) {
+  unsigned long bytes = 0;
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    if (wifi_fw_sections[i].dst == PAGING_SEPARATOR_SECTION) {
+      break;
+    }
+    if (wifi_section_is_separator(&wifi_fw_sections[i])) {
+      continue;
+    }
+    bytes += wifi_fw_sections[i].len;
+  }
+  return bytes;
 }
 
 static int wifi_stage_dma_chunk(const wifi_fw_section_t *section,
@@ -1060,7 +1253,8 @@ static int wifi_prepare_fh_plan_for(const wifi_fw_section_t *section,
   uint32_t byte_count;
   int section_index;
 
-  if (!section || wifi_stage_dma_chunk(section, offset) != 0) {
+  if (!section || wifi_section_is_separator(section) ||
+      wifi_stage_dma_chunk(section, offset) != 0) {
     return -1;
   }
 
@@ -1173,6 +1367,199 @@ static int wifi_arm_fh_current_chunk(void) {
   return -1;
 }
 
+static int wifi_uses_gen2_fw_load_status(void) {
+  switch (wifi_status_state.device_id) {
+    case 0x54F0:
+    case 0x4DF0:
+    case 0xA0F0:
+    case 0x51F0:
+    case 0x7AF0:
+    case 0x2723:
+    case 0x2725:
+    case 0xA840:
+    case 0x7740:
+    case 0x4D40:
+      return 1;
+    default:
+      return 0;
+  }
+}
+
+static void wifi_reset_boot_runtime(void) {
+  wifi_status_state.boot_ready = 0;
+  wifi_status_state.boot_released = 0;
+  wifi_status_state.boot_failed = 0;
+  wifi_status_state.boot_cpu1_sections = 0;
+  wifi_status_state.boot_cpu2_sections = 0;
+  wifi_status_state.boot_paging_sections_skipped = 0;
+  wifi_status_state.boot_sections_loaded = 0;
+  wifi_status_state.boot_release_value = 0;
+  wifi_status_state.boot_fh_status = 0;
+  wifi_status_state.boot_ureg_status = 0;
+  wifi_status_state.boot_first_cpu2_index = 0;
+  wifi_status_state.boot_paging_index = 0;
+  wifi_status_state.boot_last_gp = 0;
+}
+
+static void wifi_count_boot_plan(unsigned long *cpu1, unsigned long *cpu2,
+                                 unsigned long *paging,
+                                 uint32_t *cpu2_index,
+                                 uint32_t *paging_index) {
+  int phase = 1;
+
+  if (cpu1) {
+    *cpu1 = 0;
+  }
+  if (cpu2) {
+    *cpu2 = 0;
+  }
+  if (paging) {
+    *paging = 0;
+  }
+  if (cpu2_index) {
+    *cpu2_index = 0;
+  }
+  if (paging_index) {
+    *paging_index = 0;
+  }
+
+  for (int i = 0; i < wifi_fw_section_count; i++) {
+    const wifi_fw_section_t *section = &wifi_fw_sections[i];
+
+    if (section->dst == CPU1_CPU2_SEPARATOR_SECTION) {
+      phase = 2;
+      if (cpu2_index) {
+        *cpu2_index = (uint32_t)(i + 1);
+      }
+      continue;
+    }
+    if (section->dst == PAGING_SEPARATOR_SECTION) {
+      phase = 3;
+      if (paging_index) {
+        *paging_index = (uint32_t)i;
+      }
+      continue;
+    }
+
+    if (phase == 1 && cpu1) {
+      (*cpu1)++;
+    } else if (phase == 2 && cpu2) {
+      (*cpu2)++;
+    } else if (phase == 3 && paging) {
+      (*paging)++;
+    }
+  }
+}
+
+static int wifi_boot_prepare_cpu_release(void) {
+  uint32_t release_value = 0;
+
+  if (wifi_prph_write32(WFPM_GP2, 0x01010101U) != 0) {
+    return -1;
+  }
+  if (wifi_prph_write32(RELEASE_CPU_RESET, RELEASE_CPU_RESET_BIT) != 0) {
+    return -1;
+  }
+  if (wifi_prph_read32(RELEASE_CPU_RESET, &release_value) == 0) {
+    wifi_status_state.boot_release_value = release_value;
+  } else {
+    wifi_status_state.boot_release_value = RELEASE_CPU_RESET_BIT;
+  }
+  wifi_status_state.boot_released = 1;
+  return 0;
+}
+
+static int wifi_boot_mark_section_loaded(int cpu, uint32_t section_mask) {
+  uint32_t status = 0;
+  uint32_t shift = cpu == 1 ? 0U : 16U;
+
+  if (wifi_direct_read32(FH_UCODE_LOAD_STATUS, &status) != 0) {
+    return -1;
+  }
+  status |= section_mask << shift;
+  if (wifi_direct_write32(FH_UCODE_LOAD_STATUS, status) != 0) {
+    return -1;
+  }
+  wifi_status_state.boot_fh_status = status;
+  return 0;
+}
+
+static int wifi_boot_mark_cpu_done(int cpu) {
+  uint32_t value = cpu == 1 ? 0x0000ffffU : 0xffffffffU;
+
+  if (wifi_uses_gen2_fw_load_status()) {
+    if (wifi_prph_write32(UREG_UCODE_LOAD_STATUS, value) != 0) {
+      return -1;
+    }
+    wifi_status_state.boot_ureg_status = value;
+    return 0;
+  }
+
+  if (wifi_direct_write32(FH_UCODE_LOAD_STATUS, value) != 0) {
+    return -1;
+  }
+  wifi_status_state.boot_fh_status = value;
+  return 0;
+}
+
+static int wifi_boot_upload_section(const wifi_fw_section_t *section) {
+  uint32_t offset = 0;
+
+  while (offset < section->len) {
+    if (wifi_prepare_fh_plan_for(section, offset, NULL) != 0) {
+      return -1;
+    }
+    if (wifi_arm_fh_current_chunk() != 0) {
+      return -1;
+    }
+    if (wifi_status_state.fh_last_len == 0) {
+      return -1;
+    }
+    wifi_status_state.fh_uploaded_chunks++;
+    wifi_status_state.fh_uploaded_bytes += wifi_status_state.fh_last_len;
+    offset += wifi_status_state.fh_last_len;
+  }
+
+  wifi_status_state.fh_sections_done++;
+  wifi_status_state.boot_sections_loaded++;
+  return 0;
+}
+
+static int wifi_boot_load_cpu_sections(int cpu, int start_index,
+                                       int *next_index) {
+  uint32_t section_mask = 1;
+  int i;
+
+  for (i = start_index; i < wifi_fw_section_count; i++) {
+    const wifi_fw_section_t *section = &wifi_fw_sections[i];
+
+    if (section->dst == CPU1_CPU2_SEPARATOR_SECTION ||
+        section->dst == PAGING_SEPARATOR_SECTION) {
+      break;
+    }
+
+    if (wifi_boot_upload_section(section) != 0) {
+      return -1;
+    }
+    if (wifi_boot_mark_section_loaded(cpu, section_mask) != 0) {
+      return -1;
+    }
+
+    if (cpu == 1) {
+      wifi_status_state.boot_cpu1_sections++;
+    } else {
+      wifi_status_state.boot_cpu2_sections++;
+    }
+
+    section_mask = (section_mask << 1) | 0x1U;
+  }
+
+  if (next_index) {
+    *next_index = i;
+  }
+  return 0;
+}
+
 int wifi_init(void) {
   pci_device_info_t devs[8];
   int count;
@@ -1247,7 +1634,7 @@ void wifi_format_status(char *buf, size_t size) {
            "driver=%s present=%s ready=%s associated=%s pci=%04x:%04x "
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
-           "plan=%s dma=%s apm=%s alive=%s status=%s",
+           "plan=%s dma=%s apm=%s boot=%s alive=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -1262,6 +1649,7 @@ void wifi_format_status(char *buf, size_t size) {
            s->firmware_load_plan_ready ? "ready" : "no",
            s->dma_ready ? "staged" : "idle",
            s->apm_ready ? "awake" : (s->apm_timeout ? "timeout" : "idle"),
+           s->boot_ready ? "ready" : (s->boot_failed ? "failed" : "idle"),
            s->alive_seen ? "seen" : (s->alive_timeout ? "timeout" : "idle"),
            s->status);
 }
@@ -1693,6 +2081,10 @@ int wifi_upload_all_firmware(int arm, char *report, size_t report_size) {
     const wifi_fw_section_t *section = &wifi_fw_sections[i];
     uint32_t offset = 0;
 
+    if (wifi_section_is_separator(section)) {
+      continue;
+    }
+
     while (offset < section->len) {
       if (wifi_prepare_fh_plan_for(section, offset, NULL) != 0) {
         rc = -1;
@@ -1738,6 +2130,139 @@ int wifi_upload_all_firmware(int arm, char *report, size_t report_size) {
   return rc;
 }
 
+int wifi_boot_firmware(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  unsigned long plan_cpu1 = 0;
+  unsigned long plan_cpu2 = 0;
+  unsigned long plan_paging = 0;
+  unsigned long boot_chunks = 0;
+  unsigned long boot_bytes = 0;
+  uint32_t plan_cpu2_index = 0;
+  uint32_t plan_paging_index = 0;
+  int next_index = 0;
+  int rc = 0;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  if (wifi_load_firmware(report, report_size) != 0) {
+    return -1;
+  }
+
+  wifi_count_boot_plan(&plan_cpu1, &plan_cpu2, &plan_paging,
+                       &plan_cpu2_index, &plan_paging_index);
+  boot_chunks = wifi_count_boot_fw_chunks();
+  boot_bytes = wifi_count_boot_fw_bytes();
+
+  if (!arm) {
+    s = &wifi_status_state;
+    snprintf(report, report_size,
+             "wifi boot: firmware CPU boot plan ready\n"
+             "firmware: %s source=%s cpus=%u\n"
+             "sections: cpu1=%lu cpu2=%lu paging-skipped=%lu total=%lu\n"
+             "payload: boot-chunks=%lu boot-bytes=%lu\n"
+             "separators: cpu2-index=%u paging-index=%u\n"
+             "status-regs: fh=0x%08x ureg=0x%08x release=0x%08x\n"
+             "state: plan only; use 'wifi boot arm' for guarded CPU release/load\n",
+             s->firmware_name, s->firmware_source, s->firmware_cpu_count,
+             plan_cpu1, plan_cpu2, plan_paging, s->firmware_section_count,
+             boot_chunks, boot_bytes, plan_cpu2_index, plan_paging_index,
+             s->boot_fh_status, s->boot_ureg_status, s->boot_release_value);
+    return 0;
+  }
+
+  if (plan_cpu1 == 0) {
+    snprintf(report, report_size,
+             "wifi boot: no CPU1 firmware sections found\n"
+             "sections=%lu parse-errors=%lu valid=%s\n",
+             wifi_status_state.firmware_section_count,
+             wifi_status_state.firmware_parse_errors,
+             wifi_status_state.firmware_valid ? "yes" : "no");
+    return -1;
+  }
+
+  wifi_status_state.boot_attempts++;
+  wifi_reset_boot_runtime();
+  wifi_status_state.fh_total_chunks = boot_chunks;
+  wifi_status_state.fh_uploaded_chunks = 0;
+  wifi_status_state.fh_uploaded_bytes = 0;
+  wifi_status_state.fh_sections_done = 0;
+  wifi_status_state.boot_first_cpu2_index = plan_cpu2_index;
+  wifi_status_state.boot_paging_index = plan_paging_index;
+  wifi_status_state.boot_paging_sections_skipped = plan_paging;
+
+  if (wifi_activate_nic() != 0) {
+    s = &wifi_status_state;
+    wifi_status_state.boot_failed = 1;
+    wifi_status_state.load_state =
+        "wifi: NIC APM wake failed before firmware CPU boot";
+    snprintf(report, report_size,
+             "wifi boot: NIC APM wake failed\n"
+             "apm: ready=%s timeout=%s gp=0x%08x hw-if=0x%08x gio=0x%08x\n"
+             "hint: run 'wifi apm' for detailed register state\n",
+             s->apm_ready ? "yes" : "no",
+             s->apm_timeout ? "yes" : "no", s->apm_last_gp,
+             s->apm_last_hw_if, s->apm_last_gio);
+    return -1;
+  }
+
+  if (wifi_boot_prepare_cpu_release() != 0) {
+    s = &wifi_status_state;
+    wifi_status_state.boot_failed = 1;
+    wifi_status_state.load_state =
+        "wifi: firmware CPU release register write failed";
+    snprintf(report, report_size,
+             "wifi boot: CPU release failed\n"
+             "release=0x%08x gp=0x%08x prph-mask=0x%08x\n"
+             "hint: capture this output; PRPH access may be blocked\n",
+             s->boot_release_value, s->boot_last_gp, wifi_prph_mask());
+    return -1;
+  }
+
+  rc = wifi_boot_load_cpu_sections(1, 0, &next_index);
+  if (rc == 0) {
+    rc = wifi_boot_mark_cpu_done(1);
+  }
+
+  if (rc == 0 && plan_cpu2 > 0) {
+    int cpu2_start = next_index + 1;
+    rc = wifi_boot_load_cpu_sections(2, cpu2_start, &next_index);
+    if (rc == 0) {
+      rc = wifi_boot_mark_cpu_done(2);
+    }
+  }
+
+  wifi_status_state.boot_ready = rc == 0;
+  wifi_status_state.boot_failed = rc != 0;
+  wifi_status_state.load_state =
+      rc == 0 ? "wifi: firmware CPU boot/load sequence completed; alive pending"
+              : "wifi: firmware CPU boot/load sequence failed";
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi boot: %s\n"
+           "progress: cpu1=%lu/%lu cpu2=%lu/%lu paging-skipped=%lu\n"
+           "fh: sections=%lu chunks=%lu/%lu bytes=%lu/%lu errors=%lu\n"
+           "last: section=%u offset=%u len=%u dst=0x%08x\n"
+           "regs: release=0x%08x fh-status=0x%08x ureg-status=0x%08x "
+           "gp=0x%08x csr-int=0x%08x fh-int=0x%08x\n"
+           "result: released=%s boot-ready=%s failed=%s\n"
+           "next: run 'wifi alive' to wait for firmware ALIVE\n",
+           rc == 0 ? "CPU release/load sequence completed"
+                   : "CPU release/load sequence failed",
+           s->boot_cpu1_sections, plan_cpu1, s->boot_cpu2_sections,
+           plan_cpu2, s->boot_paging_sections_skipped,
+           s->fh_sections_done, s->fh_uploaded_chunks, s->fh_total_chunks,
+           s->fh_uploaded_bytes, boot_bytes, s->fh_errors,
+           s->fh_last_section, s->fh_last_offset, s->fh_last_len,
+           s->fh_dst_addr, s->boot_release_value, s->boot_fh_status,
+           s->boot_ureg_status, s->boot_last_gp, s->fh_last_csr_int,
+           s->fh_last_fh_int, s->boot_released ? "yes" : "no",
+           s->boot_ready ? "yes" : "no", s->boot_failed ? "yes" : "no");
+  return rc;
+}
+
 int wifi_alive_probe(char *report, size_t report_size) {
   const wifi_status_t *s;
 
@@ -1767,12 +2292,25 @@ int wifi_alive_probe(char *report, size_t report_size) {
     return -1;
   }
 
+  if (!s->boot_ready) {
+    snprintf(report, report_size,
+             "wifi alive: firmware CPU boot sequence has not completed yet\n"
+             "boot: released=%s ready=%s failed=%s cpu1=%lu cpu2=%lu "
+             "fh=%lu/%lu chunks\n"
+             "run: wifi boot arm\n",
+             s->boot_released ? "yes" : "no", s->boot_ready ? "yes" : "no",
+             s->boot_failed ? "yes" : "no", s->boot_cpu1_sections,
+             s->boot_cpu2_sections, s->fh_uploaded_chunks,
+             s->fh_total_chunks);
+    return -1;
+  }
+
   if (!s->apm_ready && wifi_activate_nic() != 0) {
     s = &wifi_status_state;
     snprintf(report, report_size,
              "wifi alive: NIC is not awake, cannot wait for firmware alive\n"
              "apm: ready=%s timeout=%s gp=0x%08x hw-if=0x%08x\n"
-             "hint: run 'wifi apm' then 'wifi upload all arm'\n",
+             "hint: run 'wifi apm' then 'wifi boot arm'\n",
              s->apm_ready ? "yes" : "no",
              s->apm_timeout ? "yes" : "no", s->apm_last_gp,
              s->apm_last_hw_if);
@@ -1845,7 +2383,7 @@ int wifi_alive_probe(char *report, size_t report_size) {
            "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
            "apm: ready=%s timeout=%s mask=0x%08x\n"
            "fh: uploaded=%lu/%lu chunks bytes=%lu/%lu complete=%s errors=%lu\n"
-           "next: implement reset/CPU-release sequence before alive wait\n",
+           "next: command queues/RX ring setup if ALIVE still never appears\n",
            s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
            s->alive_last_gp, s->apm_ready ? "yes" : "no",
            s->apm_timeout ? "yes" : "no", s->apm_poll_ready_mask,
