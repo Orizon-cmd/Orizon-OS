@@ -39,9 +39,10 @@ development target, not a ZimaOS-only assumption.
   detect the Intel CNVi controller (`8086:54f0`), validate embedded or module
   `iwlwifi-*.ucode` firmware, wake the NIC APM path with `wifi apm`, run the
   PRPH CPU-release plus CPU1/CPU2 FH DMA load sequence with `wifi boot arm`,
-  and poll `CSR_INT` for the firmware `ALIVE` bit with `wifi alive`. Real
-  scans/connections still require the next driver milestones: command queues,
-  RX/TX rings, 802.11 management frames, and WPA association.
+  poll `CSR_INT` for the firmware `ALIVE` bit with `wifi alive`, and stage
+  host-side command/RX/TX rings with `wifi queues arm`. Real scans/connections
+  still require the next driver milestones: hardware context/scheduler
+  programming, 802.11 management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -58,6 +59,8 @@ wifi firmware
 wifi apm
 wifi boot arm
 wifi alive
+wifi queues
+wifi queues arm
 wifi scan
 storage
 disks
@@ -104,5 +107,5 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: command queues, RX/TX rings, scan,
-   association, then WPA2/WPA3.
+6. Grow the Intel Wi-Fi path in order: hardware context/scheduler programming,
+   scan command, association, then WPA2/WPA3.

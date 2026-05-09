@@ -1,10 +1,10 @@
 /*
  * Orizon OS x86_64 - Wi-Fi driver staging
  *
- * This file intentionally stops before touching Intel Wi-Fi MMIO. Modern Intel
- * CNVi devices require firmware loading, DMA command queues, MAC/radio setup,
- * 802.11 management frames, and WPA handshakes. For real hardware safety, the
- * first milestone is reliable detection and user-visible diagnostics.
+ * This file stages Intel Wi-Fi support incrementally. Modern Intel CNVi
+ * devices require firmware loading, DMA command queues, MAC/radio setup,
+ * 802.11 management frames, and WPA handshakes. For real hardware safety,
+ * each milestone exposes explicit diagnostics before enabling the next layer.
  */
 
 #include "../include/wifi.h"
@@ -67,6 +67,29 @@ static wifi_status_t wifi_status_state = {
     .boot_first_cpu2_index = 0,
     .boot_paging_index = 0,
     .boot_last_gp = 0,
+    .queues_ready = 0,
+    .queues_armed = 0,
+    .queues_failed = 0,
+    .queue_errors = 0,
+    .queue_generation = 0,
+    .cmd_queue_entries = 0,
+    .tx_queue_entries = 0,
+    .rx_queue_entries = 0,
+    .cmd_buffer_bytes = 0,
+    .tx_buffer_bytes = 0,
+    .rx_buffer_bytes = 0,
+    .cmd_tfd_bytes = 0,
+    .tx_tfd_bytes = 0,
+    .rx_desc_bytes = 0,
+    .cmd_tfd_phys = 0,
+    .cmd_buffer_phys = 0,
+    .tx_tfd_phys = 0,
+    .tx_buffer_phys = 0,
+    .rx_desc_phys = 0,
+    .rx_buffer_phys = 0,
+    .cmd_write_ptr = 0,
+    .tx_write_ptr = 0,
+    .rx_write_ptr = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -234,6 +257,16 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_ALIVE_POLL_LOOPS 2000000U
 #define WIFI_NIC_ACCESS_POLL_LOOPS 150000U
 
+#define WIFI_CMD_QUEUE_ENTRIES 32U
+#define WIFI_TX_QUEUE_ENTRIES 64U
+#define WIFI_RX_QUEUE_ENTRIES 64U
+#define WIFI_CMD_TFD_BYTES 256U
+#define WIFI_TX_TFD_BYTES 256U
+#define WIFI_RX_DESC_BYTES 16U
+#define WIFI_CMD_BUFFER_BYTES 1024U
+#define WIFI_TX_BUFFER_BYTES 2048U
+#define WIFI_RX_BUFFER_BYTES 2048U
+
 typedef enum {
   WIFI_FW_IMAGE_RUNTIME = 0,
   WIFI_FW_IMAGE_INIT = 1,
@@ -250,12 +283,30 @@ typedef struct {
   int secure;
 } wifi_fw_section_t;
 
+typedef struct {
+  uint64_t phys;
+  uint32_t bytes;
+  uint32_t flags;
+} wifi_queue_desc_t;
+
 static volatile uint8_t *wifi_mmio = NULL;
 static const uint8_t *wifi_firmware_blob = NULL;
 static size_t wifi_firmware_blob_size = 0;
 static wifi_fw_section_t wifi_fw_sections[WIFI_FW_MAX_SECTIONS];
 static int wifi_fw_section_count = 0;
 static uint8_t wifi_dma_chunk[WIFI_DMA_CHUNK_BYTES]
+    __attribute__((aligned(4096)));
+static uint8_t wifi_cmd_tfd[WIFI_CMD_QUEUE_ENTRIES][WIFI_CMD_TFD_BYTES]
+    __attribute__((aligned(4096)));
+static uint8_t wifi_tx_tfd[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_TFD_BYTES]
+    __attribute__((aligned(4096)));
+static wifi_queue_desc_t wifi_rx_desc[WIFI_RX_QUEUE_ENTRIES]
+    __attribute__((aligned(4096)));
+static uint8_t wifi_cmd_buffers[WIFI_CMD_QUEUE_ENTRIES][WIFI_CMD_BUFFER_BYTES]
+    __attribute__((aligned(4096)));
+static uint8_t wifi_tx_buffers[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_BUFFER_BYTES]
+    __attribute__((aligned(4096)));
+static uint8_t wifi_rx_buffers[WIFI_RX_QUEUE_ENTRIES][WIFI_RX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 
 extern const uint8_t orizon_iwlwifi_so_a0_hr_b0_89_ucode_start[];
@@ -499,6 +550,29 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.boot_first_cpu2_index = 0;
   wifi_status_state.boot_paging_index = 0;
   wifi_status_state.boot_last_gp = 0;
+  wifi_status_state.queues_ready = 0;
+  wifi_status_state.queues_armed = 0;
+  wifi_status_state.queues_failed = 0;
+  wifi_status_state.queue_errors = 0;
+  wifi_status_state.queue_generation = 0;
+  wifi_status_state.cmd_queue_entries = 0;
+  wifi_status_state.tx_queue_entries = 0;
+  wifi_status_state.rx_queue_entries = 0;
+  wifi_status_state.cmd_buffer_bytes = 0;
+  wifi_status_state.tx_buffer_bytes = 0;
+  wifi_status_state.rx_buffer_bytes = 0;
+  wifi_status_state.cmd_tfd_bytes = 0;
+  wifi_status_state.tx_tfd_bytes = 0;
+  wifi_status_state.rx_desc_bytes = 0;
+  wifi_status_state.cmd_tfd_phys = 0;
+  wifi_status_state.cmd_buffer_phys = 0;
+  wifi_status_state.tx_tfd_phys = 0;
+  wifi_status_state.tx_buffer_phys = 0;
+  wifi_status_state.rx_desc_phys = 0;
+  wifi_status_state.rx_buffer_phys = 0;
+  wifi_status_state.cmd_write_ptr = 0;
+  wifi_status_state.tx_write_ptr = 0;
+  wifi_status_state.rx_write_ptr = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -1560,6 +1634,76 @@ static int wifi_boot_load_cpu_sections(int cpu, int start_index,
   return 0;
 }
 
+static void wifi_reset_queue_runtime(void) {
+  wifi_status_state.queues_ready = 0;
+  wifi_status_state.queues_armed = 0;
+  wifi_status_state.queues_failed = 0;
+  wifi_status_state.cmd_queue_entries = WIFI_CMD_QUEUE_ENTRIES;
+  wifi_status_state.tx_queue_entries = WIFI_TX_QUEUE_ENTRIES;
+  wifi_status_state.rx_queue_entries = WIFI_RX_QUEUE_ENTRIES;
+  wifi_status_state.cmd_buffer_bytes = sizeof(wifi_cmd_buffers);
+  wifi_status_state.tx_buffer_bytes = sizeof(wifi_tx_buffers);
+  wifi_status_state.rx_buffer_bytes = sizeof(wifi_rx_buffers);
+  wifi_status_state.cmd_tfd_bytes = sizeof(wifi_cmd_tfd);
+  wifi_status_state.tx_tfd_bytes = sizeof(wifi_tx_tfd);
+  wifi_status_state.rx_desc_bytes = sizeof(wifi_rx_desc);
+  wifi_status_state.cmd_tfd_phys = 0;
+  wifi_status_state.cmd_buffer_phys = 0;
+  wifi_status_state.tx_tfd_phys = 0;
+  wifi_status_state.tx_buffer_phys = 0;
+  wifi_status_state.rx_desc_phys = 0;
+  wifi_status_state.rx_buffer_phys = 0;
+  wifi_status_state.cmd_write_ptr = 0;
+  wifi_status_state.tx_write_ptr = 0;
+  wifi_status_state.rx_write_ptr = 0;
+}
+
+static int wifi_prepare_host_queues(void) {
+  memset(wifi_cmd_tfd, 0, sizeof(wifi_cmd_tfd));
+  memset(wifi_tx_tfd, 0, sizeof(wifi_tx_tfd));
+  memset(wifi_rx_desc, 0, sizeof(wifi_rx_desc));
+  memset(wifi_cmd_buffers, 0, sizeof(wifi_cmd_buffers));
+  memset(wifi_tx_buffers, 0, sizeof(wifi_tx_buffers));
+  memset(wifi_rx_buffers, 0, sizeof(wifi_rx_buffers));
+
+  wifi_reset_queue_runtime();
+  wifi_status_state.cmd_tfd_phys = wifi_phys_addr(wifi_cmd_tfd);
+  wifi_status_state.cmd_buffer_phys = wifi_phys_addr(wifi_cmd_buffers);
+  wifi_status_state.tx_tfd_phys = wifi_phys_addr(wifi_tx_tfd);
+  wifi_status_state.tx_buffer_phys = wifi_phys_addr(wifi_tx_buffers);
+  wifi_status_state.rx_desc_phys = wifi_phys_addr(wifi_rx_desc);
+  wifi_status_state.rx_buffer_phys = wifi_phys_addr(wifi_rx_buffers);
+
+  if (!wifi_status_state.cmd_tfd_phys || !wifi_status_state.cmd_buffer_phys ||
+      !wifi_status_state.tx_tfd_phys || !wifi_status_state.tx_buffer_phys ||
+      !wifi_status_state.rx_desc_phys || !wifi_status_state.rx_buffer_phys) {
+    wifi_status_state.queues_failed = 1;
+    wifi_status_state.queue_errors++;
+    wifi_status_state.status =
+        "wifi: host queue DMA address translation failed";
+    return -1;
+  }
+
+  for (uint32_t i = 0; i < WIFI_RX_QUEUE_ENTRIES; i++) {
+    wifi_rx_desc[i].phys = wifi_phys_addr(wifi_rx_buffers[i]);
+    wifi_rx_desc[i].bytes = WIFI_RX_BUFFER_BYTES;
+    wifi_rx_desc[i].flags = 1;
+    if (!wifi_rx_desc[i].phys) {
+      wifi_status_state.queues_failed = 1;
+      wifi_status_state.queue_errors++;
+      wifi_status_state.status = "wifi: RX buffer DMA address missing";
+      return -1;
+    }
+  }
+
+  wifi_status_state.queue_generation++;
+  wifi_status_state.queues_ready = 1;
+  wifi_status_state.queues_failed = 0;
+  wifi_status_state.status =
+      "wifi: host command/RX/TX queue memory staged";
+  return 0;
+}
+
 int wifi_init(void) {
   pci_device_info_t devs[8];
   int count;
@@ -1634,7 +1778,7 @@ void wifi_format_status(char *buf, size_t size) {
            "driver=%s present=%s ready=%s associated=%s pci=%04x:%04x "
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
-           "plan=%s dma=%s apm=%s boot=%s alive=%s status=%s",
+           "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -1651,6 +1795,8 @@ void wifi_format_status(char *buf, size_t size) {
            s->apm_ready ? "awake" : (s->apm_timeout ? "timeout" : "idle"),
            s->boot_ready ? "ready" : (s->boot_failed ? "failed" : "idle"),
            s->alive_seen ? "seen" : (s->alive_timeout ? "timeout" : "idle"),
+           s->queues_ready ? (s->queues_armed ? "armed" : "staged")
+                           : (s->queues_failed ? "failed" : "idle"),
            s->status);
 }
 
@@ -2343,7 +2489,7 @@ int wifi_alive_probe(char *report, size_t report_size) {
                "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
                "apm: ready=%s profile=%s mask=0x%08x\n"
                "fh: uploaded=%lu/%lu chunks bytes=%lu/%lu complete=%s errors=%lu\n"
-               "state: command/RX/TX queues still need implementation\n",
+               "state: firmware signalled alive; run 'wifi queues arm' for host rings\n",
                s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
                s->alive_last_gp, s->apm_ready ? "yes" : "no",
                wifi_uses_bz_apm_profile() ? "bz/mac-init" : "legacy/init-done",
@@ -2363,7 +2509,7 @@ int wifi_alive_probe(char *report, size_t report_size) {
                "wifi alive: stopped on hardware/software error\n"
                "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
                "errors=%lu hw-err=%s sw-err=%s alive=%s\n"
-               "hint: capture this output; next step is reset/CPU-release sequencing\n",
+               "hint: capture this output; next step is queue/context setup diagnostics\n",
                s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
                s->alive_last_gp, s->alive_errors,
                wifi_bit_text(s->alive_last_csr_int, CSR_INT_BIT_HW_ERR),
@@ -2383,7 +2529,7 @@ int wifi_alive_probe(char *report, size_t report_size) {
            "polls=%lu csr-int=0x%08x fh-int=0x%08x gp=0x%08x\n"
            "apm: ready=%s timeout=%s mask=0x%08x\n"
            "fh: uploaded=%lu/%lu chunks bytes=%lu/%lu complete=%s errors=%lu\n"
-           "next: command queues/RX ring setup if ALIVE still never appears\n",
+           "next: run 'wifi queues' to inspect host rings, then hardware context setup\n",
            s->alive_polls, s->alive_last_csr_int, s->alive_last_fh_int,
            s->alive_last_gp, s->apm_ready ? "yes" : "no",
            s->apm_timeout ? "yes" : "no", s->apm_poll_ready_mask,
@@ -2391,6 +2537,92 @@ int wifi_alive_probe(char *report, size_t report_size) {
            s->firmware_load_bytes, s->fh_complete ? "yes" : "no",
            s->fh_errors);
   return -1;
+}
+
+int wifi_queue_probe(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi queues: no PCI wireless controller detected\n");
+    return -1;
+  }
+
+  if (s->vendor_id != 0x8086) {
+    snprintf(report, report_size,
+             "wifi queues: unsupported controller %04x:%04x\n",
+             s->vendor_id, s->device_id);
+    return -1;
+  }
+
+  rc = wifi_prepare_host_queues();
+  s = &wifi_status_state;
+  if (rc != 0) {
+    snprintf(report, report_size,
+             "wifi queues: host queue staging failed\n"
+             "errors=%lu cmd-tfd=0x%lx cmd-buf=0x%lx tx-tfd=0x%lx "
+             "tx-buf=0x%lx rx-desc=0x%lx rx-buf=0x%lx\n"
+             "hint: DMA address translation must be fixed before queue setup\n",
+             s->queue_errors, (unsigned long)s->cmd_tfd_phys,
+             (unsigned long)s->cmd_buffer_phys,
+             (unsigned long)s->tx_tfd_phys,
+             (unsigned long)s->tx_buffer_phys,
+             (unsigned long)s->rx_desc_phys,
+             (unsigned long)s->rx_buffer_phys);
+    return -1;
+  }
+
+  if (arm) {
+    if (!s->boot_ready) {
+      wifi_status_state.queues_failed = 1;
+      wifi_status_state.queue_errors++;
+      snprintf(report, report_size,
+               "wifi queues: host queues staged, but firmware boot is not ready\n"
+               "boot: released=%s ready=%s failed=%s alive=%s\n"
+               "run: wifi boot arm, then wifi queues arm\n",
+               s->boot_released ? "yes" : "no",
+               s->boot_ready ? "yes" : "no",
+               s->boot_failed ? "yes" : "no",
+               s->alive_seen ? "yes" : "no");
+      return -1;
+    }
+    wifi_status_state.queues_armed = 1;
+    wifi_status_state.status =
+        "wifi: host queues armed; hardware scheduler programming pending";
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi queues: %s\n"
+           "rings: cmd=%lu tx=%lu rx=%lu generation=%lu\n"
+           "bytes: cmd-tfd=%lu cmd-buf=%lu tx-tfd=%lu tx-buf=%lu "
+           "rx-desc=%lu rx-buf=%lu\n"
+           "dma: cmd-tfd=0x%lx cmd-buf=0x%lx tx-tfd=0x%lx tx-buf=0x%lx\n"
+           "dma: rx-desc=0x%lx rx-buf=0x%lx first-rx=0x%lx\n"
+           "ptrs: cmd-w=%u tx-w=%u rx-w=%u armed=%s errors=%lu\n"
+           "state: host-side rings only; hardware context/scheduler registers "
+           "are not programmed yet\n"
+           "next: implement firmware context-info and TX scheduler setup\n",
+           arm ? "host queues armed" : "host queues staged",
+           s->cmd_queue_entries, s->tx_queue_entries, s->rx_queue_entries,
+           s->queue_generation, s->cmd_tfd_bytes, s->cmd_buffer_bytes,
+           s->tx_tfd_bytes, s->tx_buffer_bytes, s->rx_desc_bytes,
+           s->rx_buffer_bytes, (unsigned long)s->cmd_tfd_phys,
+           (unsigned long)s->cmd_buffer_phys, (unsigned long)s->tx_tfd_phys,
+           (unsigned long)s->tx_buffer_phys, (unsigned long)s->rx_desc_phys,
+           (unsigned long)s->rx_buffer_phys,
+           (unsigned long)wifi_rx_desc[0].phys, s->cmd_write_ptr,
+           s->tx_write_ptr, s->rx_write_ptr,
+           s->queues_armed ? "yes" : "no", s->queue_errors);
+  return 0;
 }
 
 int wifi_scan(char *report, size_t report_size) {
@@ -2422,7 +2654,7 @@ int wifi_scan(char *report, size_t report_size) {
            "wifi scan: %s detected at %02x:%02x.%u\n"
            "firmware: %s (%lu bytes, valid=%s plan=%s dma=%s)\n"
            "wifi scan: radio scan is not available yet\n"
-           "next: run wifi load, then implement firmware alive + 802.11 scan\n",
+           "next: run wifi boot arm, wifi alive, wifi queues arm; then implement scan command\n",
            s->chipset, s->bus, s->device, (unsigned int)s->function,
            s->firmware_name, (unsigned long)s->firmware_size,
            s->firmware_valid ? "yes" : "no",
@@ -2459,7 +2691,7 @@ int wifi_connect(const char *ssid, const char *password, char *report,
            "wifi connect: saved nothing yet, driver is not ready\n"
            "target ssid: %s\n"
            "detected: %s (%04x:%04x)\n"
-           "blocked by: Intel firmware loader + WPA/802.11 association layer\n",
+           "blocked by: firmware command queue, 802.11 association, and WPA layer\n",
            ssid, s->chipset, s->vendor_id, s->device_id);
   return -1;
 }

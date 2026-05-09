@@ -2747,6 +2747,15 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "queues")) {
+    const char *queue_args = term_skip_spaces(args + 6);
+    int arm_queues = term_command_is(queue_args, "arm") ||
+                     term_command_is(queue_args, "go");
+    wifi_queue_probe(arm_queues, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "connect")) {
     rest = term_skip_spaces(args + 7);
     rest = term_read_token(rest, ssid, sizeof(ssid));
@@ -2764,7 +2773,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|scan|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|scan|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3355,6 +3364,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi upload all [arm] - Prepare/arm all Intel firmware chunks\n");
     term_puts_t(term, "  wifi boot [arm] - Release/load Intel firmware CPU sequence\n");
     term_puts_t(term, "  wifi alive - Poll for Intel firmware alive interrupt\n");
+    term_puts_t(term, "  wifi queues [arm] - Stage Intel command/RX/TX host rings\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");

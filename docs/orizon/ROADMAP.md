@@ -14,7 +14,8 @@
 - Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
-  upload staging, and alive polling diagnostics.
+  upload staging, alive polling diagnostics, and host-side command/RX/TX queue
+  memory staging.
 
 ## Next Stability Track
 
@@ -35,8 +36,8 @@
    modes.
 4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
    report parser for ELAN/Wacom multitouch and stylus events.
-5. Build Intel CNVi Wi-Fi properly: command queues, RX/TX rings, scan results,
-   association, then WPA.
+5. Build Intel CNVi Wi-Fi properly: hardware context/scheduler programming,
+   scan command/results, association, then WPA.
 6. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 7. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 8. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
