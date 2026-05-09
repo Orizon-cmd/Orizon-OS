@@ -5,7 +5,7 @@ disk installation path:
 
 1. boot the live ISO,
 2. run `install`,
-3. collect language, keyboard, hostname, and disk strategy,
+3. collect language, keyboard, target disk, hostname, and disk strategy,
 4. write an installation plan under `/workspace/.orizon/`,
 5. save `/workspace` before touching the disk,
 6. write a GPT disk with a FAT32 ESP,
@@ -26,9 +26,18 @@ The guided flow currently asks for:
 
 - language: `fr_FR` or `en_US`
 - keyboard: `fr-azerty` or `us-qwerty`
-- disk mode: `guided-full-disk` or `manual-later`
+- target disk: detected as `disk0`, `disk1`, etc. with driver, size and model
+- disk mode: selected disk as `guided-full-disk`, or `manual-later`
 - hostname, defaulting to `orizon-os`
-- explicit confirmation with `INSTALL` or `install`
+- explicit destructive confirmation such as `ERASE disk0`
+
+Storage can also be inspected outside the installer:
+
+```text
+disks
+storage detail
+storage select 1
+```
 
 It writes runtime/staging state:
 
@@ -52,9 +61,18 @@ It also writes a bootable disk layout in `guided-full-disk` mode:
 - `/limine.conf`, `/boot/limine.conf`, and `/EFI/BOOT/limine.conf`
 - `/INSTALL.TXT`
 
-`/workspace` remains persistent through the Orizon data partition.
-Files and directories created during the live boot are saved before the ESP/GPT
-writer runs, so they survive the install path.
+The Orizon data partition persists the first real data roots:
+
+```text
+/workspace
+/home
+/system
+/packages
+/logs
+```
+
+Files and directories created during the live boot in those roots are saved
+before the ESP/GPT writer runs, so they survive the install path.
 
 Before the disk is marked installed, the installer runs the same boot validator
 exposed as:

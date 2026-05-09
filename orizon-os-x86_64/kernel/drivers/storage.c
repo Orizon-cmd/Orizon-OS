@@ -53,6 +53,15 @@ typedef enum {
   STORAGE_DRIVER_NVME,
 } storage_driver_t;
 
+typedef struct {
+  storage_driver_t driver;
+  void *ahci_port;
+  uint64_t sectors;
+  char name[24];
+  char model[64];
+  int writable;
+} storage_device_t;
+
 typedef volatile struct {
   uint32_t clb;
   uint32_t clbu;
@@ -147,6 +156,11 @@ static storage_driver_t storage_driver = STORAGE_DRIVER_NONE;
 static int disk_ready = 0;
 static uint64_t disk_sectors = 0;
 static const char *disk_status = "storage: not initialized";
+static int storage_scanned = 0;
+static int storage_device_total = 0;
+static int storage_selected_index = -1;
+static char selected_status[96] = "storage: not initialized";
+static storage_device_t storage_devices[ORIZON_STORAGE_MAX_DEVICES];
 
 static ahci_cmd_header_t cmd_list[32] __attribute__((aligned(1024)));
 static uint8_t fis_area[256] __attribute__((aligned(256)));
@@ -189,6 +203,53 @@ static void set_status(const char *status) {
   disk_status = status;
   serial_puts("[storage] ");
   serial_puts(status);
+  serial_puts("\n");
+}
+
+static const char *driver_name(storage_driver_t driver) {
+  if (driver == STORAGE_DRIVER_NVME) {
+    return "NVMe";
+  }
+  if (driver == STORAGE_DRIVER_AHCI) {
+    return "AHCI";
+  }
+  return "none";
+}
+
+static int storage_add_device(storage_driver_t driver, void *ahci_port,
+                              uint64_t sectors, const char *model) {
+  storage_device_t *dev;
+  int index;
+
+  if (storage_device_total >= ORIZON_STORAGE_MAX_DEVICES || sectors == 0) {
+    return -1;
+  }
+
+  index = storage_device_total++;
+  dev = &storage_devices[index];
+  memset(dev, 0, sizeof(*dev));
+  dev->driver = driver;
+  dev->ahci_port = ahci_port;
+  dev->sectors = sectors;
+  dev->writable = 1;
+  snprintf(dev->name, sizeof(dev->name), "disk%d", index);
+  snprintf(dev->model, sizeof(dev->model), "%s",
+           model && model[0] ? model : driver_name(driver));
+  return index;
+}
+
+static void select_status_from_device(const storage_device_t *dev) {
+  char capacity[40];
+  storage_format_size(dev->sectors, capacity, sizeof(capacity));
+  snprintf(selected_status, sizeof(selected_status), "storage: %s %s ready",
+           dev->name, driver_name(dev->driver));
+  disk_status = selected_status;
+  serial_puts("[storage] selected ");
+  serial_puts(dev->name);
+  serial_puts(" ");
+  serial_puts(driver_name(dev->driver));
+  serial_puts(" ");
+  serial_puts(capacity);
   serial_puts("\n");
 }
 
@@ -436,10 +497,9 @@ static int nvme_init_controller(void) {
     return -1;
   }
 
-  storage_driver = STORAGE_DRIVER_NVME;
-  disk_ready = 1;
-  disk_port = NULL;
-  set_status("storage: NVMe namespace ready");
+  storage_add_device(STORAGE_DRIVER_NVME, NULL, disk_sectors,
+                     "NVMe namespace 1");
+  set_status("storage: NVMe namespace detected");
   return 0;
 }
 
@@ -643,13 +703,37 @@ static uint64_t identify_sector_count(const uint16_t *id) {
   return sectors;
 }
 
-static int ahci_init_controller(void) {
-  if (disk_ready) {
-    return 0;
+static void identify_model_string(const uint16_t *id, char *out,
+                                  size_t out_size) {
+  size_t o = 0;
+  if (!out || out_size == 0) {
+    return;
   }
+  out[0] = '\0';
+  if (!id) {
+    return;
+  }
+  for (int i = 27; i <= 46 && o + 1 < out_size; i++) {
+    char hi = (char)(id[i] >> 8);
+    char lo = (char)(id[i] & 0xFF);
+    if (hi && o + 1 < out_size) {
+      out[o++] = hi;
+    }
+    if (lo && o + 1 < out_size) {
+      out[o++] = lo;
+    }
+  }
+  while (o > 0 && out[o - 1] == ' ') {
+    o--;
+  }
+  out[o] = '\0';
+}
 
+static int ahci_scan_controller(void) {
   pci_device_info_t devs[4];
   int count = pci_scan_class(0x01, 0x06, 0x01, devs, 4);
+  int found = 0;
+
   if (count <= 0) {
     count = pci_scan_class(0x01, 0x06, 0xFF, devs, 4);
   }
@@ -694,15 +778,24 @@ static int ahci_init_controller(void) {
     }
     if (ahci_setup_port(&hba->ports[i]) == 0) {
       static uint16_t identify_words[256] __attribute__((aligned(4096)));
-      disk_port = &hba->ports[i];
-      storage_driver = STORAGE_DRIVER_AHCI;
-      disk_ready = 1;
-      if (ahci_identify(disk_port, identify_words) == 0) {
-        disk_sectors = identify_sector_count(identify_words);
+      char model[64];
+      uint64_t sectors = 0;
+      model[0] = '\0';
+      if (ahci_identify(&hba->ports[i], identify_words) == 0) {
+        sectors = identify_sector_count(identify_words);
+        identify_model_string(identify_words, model, sizeof(model));
       }
-      set_status("storage: AHCI disk ready");
-      return 0;
+      if (sectors > 0) {
+        storage_add_device(STORAGE_DRIVER_AHCI, (void *)&hba->ports[i],
+                           sectors, model);
+        found++;
+      }
     }
+  }
+
+  if (found > 0) {
+    set_status("storage: AHCI disk detected");
+    return 0;
   }
 
   set_status("storage: no SATA disk");
@@ -713,10 +806,28 @@ int storage_init(void) {
   if (disk_ready) {
     return 0;
   }
-  if (nvme_init_controller() == 0) {
-    return 0;
+  if (storage_scanned) {
+    if (storage_device_total > 0) {
+      return storage_select_device(0);
+    }
+    return -1;
   }
-  return ahci_init_controller();
+
+  storage_scanned = 1;
+  storage_device_total = 0;
+  storage_selected_index = -1;
+  storage_driver = STORAGE_DRIVER_NONE;
+  disk_port = NULL;
+  disk_sectors = 0;
+
+  nvme_init_controller();
+  ahci_scan_controller();
+
+  if (storage_device_total <= 0) {
+    set_status("storage: no AHCI/NVMe disk");
+    return -1;
+  }
+  return storage_select_device(0);
 }
 
 int storage_available(void) {
@@ -734,9 +845,8 @@ uint64_t storage_sector_count(void) {
   return disk_sectors;
 }
 
-void storage_format_capacity(char *out, size_t out_size) {
+void storage_format_size(uint64_t sectors, char *out, size_t out_size) {
   uint64_t mib;
-  uint64_t sectors = storage_sector_count();
   if (!out || out_size == 0) {
     return;
   }
@@ -752,6 +862,68 @@ void storage_format_capacity(char *out, size_t out_size) {
     snprintf(out, out_size, "%lu MiB (%lu sectors)", (unsigned long)mib,
              (unsigned long)sectors);
   }
+}
+
+void storage_format_capacity(char *out, size_t out_size) {
+  storage_format_size(storage_sector_count(), out, out_size);
+}
+
+int storage_device_count(void) {
+  if (!storage_scanned) {
+    storage_init();
+  }
+  return storage_device_total;
+}
+
+int storage_selected_device(void) {
+  if (!storage_scanned) {
+    storage_init();
+  }
+  return storage_selected_index;
+}
+
+int storage_get_device(int index, storage_device_info_t *out) {
+  storage_device_t *dev;
+
+  if (!out) {
+    return -1;
+  }
+  if (!storage_scanned) {
+    storage_init();
+  }
+  if (index < 0 || index >= storage_device_total) {
+    return -1;
+  }
+  dev = &storage_devices[index];
+  memset(out, 0, sizeof(*out));
+  out->index = index;
+  out->selected = index == storage_selected_index;
+  out->writable = dev->writable;
+  out->sectors = dev->sectors;
+  snprintf(out->name, sizeof(out->name), "%s", dev->name);
+  snprintf(out->driver, sizeof(out->driver), "%s", driver_name(dev->driver));
+  snprintf(out->model, sizeof(out->model), "%s", dev->model);
+  return 0;
+}
+
+int storage_select_device(int index) {
+  storage_device_t *dev;
+
+  if (!storage_scanned) {
+    storage_init();
+  }
+  if (index < 0 || index >= storage_device_total) {
+    return -1;
+  }
+
+  dev = &storage_devices[index];
+  storage_driver = dev->driver;
+  disk_port = (ahci_port_t *)dev->ahci_port;
+  disk_sectors = dev->sectors;
+  storage_selected_index = index;
+  disk_ready = 1;
+  select_status_from_device(dev);
+  return 0;
 }
 
 int storage_read(uint64_t lba, void *buf, uint32_t sector_count) {

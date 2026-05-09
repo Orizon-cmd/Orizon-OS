@@ -1054,12 +1054,18 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
     append_report(report, report_size, "install: invalid configuration");
     return -1;
   }
+  if (config->disk_index < 0 ||
+      storage_select_device(config->disk_index) < 0) {
+    append_report(report, report_size, "install: target disk not selectable");
+    return -1;
+  }
   if (!storage_available()) {
     append_report(report, report_size, "install: no writable AHCI/NVMe disk");
     return -2;
   }
   storage_format_capacity(capacity, sizeof(capacity));
-  snprintf(line, sizeof(line), "Disk: %s, %s", storage_status(), capacity);
+  snprintf(line, sizeof(line), "Target disk: %s, %s",
+           config->disk_name ? config->disk_name : storage_status(), capacity);
   append_report(report, report_size, line);
 
   if (!boot_payloads_ready()) {

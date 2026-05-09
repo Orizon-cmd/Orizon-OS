@@ -88,6 +88,9 @@ typedef struct terminal {
   char install_language[16];
   char install_keyboard[24];
   char install_disk_mode[24];
+  int install_disk_index;
+  char install_disk_name[24];
+  char install_disk_summary[128];
   char install_hostname[64];
   
   /* History */
@@ -674,7 +677,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
       "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
-      "dmesg", "edit", "echo", "find", "free", "grep", "head", "help",
+      "disks", "dmesg", "edit", "echo", "find", "free", "grep", "head", "help",
       "history", "hostname", "hw", "id", "install", "install-status",
       "keyboard", "ls", "mkdir", "mv",
       "neofetch", "net", "logs", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
@@ -2166,6 +2169,48 @@ static int term_install_value_is(const char *value, const char *a,
          (c && strcmp(value, c) == 0);
 }
 
+static void term_print_disks(terminal_t *term) {
+  int count = storage_device_count();
+  char line[224];
+  char capacity[64];
+
+  if (count <= 0) {
+    term_puts_t(term, "No AHCI/NVMe disks detected.\n");
+    return;
+  }
+
+  for (int i = 0; i < count; i++) {
+    storage_device_info_t info;
+    if (storage_get_device(i, &info) < 0) {
+      continue;
+    }
+    storage_format_size(info.sectors, capacity, sizeof(capacity));
+    snprintf(line, sizeof(line), "  %d. %s%s  %s  %s  %s\n", i + 1,
+             info.name, info.selected ? " *" : "  ", info.driver, capacity,
+             info.model);
+    term_puts_t(term, line);
+  }
+}
+
+static int term_install_capture_disk(int choice, terminal_t *term) {
+  storage_device_info_t info;
+  char capacity[64];
+
+  if (storage_select_device(choice) < 0 ||
+      storage_get_device(choice, &info) < 0) {
+    return -1;
+  }
+
+  storage_format_size(info.sectors, capacity, sizeof(capacity));
+  term->install_disk_index = choice;
+  snprintf(term->install_disk_name, sizeof(term->install_disk_name), "%s",
+           info.name);
+  snprintf(term->install_disk_summary, sizeof(term->install_disk_summary),
+           "%s %s %s %s", info.name, info.driver, capacity, info.model);
+  strcpy(term->install_disk_mode, "guided-full-disk");
+  return 0;
+}
+
 static void term_install_prompt(terminal_t *term) {
   switch (term->install_step) {
   case 0:
@@ -2185,14 +2230,10 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, "Choice: ");
     break;
   case 2:
-    term_puts_t(term, "[3/5] Disk configuration\n");
-    term_puts_t(term, "Detected storage: ");
-    term_puts_t(term, storage_available() ? storage_status()
-                                          : "no writable AHCI/NVMe disk");
-    term_puts_t(term, "\n");
-    term_puts_t(term, "  1. guided-full-disk\n");
-    term_puts_t(term, "  2. manual-later\n");
-    term_puts_t(term, "Choice: ");
+    term_puts_t(term, "[3/5] Target disk\n");
+    term_print_disks(term);
+    term_puts_t(term, "  m. manual-later (do not write disk)\n");
+    term_puts_t(term, "Choose target disk number, or m: ");
     break;
   case 3:
     term_puts_t(term, "[4/5] Hostname\n");
@@ -2205,12 +2246,21 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Keyboard: %s\n", term->install_keyboard);
     term_puts_t(term, line);
-    snprintf(line, sizeof(line), "  Disk:     %s\n", term->install_disk_mode);
+    snprintf(line, sizeof(line), "  Disk:     %s\n",
+             strcmp(term->install_disk_mode, "manual-later") == 0
+                 ? "manual-later"
+                 : term->install_disk_summary);
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Hostname: %s\n", term->install_hostname);
     term_puts_t(term, line);
-    term_puts_t(term,
-                "Type INSTALL to write the disk, or cancel to abort: ");
+    if (strcmp(term->install_disk_mode, "manual-later") == 0) {
+      term_puts_t(term, "Type SAVE to store the plan, or cancel to abort: ");
+    } else {
+      snprintf(line, sizeof(line),
+               "Type ERASE %s to write this disk, or cancel to abort: ",
+               term->install_disk_name);
+      term_puts_t(term, line);
+    }
     break;
   }
   default:
@@ -2235,10 +2285,18 @@ static void term_install_write_plan(terminal_t *term) {
   char marker[256];
   static char install_report[4096];
   orizon_install_config_t config;
+  const char *disk_name =
+      term->install_disk_name[0] ? term->install_disk_name : "none";
+  const char *disk_summary =
+      term->install_disk_summary[0] ? term->install_disk_summary : "none";
 
   vfs_mkdir("/workspace");
   vfs_mkdir("/workspace/.orizon");
   vfs_mkdir("/system");
+  vfs_mkdir("/home");
+  vfs_mkdir("/home/orizon");
+  vfs_mkdir("/packages");
+  vfs_mkdir("/logs");
 
   snprintf(plan, sizeof(plan),
            "installer-version 1\n"
@@ -2248,12 +2306,16 @@ static void term_install_write_plan(terminal_t *term) {
            "keyboard %s\n"
            "hostname %s\n"
            "disk-mode %s\n"
+           "disk-index %d\n"
+           "disk-name %s\n"
+           "disk-summary %s\n"
            "disk-status %s\n"
            "boot-strategy uefi-fallback-esp\n"
            "write-mode %s\n"
            "next reboot-installed-disk\n",
            term->install_language, term->install_keyboard,
            term->install_hostname, term->install_disk_mode,
+           term->install_disk_index, disk_name, disk_summary,
            storage_available() ? storage_status() : "unavailable",
            strcmp(term->install_disk_mode, "manual-later") == 0
                ? "plan-only-no-disk-write"
@@ -2275,6 +2337,12 @@ static void term_install_write_plan(terminal_t *term) {
     term_install_finish(term, 0);
     return;
   }
+  term_write_text_file("/system/data-layout",
+                       "version 1\nroots /system /home /packages /logs /workspace\n");
+  term_write_text_file("/home/orizon/README.txt",
+                       "Home directory for Orizon OS user files.\n");
+  term_write_text_file("/packages/README.txt",
+                       "Local package cache and installed package metadata.\n");
 
   if (strcmp(term->install_disk_mode, "manual-later") == 0) {
     vfs_persist_save();
@@ -2295,6 +2363,8 @@ static void term_install_write_plan(terminal_t *term) {
   config.keyboard = term->install_keyboard;
   config.disk_mode = term->install_disk_mode;
   config.hostname = term->install_hostname;
+  config.disk_index = term->install_disk_index;
+  config.disk_name = term->install_disk_name;
   term_puts_t(term, "\n");
   if (orizon_install_run(&config, install_report, sizeof(install_report)) == 0) {
     term_puts_t(term, install_report);
@@ -2370,16 +2440,23 @@ static void term_install_submit(terminal_t *term, const char *line) {
     term_install_prompt(term);
     return;
   case 2:
-    if (term_install_value_is(value, "1", "guided", "full") ||
-        strcmp(value, "&") == 0) {
-      strcpy(term->install_disk_mode, "guided-full-disk");
-    } else if (term_install_value_is(value, "2", "manual", "later") ||
-               strcmp(value, "e") == 0) {
+    if (term_install_value_is(value, "m", "manual", "later") ||
+        strcmp(value, "manual-later") == 0) {
       strcpy(term->install_disk_mode, "manual-later");
+      term->install_disk_index = -1;
+      strcpy(term->install_disk_name, "none");
+      strcpy(term->install_disk_summary, "manual-later");
     } else {
-      term_puts_t(term, "Choose 1 or 2.\n");
-      term_install_prompt(term);
-      return;
+      int choice = 0;
+      if (term_parse_uint(value, &choice) < 0 ||
+          term_install_capture_disk(choice - 1, term) < 0) {
+        term_puts_t(term, "Choose a listed disk number, or m.\n");
+        term_install_prompt(term);
+        return;
+      }
+      term_puts_t(term, "Selected target: ");
+      term_puts_t(term, term->install_disk_summary);
+      term_puts_t(term, "\n");
     }
     term->install_step++;
     term_install_prompt(term);
@@ -2396,10 +2473,23 @@ static void term_install_submit(terminal_t *term, const char *line) {
     term_install_prompt(term);
     return;
   case 4:
-    if (strcmp(value, "INSTALL") == 0 || strcmp(value, "install") == 0) {
+    if (strcmp(term->install_disk_mode, "manual-later") == 0 &&
+        (strcmp(value, "SAVE") == 0 || strcmp(value, "save") == 0)) {
       term_install_write_plan(term);
+    } else if (strcmp(term->install_disk_mode, "guided-full-disk") == 0) {
+      char expected[64];
+      char expected_lower[64];
+      snprintf(expected, sizeof(expected), "ERASE %s", term->install_disk_name);
+      snprintf(expected_lower, sizeof(expected_lower), "erase %s",
+               term->install_disk_name);
+      if (strcmp(value, expected) == 0 || strcmp(value, expected_lower) == 0) {
+        term_install_write_plan(term);
+      } else {
+        term_puts_t(term, "Confirmation refused. Type the exact ERASE command.\n");
+        term_install_prompt(term);
+      }
     } else {
-      term_puts_t(term, "Confirmation refused. Type INSTALL exactly.\n");
+      term_puts_t(term, "Confirmation refused.\n");
       term_install_prompt(term);
     }
     return;
@@ -2423,6 +2513,9 @@ static void term_start_installer(terminal_t *term) {
   term->install_language[0] = '\0';
   term->install_keyboard[0] = '\0';
   term->install_disk_mode[0] = '\0';
+  term->install_disk_index = -1;
+  term->install_disk_name[0] = '\0';
+  term->install_disk_summary[0] = '\0';
   strcpy(term->install_hostname, "orizon-os");
   term_puts_t(term, "\n");
   term_install_prompt(term);
@@ -2530,6 +2623,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  logs [name] - Read recent boot/update/install logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
+    term_puts_t(term, "  disks     - List detected install disks\n");
+    term_puts_t(term, "  storage select <n> - Select active disk\n");
     term_puts_t(term, "  net       - Show ethernet status\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
@@ -2934,12 +3029,33 @@ void term_execute(terminal_t *term, const char *cmd) {
     }
   } else if (term_command_is(cmd, "sync")) {
     if (vfs_persist_save() == 0) {
-      term_puts_t(term, "Synced /workspace to disk\n");
+      term_puts_t(term, "Synced Orizon data roots to disk\n");
     } else {
       term_puts_t(term, "sync: persistence unavailable\n");
     }
+  } else if (term_command_is(cmd, "disks")) {
+    term_puts_t(term, "\033[1;36mDetected disks\033[0m\n");
+    term_print_disks(term);
   } else if (term_command_is(cmd, "storage")) {
     char capacity[64];
+    const char *args = term_skip_spaces(cmd + 7);
+    if (term_command_is(args, "select")) {
+      int choice = 0;
+      args = term_skip_spaces(args + 6);
+      if (term_parse_uint(args, &choice) < 0 ||
+          storage_select_device(choice - 1) < 0) {
+        term_puts_t(term, "usage: storage select <disk-number>\n");
+        term_print_disks(term);
+        return;
+      }
+      term_puts_t(term, "Selected active disk.\n");
+      term_print_disks(term);
+      return;
+    }
+    if (term_command_is(args, "detail") || term_command_is(args, "list")) {
+      term_puts_t(term, "\033[1;36mStorage detail\033[0m\n");
+      term_print_disks(term);
+    }
     storage_format_capacity(capacity, sizeof(capacity));
     term_puts_t(term, "Disk: ");
     term_puts_t(term, storage_available() ? storage_status()
@@ -2947,7 +3063,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, " (");
     term_puts_t(term, capacity);
     term_puts_t(term, ")\n");
-    term_puts_t(term, "Workspace: ");
+    term_puts_t(term, "Data roots: ");
     term_puts_t(term, vfs_persist_status());
     term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "keyboard")) {

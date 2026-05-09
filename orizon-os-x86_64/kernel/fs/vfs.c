@@ -9,7 +9,7 @@
 
 #define PERSIST_MAGIC "ORZPFS1"
 #define PERSIST_VERSION 1U
-#define PERSIST_BYTES (256U * 1024U)
+#define PERSIST_BYTES (1024U * 1024U)
 #define PERSIST_SECTORS (PERSIST_BYTES / ORIZON_SECTOR_SIZE)
 #define PERSIST_HEADER_SIZE ORIZON_SECTOR_SIZE
 #define PERSIST_IO_MAX_SECTORS 128U
@@ -32,7 +32,7 @@ static file_t open_files[MAX_OPEN];
 static int vfs_initialized = 0;
 static int persist_ready = 0;
 static int persist_loading = 0;
-static const char *persist_status = "workspace/log persistence not loaded";
+static const char *persist_status = "Orizon data persistence not loaded";
 static uint8_t persist_buf[PERSIST_BYTES] __attribute__((aligned(4096)));
 
 static int create_inode(const char *path, int type);
@@ -114,11 +114,16 @@ static int path_is_inside(const char *path, const char *prefix) {
 static int path_should_persist(const char *path) {
   return path &&
          (path_is_inside(path, "/workspace") ||
+          path_is_inside(path, "/home") ||
+          path_is_inside(path, "/system") ||
+          path_is_inside(path, "/packages") ||
           path_is_inside(path, "/logs"));
 }
 
 static int path_is_persistent_root(const char *path) {
-  return path && (str_eq(path, "/workspace") || str_eq(path, "/logs"));
+  return path && (str_eq(path, "/workspace") || str_eq(path, "/home") ||
+                  str_eq(path, "/system") || str_eq(path, "/packages") ||
+                  str_eq(path, "/logs"));
 }
 
 static int append_path_component(char *path, size_t size, const char *component,
@@ -395,9 +400,7 @@ void vfs_init(void) {
   vfs_initialized = 1;
 }
 
-/* Seed initial filesystem content */
-void vfs_seed_content(void) {
-  /* Create a small, stable workspace for iterative development. */
+static void vfs_ensure_data_roots(void) {
   vfs_mkdir("/workspace");
   vfs_mkdir("/system");
   vfs_mkdir("/system/share");
@@ -406,6 +409,23 @@ void vfs_seed_content(void) {
   vfs_mkdir("/packages");
   vfs_mkdir("/logs");
   vfs_mkdir("/tmp");
+}
+
+static void vfs_write_default_file(const char *path, const char *text) {
+  if (vfs_exists(path)) {
+    return;
+  }
+  file_t *f = vfs_open(path, O_CREAT | O_WRONLY);
+  if (f) {
+    vfs_write(f, text, strlen(text));
+    vfs_close(f);
+  }
+}
+
+/* Seed initial filesystem content */
+void vfs_seed_content(void) {
+  /* Create a small, stable workspace for iterative development. */
+  vfs_ensure_data_roots();
 
   file_t *f;
 
@@ -449,6 +469,17 @@ void vfs_seed_content(void) {
     vfs_write(f, txt, strlen(txt));
     vfs_close(f);
   }
+
+  vfs_write_default_file(
+      "/system/data-layout",
+      "version 1\nroots /system /home /packages /logs /workspace\n");
+  vfs_write_default_file("/home/orizon/README.txt",
+                         "Home directory for Orizon OS user files.\n");
+  vfs_write_default_file(
+      "/packages/README.txt",
+      "Local package cache and installed package metadata.\n");
+  vfs_write_default_file("/logs/README.txt",
+                         "Persistent boot, install and update logs.\n");
 }
 
 int vfs_persist_save(void) {
@@ -456,7 +487,7 @@ int vfs_persist_save(void) {
     return -EINVAL;
   }
   if (!storage_available()) {
-    persist_set_status("workspace/log persistence unavailable");
+    persist_set_status("Orizon data persistence unavailable");
     return -EIO;
   }
 
@@ -472,7 +503,7 @@ int vfs_persist_save(void) {
     if (inodes[i].type == 1 && path_should_persist(inodes[i].path) &&
         !path_is_persistent_root(inodes[i].path)) {
       if (persist_append_entry(&offset, &entry_count, &inodes[i]) < 0) {
-        persist_set_status("workspace/log persistence full");
+        persist_set_status("Orizon data persistence full");
         return -ENOSPC;
       }
     }
@@ -480,7 +511,7 @@ int vfs_persist_save(void) {
   for (int i = 0; i < inode_count; i++) {
     if (inodes[i].type == 0 && path_should_persist(inodes[i].path)) {
       if (persist_append_entry(&offset, &entry_count, &inodes[i]) < 0) {
-        persist_set_status("workspace/log persistence full");
+        persist_set_status("Orizon data persistence full");
         return -ENOSPC;
       }
     }
@@ -498,11 +529,11 @@ int vfs_persist_save(void) {
     sectors = 1;
   }
   if (persist_storage_write(ORIZON_PERSIST_LBA, persist_buf, sectors) < 0) {
-    persist_set_status("workspace/log persistence write failed");
+    persist_set_status("Orizon data persistence write failed");
     return -EIO;
   }
 
-  persist_set_status("workspace/log persistence active");
+  persist_set_status("Orizon data persistence active");
   return 0;
 }
 
@@ -513,13 +544,13 @@ void vfs_persist_load(void) {
 
   if (!storage_available()) {
     persist_ready = 0;
-    persist_set_status("workspace/log persistence unavailable");
+    persist_set_status("Orizon data persistence unavailable");
     return;
   }
 
   if (persist_storage_read(ORIZON_PERSIST_LBA, persist_buf, PERSIST_SECTORS) < 0) {
     persist_ready = 0;
-    persist_set_status("workspace/log persistence read failed");
+    persist_set_status("Orizon data persistence read failed");
     return;
   }
 
@@ -529,7 +560,7 @@ void vfs_persist_load(void) {
   if (memcmp(persist_buf, PERSIST_MAGIC, 7) != 0 ||
       get_u32(persist_buf + 8) != PERSIST_VERSION) {
     persist_loading = 0;
-    persist_set_status("workspace/log persistence initialized");
+    persist_set_status("Orizon data persistence initialized");
     vfs_persist_save();
     return;
   }
@@ -542,11 +573,14 @@ void vfs_persist_load(void) {
       checksum != persist_checksum(persist_buf + PERSIST_HEADER_SIZE,
                                    payload_size)) {
     persist_loading = 0;
-    persist_set_status("workspace/log persistence checksum failed");
+    persist_set_status("Orizon data persistence checksum failed");
     return;
   }
 
   clear_directory_contents("/workspace");
+  clear_directory_contents("/home");
+  clear_directory_contents("/system");
+  clear_directory_contents("/packages");
   clear_directory_contents("/logs");
 
   size_t offset = PERSIST_HEADER_SIZE;
@@ -591,8 +625,23 @@ void vfs_persist_load(void) {
     offset += data_size;
   }
 
+  vfs_ensure_data_roots();
+  vfs_write_default_file(
+      "/system/data-layout",
+      "version 1\nroots /system /home /packages /logs /workspace\n");
+  vfs_write_default_file("/system/hostname", "orizon-os");
+  vfs_write_default_file("/system/version", "core-x86_64");
+  vfs_write_default_file("/system/profile", "minimal-development\n");
+  vfs_write_default_file("/home/orizon/README.txt",
+                         "Home directory for Orizon OS user files.\n");
+  vfs_write_default_file(
+      "/packages/README.txt",
+      "Local package cache and installed package metadata.\n");
+  vfs_write_default_file("/logs/README.txt",
+                         "Persistent boot, install and update logs.\n");
+
   persist_loading = 0;
-  persist_set_status("workspace/log persistence active");
+  persist_set_status("Orizon data persistence active");
 }
 
 int vfs_persist_available(void) {

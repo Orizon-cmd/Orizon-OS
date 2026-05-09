@@ -12,6 +12,8 @@ typedef struct {
   const char *keyboard;
   const char *disk_mode;
   const char *hostname;
+  int disk_index;
+  const char *disk_name;
 } orizon_install_config_t;
 
 int orizon_install_run(const orizon_install_config_t *config, char *report,

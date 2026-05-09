@@ -12,9 +12,10 @@ le developpement noyau:
 - demarrage stable en VM et sur cible `x86_64` UEFI
 - interface framebuffer simple avec splash `Orizon OS`
 - une seule console centrale avec historique persistant et autocompletion simple
-- espace `/workspace` persistant quand une zone donnees Orizon est disponible
+- racines data persistantes `/workspace`, `/home`, `/system`, `/packages` et
+  `/logs` quand une zone donnees Orizon est disponible
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, verification
-  du boot UEFI et reparation de l'ESP
+  du boot UEFI, selection explicite du disque cible et reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
   Ethernet Intel e1000/e1000e et Realtek RTL8139
@@ -29,6 +30,8 @@ le developpement noyau:
   navigation historique `Up/Down`
 - diagnostic materiel `hw` pour voir CPU, memoire, stockage, reseau, USB/PS2,
   installation, update et principaux peripheriques PCI
+- inspection stockage avec `disks`, `storage detail` et selection du disque
+  actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
   rapport compact `report`; apres installation, le boot log est conserve dans
   `/logs/boot.log`
@@ -51,10 +54,12 @@ install
 ```
 
 L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
-peut installer Orizon OS sur le disque cible. Le mode `guided-full-disk` ecrit
-une GPT, formate une ESP FAT32, copie `BOOTX64.EFI`, `kernel.elf` et
+peut installer Orizon OS sur le disque cible. Le flux affiche les disques
+detectes (`disk0`, `disk1`, etc.) avec type, taille et modele, puis demande une
+confirmation destructive sous la forme `ERASE disk0`. Le mode
+`guided-full-disk` ecrit une GPT, formate une ESP FAT32, copie `BOOTX64.EFI`, `kernel.elf` et
 `limine.conf`, puis conserve une partition data Orizon pour `/workspace` et
-`/logs`.
+les racines `/home`, `/system`, `/packages` et `/logs`.
 Avant l'ecriture disque, `/workspace` est synchronise pour garder les dossiers
 et fichiers crees pendant le live boot.
 
@@ -94,6 +99,14 @@ Pour verifier le layout clavier actif:
 
 ```text
 keyboard
+```
+
+Pour inspecter ou changer le disque actif avant diagnostic/reparation:
+
+```text
+disks
+storage detail
+storage select 1
 ```
 
 Details: [docs/orizon/INSTALL.md](docs/orizon/INSTALL.md).

@@ -29,7 +29,8 @@ The command performs a kernel-owned full-upgrade transaction:
 - keep the currently booted kernel and UEFI loader as the ESP rollback slot
 - rewrite only the installed ESP boot files
 - verify the rewritten ESP with the same boot checks used by `boot-check`
-- preserve the Orizon data partition and `/workspace`
+- preserve the Orizon data partition and persistent roots `/workspace`,
+  `/home`, `/system`, `/packages`, and `/logs`
 - save update logs and success metadata
 
 Progress is streamed to the console while the transaction is running. The
