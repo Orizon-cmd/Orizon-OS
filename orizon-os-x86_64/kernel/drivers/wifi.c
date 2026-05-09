@@ -155,12 +155,35 @@ static wifi_status_t wifi_status_state = {
     .rx_last_group = 0,
     .rx_last_sequence = 0,
     .rx_last_index = 0,
+    .rx_last_word0 = 0,
+    .rx_last_word1 = 0,
+    .rx_last_word2 = 0,
+    .rx_last_word3 = 0,
+    .rx_last_cd_word0 = 0,
+    .rx_last_cd_word1 = 0,
+    .rx_last_cd_word2 = 0,
+    .rx_last_cd_word3 = 0,
     .command_ready = 0,
     .command_sent = 0,
     .command_failed = 0,
+    .command_response_seen = 0,
+    .command_timeout = 0,
     .command_attempts = 0,
     .command_errors = 0,
     .command_doorbell_value = 0,
+    .command_wptr_readback = 0,
+    .command_bc_entry = 0,
+    .command_tfd_num_tbs = 0,
+    .command_tfd_tb0_len = 0,
+    .command_tfd_tb0_addr = 0,
+    .command_before_csr_int = 0,
+    .command_before_fh_int = 0,
+    .command_before_closed_rb = 0,
+    .command_before_read_ptr = 0,
+    .command_after_csr_int = 0,
+    .command_after_fh_int = 0,
+    .command_after_closed_rb = 0,
+    .command_after_read_ptr = 0,
     .command_last_csr_int = 0,
     .command_last_fh_int = 0,
     .command_last_closed_rb = 0,
@@ -970,12 +993,35 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.rx_last_group = 0;
   wifi_status_state.rx_last_sequence = 0;
   wifi_status_state.rx_last_index = 0;
+  wifi_status_state.rx_last_word0 = 0;
+  wifi_status_state.rx_last_word1 = 0;
+  wifi_status_state.rx_last_word2 = 0;
+  wifi_status_state.rx_last_word3 = 0;
+  wifi_status_state.rx_last_cd_word0 = 0;
+  wifi_status_state.rx_last_cd_word1 = 0;
+  wifi_status_state.rx_last_cd_word2 = 0;
+  wifi_status_state.rx_last_cd_word3 = 0;
   wifi_status_state.command_ready = 0;
   wifi_status_state.command_sent = 0;
   wifi_status_state.command_failed = 0;
+  wifi_status_state.command_response_seen = 0;
+  wifi_status_state.command_timeout = 0;
   wifi_status_state.command_attempts = 0;
   wifi_status_state.command_errors = 0;
   wifi_status_state.command_doorbell_value = 0;
+  wifi_status_state.command_wptr_readback = 0;
+  wifi_status_state.command_bc_entry = 0;
+  wifi_status_state.command_tfd_num_tbs = 0;
+  wifi_status_state.command_tfd_tb0_len = 0;
+  wifi_status_state.command_tfd_tb0_addr = 0;
+  wifi_status_state.command_before_csr_int = 0;
+  wifi_status_state.command_before_fh_int = 0;
+  wifi_status_state.command_before_closed_rb = 0;
+  wifi_status_state.command_before_read_ptr = 0;
+  wifi_status_state.command_after_csr_int = 0;
+  wifi_status_state.command_after_fh_int = 0;
+  wifi_status_state.command_after_closed_rb = 0;
+  wifi_status_state.command_after_read_ptr = 0;
   wifi_status_state.command_last_csr_int = 0;
   wifi_status_state.command_last_fh_int = 0;
   wifi_status_state.command_last_closed_rb = 0;
@@ -2121,10 +2167,33 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.rx_last_group = 0;
   wifi_status_state.rx_last_sequence = 0;
   wifi_status_state.rx_last_index = 0;
+  wifi_status_state.rx_last_word0 = 0;
+  wifi_status_state.rx_last_word1 = 0;
+  wifi_status_state.rx_last_word2 = 0;
+  wifi_status_state.rx_last_word3 = 0;
+  wifi_status_state.rx_last_cd_word0 = 0;
+  wifi_status_state.rx_last_cd_word1 = 0;
+  wifi_status_state.rx_last_cd_word2 = 0;
+  wifi_status_state.rx_last_cd_word3 = 0;
   wifi_status_state.command_ready = 0;
   wifi_status_state.command_sent = 0;
   wifi_status_state.command_failed = 0;
+  wifi_status_state.command_response_seen = 0;
+  wifi_status_state.command_timeout = 0;
   wifi_status_state.command_doorbell_value = 0;
+  wifi_status_state.command_wptr_readback = 0;
+  wifi_status_state.command_bc_entry = 0;
+  wifi_status_state.command_tfd_num_tbs = 0;
+  wifi_status_state.command_tfd_tb0_len = 0;
+  wifi_status_state.command_tfd_tb0_addr = 0;
+  wifi_status_state.command_before_csr_int = 0;
+  wifi_status_state.command_before_fh_int = 0;
+  wifi_status_state.command_before_closed_rb = 0;
+  wifi_status_state.command_before_read_ptr = 0;
+  wifi_status_state.command_after_csr_int = 0;
+  wifi_status_state.command_after_fh_int = 0;
+  wifi_status_state.command_after_closed_rb = 0;
+  wifi_status_state.command_after_read_ptr = 0;
   wifi_status_state.command_last_csr_int = 0;
   wifi_status_state.command_last_fh_int = 0;
   wifi_status_state.command_last_closed_rb = 0;
@@ -3607,8 +3676,13 @@ static int wifi_prepare_scheduler_command(void) {
       (WIFI_DQA_CMD_QUEUE << HBUS_TARG_WRPTR_Q_SHIFT) | next_idx;
   wifi_status_state.command_ready = 1;
   wifi_status_state.command_failed = 0;
+  wifi_status_state.command_timeout = 0;
   wifi_status_state.command_doorbell_value =
       wifi_status_state.scheduler_wptr_value;
+  wifi_status_state.command_bc_entry = wifi_cmd_bc_tbl[idx].tfd_offset;
+  wifi_status_state.command_tfd_num_tbs = tfd->num_tbs;
+  wifi_status_state.command_tfd_tb0_len = tfd->tbs[0].tb_len;
+  wifi_status_state.command_tfd_tb0_addr = tfd->tbs[0].addr;
   wifi_status_state.status =
       "wifi: scheduler command frame staged for firmware command queue";
   return 0;
@@ -3735,6 +3809,14 @@ static int wifi_rx_parse_one(void) {
 
   pkt = (wifi_rx_packet_t *)wifi_rx_buffers[rbid - 1U];
   wifi_status_state.rx_last_len_n_flags = pkt->len_n_flags;
+  wifi_status_state.rx_last_word0 = ((const uint32_t *)pkt)[0];
+  wifi_status_state.rx_last_word1 = ((const uint32_t *)pkt)[1];
+  wifi_status_state.rx_last_word2 = ((const uint32_t *)pkt)[2];
+  wifi_status_state.rx_last_word3 = ((const uint32_t *)pkt)[3];
+  wifi_status_state.rx_last_cd_word0 = ((const uint32_t *)cd)[0];
+  wifi_status_state.rx_last_cd_word1 = ((const uint32_t *)cd)[1];
+  wifi_status_state.rx_last_cd_word2 = ((const uint32_t *)cd)[2];
+  wifi_status_state.rx_last_cd_word3 = ((const uint32_t *)cd)[3];
   wifi_status_state.rx_last_len =
       pkt->len_n_flags & FH_RSCSR_FRAME_SIZE_MSK;
   wifi_status_state.rx_last_queue =
@@ -3813,7 +3895,8 @@ int wifi_rx_probe(int poll, char *report, size_t report_size) {
            "last: idx=%u rbid=%u flags=0x%02x len-flags=0x%08x "
            "len=%u queue=%u\n"
            "last-hdr: cmd=0x%02x group=0x%02x seq=0x%04x "
-           "response-match=%s\n",
+           "response-match=%s\n"
+           "raw: pkt=%08x %08x %08x %08x cd=%08x %08x %08x %08x\n",
            parsed > 0 ? "firmware response parsed"
                       : (parsed < 0 ? "RX completion error"
                                     : "no new firmware response"),
@@ -3829,7 +3912,10 @@ int wifi_rx_probe(int poll, char *report, size_t report_size) {
            (s->rx_last_sequence == s->scheduler_cmd_sequence &&
             s->rx_last_sequence != 0)
                ? "yes"
-               : "no");
+               : "no",
+           s->rx_last_word0, s->rx_last_word1, s->rx_last_word2,
+           s->rx_last_word3, s->rx_last_cd_word0, s->rx_last_cd_word1,
+           s->rx_last_cd_word2, s->rx_last_cd_word3);
   return parsed < 0 ? -1 : 0;
 }
 
@@ -3870,16 +3956,32 @@ int wifi_command_probe(int arm, char *report, size_t report_size) {
     return -1;
   }
 
+  if (wifi_mmio) {
+    wifi_status_state.command_before_csr_int = wifi_csr_read32(CSR_INT);
+    wifi_status_state.command_before_fh_int =
+        wifi_csr_read32(CSR_FH_INT_STATUS);
+  }
+  wifi_status_state.command_before_closed_rb = wifi_rx_closed_status();
+  wifi_status_state.command_before_read_ptr = wifi_status_state.rx_read_ptr;
   if (!arm) {
+    s = &wifi_status_state;
     snprintf(report, report_size,
              "wifi command: ready, not sent\n"
              "doorbell: CSR[0x%03x]=0x%08x queue=%u index=%u seq=0x%04x\n"
-             "rx: ready=%s closed=%u read=%u packets=%lu\n"
+             "cmd-buf: tfd-tbs=%u tb0-len=%u tb0=0x%lx bc=0x%04x\n"
+             "before: csr-int=0x%08x fh-int=0x%08x closed=%u read=%u\n"
+             "rx: ready=%s packets=%lu raw=%08x %08x %08x %08x\n"
              "run: wifi command arm to ring the command queue doorbell\n",
              HBUS_TARG_WRPTR, s->command_doorbell_value,
              s->scheduler_cmd_queue, s->scheduler_cmd_index,
-             s->scheduler_cmd_sequence, s->rx_path_ready ? "yes" : "no",
-             s->rx_closed_rb, s->rx_read_ptr, s->rx_packets);
+             s->scheduler_cmd_sequence, s->command_tfd_num_tbs,
+             s->command_tfd_tb0_len,
+             (unsigned long)s->command_tfd_tb0_addr, s->command_bc_entry,
+             s->command_before_csr_int, s->command_before_fh_int,
+             s->command_before_closed_rb, s->command_before_read_ptr,
+             s->rx_path_ready ? "yes" : "no", s->rx_packets,
+             s->rx_last_word0, s->rx_last_word1, s->rx_last_word2,
+             s->rx_last_word3);
     return 0;
   }
 
@@ -3899,12 +4001,15 @@ int wifi_command_probe(int arm, char *report, size_t report_size) {
   }
 
   wifi_status_state.command_attempts++;
+  wifi_status_state.command_response_seen = 0;
+  wifi_status_state.command_timeout = 0;
   wifi_status_state.command_doorbell_value =
       wifi_status_state.scheduler_wptr_value;
   packets_before = wifi_status_state.rx_packets;
   wifi_csr_write32(CSR_INT, CSR_INT_BIT_SCD | CSR_INT_BIT_HW_ERR |
                                 CSR_INT_BIT_SW_ERR);
   wifi_csr_write32(HBUS_TARG_WRPTR, wifi_status_state.command_doorbell_value);
+  wifi_status_state.command_wptr_readback = wifi_csr_read32(HBUS_TARG_WRPTR);
   wifi_status_state.cmd_write_ptr =
       (wifi_status_state.scheduler_cmd_index + 1U) & (WIFI_CMD_QUEUE_ENTRIES - 1U);
   wifi_status_state.command_sent = 1;
@@ -3928,6 +4033,7 @@ int wifi_command_probe(int arm, char *report, size_t report_size) {
 
     if (wifi_rx_parse_one() > 0 && wifi_status_state.rx_packets > packets_before) {
       response_seen = 1;
+      wifi_status_state.command_response_seen = 1;
       break;
     }
 
@@ -3937,23 +4043,47 @@ int wifi_command_probe(int arm, char *report, size_t report_size) {
     __asm__ volatile("pause");
   }
 
+  wifi_status_state.command_after_csr_int = wifi_csr_read32(CSR_INT);
+  wifi_status_state.command_after_fh_int = wifi_csr_read32(CSR_FH_INT_STATUS);
+  wifi_status_state.command_after_closed_rb = wifi_rx_closed_status();
+  wifi_status_state.command_after_read_ptr = wifi_status_state.rx_read_ptr;
+  if (!response_seen && !wifi_status_state.command_failed) {
+    wifi_status_state.command_timeout = 1;
+    wifi_status_state.command_failed = 1;
+    wifi_status_state.command_errors++;
+    wifi_status_state.status = "wifi: command response timed out";
+  }
+
   s = &wifi_status_state;
   snprintf(report, report_size,
            "wifi command: %s\n"
-           "doorbell: CSR[0x%03x]=0x%08x attempts=%lu sent=%s failed=%s\n"
+           "doorbell: CSR[0x%03x]=0x%08x readback=0x%08x attempts=%lu "
+           "sent=%s failed=%s timeout=%s\n"
            "cmd: id=0x%02x group=0x%02x seq=0x%04x queue=%u index=%u "
-           "write=%u\n"
-           "poll: loops=%u csr-int=0x%08x fh-int=0x%08x closed=%u "
+           "write=%u tfd-tbs=%u tb0-len=%u bc=0x%04x\n"
+           "before: csr=0x%08x fh=0x%08x closed=%u read=%u\n"
+           "after: csr=0x%08x fh=0x%08x closed=%u read=%u\n"
+           "poll: loops=%u last-csr=0x%08x last-fh=0x%08x closed=%u "
            "response=%s\n"
            "rx-last: rbid=%u cmd=0x%02x group=0x%02x seq=0x%04x "
-           "len=%u match=%s errors=%lu\n",
+           "len=%u match=%s errors=%lu\n"
+           "rx-raw: pkt=%08x %08x %08x %08x cd=%08x %08x %08x %08x\n",
            response_seen ? "response observed"
-                         : (s->command_failed ? "failed" : "doorbell sent"),
-           HBUS_TARG_WRPTR, s->command_doorbell_value, s->command_attempts,
+                         : (s->command_failed ? "failed/timeout"
+                                             : "doorbell sent"),
+           HBUS_TARG_WRPTR, s->command_doorbell_value,
+           s->command_wptr_readback, s->command_attempts,
            s->command_sent ? "yes" : "no",
-           s->command_failed ? "yes" : "no", s->scheduler_cmd_id,
+           s->command_failed ? "yes" : "no",
+           s->command_timeout ? "yes" : "no", s->scheduler_cmd_id,
            s->scheduler_cmd_group, s->scheduler_cmd_sequence,
            s->scheduler_cmd_queue, s->scheduler_cmd_index, s->cmd_write_ptr,
+           s->command_tfd_num_tbs, s->command_tfd_tb0_len,
+           s->command_bc_entry, s->command_before_csr_int,
+           s->command_before_fh_int, s->command_before_closed_rb,
+           s->command_before_read_ptr, s->command_after_csr_int,
+           s->command_after_fh_int, s->command_after_closed_rb,
+           s->command_after_read_ptr,
            s->command_poll_loops, s->command_last_csr_int,
            s->command_last_fh_int, s->command_last_closed_rb,
            response_seen ? "yes" : "no", s->rx_last_rbid,
@@ -3963,7 +4093,9 @@ int wifi_command_probe(int arm, char *report, size_t report_size) {
             s->rx_last_sequence != 0)
                ? "yes"
                : "no",
-           s->command_errors);
+           s->command_errors, s->rx_last_word0, s->rx_last_word1,
+           s->rx_last_word2, s->rx_last_word3, s->rx_last_cd_word0,
+           s->rx_last_cd_word1, s->rx_last_cd_word2, s->rx_last_cd_word3);
   return s->command_failed ? -1 : 0;
 }
 

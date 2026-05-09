@@ -3404,7 +3404,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi context [arm] - Stage Intel firmware context-info\n");
     term_puts_t(term, "  wifi scheduler [arm] - Stage Intel scheduler command frame\n");
     term_puts_t(term, "  wifi rx [poll] - Inspect Intel firmware RX responses\n");
-    term_puts_t(term, "  wifi command [arm] - Ring staged Intel command doorbell\n");
+    term_puts_t(term, "  wifi command [arm] - Ring doorbell + command diagnostics\n");
     term_puts_t(term, "  wifi scan/connect - Wi-Fi driver staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");

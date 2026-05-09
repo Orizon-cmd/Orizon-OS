@@ -182,9 +182,11 @@ firmware: presence du blob Intel, reveil APM du controleur, release CPU
 firmware, transfert FH DMA garde, attente du signal firmware alive, puis
 preparation des rings commande/RX/TX cote hote, du context-info firmware,
 des anneaux message MTR/MCR, de la premiere trame de commande scheduler, du
-polling RX de reponse firmware et du doorbell commande explicite. Les vraies
-connexions attendent encore les commandes de configuration MAC/PHY, la couche
-802.11 et WPA.
+polling RX de reponse firmware et du doorbell commande explicite. `wifi command`
+affiche aussi les snapshots avant/apres, les mots bruts RX/completion et les
+valeurs TFD/byte-count pour diagnostiquer un blocage sur vrai materiel. Les
+vraies connexions attendent encore les commandes de configuration MAC/PHY, la
+couche 802.11 et WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
