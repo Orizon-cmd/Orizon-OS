@@ -69,6 +69,12 @@ static const char ps2_fr_shift[128] = {
     '2',  '3',  '0',  '.',  0,    0,    0,    0,
 };
 
+static const char ps2_fr_altgr[128] = {
+    [0x03] = '~', [0x04] = '#',  [0x05] = '{',  [0x06] = '[',
+    [0x07] = '|', [0x08] = '`',  [0x09] = '\\', [0x0A] = '^',
+    [0x0B] = '@', [0x0C] = ']',  [0x0D] = '}',
+};
+
 static int is_lower(char c) {
   return c >= 'a' && c <= 'z';
 }
@@ -78,6 +84,10 @@ static int apply_case(char c, int shift, int caps_lock) {
     return c - ('a' - 'A');
   }
   return c;
+}
+
+static int shifted_is_upper_of(char shifted, char base) {
+  return is_lower(base) && shifted == base - ('a' - 'A');
 }
 
 static int layout_is_fr_name(const char *layout) {
@@ -124,6 +134,11 @@ void input_load_keyboard_layout_from_vfs(void) {
     return;
   }
 
+  if (read_text_file("/system/keyboard", buf, sizeof(buf)) > 0) {
+    input_set_keyboard_layout(buf);
+    return;
+  }
+
   if (read_text_file("/workspace/.orizon/install-plan", buf, sizeof(buf)) <= 0) {
     return;
   }
@@ -133,7 +148,8 @@ void input_load_keyboard_layout_from_vfs(void) {
   }
 }
 
-int input_map_ps2_scancode(uint8_t scancode, int shift, int caps_lock) {
+int input_map_ps2_scancode(uint8_t scancode, int shift, int altgr,
+                           int caps_lock) {
   const char *normal = current_layout == INPUT_LAYOUT_FR_AZERTY ? ps2_fr : ps2_us;
   const char *shifted =
       current_layout == INPUT_LAYOUT_FR_AZERTY ? ps2_fr_shift : ps2_us_shift;
@@ -143,7 +159,16 @@ int input_map_ps2_scancode(uint8_t scancode, int shift, int caps_lock) {
     return 0;
   }
 
+  if (current_layout == INPUT_LAYOUT_FR_AZERTY && altgr &&
+      ps2_fr_altgr[scancode]) {
+    return ps2_fr_altgr[scancode];
+  }
+
   base = normal[scancode];
+  if (shift && shifted[scancode] &&
+      !shifted_is_upper_of(shifted[scancode], base)) {
+    return shifted[scancode];
+  }
   if (is_lower(base)) {
     return apply_case(base, shift, caps_lock);
   }
@@ -181,7 +206,7 @@ static int hid_us(uint8_t usage, int shift, int caps_lock) {
   return shift ? shifted[usage] : normal[usage];
 }
 
-static int hid_fr(uint8_t usage, int shift, int caps_lock) {
+static int hid_fr(uint8_t usage, int shift, int altgr, int caps_lock) {
   static const char normal[128] = {
       [0x04] = 'q', [0x05] = 'b', [0x06] = 'c', [0x07] = 'd',
       [0x08] = 'e', [0x09] = 'f', [0x0A] = 'g', [0x0B] = 'h',
@@ -212,20 +237,32 @@ static int hid_fr(uint8_t usage, int shift, int caps_lock) {
       [0x32] = '>', [0x33] = 'M', [0x34] = '%', [0x35] = '~',
       [0x36] = '.', [0x37] = '/', [0x38] = '?',
   };
+  static const char altgr_map[128] = {
+      [0x1F] = '~', [0x20] = '#',  [0x21] = '{',  [0x22] = '[',
+      [0x23] = '|', [0x24] = '`',  [0x25] = '\\', [0x26] = '^',
+      [0x27] = '@', [0x2D] = ']',  [0x2E] = '}',
+  };
   char base;
 
   if (usage >= 128) {
     return 0;
   }
+  if (altgr && altgr_map[usage]) {
+    return altgr_map[usage];
+  }
   base = normal[usage];
+  if (shift && shifted[usage] &&
+      !shifted_is_upper_of(shifted[usage], base)) {
+    return shifted[usage];
+  }
   if (is_lower(base)) {
     return apply_case(base, shift, caps_lock);
   }
   return shift ? shifted[usage] : base;
 }
 
-int input_map_hid_usage(uint8_t usage, int shift, int caps_lock) {
+int input_map_hid_usage(uint8_t usage, int shift, int altgr, int caps_lock) {
   return current_layout == INPUT_LAYOUT_FR_AZERTY
-             ? hid_fr(usage, shift, caps_lock)
+             ? hid_fr(usage, shift, altgr, caps_lock)
              : hid_us(usage, shift, caps_lock);
 }

@@ -11,6 +11,7 @@ void usb_hid_handle_key(int key);
 
 static uint8_t prev_keys[6] = {0};
 static int caps_lock = 0;
+static int num_lock = 1;
 
 static int usb_hid_key_is_down(uint8_t key) {
   for (int i = 0; i < 6; i++) {
@@ -30,6 +31,28 @@ static int usb_hid_report_has_rollover(const uint8_t *keys) {
   return 0;
 }
 
+static int usb_hid_keypad_output(uint8_t key) {
+  switch (key) {
+  case 0x54: return '/';
+  case 0x55: return '*';
+  case 0x56: return '-';
+  case 0x57: return '+';
+  case 0x58: return '\n';
+  case 0x59: return num_lock ? '1' : KEY_DOWN;
+  case 0x5A: return num_lock ? '2' : KEY_DOWN;
+  case 0x5B: return num_lock ? '3' : KEY_DOWN;
+  case 0x5C: return num_lock ? '4' : KEY_LEFT;
+  case 0x5D: return num_lock ? '5' : 0;
+  case 0x5E: return num_lock ? '6' : KEY_RIGHT;
+  case 0x5F: return num_lock ? '7' : KEY_UP;
+  case 0x60: return num_lock ? '8' : KEY_UP;
+  case 0x61: return num_lock ? '9' : KEY_UP;
+  case 0x62: return num_lock ? '0' : 0;
+  case 0x63: return num_lock ? '.' : '\b';
+  default: return 0;
+  }
+}
+
 void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
   if (!rep || len < 8) {
     return;
@@ -42,6 +65,7 @@ void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
 
   uint8_t mods = rep[0];
   int shift = (mods & 0x22) != 0; /* LSHIFT or RSHIFT */
+  int altgr = (mods & 0x40) != 0; /* Right Alt / AltGr */
 
   /* Check newly pressed keys */
   for (int i = 2; i < 8; i++) {
@@ -60,6 +84,9 @@ void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
     case 0x39:                               /* Caps Lock */
       caps_lock = !caps_lock;
       break;
+    case 0x53:                               /* Num Lock */
+      num_lock = !num_lock;
+      break;
     case 0x3A: out = KEY_F1; break;
     case 0x3B: out = KEY_F2; break;
     case 0x3C: out = KEY_F3; break;
@@ -77,7 +104,10 @@ void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
     case 0x51: out = KEY_DOWN; break;
     case 0x52: out = KEY_UP; break;
     default:
-      out = input_map_hid_usage(key, shift, caps_lock);
+      out = usb_hid_keypad_output(key);
+      if (!out) {
+        out = input_map_hid_usage(key, shift, altgr, caps_lock);
+      }
       break;
     }
 

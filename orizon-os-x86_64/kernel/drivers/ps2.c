@@ -76,7 +76,9 @@ static inline void io_wait(void) {
 static int shift_pressed = 0;
 static int ctrl_pressed = 0;
 static int alt_pressed = 0;
+static int altgr_pressed = 0;
 static int caps_lock = 0;
+static int num_lock = 1;
 
 /* Keyboard callback */
 typedef void (*keyboard_callback_t)(int key);
@@ -343,7 +345,7 @@ void ps2_poll(void) {
           /* Extended key release - handle right ctrl/alt */
           switch (released) {
           case 0x1D: ctrl_pressed = 0; break;   /* Right Ctrl */
-          case 0x38: alt_pressed = 0; break;    /* Right Alt */
+          case 0x38: altgr_pressed = 0; break;  /* Right Alt / AltGr */
           }
         } else {
           switch (released) {
@@ -364,7 +366,8 @@ void ps2_poll(void) {
         case 0x4B: key = KEY_LEFT; break;
         case 0x4D: key = KEY_RIGHT; break;
         case 0x1D: ctrl_pressed = 1; continue;   /* Right Ctrl */
-        case 0x38: alt_pressed = 1; continue;    /* Right Alt */
+        case 0x35: key = '/'; break;             /* Keypad slash */
+        case 0x38: altgr_pressed = 1; continue;  /* Right Alt / AltGr */
         case 0x47: key = KEY_UP; break;          /* Home -> Up */
         case 0x4F: key = KEY_DOWN; break;        /* End -> Down */
         case 0x49: key = KEY_UP; break;          /* Page Up -> Up */
@@ -386,14 +389,24 @@ void ps2_poll(void) {
       case 0x1D: ctrl_pressed = 1; continue;              /* Ctrl */
       case 0x38: alt_pressed = 1; continue;               /* Alt */
       case 0x3A: caps_lock = !caps_lock; continue;        /* Caps Lock */
+      case 0x45: num_lock = !num_lock; continue;          /* Num Lock */
       }
       
       /* Special keys */
       switch (scancode) {
-      case 0x48: key = KEY_UP; break;
-      case 0x50: key = KEY_DOWN; break;
-      case 0x4B: key = KEY_LEFT; break;
-      case 0x4D: key = KEY_RIGHT; break;
+      case 0x47: key = num_lock ? '7' : KEY_UP; break;
+      case 0x48: key = num_lock ? '8' : KEY_UP; break;
+      case 0x49: key = num_lock ? '9' : KEY_UP; break;
+      case 0x4A: key = '-'; break;
+      case 0x4B: key = num_lock ? '4' : KEY_LEFT; break;
+      case 0x4C: key = '5'; break;
+      case 0x4D: key = num_lock ? '6' : KEY_RIGHT; break;
+      case 0x4E: key = '+'; break;
+      case 0x4F: key = num_lock ? '1' : KEY_DOWN; break;
+      case 0x50: key = num_lock ? '2' : KEY_DOWN; break;
+      case 0x51: key = num_lock ? '3' : KEY_DOWN; break;
+      case 0x52: key = num_lock ? '0' : 0; break;
+      case 0x53: key = num_lock ? '.' : '\b'; break;
       case 0x01: key = KEY_ESC; break;
       case 0x3B: key = KEY_F1; break;
       case 0x3C: key = KEY_F2; break;
@@ -410,7 +423,8 @@ void ps2_poll(void) {
       default:
         /* Regular keys */
         if (scancode < 128) {
-          key = input_map_ps2_scancode(scancode, shift_pressed, caps_lock);
+          key = input_map_ps2_scancode(scancode, shift_pressed, altgr_pressed,
+                                       caps_lock);
         }
         break;
       }

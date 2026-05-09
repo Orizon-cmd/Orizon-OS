@@ -2880,7 +2880,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
     term_puts_t(term, "  repair-boot - Rewrite installed boot files\n");
-    term_puts_t(term, "  keyboard  - Show active keyboard layout\n");
+    term_puts_t(term, "  keyboard [fr|us] - Show or change keyboard layout\n");
     term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
@@ -3317,9 +3317,34 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, vfs_persist_status());
     term_puts_t(term, "\n");
   } else if (term_command_is(cmd, "keyboard")) {
-    term_puts_t(term, "Keyboard layout: ");
-    term_puts_t(term, input_keyboard_layout());
-    term_puts_t(term, "\n");
+    const char *args = term_skip_spaces(cmd + 8);
+    if (*args == '\0') {
+      term_puts_t(term, "Keyboard layout: ");
+      term_puts_t(term, input_keyboard_layout());
+      term_puts_t(term, "\nUse: keyboard fr | keyboard us\n");
+    } else if (term_command_is(args, "fr") ||
+               term_command_is(args, "fr-azerty") ||
+               term_command_is(args, "azerty")) {
+      input_set_keyboard_layout("fr-azerty");
+      vfs_mkdir("/workspace/.orizon");
+      vfs_mkdir("/system");
+      term_write_text_file("/workspace/.orizon/keyboard", "fr-azerty\n");
+      term_write_text_file("/system/keyboard", "fr-azerty\n");
+      vfs_persist_save();
+      term_puts_t(term, "Keyboard layout active: fr-azerty\n");
+    } else if (term_command_is(args, "us") ||
+               term_command_is(args, "us-qwerty") ||
+               term_command_is(args, "qwerty")) {
+      input_set_keyboard_layout("us-qwerty");
+      vfs_mkdir("/workspace/.orizon");
+      vfs_mkdir("/system");
+      term_write_text_file("/workspace/.orizon/keyboard", "us-qwerty\n");
+      term_write_text_file("/system/keyboard", "us-qwerty\n");
+      vfs_persist_save();
+      term_puts_t(term, "Keyboard layout active: us-qwerty\n");
+    } else {
+      term_puts_t(term, "usage: keyboard fr | keyboard us\n");
+    }
   } else if (term_command_is(cmd, "net")) {
     term_run_net(term, cmd);
   } else if (term_command_is(cmd, "network-status")) {
