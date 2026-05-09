@@ -215,9 +215,13 @@ typedef struct {
   int scan_ready;
   int scan_failed;
   int scan_response_seen;
+  int scan_start_seen;
+  int scan_iter_seen;
+  int scan_complete_seen;
   int scan_inflight;
   unsigned long scan_errors;
   unsigned long scan_generation;
+  unsigned long scan_notifications;
   uint32_t scan_uid;
   uint32_t scan_cmd_len;
   uint32_t scan_version;
@@ -228,6 +232,20 @@ typedef struct {
   uint32_t scan_channel_last;
   uint32_t scan_dwell_active;
   uint32_t scan_dwell_passive;
+  uint32_t scan_start_uid;
+  uint32_t scan_iter_uid;
+  uint32_t scan_iter_channels;
+  uint32_t scan_iter_status;
+  uint32_t scan_iter_bt_status;
+  uint32_t scan_iter_last_channel;
+  uint32_t scan_iter_tsf_low;
+  uint32_t scan_iter_tsf_high;
+  uint32_t scan_complete_uid;
+  uint32_t scan_complete_last_schedule;
+  uint32_t scan_complete_last_iter;
+  uint32_t scan_complete_status;
+  uint32_t scan_complete_ebs_status;
+  uint32_t scan_complete_elapsed;
   const char *chipset;
   const char *driver;
   const char *status;
@@ -309,6 +327,7 @@ int wifi_nvm_probe(int arm, char *report, size_t report_size);
 int wifi_nvm_info_probe(int arm, char *report, size_t report_size);
 int wifi_bringup_probe(char *report, size_t report_size);
 int wifi_scan(int arm, char *report, size_t report_size);
+int wifi_scan_poll(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 

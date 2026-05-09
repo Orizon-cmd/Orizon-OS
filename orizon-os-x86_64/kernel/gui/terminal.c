@@ -2688,6 +2688,12 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "scan")) {
     const char *scan_args = term_skip_spaces(args + 4);
+    if (term_command_is(scan_args, "poll") ||
+        term_command_is(scan_args, "wait")) {
+      wifi_scan_poll(line, sizeof(line));
+      term_puts_t(term, line);
+      return;
+    }
     int arm_scan = term_command_is(scan_args, "arm") ||
                    term_command_is(scan_args, "go");
     wifi_scan(arm_scan, line, sizeof(line));
@@ -2836,7 +2842,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|scan [arm]|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|scan [arm|poll]|connect <ssid> [password]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3435,7 +3441,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi nvm [arm] - Read Intel firmware NVM cache\n");
     term_puts_t(term, "  wifi nvm-info [arm] - Read Intel radio/NVM capabilities\n");
     term_puts_t(term, "  wifi bringup - Run Intel Wi-Fi boot/readiness sequence\n");
-    term_puts_t(term, "  wifi scan [arm] - Plan/send experimental passive scan\n");
+    term_puts_t(term, "  wifi scan [arm|poll] - Plan/send/poll experimental passive scan\n");
     term_puts_t(term, "  wifi connect - Wi-Fi association staging diagnostics\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");

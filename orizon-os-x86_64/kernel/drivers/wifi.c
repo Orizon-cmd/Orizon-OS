@@ -223,9 +223,13 @@ static wifi_status_t wifi_status_state = {
     .scan_ready = 0,
     .scan_failed = 0,
     .scan_response_seen = 0,
+    .scan_start_seen = 0,
+    .scan_iter_seen = 0,
+    .scan_complete_seen = 0,
     .scan_inflight = 0,
     .scan_errors = 0,
     .scan_generation = 0,
+    .scan_notifications = 0,
     .scan_uid = 0,
     .scan_cmd_len = 0,
     .scan_version = 0,
@@ -236,6 +240,20 @@ static wifi_status_t wifi_status_state = {
     .scan_channel_last = 0,
     .scan_dwell_active = 0,
     .scan_dwell_passive = 0,
+    .scan_start_uid = 0,
+    .scan_iter_uid = 0,
+    .scan_iter_channels = 0,
+    .scan_iter_status = 0,
+    .scan_iter_bt_status = 0,
+    .scan_iter_last_channel = 0,
+    .scan_iter_tsf_low = 0,
+    .scan_iter_tsf_high = 0,
+    .scan_complete_uid = 0,
+    .scan_complete_last_schedule = 0,
+    .scan_complete_last_iter = 0,
+    .scan_complete_status = 0,
+    .scan_complete_ebs_status = 0,
+    .scan_complete_elapsed = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -427,8 +445,13 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CMD_NVM_ACCESS 0x88U
 #define WIFI_CMD_NVM_GET_INFO 0x02U
 #define WIFI_CMD_SCAN_REQ_UMAC 0x0dU
+#define WIFI_CMD_SCAN_ABORT_UMAC 0x0eU
+#define WIFI_CMD_SCAN_COMPLETE_UMAC 0x0fU
+#define WIFI_CMD_SCAN_START_NOTIFICATION_UMAC 0xb2U
+#define WIFI_CMD_SCAN_ITERATION_COMPLETE_UMAC 0xb5U
 #define WIFI_CMD_GROUP_LONG 0x01U
 #define WIFI_CMD_GROUP_LEGACY 0x00U
+#define WIFI_CMD_GROUP_SCAN 0x06U
 #define WIFI_CMD_GROUP_REGULATORY_NVM 0x0cU
 #define WIFI_CMD_VERSION_TX_QUEUE_CFG 2U
 #define WIFI_CMD_VERSION_NVM_ACCESS 0U
@@ -459,6 +482,7 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_SCAN_DWELL_PASSIVE 110U
 #define WIFI_SCAN_DWELL_FRAGMENTED 44U
 #define WIFI_SCAN_DWELL_EXTENDED 90U
+#define WIFI_SCAN_POLL_LOOPS 800000U
 #define HBUS_TARG_WRPTR 0x460U
 #define HBUS_TARG_WRPTR_Q_SHIFT 16U
 #define FH_RSCSR_FRAME_SIZE_MSK 0x00003fffU
@@ -637,6 +661,30 @@ typedef struct __attribute__((packed)) {
   wifi_scan_probe_req_v1_t preq;
   wifi_scan_ssid_ie_t direct_scan[WIFI_SCAN_DIRECT_SSID_SLOTS];
 } wifi_scan_req_umac_tail_v1_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t uid;
+  uint32_t reserved;
+} wifi_umac_scan_start_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t uid;
+  uint8_t last_schedule;
+  uint8_t last_iter;
+  uint8_t status;
+  uint8_t ebs_status;
+  uint32_t time_from_last_iter;
+  uint32_t reserved;
+} wifi_umac_scan_complete_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t uid;
+  uint8_t scanned_channels;
+  uint8_t status;
+  uint8_t bt_status;
+  uint8_t last_channel;
+  uint64_t start_tsf;
+} wifi_umac_scan_iter_complete_t;
 
 typedef struct __attribute__((packed)) {
   uint16_t mac_id;
@@ -1222,9 +1270,13 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.scan_ready = 0;
   wifi_status_state.scan_failed = 0;
   wifi_status_state.scan_response_seen = 0;
+  wifi_status_state.scan_start_seen = 0;
+  wifi_status_state.scan_iter_seen = 0;
+  wifi_status_state.scan_complete_seen = 0;
   wifi_status_state.scan_inflight = 0;
   wifi_status_state.scan_errors = 0;
   wifi_status_state.scan_generation = 0;
+  wifi_status_state.scan_notifications = 0;
   wifi_status_state.scan_uid = 0;
   wifi_status_state.scan_cmd_len = 0;
   wifi_status_state.scan_version = 0;
@@ -1235,6 +1287,20 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.scan_channel_last = 0;
   wifi_status_state.scan_dwell_active = 0;
   wifi_status_state.scan_dwell_passive = 0;
+  wifi_status_state.scan_start_uid = 0;
+  wifi_status_state.scan_iter_uid = 0;
+  wifi_status_state.scan_iter_channels = 0;
+  wifi_status_state.scan_iter_status = 0;
+  wifi_status_state.scan_iter_bt_status = 0;
+  wifi_status_state.scan_iter_last_channel = 0;
+  wifi_status_state.scan_iter_tsf_low = 0;
+  wifi_status_state.scan_iter_tsf_high = 0;
+  wifi_status_state.scan_complete_uid = 0;
+  wifi_status_state.scan_complete_last_schedule = 0;
+  wifi_status_state.scan_complete_last_iter = 0;
+  wifi_status_state.scan_complete_status = 0;
+  wifi_status_state.scan_complete_ebs_status = 0;
+  wifi_status_state.scan_complete_elapsed = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -2438,7 +2504,11 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.scan_ready = 0;
   wifi_status_state.scan_failed = 0;
   wifi_status_state.scan_response_seen = 0;
+  wifi_status_state.scan_start_seen = 0;
+  wifi_status_state.scan_iter_seen = 0;
+  wifi_status_state.scan_complete_seen = 0;
   wifi_status_state.scan_inflight = 0;
+  wifi_status_state.scan_notifications = 0;
   wifi_status_state.scan_uid = 0;
   wifi_status_state.scan_cmd_len = 0;
   wifi_status_state.scan_version = 0;
@@ -2449,6 +2519,20 @@ static void wifi_reset_queue_runtime(void) {
   wifi_status_state.scan_channel_last = 0;
   wifi_status_state.scan_dwell_active = 0;
   wifi_status_state.scan_dwell_passive = 0;
+  wifi_status_state.scan_start_uid = 0;
+  wifi_status_state.scan_iter_uid = 0;
+  wifi_status_state.scan_iter_channels = 0;
+  wifi_status_state.scan_iter_status = 0;
+  wifi_status_state.scan_iter_bt_status = 0;
+  wifi_status_state.scan_iter_last_channel = 0;
+  wifi_status_state.scan_iter_tsf_low = 0;
+  wifi_status_state.scan_iter_tsf_high = 0;
+  wifi_status_state.scan_complete_uid = 0;
+  wifi_status_state.scan_complete_last_schedule = 0;
+  wifi_status_state.scan_complete_last_iter = 0;
+  wifi_status_state.scan_complete_status = 0;
+  wifi_status_state.scan_complete_ebs_status = 0;
+  wifi_status_state.scan_complete_elapsed = 0;
 }
 
 static int wifi_prepare_host_queues(void) {
@@ -2891,13 +2975,20 @@ void wifi_format_status(char *buf, size_t size) {
                : (s->nvm_info_ready
                       ? "ready"
                       : (s->nvm_info_failed ? "failed" : "idle")),
-           s->scan_response_seen
-               ? "response"
-               : (s->scan_inflight
-                      ? "inflight"
-                      : (s->scan_ready
-                             ? "ready"
-                             : (s->scan_failed ? "failed" : "idle"))),
+           s->scan_complete_seen
+               ? "complete"
+               : (s->scan_iter_seen
+                      ? "iter"
+                      : (s->scan_start_seen
+                             ? "started"
+                             : (s->scan_response_seen
+                                    ? "response"
+                                    : (s->scan_inflight
+                                           ? "inflight"
+                                           : (s->scan_ready
+                                                  ? "ready"
+                                                  : (s->scan_failed ? "failed"
+                                                                    : "idle")))))),
            s->status);
 }
 
@@ -3888,6 +3979,37 @@ static void wifi_scan_mark_failure(const char *status) {
   wifi_status_state.status = status;
 }
 
+static int wifi_is_scan_notification_group(uint8_t group_id) {
+  return group_id == WIFI_CMD_GROUP_LONG || group_id == WIFI_CMD_GROUP_LEGACY ||
+         group_id == WIFI_CMD_GROUP_SCAN;
+}
+
+static const char *wifi_scan_complete_status_text(uint32_t status) {
+  switch (status) {
+  case 1U:
+    return "completed";
+  case 2U:
+    return "aborted";
+  default:
+    return "unknown";
+  }
+}
+
+static const char *wifi_scan_ebs_status_text(uint32_t status) {
+  switch (status) {
+  case 0U:
+    return "success";
+  case 1U:
+    return "failed";
+  case 2U:
+    return "chan-not-found";
+  case 3U:
+    return "inactive";
+  default:
+    return "unknown";
+  }
+}
+
 static int wifi_stage_command_payload(uint8_t cmd_id, uint8_t group_id,
                                       uint8_t version, const void *payload,
                                       uint32_t payload_len,
@@ -4184,7 +4306,11 @@ static int wifi_prepare_scan_command(void) {
   wifi_status_state.scan_ready = 1;
   wifi_status_state.scan_failed = 0;
   wifi_status_state.scan_response_seen = 0;
+  wifi_status_state.scan_start_seen = 0;
+  wifi_status_state.scan_iter_seen = 0;
+  wifi_status_state.scan_complete_seen = 0;
   wifi_status_state.scan_inflight = 0;
+  wifi_status_state.scan_notifications = 0;
   wifi_status_state.scan_generation++;
   wifi_status_state.scan_uid = cmd->uid;
   wifi_status_state.scan_cmd_len = payload_len;
@@ -4196,6 +4322,20 @@ static int wifi_prepare_scan_command(void) {
   wifi_status_state.scan_channel_last = channels[channel_count - 1U];
   wifi_status_state.scan_dwell_active = cmd->active_dwell;
   wifi_status_state.scan_dwell_passive = cmd->passive_dwell;
+  wifi_status_state.scan_start_uid = 0;
+  wifi_status_state.scan_iter_uid = 0;
+  wifi_status_state.scan_iter_channels = 0;
+  wifi_status_state.scan_iter_status = 0;
+  wifi_status_state.scan_iter_bt_status = 0;
+  wifi_status_state.scan_iter_last_channel = 0;
+  wifi_status_state.scan_iter_tsf_low = 0;
+  wifi_status_state.scan_iter_tsf_high = 0;
+  wifi_status_state.scan_complete_uid = 0;
+  wifi_status_state.scan_complete_last_schedule = 0;
+  wifi_status_state.scan_complete_last_iter = 0;
+  wifi_status_state.scan_complete_status = 0;
+  wifi_status_state.scan_complete_ebs_status = 0;
+  wifi_status_state.scan_complete_elapsed = 0;
   return 0;
 }
 
@@ -4409,6 +4549,67 @@ static int wifi_rx_parse_one(void) {
     } else {
       wifi_status_state.nvm_info_errors++;
       wifi_status_state.status = "wifi: NVM_GET_INFO response too short";
+    }
+    specialized_status = 1;
+  }
+
+  if (pkt->header.cmd == WIFI_CMD_SCAN_START_NOTIFICATION_UMAC &&
+      wifi_is_scan_notification_group(pkt->header.group_id)) {
+    if (payload_len >= sizeof(wifi_umac_scan_start_t)) {
+      wifi_status_state.scan_start_seen = 1;
+      wifi_status_state.scan_inflight = 1;
+      wifi_status_state.scan_ready = 0;
+      wifi_status_state.scan_failed = 0;
+      wifi_status_state.scan_notifications++;
+      wifi_status_state.scan_start_uid = wifi_read_le32(payload);
+      wifi_status_state.status = "wifi: UMAC scan start notification parsed";
+    } else {
+      wifi_scan_mark_failure("wifi: UMAC scan start notification too short");
+    }
+    specialized_status = 1;
+  }
+
+  if (pkt->header.cmd == WIFI_CMD_SCAN_ITERATION_COMPLETE_UMAC &&
+      wifi_is_scan_notification_group(pkt->header.group_id)) {
+    if (payload_len >= sizeof(wifi_umac_scan_iter_complete_t)) {
+      wifi_status_state.scan_iter_seen = 1;
+      wifi_status_state.scan_inflight = 1;
+      wifi_status_state.scan_ready = 0;
+      wifi_status_state.scan_failed = 0;
+      wifi_status_state.scan_notifications++;
+      wifi_status_state.scan_iter_uid = wifi_read_le32(payload);
+      wifi_status_state.scan_iter_channels = payload[4];
+      wifi_status_state.scan_iter_status = payload[5];
+      wifi_status_state.scan_iter_bt_status = payload[6];
+      wifi_status_state.scan_iter_last_channel = payload[7];
+      wifi_status_state.scan_iter_tsf_low = wifi_read_le32(payload + 8U);
+      wifi_status_state.scan_iter_tsf_high = wifi_read_le32(payload + 12U);
+      wifi_status_state.status =
+          "wifi: UMAC scan iteration notification parsed";
+    } else {
+      wifi_scan_mark_failure(
+          "wifi: UMAC scan iteration notification too short");
+    }
+    specialized_status = 1;
+  }
+
+  if (pkt->header.cmd == WIFI_CMD_SCAN_COMPLETE_UMAC &&
+      wifi_is_scan_notification_group(pkt->header.group_id)) {
+    if (payload_len >= sizeof(wifi_umac_scan_complete_t)) {
+      wifi_status_state.scan_complete_seen = 1;
+      wifi_status_state.scan_inflight = 0;
+      wifi_status_state.scan_ready = 0;
+      wifi_status_state.scan_failed = 0;
+      wifi_status_state.scan_notifications++;
+      wifi_status_state.scan_complete_uid = wifi_read_le32(payload);
+      wifi_status_state.scan_complete_last_schedule = payload[4];
+      wifi_status_state.scan_complete_last_iter = payload[5];
+      wifi_status_state.scan_complete_status = payload[6];
+      wifi_status_state.scan_complete_ebs_status = payload[7];
+      wifi_status_state.scan_complete_elapsed = wifi_read_le32(payload + 8U);
+      wifi_status_state.status = "wifi: UMAC scan complete notification parsed";
+    } else {
+      wifi_scan_mark_failure("wifi: UMAC scan complete notification too short");
     }
     specialized_status = 1;
   }
@@ -5079,9 +5280,14 @@ int wifi_scan(int arm, char *report, size_t report_size) {
            "seq=0x%04x queue=%u index=%u\n"
            "plan: channels=%u first=%u last=%u flags=0x%08x "
            "general=0x%08x dwell=%u/%u\n"
-           "state: sent=%s response=%s failed=%s timeout=%s errors=%lu\n"
+           "state: sent=%s response=%s start=%s iter=%s complete=%s "
+           "inflight=%s failed=%s timeout=%s notifications=%lu errors=%lu\n"
+           "iter: uid=%u channels=%u status=%u bt=%u last-channel=%u "
+           "tsf=0x%08x%08x\n"
+           "complete: uid=%u status=%u/%s ebs=%u/%s elapsed=%u\n"
            "note: this is the first passive UMAC scan request; full AP list "
-           "parsing still needs scan notification handling and MAC context work\n",
+           "parsing still needs beacon/probe result parsing and MAC context work\n"
+           "next: run wifi scan poll until complete=yes\n",
            s->scan_response_seen
                ? "firmware accepted/answered scan command"
                : (s->command_failed ? "scan command failed/timeout"
@@ -5094,9 +5300,121 @@ int wifi_scan(int arm, char *report, size_t report_size) {
            s->scan_general_flags, s->scan_dwell_active,
            s->scan_dwell_passive, s->command_sent ? "yes" : "no",
            s->scan_response_seen ? "yes" : "no",
+           s->scan_start_seen ? "yes" : "no",
+           s->scan_iter_seen ? "yes" : "no",
+           s->scan_complete_seen ? "yes" : "no",
+           s->scan_inflight ? "yes" : "no",
            s->command_failed ? "yes" : "no",
-           s->command_timeout ? "yes" : "no", s->scan_errors);
+           s->command_timeout ? "yes" : "no", s->scan_notifications,
+           s->scan_errors, s->scan_iter_uid, s->scan_iter_channels,
+           s->scan_iter_status, s->scan_iter_bt_status,
+           s->scan_iter_last_channel, s->scan_iter_tsf_high,
+           s->scan_iter_tsf_low, s->scan_complete_uid,
+           s->scan_complete_status,
+           wifi_scan_complete_status_text(s->scan_complete_status),
+           s->scan_complete_ebs_status,
+           wifi_scan_ebs_status_text(s->scan_complete_ebs_status),
+           s->scan_complete_elapsed);
   return rc;
+}
+
+int wifi_scan_poll(char *report, size_t report_size) {
+  const wifi_status_t *s;
+  unsigned long notifications_before;
+  unsigned long packets_before;
+  uint32_t loops = 0;
+  int parsed = 0;
+  int observed = 0;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi scan poll: no wireless controller detected\n");
+    return -1;
+  }
+
+  if (!s->rx_path_ready) {
+    snprintf(report, report_size,
+             "wifi scan poll: RX path is not ready\n"
+             "state: boot=%s alive=%s queues=%s context=%s rx=%s\n"
+             "run: wifi bringup, wifi scan arm, then wifi scan poll\n",
+             s->boot_ready ? "ready" : "not-ready",
+             s->alive_seen ? "seen" : "not-seen",
+             s->queues_ready ? "ready" : "not-ready",
+             s->context_armed ? "armed" : "not-armed",
+             s->rx_path_ready ? "ready" : "not-ready");
+    return -1;
+  }
+
+  notifications_before = s->scan_notifications;
+  packets_before = s->rx_packets;
+
+  if (!s->scan_complete_seen) {
+    for (uint32_t i = 0; i < WIFI_SCAN_POLL_LOOPS; i++) {
+      int rc;
+      loops = i + 1U;
+      wifi_status_state.rx_polls++;
+      rc = wifi_rx_parse_one();
+      if (rc > 0) {
+        parsed++;
+        if (wifi_status_state.scan_notifications != notifications_before ||
+            wifi_status_state.scan_complete_seen) {
+          observed = 1;
+          break;
+        }
+      }
+      if (rc < 0) {
+        break;
+      }
+      __asm__ volatile("pause");
+    }
+  } else {
+    observed = 1;
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi scan poll: %s\n"
+           "state: uid=%u sent=%s response=%s start=%s iter=%s complete=%s "
+           "inflight=%s notifications=%lu failed=%s errors=%lu\n"
+           "poll: loops=%u parsed=%d packets-before=%lu packets-after=%lu "
+           "notifications-before=%lu\n"
+           "start: uid=%u\n"
+           "iter: uid=%u channels=%u status=%u bt=%u last-channel=%u "
+           "tsf=0x%08x%08x\n"
+           "complete: uid=%u schedule=%u iter=%u status=%u/%s ebs=%u/%s "
+           "elapsed=%u\n"
+           "rx-last: cmd=0x%02x group=0x%02x seq=0x%04x len=%u\n"
+           "next: if complete=no, repeat wifi scan poll; AP names need the "
+           "next RX beacon/probe parser step\n",
+           observed ? "scan notification observed"
+                    : "no new scan notification in this poll window",
+           s->scan_uid, s->command_sent ? "yes" : "no",
+           s->scan_response_seen ? "yes" : "no",
+           s->scan_start_seen ? "yes" : "no",
+           s->scan_iter_seen ? "yes" : "no",
+           s->scan_complete_seen ? "yes" : "no",
+           s->scan_inflight ? "yes" : "no", s->scan_notifications,
+           s->scan_failed ? "yes" : "no", s->scan_errors, loops, parsed,
+           packets_before, s->rx_packets, notifications_before,
+           s->scan_start_uid, s->scan_iter_uid, s->scan_iter_channels,
+           s->scan_iter_status, s->scan_iter_bt_status,
+           s->scan_iter_last_channel, s->scan_iter_tsf_high,
+           s->scan_iter_tsf_low, s->scan_complete_uid,
+           s->scan_complete_last_schedule, s->scan_complete_last_iter,
+           s->scan_complete_status,
+           wifi_scan_complete_status_text(s->scan_complete_status),
+           s->scan_complete_ebs_status,
+           wifi_scan_ebs_status_text(s->scan_complete_ebs_status),
+           s->scan_complete_elapsed, s->rx_last_cmd, s->rx_last_group,
+           s->rx_last_sequence, s->rx_last_len);
+  return s->scan_failed ? -1 : 0;
 }
 
 int wifi_connect(const char *ssid, const char *password, char *report,
