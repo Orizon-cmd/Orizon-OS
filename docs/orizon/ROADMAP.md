@@ -11,8 +11,9 @@
   `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
   `sysinfo`, `hw`, `mounts`, `logs`, `report`, `ps`, and `uptime`.
-- Staged remote-management base: `ssh start/status/stop`, TCP/22 listener,
-  SSH banner diagnostics, `/system/ssh.conf`, and `/logs/ssh.log`.
+- Staged remote-management base: `ssh start/status/algorithms/stop`, TCP/22
+  listener, SSH banner, server/client `KEXINIT` diagnostics, algorithm
+  negotiation report, `/system/ssh.conf`, and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA

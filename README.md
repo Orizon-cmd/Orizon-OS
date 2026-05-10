@@ -32,9 +32,9 @@ le developpement noyau:
 - diagnostics `sysinfo`, `hw`, `mounts` et `report` pour voir CPU, memoire,
   stockage, racines data, reseau, USB/PS2, installation, update et principaux
   peripheriques PCI
-- service `ssh` experimental: listener TCP/22, banniere SSH Orizon,
-  configuration `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics
-  `ssh status` pour preparer l'acces distant securise
+- service `ssh` experimental: listener TCP/22, banniere SSH Orizon, paquet
+  `KEXINIT`, negotiation diagnostique des algorithmes OpenSSH, configuration
+  `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics `ssh status`
 - inspection stockage avec `disks`, `storage detail` et selection du disque
   actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
@@ -136,15 +136,17 @@ Le service SSH se demarre explicitement depuis la console:
 net dhcp
 ssh start
 ssh status
+ssh algorithms
 logs ssh
 ```
 
-La commande configure IPv4 si besoin, ouvre TCP/22 et ecrit la configuration
-dans `/system/ssh.conf`. Depuis une autre machine du meme reseau, un client SSH
-peut atteindre la banniere `SSH-2.0-OrizonSSH_0.1`, ce qui valide le chemin
-entrant. La couche shell chiffree n'est volontairement pas active tant que
-l'echange de cles, l'authentification et la pseudo-console ne sont pas
-termines; Orizon ne cree donc pas d'acces cache non securise.
+La commande configure IPv4 si besoin, ouvre TCP/22, ecrit la configuration
+dans `/system/ssh.conf`, envoie la banniere `SSH-2.0-OrizonSSH_0.1`, puis
+participe a la premiere negotiation `KEXINIT`. `ssh algorithms` affiche les
+algorithmes vus/proposes par le client et ceux choisis par Orizon. La couche
+shell chiffree n'est volontairement pas active tant que l'echange de cles,
+l'authentification et la pseudo-console ne sont pas termines; Orizon ne cree
+donc pas d'acces cache non securise.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

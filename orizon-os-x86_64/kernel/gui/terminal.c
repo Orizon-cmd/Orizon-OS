@@ -2531,7 +2531,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
       term_puts_t(term, "\n");
     }
     term_puts_t(term,
-                "commands: ssh start | ssh stop | ssh status | ssh poll\n");
+                "commands: ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
     return;
   }
 
@@ -2564,7 +2564,17 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
     return;
   }
 
-  term_puts_t(term, "usage: ssh start | ssh stop | ssh status | ssh poll\n");
+  if (term_command_is(args, "algorithms") || term_command_is(args, "algo")) {
+    ssh_format_algorithms(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
+
+  term_puts_t(term,
+              "usage: ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
 }
 
 static void term_run_net(terminal_t *term, const char *cmd) {
@@ -3628,7 +3638,7 @@ void term_execute(terminal_t *term, const char *cmd) {
                 "  wifi tx [auth|assoc|m2|m4|data|all] - Stage Wi-Fi TX DMA only\n");
     term_puts_t(term,
                 "  wifi txcmd [auth|assoc|m2|m4|data] [arm] - Build/queue TX_CMD\n");
-    term_puts_t(term, "  ssh start/status/stop - Manage TCP/22 SSH listener\n");
+    term_puts_t(term, "  ssh start/status/algorithms/stop - Manage TCP/22 SSH listener\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
