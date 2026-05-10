@@ -54,9 +54,11 @@ development target, not a ZimaOS-only assumption.
   first per-channel scan telemetry rows: channel, band, probe status, skipped
   probes, and dwell duration. Orizon now also watches `REPLY_RX_MPDU` packets
   during scan polling and records the first SSID/BSSID/channel rows from
-  beacon/probe-response management frames. Real connections still require the
-  next driver milestones: MAC context setup, 802.11 association management
-  frames, and WPA association.
+  beacon/probe-response management frames. `wifi scan poll` includes an
+  `mpdu-debug` block with raw bytes and candidate frame offsets when no AP is
+  parsed yet, which is the key feedback loop for fixing real-hardware RX
+  layouts. Real connections still require the next driver milestones: MAC
+  context setup, 802.11 association management frames, and WPA association.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware

@@ -264,12 +264,16 @@ static wifi_status_t wifi_status_state = {
     .scan_beacon_frames = 0,
     .scan_probe_resp_frames = 0,
     .scan_ssid_updates = 0,
+    .scan_mpdu_parse_misses = 0,
+    .scan_last_mpdu_payload_len = 0,
     .scan_last_mpdu_len = 0,
     .scan_last_frame_offset = 0,
     .scan_last_frame_len = 0,
     .scan_last_frame_control = 0,
     .scan_last_frame_subtype = 0,
     .scan_last_frame_channel = 0,
+    .scan_last_debug_len = 0,
+    .scan_candidate_count = 0,
     .scan_ap_count = 0,
     .scan_ap_overflow = 0,
     .chipset = "none",
@@ -1106,12 +1110,28 @@ static void wifi_scan_clear_access_points(void) {
   wifi_status_state.scan_beacon_frames = 0;
   wifi_status_state.scan_probe_resp_frames = 0;
   wifi_status_state.scan_ssid_updates = 0;
+  wifi_status_state.scan_mpdu_parse_misses = 0;
+  wifi_status_state.scan_last_mpdu_payload_len = 0;
   wifi_status_state.scan_last_mpdu_len = 0;
   wifi_status_state.scan_last_frame_offset = 0;
   wifi_status_state.scan_last_frame_len = 0;
   wifi_status_state.scan_last_frame_control = 0;
   wifi_status_state.scan_last_frame_subtype = 0;
   wifi_status_state.scan_last_frame_channel = 0;
+  wifi_status_state.scan_last_debug_len = 0;
+  wifi_status_state.scan_candidate_count = 0;
+  memset(wifi_status_state.scan_last_debug_bytes, 0,
+         sizeof(wifi_status_state.scan_last_debug_bytes));
+  memset(wifi_status_state.scan_candidate_offset, 0,
+         sizeof(wifi_status_state.scan_candidate_offset));
+  memset(wifi_status_state.scan_candidate_len, 0,
+         sizeof(wifi_status_state.scan_candidate_len));
+  memset(wifi_status_state.scan_candidate_fc, 0,
+         sizeof(wifi_status_state.scan_candidate_fc));
+  memset(wifi_status_state.scan_candidate_type, 0,
+         sizeof(wifi_status_state.scan_candidate_type));
+  memset(wifi_status_state.scan_candidate_subtype, 0,
+         sizeof(wifi_status_state.scan_candidate_subtype));
   wifi_status_state.scan_ap_count = 0;
   wifi_status_state.scan_ap_overflow = 0;
   memset(wifi_status_state.scan_ap_channel, 0,
@@ -4251,6 +4271,53 @@ static int wifi_scan_store_ap(const uint8_t *bssid, const uint8_t *ssid,
   return 0;
 }
 
+static void wifi_scan_record_candidate(uint32_t offset, uint32_t frame_len,
+                                       uint16_t fc) {
+  uint32_t slot = wifi_status_state.scan_candidate_count;
+
+  if (slot >= WIFI_SCAN_CANDIDATE_SLOTS) {
+    return;
+  }
+
+  wifi_status_state.scan_candidate_offset[slot] = offset;
+  wifi_status_state.scan_candidate_len[slot] = frame_len;
+  wifi_status_state.scan_candidate_fc[slot] = fc;
+  wifi_status_state.scan_candidate_type[slot] =
+      (fc & WIFI_80211_FC_TYPE_MASK) >> 2;
+  wifi_status_state.scan_candidate_subtype[slot] =
+      (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
+  wifi_status_state.scan_candidate_count = slot + 1U;
+}
+
+static void wifi_scan_capture_mpdu_debug(const uint8_t *payload,
+                                         uint32_t payload_len) {
+  uint32_t copy_len = payload_len;
+
+  if (copy_len > WIFI_SCAN_DEBUG_BYTES) {
+    copy_len = WIFI_SCAN_DEBUG_BYTES;
+  }
+
+  wifi_status_state.scan_last_mpdu_payload_len = payload_len;
+  wifi_status_state.scan_last_debug_len = copy_len;
+  wifi_status_state.scan_candidate_count = 0;
+  memset(wifi_status_state.scan_last_debug_bytes, 0,
+         sizeof(wifi_status_state.scan_last_debug_bytes));
+  memset(wifi_status_state.scan_candidate_offset, 0,
+         sizeof(wifi_status_state.scan_candidate_offset));
+  memset(wifi_status_state.scan_candidate_len, 0,
+         sizeof(wifi_status_state.scan_candidate_len));
+  memset(wifi_status_state.scan_candidate_fc, 0,
+         sizeof(wifi_status_state.scan_candidate_fc));
+  memset(wifi_status_state.scan_candidate_type, 0,
+         sizeof(wifi_status_state.scan_candidate_type));
+  memset(wifi_status_state.scan_candidate_subtype, 0,
+         sizeof(wifi_status_state.scan_candidate_subtype));
+
+  for (uint32_t i = 0; i < copy_len; i++) {
+    wifi_status_state.scan_last_debug_bytes[i] = payload[i];
+  }
+}
+
 static int wifi_scan_parse_80211_ies(const uint8_t *frame, uint32_t frame_len,
                                      uint32_t *channel,
                                      const uint8_t **ssid,
@@ -4349,6 +4416,7 @@ static int wifi_scan_try_mpdu_candidate(const uint8_t *payload,
                       WIFI_80211_BEACON_FIXED_BYTES) {
     return 0;
   }
+  wifi_scan_record_candidate(offset, frame_len, wifi_read_le16(payload + offset));
   return wifi_scan_parse_80211_frame(payload + offset, frame_len, offset,
                                      mpdu_len);
 }
@@ -4361,6 +4429,7 @@ static int wifi_scan_parse_rx_mpdu(const uint8_t *payload,
 
   wifi_status_state.scan_mpdu_packets++;
   wifi_status_state.scan_last_mpdu_len = mpdu_len;
+  wifi_scan_capture_mpdu_debug(payload, payload_len);
 
   for (uint32_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
     if (wifi_scan_try_mpdu_candidate(payload, payload_len, candidates[i],
@@ -4377,6 +4446,7 @@ static int wifi_scan_parse_rx_mpdu(const uint8_t *payload,
     }
   }
 
+  wifi_status_state.scan_mpdu_parse_misses++;
   return 0;
 }
 
@@ -5562,6 +5632,31 @@ static void wifi_scan_append_access_points(char *report, size_t report_size) {
            s->scan_last_frame_offset, s->scan_last_frame_len,
            s->scan_last_mpdu_len, s->scan_last_frame_channel);
   wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "mpdu-debug: payload-len=%u parse-misses=%lu raw-len=%u "
+           "candidates=%u\n",
+           s->scan_last_mpdu_payload_len, s->scan_mpdu_parse_misses,
+           s->scan_last_debug_len, s->scan_candidate_count);
+  wifi_report_append(report, report_size, line);
+  if (s->scan_last_debug_len > 0) {
+    wifi_report_append(report, report_size, "mpdu-raw:");
+    for (uint32_t i = 0; i < s->scan_last_debug_len; i++) {
+      char byte_text[8];
+      snprintf(byte_text, sizeof(byte_text), " %02x",
+               s->scan_last_debug_bytes[i]);
+      wifi_report_append(report, report_size, byte_text);
+    }
+    wifi_report_append(report, report_size, "\n");
+  }
+  for (uint32_t i = 0; i < s->scan_candidate_count; i++) {
+    snprintf(line, sizeof(line),
+             "candidate[%u]: offset=%u len=%u fc=0x%04x type=%u subtype=%u/%s\n",
+             i, s->scan_candidate_offset[i], s->scan_candidate_len[i],
+             s->scan_candidate_fc[i], s->scan_candidate_type[i],
+             s->scan_candidate_subtype[i],
+             wifi_scan_frame_subtype_text(s->scan_candidate_subtype[i]));
+    wifi_report_append(report, report_size, line);
+  }
 
   if (s->scan_ap_count == 0) {
     wifi_report_append(report, report_size,

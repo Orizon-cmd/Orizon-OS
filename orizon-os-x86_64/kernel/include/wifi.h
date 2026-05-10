@@ -10,6 +10,8 @@
 #define WIFI_SCAN_RESULT_SLOTS 8U
 #define WIFI_SCAN_AP_SLOTS 8U
 #define WIFI_SCAN_SSID_MAX 32U
+#define WIFI_SCAN_CANDIDATE_SLOTS 8U
+#define WIFI_SCAN_DEBUG_BYTES 32U
 
 typedef struct {
   int present;
@@ -265,12 +267,22 @@ typedef struct {
   unsigned long scan_beacon_frames;
   unsigned long scan_probe_resp_frames;
   unsigned long scan_ssid_updates;
+  unsigned long scan_mpdu_parse_misses;
+  uint32_t scan_last_mpdu_payload_len;
   uint32_t scan_last_mpdu_len;
   uint32_t scan_last_frame_offset;
   uint32_t scan_last_frame_len;
   uint32_t scan_last_frame_control;
   uint32_t scan_last_frame_subtype;
   uint32_t scan_last_frame_channel;
+  uint32_t scan_last_debug_len;
+  uint8_t scan_last_debug_bytes[WIFI_SCAN_DEBUG_BYTES];
+  uint32_t scan_candidate_count;
+  uint32_t scan_candidate_offset[WIFI_SCAN_CANDIDATE_SLOTS];
+  uint32_t scan_candidate_len[WIFI_SCAN_CANDIDATE_SLOTS];
+  uint32_t scan_candidate_fc[WIFI_SCAN_CANDIDATE_SLOTS];
+  uint32_t scan_candidate_type[WIFI_SCAN_CANDIDATE_SLOTS];
+  uint32_t scan_candidate_subtype[WIFI_SCAN_CANDIDATE_SLOTS];
   uint32_t scan_ap_count;
   uint32_t scan_ap_overflow;
   uint32_t scan_ap_channel[WIFI_SCAN_AP_SLOTS];
