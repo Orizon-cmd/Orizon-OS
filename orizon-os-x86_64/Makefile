@@ -72,6 +72,7 @@ LDFLAGS := -nostdlib \
 # Source files
 SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/lib/string.c \
+           $(KERNEL_DIR)/lib/sha1.c \
            $(KERNEL_DIR)/lib/sha256.c \
            $(KERNEL_DIR)/lib/aes_gcm.c \
            $(KERNEL_DIR)/mm/kmalloc.c \

@@ -37,8 +37,7 @@
 4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
    report parser for ELAN/Wacom multitouch and stylus events.
 5. Build Intel CNVi Wi-Fi properly: send prepared auth/association frames with
-   Intel `TX_CMD`, bind MAC/STA context, parse association responses, then add
-   WPA2/WPA3 key exchange.
+   Intel `TX_CMD`, bind MAC/STA context, then complete WPA2/WPA3 key exchange.
 6. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 7. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 8. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and

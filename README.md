@@ -201,8 +201,13 @@ bloc `mpdu-debug` avec les octets bruts et offsets candidats pour corriger le
 parseur sur vrai materiel.
 `wifi connect <ssid> [password]` peut ensuite selectionner un AP scanne et
 preparer les trames 802.11 open-system authentication + association request,
-avec template RSN WPA2-PSK si un mot de passe est fourni. L'association reelle
-attend encore l'emission Intel `TX_CMD`, le binding MAC/STA et le handshake WPA.
+avec template RSN WPA2-PSK si un mot de passe est fourni. Pour WPA2, Orizon
+derive aussi la PMK par PBKDF2-HMAC-SHA1 sans afficher la cle; `wifi crypto`
+verifie les vecteurs SHA-1/PBKDF2 integres. Les passphrases 8-63 caracteres et
+les PSK hexadecimales 64 caracteres sont acceptees. Le chemin RX reconnait deja
+les reponses authentication/association correspondant au plan de connexion et
+stocke leurs status codes. L'association reelle attend encore l'emission Intel
+`TX_CMD`, le binding MAC/STA et le handshake WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

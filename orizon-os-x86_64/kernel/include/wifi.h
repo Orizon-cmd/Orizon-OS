@@ -312,6 +312,20 @@ typedef struct {
   uint32_t connect_auth_fc;
   uint32_t connect_assoc_fc;
   uint32_t connect_frame_checksum;
+  int connect_pmk_ready;
+  uint32_t connect_password_len;
+  uint32_t connect_pmk_iterations;
+  uint32_t connect_pmk_checksum;
+  int connect_auth_response_seen;
+  int connect_assoc_response_seen;
+  int connect_response_failed;
+  unsigned long connect_response_packets;
+  uint32_t connect_last_rx_subtype;
+  uint32_t connect_auth_alg;
+  uint32_t connect_auth_seq;
+  uint32_t connect_auth_status;
+  uint32_t connect_assoc_status;
+  uint32_t connect_assoc_aid;
   uint8_t connect_bssid[6];
   uint8_t connect_local_mac[6];
   char connect_ssid[WIFI_SCAN_SSID_MAX + 1U];
@@ -397,6 +411,7 @@ int wifi_nvm_info_probe(int arm, char *report, size_t report_size);
 int wifi_bringup_probe(char *report, size_t report_size);
 int wifi_scan(int arm, char *report, size_t report_size);
 int wifi_scan_poll(char *report, size_t report_size);
+int wifi_crypto_probe(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 

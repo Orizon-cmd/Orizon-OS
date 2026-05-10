@@ -12,6 +12,7 @@
 #include "../include/gui.h"
 #include "../include/mmio.h"
 #include "../include/pci.h"
+#include "../include/sha1.h"
 #include "../include/string.h"
 #include "../include/vfs.h"
 
@@ -289,6 +290,20 @@ static wifi_status_t wifi_status_state = {
     .connect_auth_fc = 0,
     .connect_assoc_fc = 0,
     .connect_frame_checksum = 0,
+    .connect_pmk_ready = 0,
+    .connect_password_len = 0,
+    .connect_pmk_iterations = 0,
+    .connect_pmk_checksum = 0,
+    .connect_auth_response_seen = 0,
+    .connect_assoc_response_seen = 0,
+    .connect_response_failed = 0,
+    .connect_response_packets = 0,
+    .connect_last_rx_subtype = 0,
+    .connect_auth_alg = 0,
+    .connect_auth_seq = 0,
+    .connect_auth_status = 0,
+    .connect_assoc_status = 0,
+    .connect_assoc_aid = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -529,12 +544,18 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_80211_FC_SUBTYPE_MASK 0x00f0U
 #define WIFI_80211_TYPE_MGMT 0U
 #define WIFI_80211_SUBTYPE_ASSOC_REQ 0U
+#define WIFI_80211_SUBTYPE_ASSOC_RESP 1U
 #define WIFI_80211_SUBTYPE_AUTH 11U
 #define WIFI_80211_SUBTYPE_PROBE_RESP 5U
 #define WIFI_80211_SUBTYPE_BEACON 8U
 #define WIFI_80211_CAP_ESS 0x0001U
 #define WIFI_80211_CAP_PRIVACY 0x0010U
 #define WIFI_80211_LISTEN_INTERVAL 10U
+#define WIFI_WPA2_PMK_BYTES 32U
+#define WIFI_WPA2_PBKDF2_ITERATIONS 4096U
+#define WIFI_WPA2_MIN_PASSPHRASE 8U
+#define WIFI_WPA2_MAX_PASSPHRASE 63U
+#define WIFI_WPA2_HEX_PSK_CHARS 64U
 #define HBUS_TARG_WRPTR 0x460U
 #define HBUS_TARG_WRPTR_Q_SHIFT 16U
 #define FH_RSCSR_FRAME_SIZE_MSK 0x00003fffU
@@ -917,6 +938,8 @@ static uint8_t wifi_scan_payload[WIFI_CMD_BUFFER_BYTES]
 static uint8_t wifi_connect_auth_frame[64] __attribute__((aligned(16)));
 static uint8_t wifi_connect_assoc_frame[WIFI_CONNECT_FRAME_BYTES]
     __attribute__((aligned(16)));
+static uint8_t wifi_connect_pmk[WIFI_WPA2_PMK_BYTES]
+    __attribute__((aligned(16)));
 static wifi_legacy_context_info_t wifi_legacy_context
     __attribute__((aligned(4096)));
 static wifi_context_info_v2_t wifi_context_v2 __attribute__((aligned(4096)));
@@ -1191,6 +1214,20 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.connect_auth_fc = 0;
   wifi_status_state.connect_assoc_fc = 0;
   wifi_status_state.connect_frame_checksum = 0;
+  wifi_status_state.connect_pmk_ready = 0;
+  wifi_status_state.connect_password_len = 0;
+  wifi_status_state.connect_pmk_iterations = 0;
+  wifi_status_state.connect_pmk_checksum = 0;
+  wifi_status_state.connect_auth_response_seen = 0;
+  wifi_status_state.connect_assoc_response_seen = 0;
+  wifi_status_state.connect_response_failed = 0;
+  wifi_status_state.connect_response_packets = 0;
+  wifi_status_state.connect_last_rx_subtype = 0;
+  wifi_status_state.connect_auth_alg = 0;
+  wifi_status_state.connect_auth_seq = 0;
+  wifi_status_state.connect_auth_status = 0;
+  wifi_status_state.connect_assoc_status = 0;
+  wifi_status_state.connect_assoc_aid = 0;
   memset(wifi_status_state.connect_bssid, 0,
          sizeof(wifi_status_state.connect_bssid));
   memset(wifi_status_state.connect_local_mac, 0,
@@ -1199,6 +1236,7 @@ static void wifi_connect_clear_plan(void) {
          sizeof(wifi_status_state.connect_ssid));
   memset(wifi_connect_auth_frame, 0, sizeof(wifi_connect_auth_frame));
   memset(wifi_connect_assoc_frame, 0, sizeof(wifi_connect_assoc_frame));
+  memset(wifi_connect_pmk, 0, sizeof(wifi_connect_pmk));
 }
 
 static void wifi_reset_firmware_parse(void) {
@@ -3164,9 +3202,13 @@ void wifi_format_status(char *buf, size_t size) {
                                                   ? "ready"
                                                   : (s->scan_failed ? "failed"
                                                                     : "idle")))))),
-           s->connect_ready
-               ? (s->connect_wpa ? "wpa-plan" : "open-plan")
-               : (s->connect_failed ? "failed" : "idle"),
+           s->connect_assoc_response_seen
+               ? (s->connect_assoc_status ? "assoc-failed" : "assoc-rx")
+               : (s->connect_auth_response_seen
+                      ? (s->connect_auth_status ? "auth-failed" : "auth-rx")
+                      : (s->connect_ready
+                             ? (s->connect_wpa ? "wpa-plan" : "open-plan")
+                             : (s->connect_failed ? "failed" : "idle"))),
            s->status);
 }
 
@@ -4424,6 +4466,87 @@ static int wifi_scan_parse_80211_ies(const uint8_t *frame, uint32_t frame_len,
   return ssid_seen;
 }
 
+static int wifi_mac_equal6(const uint8_t *a, const uint8_t *b) {
+  if (!a || !b) {
+    return 0;
+  }
+  for (uint32_t i = 0; i < 6U; i++) {
+    if (a[i] != b[i]) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int wifi_connect_frame_matches_plan(const uint8_t *frame,
+                                           uint32_t frame_len) {
+  if (!wifi_status_state.connect_ready ||
+      frame_len < WIFI_80211_MGMT_HEADER_BYTES) {
+    return 0;
+  }
+
+  return wifi_mac_equal6(frame + 4U, wifi_status_state.connect_local_mac) &&
+         wifi_mac_equal6(frame + 10U, wifi_status_state.connect_bssid) &&
+         wifi_mac_equal6(frame + 16U, wifi_status_state.connect_bssid);
+}
+
+static int wifi_connect_parse_response_frame(const uint8_t *frame,
+                                             uint32_t frame_len,
+                                             uint32_t subtype) {
+  if (!wifi_connect_frame_matches_plan(frame, frame_len)) {
+    return 0;
+  }
+
+  wifi_status_state.connect_last_rx_subtype = subtype;
+  wifi_status_state.connect_response_packets++;
+
+  if (subtype == WIFI_80211_SUBTYPE_AUTH) {
+    uint32_t offset = WIFI_80211_MGMT_HEADER_BYTES;
+    if (frame_len < offset + 6U) {
+      wifi_status_state.connect_response_failed = 1;
+      wifi_status_state.status = "wifi: short authentication response frame";
+      return 1;
+    }
+    wifi_status_state.connect_auth_response_seen = 1;
+    wifi_status_state.connect_auth_alg = wifi_read_le16(frame + offset);
+    wifi_status_state.connect_auth_seq = wifi_read_le16(frame + offset + 2U);
+    wifi_status_state.connect_auth_status = wifi_read_le16(frame + offset + 4U);
+    wifi_status_state.connect_response_failed =
+        wifi_status_state.connect_auth_status ? 1 : 0;
+    wifi_status_state.status = wifi_status_state.connect_auth_status
+                                   ? "wifi: authentication response failed"
+                                   : "wifi: authentication response accepted";
+    return 1;
+  }
+
+  if (subtype == WIFI_80211_SUBTYPE_ASSOC_RESP) {
+    uint32_t offset = WIFI_80211_MGMT_HEADER_BYTES;
+    if (frame_len < offset + 6U) {
+      wifi_status_state.connect_response_failed = 1;
+      wifi_status_state.status = "wifi: short association response frame";
+      return 1;
+    }
+    wifi_status_state.connect_assoc_response_seen = 1;
+    wifi_status_state.connect_assoc_status = wifi_read_le16(frame + offset + 2U);
+    wifi_status_state.connect_assoc_aid =
+        wifi_read_le16(frame + offset + 4U) & 0x3fffU;
+    wifi_status_state.connect_response_failed =
+        wifi_status_state.connect_assoc_status ? 1 : 0;
+    if (wifi_status_state.connect_assoc_status == 0) {
+      wifi_status_state.associated = wifi_status_state.connect_wpa ? 0 : 1;
+      wifi_status_state.driver_ready = wifi_status_state.connect_wpa ? 0 : 1;
+      wifi_status_state.status = wifi_status_state.connect_wpa
+                                     ? "wifi: association accepted; WPA pending"
+                                     : "wifi: open association accepted";
+    } else {
+      wifi_status_state.status = "wifi: association response failed";
+    }
+    return 1;
+  }
+
+  return 0;
+}
+
 static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
                                        uint32_t frame_offset,
                                        uint32_t mpdu_len) {
@@ -4446,7 +4569,23 @@ static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
   subtype = (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
   if (type != WIFI_80211_TYPE_MGMT ||
       (subtype != WIFI_80211_SUBTYPE_BEACON &&
-       subtype != WIFI_80211_SUBTYPE_PROBE_RESP)) {
+       subtype != WIFI_80211_SUBTYPE_PROBE_RESP &&
+       subtype != WIFI_80211_SUBTYPE_AUTH &&
+       subtype != WIFI_80211_SUBTYPE_ASSOC_RESP)) {
+    return 0;
+  }
+
+  if (subtype == WIFI_80211_SUBTYPE_AUTH ||
+      subtype == WIFI_80211_SUBTYPE_ASSOC_RESP) {
+    if (wifi_connect_parse_response_frame(frame, frame_len, subtype)) {
+      wifi_status_state.scan_mgmt_frames++;
+      wifi_status_state.scan_last_mpdu_len = mpdu_len;
+      wifi_status_state.scan_last_frame_offset = frame_offset;
+      wifi_status_state.scan_last_frame_len = frame_len;
+      wifi_status_state.scan_last_frame_control = fc;
+      wifi_status_state.scan_last_frame_subtype = subtype;
+      return 1;
+    }
     return 0;
   }
 
@@ -5191,6 +5330,9 @@ static int wifi_rx_parse_one(void) {
   return 1;
 }
 
+static void wifi_connect_append_response_status(char *report,
+                                                size_t report_size);
+
 int wifi_rx_probe(int poll, char *report, size_t report_size) {
   const wifi_status_t *s;
   int parsed = 0;
@@ -5266,6 +5408,7 @@ int wifi_rx_probe(int poll, char *report, size_t report_size) {
            s->rx_last_word0, s->rx_last_word1, s->rx_last_word2,
            s->rx_last_word3, s->rx_last_cd_word0, s->rx_last_cd_word1,
            s->rx_last_cd_word2, s->rx_last_cd_word3);
+  wifi_connect_append_response_status(report, report_size);
   return parsed < 0 ? -1 : 0;
 }
 
@@ -5686,6 +5829,10 @@ static void wifi_scan_append_channel_results(char *report, size_t report_size) {
 
 static const char *wifi_scan_frame_subtype_text(uint32_t subtype) {
   switch (subtype) {
+  case WIFI_80211_SUBTYPE_ASSOC_RESP:
+    return "assoc-response";
+  case WIFI_80211_SUBTYPE_AUTH:
+    return "auth";
   case WIFI_80211_SUBTYPE_BEACON:
     return "beacon";
   case WIFI_80211_SUBTYPE_PROBE_RESP:
@@ -5708,6 +5855,29 @@ static const char *wifi_scan_security_text(uint32_t security) {
   default:
     return "unknown";
   }
+}
+
+static void wifi_connect_append_response_status(char *report,
+                                                size_t report_size) {
+  const wifi_status_t *s = &wifi_status_state;
+  char line[224];
+
+  if (!s->connect_ready && s->connect_response_packets == 0) {
+    return;
+  }
+
+  snprintf(line, sizeof(line),
+           "connect-rx: packets=%lu auth=%s assoc=%s failed=%s "
+           "last-subtype=%u/%s auth-status=%u assoc-status=%u aid=%u\n",
+           s->connect_response_packets,
+           s->connect_auth_response_seen ? "seen" : "none",
+           s->connect_assoc_response_seen ? "seen" : "none",
+           s->connect_response_failed ? "yes" : "no",
+           s->connect_last_rx_subtype,
+           wifi_scan_frame_subtype_text(s->connect_last_rx_subtype),
+           s->connect_auth_status, s->connect_assoc_status,
+           s->connect_assoc_aid);
+  wifi_report_append(report, report_size, line);
 }
 
 static void wifi_scan_append_access_points(char *report, size_t report_size) {
@@ -5996,6 +6166,7 @@ int wifi_scan(int arm, char *report, size_t report_size) {
            s->scan_complete_elapsed);
   wifi_scan_append_channel_results(report, report_size);
   wifi_scan_append_access_points(report, report_size);
+  wifi_connect_append_response_status(report, report_size);
   return rc;
 }
 
@@ -6101,7 +6272,32 @@ int wifi_scan_poll(char *report, size_t report_size) {
            s->rx_last_sequence, s->rx_last_len);
   wifi_scan_append_channel_results(report, report_size);
   wifi_scan_append_access_points(report, report_size);
+  wifi_connect_append_response_status(report, report_size);
   return s->scan_failed ? -1 : 0;
+}
+
+int wifi_crypto_probe(char *report, size_t report_size) {
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  rc = sha1_selftest();
+  snprintf(report, report_size,
+           "wifi crypto: %s\n"
+           "sha1: %s\n"
+           "pbkdf2-hmac-sha1: %s\n"
+           "wpa2: pmk-bytes=%u iterations=%u passphrase-len=%u..%u "
+           "hex-psk-len=%u\n"
+           "note: connect reports only PMK checksum, never the key\n",
+           rc == 0 ? "self-test passed" : "self-test failed",
+           rc == 0 || rc == -2 || rc == -3 ? "ok" : "failed",
+           rc == 0 ? "ok" : "failed",
+           WIFI_WPA2_PMK_BYTES, WIFI_WPA2_PBKDF2_ITERATIONS,
+           WIFI_WPA2_MIN_PASSPHRASE, WIFI_WPA2_MAX_PASSPHRASE,
+           WIFI_WPA2_HEX_PSK_CHARS);
+  return rc;
 }
 
 static void wifi_connect_copy_mac(uint8_t *dst, const uint8_t *src) {
@@ -6160,6 +6356,89 @@ static uint32_t wifi_connect_checksum(const uint8_t *data, uint32_t len) {
     hash *= 16777619U;
   }
   return hash ? hash : 1U;
+}
+
+static int wifi_connect_hex_value(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
+static int wifi_connect_parse_hex_pmk(const char *password) {
+  for (uint32_t i = 0; i < WIFI_WPA2_PMK_BYTES; i++) {
+    int hi = wifi_connect_hex_value(password[i * 2U]);
+    int lo = wifi_connect_hex_value(password[i * 2U + 1U]);
+    if (hi < 0 || lo < 0) {
+      memset(wifi_connect_pmk, 0, sizeof(wifi_connect_pmk));
+      return -1;
+    }
+    wifi_connect_pmk[i] = (uint8_t)((hi << 4) | lo);
+  }
+  return 0;
+}
+
+static int wifi_connect_prepare_wpa2_pmk(const char *password,
+                                         uint32_t ssid_len,
+                                         char *reason,
+                                         size_t reason_size) {
+  size_t password_len;
+
+  if (!password) {
+    if (reason && reason_size > 0) {
+      snprintf(reason, reason_size, "missing password");
+    }
+    return -1;
+  }
+
+  password_len = strlen(password);
+  if (password_len == WIFI_WPA2_HEX_PSK_CHARS) {
+    if (wifi_connect_parse_hex_pmk(password) != 0) {
+      if (reason && reason_size > 0) {
+        snprintf(reason, reason_size,
+                 "64-character WPA2 PSK must be hexadecimal");
+      }
+      return -1;
+    }
+    wifi_status_state.connect_pmk_ready = 1;
+    wifi_status_state.connect_password_len = (uint32_t)password_len;
+    wifi_status_state.connect_pmk_iterations = 0;
+    wifi_status_state.connect_pmk_checksum =
+        wifi_connect_checksum(wifi_connect_pmk, sizeof(wifi_connect_pmk));
+    return 0;
+  }
+
+  if (password_len < WIFI_WPA2_MIN_PASSPHRASE ||
+      password_len > WIFI_WPA2_MAX_PASSPHRASE) {
+    if (reason && reason_size > 0) {
+      snprintf(reason, reason_size, "WPA2 passphrase length must be %u..%u",
+               WIFI_WPA2_MIN_PASSPHRASE, WIFI_WPA2_MAX_PASSPHRASE);
+    }
+    return -1;
+  }
+
+  if (pbkdf2_hmac_sha1(password, password_len,
+                       wifi_status_state.connect_ssid, ssid_len,
+                       WIFI_WPA2_PBKDF2_ITERATIONS, wifi_connect_pmk,
+                       sizeof(wifi_connect_pmk)) != 0) {
+    if (reason && reason_size > 0) {
+      snprintf(reason, reason_size, "PBKDF2-HMAC-SHA1 failed");
+    }
+    return -1;
+  }
+
+  wifi_status_state.connect_pmk_ready = 1;
+  wifi_status_state.connect_password_len = (uint32_t)password_len;
+  wifi_status_state.connect_pmk_iterations = WIFI_WPA2_PBKDF2_ITERATIONS;
+  wifi_status_state.connect_pmk_checksum =
+      wifi_connect_checksum(wifi_connect_pmk, sizeof(wifi_connect_pmk));
+  return 0;
 }
 
 static void wifi_connect_write_mgmt_header(uint8_t *frame, uint16_t fc,
@@ -6314,6 +6593,7 @@ int wifi_connect(const char *ssid, const char *password, char *report,
   uint32_t ssid_len;
   int use_wpa;
   const char *password_note;
+  char pmk_reason[96];
   uint32_t auth_hash;
   uint32_t assoc_hash;
 
@@ -6421,6 +6701,22 @@ int wifi_connect(const char *ssid, const char *password, char *report,
                         s->scan_ap_bssid[ap_index]);
   wifi_connect_make_local_mac(wifi_status_state.connect_local_mac);
 
+  if (use_wpa) {
+    pmk_reason[0] = '\0';
+    if (wifi_connect_prepare_wpa2_pmk(password, ssid_len, pmk_reason,
+                                      sizeof(pmk_reason)) != 0) {
+      wifi_status_state.connect_failed = 1;
+      snprintf(report, report_size,
+               "wifi connect: WPA2 key preparation failed\n"
+               "target: ssid=\"%s\" channel=%u security=%s\n"
+               "reason: %s\n",
+               ssid, wifi_status_state.connect_channel,
+               wifi_scan_security_text(ap_security),
+               pmk_reason[0] ? pmk_reason : "unknown");
+      return -1;
+    }
+  }
+
   if (wifi_connect_build_auth_frame(wifi_status_state.connect_bssid,
                                     wifi_status_state.connect_local_mac) != 0 ||
       wifi_connect_build_assoc_frame(ssid, ssid_len, use_wpa,
@@ -6455,6 +6751,7 @@ int wifi_connect(const char *ssid, const char *password, char *report,
            "local: sta-mac=%02x:%02x:%02x:%02x:%02x:%02x\n"
            "frames: auth-fc=0x%04x auth-len=%u assoc-fc=0x%04x "
            "assoc-len=%u checksum=0x%08x\n"
+           "wpa2: pmk=%s iterations=%u secret-len=%u pmk-check=0x%08x\n"
            "state: boot=%s context=%s rx=%s scan-aps=%u plan=%s associated=no\n"
            "next: implement Intel TX_CMD, ADD_STA/MAC binding, then WPA "
            "4-way handshake/key install\n"
@@ -6481,6 +6778,13 @@ int wifi_connect(const char *ssid, const char *password, char *report,
            wifi_status_state.connect_assoc_fc,
            wifi_status_state.connect_assoc_frame_len,
            wifi_status_state.connect_frame_checksum,
+           wifi_status_state.connect_pmk_ready
+               ? (wifi_status_state.connect_pmk_iterations ? "derived"
+                                                            : "hex-psk")
+               : "not-needed",
+           wifi_status_state.connect_pmk_iterations,
+           wifi_status_state.connect_password_len,
+           wifi_status_state.connect_pmk_checksum,
            s->boot_ready ? "ready" : "not-ready",
            s->context_armed ? "armed" : "not-armed",
            s->rx_path_ready ? "ready" : "not-ready", s->scan_ap_count,

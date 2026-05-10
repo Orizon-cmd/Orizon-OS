@@ -60,9 +60,14 @@ development target, not a ZimaOS-only assumption.
   parsed yet, which is the key feedback loop for fixing real-hardware RX
   layouts. `wifi connect <ssid> [password]` now matches a scanned AP, refuses
   unsupported WEP/WPA1 paths, requires a password for WPA2/RSN, and prepares
-  open-system authentication plus association request frames. Real traffic still
-  requires the next driver milestones: Intel `TX_CMD`, MAC/STA binding,
-  association response parsing, and WPA key installation.
+  open-system authentication plus association request frames. For WPA2 it also
+  derives the 32-byte PMK with PBKDF2-HMAC-SHA1 and only reports a checksum,
+  never the key itself. It accepts 8-63 character passphrases and 64-character
+  hexadecimal PSKs. `wifi crypto` runs built-in SHA-1 and PBKDF2 known vector
+  checks. The RX path already recognizes authentication and association response
+  frames that match the prepared local STA/BSSID pair and records status
+  codes/AID for diagnostics. Real traffic still requires the next driver
+  milestones: Intel `TX_CMD`, MAC/STA binding, and WPA key installation.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -87,6 +92,7 @@ wifi rx poll
 wifi nvm arm
 wifi nvm-info arm
 wifi bringup
+wifi crypto
 wifi scan
 wifi scan arm
 wifi scan poll
