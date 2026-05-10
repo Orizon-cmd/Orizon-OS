@@ -2938,8 +2938,24 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "join")) {
+    rest = term_skip_spaces(args + 4);
+    rest = term_read_token(rest, ssid, sizeof(ssid));
+    if (!rest) {
+      term_puts_t(term, "usage: wifi join <ssid> [password]\n");
+      return;
+    }
+    password[0] = '\0';
+    if (*rest) {
+      term_read_token(rest, password, sizeof(password));
+    }
+    wifi_join(ssid, password, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|join <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3542,6 +3558,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi scan [arm|poll] - Plan/send/poll experimental passive scan\n");
     term_puts_t(term,
                 "  wifi connect - Prepare Wi-Fi auth/association frames\n");
+    term_puts_t(term,
+                "  wifi join <ssid> [password] - Auto Wi-Fi bringup/connect/WPA\n");
     term_puts_t(term,
                 "  wifi wpa - Show WPA M1/M2/M3/M4 diagnostic state\n");
     term_puts_t(term,

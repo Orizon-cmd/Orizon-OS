@@ -226,9 +226,11 @@ binding ACKe, puis reponse firmware strictement associee a la sequence TX.
 L'etat `wifi status` et le rapport `wifi rx poll` separent maintenant l'ACK
 firmware de la reponse AP: Orizon ne marque une association comme confirmee que
 si authentication TX, association TX, binding STA, authentication response et
-association response sont tous acceptes. Pour les reseaux ouverts, ce chemin
-rend la data path disponible; pour WPA2, il reste volontairement bloque tant que
-les cles de chiffrement ne sont pas installees. `wifi key pairwise [arm]`
+association response sont tous acceptes. `wifi join <ssid> [password]` enchaine
+maintenant automatiquement bringup, scan, connexion, binding, auth/assoc, puis
+la sequence WPA2 M1/M2/M3/M4 avec progression courte. Pour WPA2, le chemin data
+reste volontairement bloque tant que les cles de chiffrement ne sont pas
+installees. `wifi key pairwise [arm]`
 prepare la commande Intel `SEC_KEY_CMD` du groupe data-path pour installer la
 cle paire CCMP derivee du PTK; elle ne s'envoie qu'apres association confirmee,
 binding STA ACKe et `wifi txcmd m2 arm` ACKe. Apres M3, Orizon dechiffre le key

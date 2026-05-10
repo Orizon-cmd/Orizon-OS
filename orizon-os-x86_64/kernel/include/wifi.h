@@ -624,5 +624,7 @@ int wifi_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
                        void *payload, size_t payload_cap);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
+int wifi_join(const char *ssid, const char *password, char *report,
+              size_t report_size);
 
 #endif /* _WIFI_H */

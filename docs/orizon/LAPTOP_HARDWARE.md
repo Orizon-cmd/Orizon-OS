@@ -86,8 +86,9 @@ development target, not a ZimaOS-only assumption.
   the command queue and requires a matching firmware response before marking
   the transmit path ACKed. Association state now requires both firmware TX ACKs,
   the STA binding ACK, and the matching AP authentication/association responses
-  before Orizon reports `confirmed`; open networks can then expose a ready data
-  path. `wifi key pairwise [arm]` now builds a guarded Intel data-path
+  before Orizon reports `confirmed`. `wifi join <ssid> [password]` now runs the
+  bringup, scan, association, binding, WPA M1/M2/M3/M4, and key-install sequence
+  with short progress lines. `wifi key pairwise [arm]` now builds a guarded Intel data-path
   `SEC_KEY_CMD` plan for the WPA2 pairwise CCMP TK and can queue it only after
   association, STA binding, and M2 TX are ACKed. `wifi key gtk [arm]` builds the
   group CCMP key command after M3/GTK extraction. The WPA guarded-ready state
@@ -127,6 +128,7 @@ wifi scan
 wifi scan arm
 wifi scan poll
 wifi connect <ssid> [password]
+wifi join <ssid> [password]
 wifi wpa
 wifi key
 wifi key pairwise arm

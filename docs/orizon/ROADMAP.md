@@ -19,7 +19,8 @@
   M2/M4, unwrap M3 key data, extract GTK, and stage pairwise/group SEC_KEY
   installs behind strict firmware ACK checks. It also has an AES-CCM self-test
   and a software-encrypted CCMP Ethernet data path that the IPv4 stack can use
-  for ARP/DHCP/IPv4 once WPA2 is guarded-ready.
+  for ARP/DHCP/IPv4 once WPA2 is guarded-ready. `wifi join` now orchestrates
+  the bringup/scan/connect/WPA sequence with concise progress output.
 
 ## Next Stability Track
 

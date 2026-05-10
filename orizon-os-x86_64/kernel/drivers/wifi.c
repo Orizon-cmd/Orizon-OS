@@ -10550,3 +10550,320 @@ int wifi_connect(const char *ssid, const char *password, char *report,
            wifi_status_state.connect_ready ? "ready" : "failed");
   return 0;
 }
+
+typedef enum {
+  WIFI_JOIN_WAIT_AUTH = 1,
+  WIFI_JOIN_WAIT_ASSOC,
+  WIFI_JOIN_WAIT_M1,
+  WIFI_JOIN_WAIT_M3
+} wifi_join_wait_goal_t;
+
+#define WIFI_JOIN_SCAN_POLLS 32U
+#define WIFI_JOIN_RX_POLLS 96U
+
+static int wifi_join_has_ssid(const char *ssid) {
+  uint32_t i;
+
+  if (!ssid || !ssid[0]) {
+    return 0;
+  }
+  for (i = 0; i < wifi_status_state.scan_ap_count &&
+              i < WIFI_SCAN_AP_SLOTS; ++i) {
+    if (strcmp(wifi_status_state.scan_ap_ssid[i], ssid) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void wifi_join_step(char *report, size_t report_size,
+                           const char *name, int rc,
+                           const char *detail_on_fail) {
+  char line[160];
+
+  snprintf(line, sizeof(line), "step: %s: %s\n", name,
+           rc == 0 ? "ok" : "failed");
+  wifi_report_append(report, report_size, line);
+  if (rc != 0 && detail_on_fail && detail_on_fail[0]) {
+    wifi_report_append(report, report_size, detail_on_fail);
+  }
+}
+
+static int wifi_join_goal_done(wifi_join_wait_goal_t goal) {
+  switch (goal) {
+  case WIFI_JOIN_WAIT_AUTH:
+    return wifi_status_state.connect_auth_response_seen &&
+           wifi_status_state.connect_auth_status == 0;
+  case WIFI_JOIN_WAIT_ASSOC:
+    return wifi_status_state.connect_assoc_confirmed;
+  case WIFI_JOIN_WAIT_M1:
+    return wifi_status_state.wpa_m1_seen && wifi_status_state.wpa_ptk_ready &&
+           wifi_status_state.wpa_m2_data_ready;
+  case WIFI_JOIN_WAIT_M3:
+    return wifi_status_state.wpa_m3_seen && wifi_status_state.wpa_gtk_seen &&
+           !wifi_status_state.wpa_key_data_decrypt_failed;
+  default:
+    return 0;
+  }
+}
+
+static int wifi_join_goal_failed(wifi_join_wait_goal_t goal) {
+  if (wifi_status_state.connect_response_failed) {
+    return 1;
+  }
+  if (goal == WIFI_JOIN_WAIT_AUTH &&
+      wifi_status_state.connect_auth_response_seen &&
+      wifi_status_state.connect_auth_status != 0) {
+    return 1;
+  }
+  if ((goal == WIFI_JOIN_WAIT_ASSOC || goal == WIFI_JOIN_WAIT_M1 ||
+       goal == WIFI_JOIN_WAIT_M3) &&
+      wifi_status_state.connect_assoc_response_seen &&
+      wifi_status_state.connect_assoc_status != 0) {
+    return 1;
+  }
+  if (goal == WIFI_JOIN_WAIT_M3 &&
+      wifi_status_state.wpa_key_data_decrypt_failed) {
+    return 1;
+  }
+  return 0;
+}
+
+static int wifi_join_wait_rx(wifi_join_wait_goal_t goal, const char *name,
+                             uint32_t polls, char *report,
+                             size_t report_size) {
+  char scratch[1024];
+  char line[256];
+  uint32_t i;
+
+  for (i = 0; i < polls; ++i) {
+    if (wifi_join_goal_done(goal)) {
+      snprintf(line, sizeof(line), "wait: %s: ok polls=%u\n", name, i);
+      wifi_report_append(report, report_size, line);
+      return 0;
+    }
+    scratch[0] = '\0';
+    wifi_rx_probe(1, scratch, sizeof(scratch));
+    if (wifi_join_goal_done(goal)) {
+      snprintf(line, sizeof(line), "wait: %s: ok polls=%u\n", name,
+               i + 1U);
+      wifi_report_append(report, report_size, line);
+      return 0;
+    }
+    if (wifi_join_goal_failed(goal)) {
+      snprintf(line, sizeof(line),
+               "wait: %s: failed polls=%u auth=%u assoc=%u m1=%s m3=%s\n",
+               name, i + 1U, wifi_status_state.connect_auth_status,
+               wifi_status_state.connect_assoc_status,
+               wifi_status_state.wpa_m1_seen ? "yes" : "no",
+               wifi_status_state.wpa_m3_seen ? "yes" : "no");
+      wifi_report_append(report, report_size, line);
+      if (scratch[0]) {
+        wifi_report_append(report, report_size, scratch);
+      }
+      return -1;
+    }
+  }
+
+  snprintf(line, sizeof(line),
+           "wait: %s: timeout polls=%u auth-seen=%s assoc-seen=%s "
+           "m1=%s m3=%s rx-packets=%lu\n",
+           name, polls,
+           wifi_status_state.connect_auth_response_seen ? "yes" : "no",
+           wifi_status_state.connect_assoc_response_seen ? "yes" : "no",
+           wifi_status_state.wpa_m1_seen ? "yes" : "no",
+           wifi_status_state.wpa_m3_seen ? "yes" : "no",
+           wifi_status_state.wpa_eapol_packets);
+  wifi_report_append(report, report_size, line);
+  return -1;
+}
+
+static int wifi_join_scan_until(const char *ssid, char *report,
+                                size_t report_size) {
+  char scratch[2048];
+  char line[192];
+  uint32_t i;
+  int rc;
+
+  if (wifi_join_has_ssid(ssid)) {
+    snprintf(line, sizeof(line), "scan: cache hit ssid=\"%s\" aps=%u\n",
+             ssid, wifi_status_state.scan_ap_count);
+    wifi_report_append(report, report_size, line);
+    return 0;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_scan(1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "scan-arm", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  for (i = 0; i < WIFI_JOIN_SCAN_POLLS; ++i) {
+    if (wifi_join_has_ssid(ssid)) {
+      snprintf(line, sizeof(line), "scan: found ssid=\"%s\" polls=%u aps=%u\n",
+               ssid, i, wifi_status_state.scan_ap_count);
+      wifi_report_append(report, report_size, line);
+      return 0;
+    }
+    scratch[0] = '\0';
+    wifi_scan_poll(scratch, sizeof(scratch));
+    if (wifi_join_has_ssid(ssid)) {
+      snprintf(line, sizeof(line), "scan: found ssid=\"%s\" polls=%u aps=%u\n",
+               ssid, i + 1U, wifi_status_state.scan_ap_count);
+      wifi_report_append(report, report_size, line);
+      return 0;
+    }
+  }
+
+  snprintf(line, sizeof(line),
+           "scan: timeout ssid=\"%s\" polls=%u aps=%u complete=%s\n",
+           ssid, WIFI_JOIN_SCAN_POLLS, wifi_status_state.scan_ap_count,
+           wifi_status_state.scan_complete_seen ? "yes" : "no");
+  wifi_report_append(report, report_size, line);
+  wifi_connect_append_known_aps(report, report_size);
+  return -1;
+}
+
+int wifi_join(const char *ssid, const char *password, char *report,
+              size_t report_size) {
+  char scratch[4096];
+  char line[256];
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+  report[0] = '\0';
+  if (!ssid || ssid[0] == '\0') {
+    snprintf(report, report_size,
+             "wifi join: usage wifi join <ssid> [password]\n");
+    return -1;
+  }
+
+  snprintf(line, sizeof(line),
+           "wifi join: automatic guarded connection flow for ssid=\"%s\"\n",
+           ssid);
+  wifi_report_append(report, report_size, line);
+
+  scratch[0] = '\0';
+  rc = wifi_bringup_probe(scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "bringup", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  if (wifi_join_scan_until(ssid, report, report_size) != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_connect(ssid, password, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "connect", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_bind_probe(1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "bind", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_txcmd_probe("auth", 1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "tx-auth", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+  if (wifi_join_wait_rx(WIFI_JOIN_WAIT_AUTH, "auth-rx",
+                        WIFI_JOIN_RX_POLLS, report, report_size) != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_txcmd_probe("assoc", 1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "tx-assoc", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+  if (wifi_join_wait_rx(WIFI_JOIN_WAIT_ASSOC, "assoc-rx",
+                        WIFI_JOIN_RX_POLLS, report, report_size) != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_bind_probe(1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "bind-aid", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  if (!wifi_status_state.connect_wpa) {
+    wifi_report_append(report, report_size,
+                       "wifi join: open association is confirmed, but the "
+                       "IPv4 bridge currently requires WPA2/CCMP\n");
+    return 0;
+  }
+
+  if (wifi_join_wait_rx(WIFI_JOIN_WAIT_M1, "wpa-m1",
+                        WIFI_JOIN_RX_POLLS, report, report_size) != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_txcmd_probe("m2", 1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "tx-m2", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_key_probe(0, 1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "key-ptk", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  if (wifi_join_wait_rx(WIFI_JOIN_WAIT_M3, "wpa-m3",
+                        WIFI_JOIN_RX_POLLS, report, report_size) != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_key_probe(1, 1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "key-gtk", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_txcmd_probe("m4", 1, scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "tx-m4", rc, scratch);
+  if (rc != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_data_probe(scratch, sizeof(scratch));
+  wifi_join_step(report, report_size, "ccmp-data", rc, scratch);
+  if (rc != 0 || !wifi_data_link_ready()) {
+    wifi_report_append(report, report_size,
+                       "wifi join: WPA handshake reached M4, but CCMP L2 "
+                       "is not ready yet; inspect wifi data / wifi status\n");
+    return -1;
+  }
+
+  snprintf(line, sizeof(line),
+           "wifi join: ready link=wifi ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
+           "next: run net dhcp, then dns raw.githubusercontent.com or update\n",
+           wifi_status_state.connect_ssid, wifi_status_state.connect_bssid[0],
+           wifi_status_state.connect_bssid[1],
+           wifi_status_state.connect_bssid[2],
+           wifi_status_state.connect_bssid[3],
+           wifi_status_state.connect_bssid[4],
+           wifi_status_state.connect_bssid[5]);
+  wifi_report_append(report, report_size, line);
+  return 0;
+}
