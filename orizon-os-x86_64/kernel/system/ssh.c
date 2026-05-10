@@ -25,6 +25,9 @@
 #define SSH_RX_BUF 2048
 #define SSH_PACKET_MAX 4096
 #define SSH_TX_BUF 1400
+#define SSH_CHANNEL_TEXT_BUF 4096
+#define SSH_CHANNEL_DATA_CHUNK 960
+#define SSH_AUDIT_RECENT 4
 
 #define SSH_MSG_DISCONNECT 1
 #define SSH_MSG_SERVICE_REQUEST 5
@@ -274,8 +277,10 @@ static uint32_t ssh_client_channel = 0;
 static uint32_t ssh_server_channel = 0;
 static uint32_t ssh_client_window = 0;
 static uint32_t ssh_client_max_packet = 0;
-static char ssh_channel_tx[900];
+static char ssh_channel_tx[SSH_CHANNEL_TEXT_BUF];
 static size_t ssh_channel_tx_len = 0;
+static size_t ssh_channel_tx_off = 0;
+static size_t ssh_channel_last_chunk_len = 0;
 static char ssh_shell_line[256];
 static size_t ssh_shell_line_len = 0;
 static char ssh_shell_cwd[MAX_PATH] = "/home/orizon";
@@ -290,6 +295,9 @@ static uint32_t ssh_listener_recover_total = 0;
 static uint32_t ssh_channel_close_total = 0;
 static char ssh_last_command[160] = "none";
 static char ssh_last_audit[192] = "none";
+static char ssh_audit_recent[SSH_AUDIT_RECENT][160];
+static uint32_t ssh_audit_recent_next = 0;
+static uint32_t ssh_audit_recent_count = 0;
 
 static int ssh_ensure_hostkey(void);
 static int ssh_load_hostkey_file(void);
@@ -325,6 +333,7 @@ static void ssh_set_status(const char *status) {
 static void ssh_audit_event(const char *event) {
   char remote[24];
   char line[224];
+  char *slot;
 
   if (!event) {
     event = "event";
@@ -335,6 +344,13 @@ static void ssh_audit_event(const char *event) {
            (unsigned long)ssh_status.sessions);
   strncpy(ssh_last_audit, line, sizeof(ssh_last_audit) - 1);
   ssh_last_audit[sizeof(ssh_last_audit) - 1] = '\0';
+  slot = ssh_audit_recent[ssh_audit_recent_next % SSH_AUDIT_RECENT];
+  strncpy(slot, line, 159);
+  slot[159] = '\0';
+  ssh_audit_recent_next = (ssh_audit_recent_next + 1) % SSH_AUDIT_RECENT;
+  if (ssh_audit_recent_count < SSH_AUDIT_RECENT) {
+    ssh_audit_recent_count++;
+  }
   ssh_log_line(line);
 }
 
@@ -1317,18 +1333,28 @@ static size_t ssh_build_channel_status(uint8_t *out, size_t cap,
 static size_t ssh_build_channel_data(uint8_t *out, size_t cap) {
   uint8_t *payload = ssh_channel_payload;
   size_t off = 0;
+  size_t remaining;
+  size_t chunk;
 
-  if (!ssh_channel_data_pending || ssh_channel_tx_len == 0) {
+  ssh_channel_last_chunk_len = 0;
+  if (!ssh_channel_data_pending || ssh_channel_tx_len == 0 ||
+      ssh_channel_tx_off >= ssh_channel_tx_len) {
     return 0;
+  }
+  remaining = ssh_channel_tx_len - ssh_channel_tx_off;
+  chunk = remaining;
+  if (chunk > SSH_CHANNEL_DATA_CHUNK) {
+    chunk = SSH_CHANNEL_DATA_CHUNK;
   }
   payload[off++] = SSH_MSG_CHANNEL_DATA;
   ssh_put_u32(payload + off, ssh_client_channel);
   off += 4;
   if (ssh_put_string(payload, sizeof(ssh_channel_payload), &off,
-                     (const uint8_t *)ssh_channel_tx,
-                     ssh_channel_tx_len) != 0) {
+                     (const uint8_t *)ssh_channel_tx + ssh_channel_tx_off,
+                     chunk) != 0) {
     return 0;
   }
+  ssh_channel_last_chunk_len = chunk;
   return ssh_build_encrypted_packet(out, cap, payload, off);
 }
 
@@ -1358,6 +1384,10 @@ static void ssh_queue_channel_text(const char *text) {
   }
   len = strlen(text);
   start = ssh_channel_data_pending ? ssh_channel_tx_len : 0;
+  if (!ssh_channel_data_pending) {
+    ssh_channel_tx_off = 0;
+    ssh_channel_last_chunk_len = 0;
+  }
   if (start >= sizeof(ssh_channel_tx) - 1) {
     return;
   }
@@ -1492,6 +1522,8 @@ static void ssh_reset_negotiation(void) {
   ssh_client_window = 0;
   ssh_client_max_packet = 0;
   ssh_channel_tx_len = 0;
+  ssh_channel_tx_off = 0;
+  ssh_channel_last_chunk_len = 0;
   ssh_shell_line_len = 0;
   strcpy(ssh_shell_cwd, "/home/orizon");
 }
@@ -2255,16 +2287,25 @@ static void ssh_shell_print_ls(const char *arg) {
   ssh_shell_prompt();
 }
 
-static void ssh_shell_print_file(const char *arg, size_t max_bytes) {
+static void ssh_shell_print_file(const char *arg, size_t max_bytes, int tail) {
   static char path[MAX_PATH];
-  static char out[880];
-  static char buf[640];
+  static char out[SSH_CHANNEL_TEXT_BUF];
+  static char buf[1800];
   size_t used = 0;
+  size_t text_start = 0;
+  size_t file_size = 0;
+  int is_dir = 0;
+  int tailing = 0;
   ssize_t n;
   file_t *f;
 
   if (ssh_shell_resolve_path(arg, path, sizeof(path)) < 0) {
     ssh_queue_channel_text("cat: invalid path\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (vfs_stat(path, &file_size, &is_dir) < 0 || is_dir) {
+    ssh_queue_channel_text("cat: not found\r\n");
     ssh_shell_prompt();
     return;
   }
@@ -2277,6 +2318,16 @@ static void ssh_shell_print_file(const char *arg, size_t max_bytes) {
   if (max_bytes > sizeof(buf)) {
     max_bytes = sizeof(buf);
   }
+  if (tail && file_size > max_bytes) {
+    if (vfs_seek(f, (int)(file_size - max_bytes), SEEK_SET) < 0) {
+      vfs_close(f);
+      ssh_queue_channel_text("cat: seek failed\r\n");
+      ssh_shell_prompt();
+      return;
+    }
+    tailing = 1;
+    ssh_shell_append(out, sizeof(out), &used, "[tail]\r\n");
+  }
   n = vfs_read(f, buf, max_bytes);
   vfs_close(f);
   if (n < 0) {
@@ -2284,8 +2335,19 @@ static void ssh_shell_print_file(const char *arg, size_t max_bytes) {
     ssh_shell_prompt();
     return;
   }
-  ssh_shell_append_file_text(out, sizeof(out), &used, buf, (size_t)n);
-  if ((size_t)n == max_bytes || (size_t)n == sizeof(buf)) {
+  if (tailing) {
+    while (text_start < (size_t)n && buf[text_start] != '\n') {
+      text_start++;
+    }
+    if (text_start < (size_t)n) {
+      text_start++;
+    } else {
+      text_start = 0;
+    }
+  }
+  ssh_shell_append_file_text(out, sizeof(out), &used, buf + text_start,
+                             (size_t)n - text_start);
+  if (!tailing && file_size > (size_t)n) {
     ssh_shell_append(out, sizeof(out), &used, "\r\n[truncated]\r\n");
   } else if (used == 0 || out[used - 1] != '\n') {
     ssh_shell_append(out, sizeof(out), &used, "\r\n");
@@ -2442,41 +2504,9 @@ static void ssh_shell_write_text(const char *args, int append) {
 }
 
 static void ssh_shell_print_audit(void) {
-  char remote[24];
-  char out[768];
-  uint64_t idle_seconds = 0;
-  uint64_t hz = timer_hz();
+  char out[1536];
 
-  netstack_format_ipv4(ssh_status.remote_ip, remote, sizeof(remote));
-  if (hz > 0 && ssh_last_activity_tick > 0 &&
-      timer_ticks() >= ssh_last_activity_tick) {
-    idle_seconds = (timer_ticks() - ssh_last_activity_tick) / hz;
-  }
-  snprintf(out, sizeof(out),
-           "ssh audit:\r\n"
-           "  remote: %s:%u\r\n"
-           "  sessions: %lu\r\n"
-           "  auth-success: %lu\r\n"
-           "  auth-failure: %lu\r\n"
-           "  exec-requests: %lu\r\n"
-           "  shell-commands: %lu\r\n"
-           "  channel-closes: %lu\r\n"
-           "  listener-resets: %lu\r\n"
-           "  listener-recovers: %lu\r\n"
-           "  idle-seconds: %lu\r\n"
-           "  last-command: %s\r\n"
-           "  last-audit: %s\r\n",
-           remote, (unsigned)ssh_status.remote_port,
-           (unsigned long)ssh_status.sessions,
-           (unsigned long)ssh_auth_success_total,
-           (unsigned long)ssh_auth_failure_total,
-           (unsigned long)ssh_exec_request_total,
-           (unsigned long)ssh_shell_command_total,
-           (unsigned long)ssh_channel_close_total,
-           (unsigned long)ssh_listener_reset_total,
-           (unsigned long)ssh_listener_recover_total,
-           (unsigned long)idle_seconds,
-           ssh_last_command, ssh_last_audit);
+  ssh_format_audit(out, sizeof(out));
   ssh_queue_channel_text(out);
   ssh_shell_prompt();
 }
@@ -2521,11 +2551,11 @@ static void ssh_shell_set_auth_policy_remote(const char *args) {
 
 static void ssh_shell_print_log(const char *which) {
   if (ssh_shell_command_is(which, "ssh")) {
-    ssh_shell_print_file(ORIZON_SSH_LOG_PATH, 560);
+    ssh_shell_print_file(ORIZON_SSH_LOG_PATH, 1800, 1);
   } else if (ssh_shell_command_is(which, "boot")) {
-    ssh_shell_print_file(KLOG_BOOT_PATH, 560);
+    ssh_shell_print_file(KLOG_BOOT_PATH, 1800, 1);
   } else {
-    char out[880];
+    char out[SSH_CHANNEL_TEXT_BUF];
     size_t n = klog_snapshot(out, sizeof(out) - 3);
     out[n] = '\0';
     if (n > 0 && out[n - 1] != '\n') {
@@ -2743,11 +2773,11 @@ static void ssh_remote_shell_execute(const char *line) {
     return;
   }
   if (ssh_shell_command_is(line, "cat")) {
-    ssh_shell_print_file(ssh_shell_skip_spaces(line + 3), 1400);
+    ssh_shell_print_file(ssh_shell_skip_spaces(line + 3), 1400, 0);
     return;
   }
   if (ssh_shell_command_is(line, "head")) {
-    ssh_shell_print_file(ssh_shell_skip_spaces(line + 4), 700);
+    ssh_shell_print_file(ssh_shell_skip_spaces(line + 4), 700, 0);
     return;
   }
   if (ssh_shell_command_is(line, "touch")) {
@@ -2891,9 +2921,9 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
-    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), 1400);
+    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), 1400, 0);
   } else if (ssh_shell_command_is(cmd, "head")) {
-    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 700);
+    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 700, 0);
   } else if (ssh_shell_command_is(cmd, "touch")) {
     ssh_shell_mutate_path(cmd + 5, "touch");
   } else if (ssh_shell_command_is(cmd, "mkdir")) {
@@ -3334,6 +3364,9 @@ int ssh_start(char *report, size_t report_size) {
   ssh_auth_failure_total = 0;
   strcpy(ssh_last_command, "none");
   strcpy(ssh_last_audit, "none");
+  memset(ssh_audit_recent, 0, sizeof(ssh_audit_recent));
+  ssh_audit_recent_next = 0;
+  ssh_audit_recent_count = 0;
   ssh_reset_negotiation();
   ssh_seen_connections = ssh_server.connections;
   ssh_disconnect_close_polls = 0;
@@ -3574,8 +3607,15 @@ int ssh_poll(void) {
         memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
         ssh_pending_ctr_s2c_ready = 0;
       }
-      ssh_channel_data_pending = 0;
-      ssh_channel_tx_len = 0;
+      if (ssh_channel_last_chunk_len > 0 &&
+          ssh_channel_tx_off + ssh_channel_last_chunk_len < ssh_channel_tx_len) {
+        ssh_channel_tx_off += ssh_channel_last_chunk_len;
+      } else {
+        ssh_channel_data_pending = 0;
+        ssh_channel_tx_len = 0;
+        ssh_channel_tx_off = 0;
+      }
+      ssh_channel_last_chunk_len = 0;
       ssh_seq_out++;
       ssh_set_status("ssh: CHANNEL_DATA sent");
     } else if (tx_kind == 13) {
@@ -3752,6 +3792,60 @@ void ssh_format_auth(char *buf, size_t size) {
            (unsigned long)ssh_auth_failure_total,
            (unsigned long)lockout,
            ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_LOG_PATH);
+}
+
+void ssh_format_audit(char *buf, size_t size) {
+  char remote[24];
+  static char line[768];
+  size_t used = 0;
+  uint64_t idle_seconds = 0;
+  uint64_t hz = timer_hz();
+
+  if (!buf || size == 0) {
+    return;
+  }
+  buf[0] = '\0';
+  netstack_format_ipv4(ssh_status.remote_ip, remote, sizeof(remote));
+  if (hz > 0 && ssh_last_activity_tick > 0 &&
+      timer_ticks() >= ssh_last_activity_tick) {
+    idle_seconds = (timer_ticks() - ssh_last_activity_tick) / hz;
+  }
+  snprintf(line, sizeof(line),
+           "ssh audit:\n"
+           "  remote: %s:%u\n"
+           "  sessions: %lu\n"
+           "  auth-success: %lu\n"
+           "  auth-failure: %lu\n"
+           "  exec-requests: %lu\n"
+           "  shell-commands: %lu\n"
+           "  channel-closes: %lu\n"
+           "  listener-resets: %lu\n"
+           "  listener-recovers: %lu\n"
+           "  idle-seconds: %lu\n"
+           "  last-command: %s\n"
+           "  last-audit: %s\n",
+           remote, (unsigned)ssh_status.remote_port,
+           (unsigned long)ssh_status.sessions,
+           (unsigned long)ssh_auth_success_total,
+           (unsigned long)ssh_auth_failure_total,
+           (unsigned long)ssh_exec_request_total,
+           (unsigned long)ssh_shell_command_total,
+           (unsigned long)ssh_channel_close_total,
+           (unsigned long)ssh_listener_reset_total,
+           (unsigned long)ssh_listener_recover_total,
+           (unsigned long)idle_seconds,
+           ssh_last_command, ssh_last_audit);
+  ssh_shell_append(buf, size, &used, line);
+  if (ssh_audit_recent_count > 0) {
+    ssh_shell_append(buf, size, &used, "  recent:\n");
+    for (uint32_t i = 0; i < ssh_audit_recent_count; i++) {
+      uint32_t idx = (ssh_audit_recent_next + SSH_AUDIT_RECENT -
+                      ssh_audit_recent_count + i) % SSH_AUDIT_RECENT;
+      ssh_shell_append(buf, size, &used, "    - ");
+      ssh_shell_append(buf, size, &used, ssh_audit_recent[idx]);
+      ssh_shell_append(buf, size, &used, "\n");
+    }
+  }
 }
 
 void ssh_format_hostkey(char *buf, size_t size) {

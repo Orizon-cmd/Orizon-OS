@@ -100,6 +100,7 @@ void ssh_format_report(char *buf, size_t size);
 void ssh_format_algorithms(char *buf, size_t size);
 void ssh_format_auth(char *buf, size_t size);
 void ssh_format_hostkey(char *buf, size_t size);
+void ssh_format_audit(char *buf, size_t size);
 const ssh_status_t *ssh_get_status(void);
 
 #endif /* _SSH_H */

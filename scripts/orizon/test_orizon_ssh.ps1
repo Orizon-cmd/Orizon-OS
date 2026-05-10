@@ -29,6 +29,7 @@ $commands = @(
   "append /workspace/ssh-regression.txt beta",
   "cat /workspace/ssh-regression.txt",
   "audit",
+  "logs ssh",
   "rm /workspace/ssh-regression.txt",
   "audit"
 )
@@ -39,6 +40,7 @@ set -u
 ASKPASS=/tmp/orizon_askpass_regression.sh
 PASSFILE=/tmp/orizon_ssh_regression_password.txt
 KNOWN=/tmp/orizon_known_hosts_regression
+OUT=/tmp/orizon_ssh_regression_output.txt
 
 printf '%s' '$encodedPassword' | base64 -d > "`$PASSFILE"
 cat > "`$ASKPASS" <<'EOS'
@@ -58,13 +60,34 @@ run_cmd() {
     -oStrictHostKeyChecking=no \
     -oUserKnownHostsFile="`$KNOWN" \
     -oConnectTimeout=5 \
-    orizon@$VmIp "`$cmd"
+    orizon@$VmIp "`$cmd" > "`$OUT" 2>&1
   rc=`$?
+  cat "`$OUT"
   echo "rc=`$rc"
   if [ "`$rc" -ne 0 ]; then
-    rm -f "`$ASKPASS" "`$PASSFILE"
+    rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"
     exit "`$rc"
   fi
+  case "`$cmd" in
+    "help")
+      grep -q "Remote Orizon commands" "`$OUT" || { echo "missing help output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "cat /workspace/ssh-regression.txt")
+      grep -q "alpha" "`$OUT" && grep -q "beta" "`$OUT" || { echo "missing cat output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "audit")
+      grep -q "ssh audit:" "`$OUT" && grep -q "recent:" "`$OUT" || { echo "missing audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "logs ssh")
+      grep -q "audit:" "`$OUT" || { echo "missing ssh log audit lines"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      bytes=`$(wc -c < "`$OUT")
+      if [ "`$bytes" -lt 900 ]; then
+        echo "ssh log output too short for chunk regression: `$bytes bytes"
+        rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"
+        exit 1
+      fi
+      ;;
+  esac
   sleep 1
 }
 
@@ -75,8 +98,11 @@ done <<'EOC'
 $commandBlock
 EOC
 
-rm -f "`$ASKPASS" "`$PASSFILE"
+rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"
 echo "Orizon SSH regression OK"
 "@
 
 $remoteScript | ssh $ZimaHost "tr -d '\r' | bash"
+if ($LASTEXITCODE -ne 0) {
+  exit $LASTEXITCODE
+}

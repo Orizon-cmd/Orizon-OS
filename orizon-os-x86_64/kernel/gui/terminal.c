@@ -2531,7 +2531,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
       term_puts_t(term, "\n");
     }
     term_puts_t(term,
-                "commands: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
+                "commands: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh audit | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
     return;
   }
 
@@ -2576,6 +2576,15 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\n");
     snprintf(report, sizeof(report), "poll=%d\n", rc);
     term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "audit") || term_command_is(args, "sessions")) {
+    ssh_format_audit(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
     return;
   }
 
@@ -2670,7 +2679,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
+              "usage: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh audit | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
 }
 
 static void term_run_net(terminal_t *term, const char *cmd) {

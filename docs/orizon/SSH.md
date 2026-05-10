@@ -11,6 +11,7 @@ net dhcp
 ssh password <mot-de-passe>
 ssh start
 ssh status
+ssh audit
 ssh auth
 ssh auth max <essais>
 ssh auth lockout <secondes>
@@ -37,6 +38,8 @@ desactive l'authentification par mot de passe.
 `ssh auth max <essais>` et `ssh auth lockout <secondes>` changent la politique
 anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
 `30` secondes de verrouillage.
+`ssh audit` affiche le meme rapport d'audit depuis la console locale que la
+commande distante `audit`.
 `ssh hostkey` affiche l'identite hote, `ssh hostkey reload` recharge
 `/system/ssh_host_rsa.key`, et `ssh hostkey reset` recree le fichier depuis le
 materiel RSA de bootstrap.
@@ -78,16 +81,21 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   proprement avec `exit-status`.
 - Audit: `audit` affiche le cumul des sessions, auth reussies/echouees,
   commandes `exec`, commandes shell, fermetures de canal, recoveries listener,
-  temps idle et derniere commande; les evenements sont aussi journalises dans
-  `/logs/ssh.log` avec le mot de passe masque.
+  temps idle, derniere commande et les derniers evenements recents; les
+  evenements sont aussi journalises dans `/logs/ssh.log` avec le mot de passe
+  masque. Le meme rapport est disponible localement avec `ssh audit`.
+- Journaux: `logs ssh` et `logs boot` affichent maintenant la fin du fichier si
+  le journal est long, pour garder les evenements recents visibles pendant une
+  session d'administration distante.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
   `write`/`append`/`touch`/`mkdir`/`rm`, et sauvegarder avec `sync`.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros
-  paquets et remet l'ecoute TCP/22 en etat apres une fermeture de canal ou une
-  session idle. Le `snprintf` kernel supporte maintenant l'alignement a gauche
+  paquets, segmente les longues sorties `CHANNEL_DATA` en plusieurs paquets, et
+  remet l'ecoute TCP/22 en etat apres une fermeture de canal ou une session
+  idle. Le `snprintf` kernel supporte maintenant l'alignement a gauche
   (`%-Ns`), ce qui evite les corruptions d'arguments dans les sorties comme
   `ps`.
 - Securite: aucun mot de passe par defaut ni backdoor n'est cree; sans

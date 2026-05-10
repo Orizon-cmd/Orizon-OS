@@ -141,6 +141,7 @@ net dhcp
 ssh password <mot-de-passe>
 ssh start
 ssh status
+ssh audit
 ssh auth
 ssh auth max <essais>
 ssh auth lockout <secondes>
@@ -169,9 +170,12 @@ de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `touch`, `mkdir`, `rm`,
 lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
 commande distante directe. Le service remet l'ecoute TCP en etat apres une
 session fermee, garde une protection anti-bruteforce dans `/system/ssh.conf`,
-et expose `audit` pour verifier sessions, auth, commandes et fermetures de
-canal. `ssh hostkey` affiche l'identite hote persistante stockee dans
-`/system/ssh_host_rsa.key`.
+et expose `audit` / `ssh audit` pour verifier sessions, auth, commandes,
+derniers evenements et fermetures de canal. Les longues sorties SSH sont
+segmentees en plusieurs paquets pour eviter les coupures sur `logs ssh` ou
+`cat`; les commandes `logs ssh` et `logs boot` montrent la fin du journal quand
+il devient long. `ssh hostkey` affiche l'identite hote persistante stockee
+dans `/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 
