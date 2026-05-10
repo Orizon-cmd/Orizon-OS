@@ -93,6 +93,21 @@ static wifi_status_t wifi_status_state = {
     .cmd_write_ptr = 0,
     .tx_write_ptr = 0,
     .rx_write_ptr = 0,
+    .tx_stage_ready = 0,
+    .tx_stage_failed = 0,
+    .tx_stage_errors = 0,
+    .tx_stage_frames = 0,
+    .tx_stage_queue = 0,
+    .tx_stage_index = 0,
+    .tx_stage_next_index = 0,
+    .tx_stage_kind = 0,
+    .tx_stage_frame_len = 0,
+    .tx_stage_tfd_tbs = 0,
+    .tx_stage_tb0_len = 0,
+    .tx_stage_tb0_addr = 0,
+    .tx_stage_bc_entry = 0,
+    .tx_stage_wptr_value = 0,
+    .tx_stage_checksum = 0,
     .context_ready = 0,
     .context_armed = 0,
     .context_failed = 0,
@@ -304,6 +319,32 @@ static wifi_status_t wifi_status_state = {
     .connect_auth_status = 0,
     .connect_assoc_status = 0,
     .connect_assoc_aid = 0,
+    .wpa_eapol_packets = 0,
+    .wpa_key_frames = 0,
+    .wpa_anonce_seen = 0,
+    .wpa_key_info = 0,
+    .wpa_key_len = 0,
+    .wpa_key_data_len = 0,
+    .wpa_replay_counter_hi = 0,
+    .wpa_replay_counter_lo = 0,
+    .wpa_anonce_checksum = 0,
+    .wpa_snonce_checksum = 0,
+    .wpa_ptk_checksum = 0,
+    .wpa_kck_checksum = 0,
+    .wpa_kek_checksum = 0,
+    .wpa_tk_checksum = 0,
+    .wpa_m2_mic_checksum = 0,
+    .wpa_m2_checksum = 0,
+    .wpa_m2_frame_len = 0,
+    .wpa_m2_data_frame_len = 0,
+    .wpa_m2_key_info = 0,
+    .wpa_m2_key_data_len = 0,
+    .wpa_key_desc_type = 0,
+    .wpa_eapol_version = 0,
+    .wpa_m1_seen = 0,
+    .wpa_ptk_ready = 0,
+    .wpa_m2_ready = 0,
+    .wpa_m2_data_ready = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -491,6 +532,7 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_MSG_RING_BYTES 256U
 #define WIFI_TFH_NUM_TBS 25U
 #define WIFI_DQA_CMD_QUEUE 0U
+#define WIFI_DQA_TX_QUEUE 1U
 #define WIFI_CMD_SCD_QUEUE_CFG 0x1dU
 #define WIFI_CMD_NVM_ACCESS 0x88U
 #define WIFI_CMD_NVM_GET_INFO 0x02U
@@ -543,6 +585,10 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_80211_FC_TYPE_MASK 0x000cU
 #define WIFI_80211_FC_SUBTYPE_MASK 0x00f0U
 #define WIFI_80211_TYPE_MGMT 0U
+#define WIFI_80211_TYPE_DATA 2U
+#define WIFI_80211_FC_TODS 0x0100U
+#define WIFI_80211_FC_FROMDS 0x0200U
+#define WIFI_80211_SUBTYPE_QOS_DATA 8U
 #define WIFI_80211_SUBTYPE_ASSOC_REQ 0U
 #define WIFI_80211_SUBTYPE_ASSOC_RESP 1U
 #define WIFI_80211_SUBTYPE_AUTH 11U
@@ -556,6 +602,21 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_WPA2_MIN_PASSPHRASE 8U
 #define WIFI_WPA2_MAX_PASSPHRASE 63U
 #define WIFI_WPA2_HEX_PSK_CHARS 64U
+#define WIFI_WPA_NONCE_BYTES 32U
+#define WIFI_WPA_PTK_BYTES 64U
+#define WIFI_WPA_KCK_BYTES 16U
+#define WIFI_WPA_KEK_BYTES 16U
+#define WIFI_WPA_TK_BYTES 16U
+#define WIFI_WPA_EAPOL_M2_BYTES 256U
+#define WIFI_TX_STAGE_KIND_AUTH 1U
+#define WIFI_TX_STAGE_KIND_ASSOC 2U
+#define WIFI_TX_STAGE_KIND_EAPOL_M2 3U
+#define WIFI_EAPOL_ETHERTYPE 0x888eU
+#define WIFI_EAPOL_TYPE_KEY 3U
+#define WIFI_WPA_KEY_INFO_PAIRWISE 0x0008U
+#define WIFI_WPA_KEY_INFO_ACK 0x0080U
+#define WIFI_WPA_KEY_INFO_MIC 0x0100U
+#define WIFI_WPA_KEY_INFO_TYPE_MASK 0x0007U
 #define HBUS_TARG_WRPTR 0x460U
 #define HBUS_TARG_WRPTR_Q_SHIFT 16U
 #define FH_RSCSR_FRAME_SIZE_MSK 0x00003fffU
@@ -940,6 +1001,16 @@ static uint8_t wifi_connect_assoc_frame[WIFI_CONNECT_FRAME_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_connect_pmk[WIFI_WPA2_PMK_BYTES]
     __attribute__((aligned(16)));
+static uint8_t wifi_wpa_anonce[WIFI_WPA_NONCE_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_wpa_snonce[WIFI_WPA_NONCE_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_wpa_ptk[WIFI_WPA_PTK_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_wpa_eapol_m2[WIFI_WPA_EAPOL_M2_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_wpa_m2_data_frame[WIFI_CONNECT_FRAME_BYTES]
+    __attribute__((aligned(16)));
 static wifi_legacy_context_info_t wifi_legacy_context
     __attribute__((aligned(4096)));
 static wifi_context_info_v2_t wifi_context_v2 __attribute__((aligned(4096)));
@@ -1228,6 +1299,47 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.connect_auth_status = 0;
   wifi_status_state.connect_assoc_status = 0;
   wifi_status_state.connect_assoc_aid = 0;
+  wifi_status_state.wpa_eapol_packets = 0;
+  wifi_status_state.wpa_key_frames = 0;
+  wifi_status_state.wpa_anonce_seen = 0;
+  wifi_status_state.wpa_key_info = 0;
+  wifi_status_state.wpa_key_len = 0;
+  wifi_status_state.wpa_key_data_len = 0;
+  wifi_status_state.wpa_replay_counter_hi = 0;
+  wifi_status_state.wpa_replay_counter_lo = 0;
+  wifi_status_state.wpa_anonce_checksum = 0;
+  wifi_status_state.wpa_snonce_checksum = 0;
+  wifi_status_state.wpa_ptk_checksum = 0;
+  wifi_status_state.wpa_kck_checksum = 0;
+  wifi_status_state.wpa_kek_checksum = 0;
+  wifi_status_state.wpa_tk_checksum = 0;
+  wifi_status_state.wpa_m2_mic_checksum = 0;
+  wifi_status_state.wpa_m2_checksum = 0;
+  wifi_status_state.wpa_m2_frame_len = 0;
+  wifi_status_state.wpa_m2_data_frame_len = 0;
+  wifi_status_state.wpa_m2_key_info = 0;
+  wifi_status_state.wpa_m2_key_data_len = 0;
+  wifi_status_state.wpa_key_desc_type = 0;
+  wifi_status_state.wpa_eapol_version = 0;
+  wifi_status_state.wpa_m1_seen = 0;
+  wifi_status_state.wpa_ptk_ready = 0;
+  wifi_status_state.wpa_m2_ready = 0;
+  wifi_status_state.wpa_m2_data_ready = 0;
+  wifi_status_state.tx_stage_ready = 0;
+  wifi_status_state.tx_stage_failed = 0;
+  wifi_status_state.tx_stage_errors = 0;
+  wifi_status_state.tx_stage_frames = 0;
+  wifi_status_state.tx_stage_queue = 0;
+  wifi_status_state.tx_stage_index = 0;
+  wifi_status_state.tx_stage_next_index = 0;
+  wifi_status_state.tx_stage_kind = 0;
+  wifi_status_state.tx_stage_frame_len = 0;
+  wifi_status_state.tx_stage_tfd_tbs = 0;
+  wifi_status_state.tx_stage_tb0_len = 0;
+  wifi_status_state.tx_stage_tb0_addr = 0;
+  wifi_status_state.tx_stage_bc_entry = 0;
+  wifi_status_state.tx_stage_wptr_value = 0;
+  wifi_status_state.tx_stage_checksum = 0;
   memset(wifi_status_state.connect_bssid, 0,
          sizeof(wifi_status_state.connect_bssid));
   memset(wifi_status_state.connect_local_mac, 0,
@@ -1237,6 +1349,11 @@ static void wifi_connect_clear_plan(void) {
   memset(wifi_connect_auth_frame, 0, sizeof(wifi_connect_auth_frame));
   memset(wifi_connect_assoc_frame, 0, sizeof(wifi_connect_assoc_frame));
   memset(wifi_connect_pmk, 0, sizeof(wifi_connect_pmk));
+  memset(wifi_wpa_anonce, 0, sizeof(wifi_wpa_anonce));
+  memset(wifi_wpa_snonce, 0, sizeof(wifi_wpa_snonce));
+  memset(wifi_wpa_ptk, 0, sizeof(wifi_wpa_ptk));
+  memset(wifi_wpa_eapol_m2, 0, sizeof(wifi_wpa_eapol_m2));
+  memset(wifi_wpa_m2_data_frame, 0, sizeof(wifi_wpa_m2_data_frame));
 }
 
 static void wifi_reset_firmware_parse(void) {
@@ -1316,6 +1433,21 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.cmd_write_ptr = 0;
   wifi_status_state.tx_write_ptr = 0;
   wifi_status_state.rx_write_ptr = 0;
+  wifi_status_state.tx_stage_ready = 0;
+  wifi_status_state.tx_stage_failed = 0;
+  wifi_status_state.tx_stage_errors = 0;
+  wifi_status_state.tx_stage_frames = 0;
+  wifi_status_state.tx_stage_queue = 0;
+  wifi_status_state.tx_stage_index = 0;
+  wifi_status_state.tx_stage_next_index = 0;
+  wifi_status_state.tx_stage_kind = 0;
+  wifi_status_state.tx_stage_frame_len = 0;
+  wifi_status_state.tx_stage_tfd_tbs = 0;
+  wifi_status_state.tx_stage_tb0_len = 0;
+  wifi_status_state.tx_stage_tb0_addr = 0;
+  wifi_status_state.tx_stage_bc_entry = 0;
+  wifi_status_state.tx_stage_wptr_value = 0;
+  wifi_status_state.tx_stage_checksum = 0;
   wifi_status_state.context_ready = 0;
   wifi_status_state.context_armed = 0;
   wifi_status_state.context_failed = 0;
@@ -3129,6 +3261,8 @@ void wifi_poll(void) {
   /* Real RX/TX polling starts once the firmware-backed driver exists. */
 }
 
+static const char *wifi_tx_stage_kind_text(uint32_t kind);
+
 const wifi_status_t *wifi_get_status(void) {
   if (!wifi_status_state.present && !wifi_status_state.driver_ready) {
     wifi_init();
@@ -3150,7 +3284,7 @@ void wifi_format_status(char *buf, size_t size) {
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
            "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s scan=%s "
-           "connect=%s status=%s",
+           "connect=%s txstage=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -3209,6 +3343,9 @@ void wifi_format_status(char *buf, size_t size) {
                       : (s->connect_ready
                              ? (s->connect_wpa ? "wpa-plan" : "open-plan")
                              : (s->connect_failed ? "failed" : "idle"))),
+           s->tx_stage_ready
+               ? wifi_tx_stage_kind_text(s->tx_stage_kind)
+               : (s->tx_stage_failed ? "failed" : "idle"),
            s->status);
 }
 
@@ -4478,6 +4615,306 @@ static int wifi_mac_equal6(const uint8_t *a, const uint8_t *b) {
   return 1;
 }
 
+static uint16_t wifi_read_be16(const uint8_t *p) {
+  return (uint16_t)(((uint16_t)p[0] << 8) | (uint16_t)p[1]);
+}
+
+static uint32_t wifi_read_be32(const uint8_t *p) {
+  return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+         ((uint32_t)p[2] << 8) | (uint32_t)p[3];
+}
+
+static void wifi_write_be16(uint8_t *p, uint16_t value) {
+  p[0] = (uint8_t)((value >> 8) & 0xffU);
+  p[1] = (uint8_t)(value & 0xffU);
+}
+
+static void wifi_write_be32(uint8_t *p, uint32_t value) {
+  p[0] = (uint8_t)(value >> 24);
+  p[1] = (uint8_t)((value >> 16) & 0xffU);
+  p[2] = (uint8_t)((value >> 8) & 0xffU);
+  p[3] = (uint8_t)(value & 0xffU);
+}
+
+static uint32_t wifi_wpa_checksum(const uint8_t *data, uint32_t len) {
+  uint32_t hash = 2166136261U;
+
+  for (uint32_t i = 0; i < len; i++) {
+    hash ^= data[i];
+    hash *= 16777619U;
+  }
+  return hash ? hash : 1U;
+}
+
+static void wifi_connect_copy_mac(uint8_t *dst, const uint8_t *src);
+
+static int wifi_wpa_lexicographic_less(const uint8_t *a, const uint8_t *b,
+                                       uint32_t len) {
+  for (uint32_t i = 0; i < len; i++) {
+    if (a[i] < b[i]) {
+      return 1;
+    }
+    if (a[i] > b[i]) {
+      return 0;
+    }
+  }
+  return 0;
+}
+
+static int wifi_wpa_prf_sha1(const uint8_t *key, uint32_t key_len,
+                             const char *label, const uint8_t *seed,
+                             uint32_t seed_len, uint8_t *out,
+                             uint32_t out_len) {
+  uint8_t block[160];
+  uint8_t digest[SHA1_DIGEST_SIZE];
+  uint32_t label_len;
+  uint32_t produced = 0;
+  uint8_t counter = 0;
+
+  if (!key || !label || !seed || !out || out_len == 0) {
+    return -1;
+  }
+
+  label_len = (uint32_t)strlen(label);
+  if (label_len + 1U + seed_len + 1U > sizeof(block)) {
+    return -1;
+  }
+
+  while (produced < out_len) {
+    uint32_t offset = 0;
+    uint32_t take;
+
+    memcpy(block + offset, label, label_len);
+    offset += label_len;
+    block[offset++] = 0;
+    memcpy(block + offset, seed, seed_len);
+    offset += seed_len;
+    block[offset++] = counter++;
+
+    hmac_sha1(key, key_len, block, offset, digest);
+    take = out_len - produced;
+    if (take > SHA1_DIGEST_SIZE) {
+      take = SHA1_DIGEST_SIZE;
+    }
+    memcpy(out + produced, digest, take);
+    produced += take;
+  }
+
+  memset(block, 0, sizeof(block));
+  memset(digest, 0, sizeof(digest));
+  return 0;
+}
+
+static void wifi_wpa_seed_append_u32(uint8_t *seed, uint32_t *offset,
+                                     uint32_t value) {
+  wifi_write_be32(seed + *offset, value);
+  *offset += 4U;
+}
+
+static int wifi_wpa_generate_snonce(void) {
+  uint8_t seed[128];
+  uint32_t offset = 0;
+
+  memset(seed, 0, sizeof(seed));
+  memcpy(seed + offset, wifi_status_state.connect_local_mac, 6U);
+  offset += 6U;
+  memcpy(seed + offset, wifi_status_state.connect_bssid, 6U);
+  offset += 6U;
+  memcpy(seed + offset, wifi_wpa_anonce, sizeof(wifi_wpa_anonce));
+  offset += sizeof(wifi_wpa_anonce);
+  wifi_wpa_seed_append_u32(seed, &offset,
+                           (uint32_t)wifi_status_state.connect_attempts);
+  wifi_wpa_seed_append_u32(seed, &offset,
+                           (uint32_t)wifi_status_state.scan_generation);
+  wifi_wpa_seed_append_u32(seed, &offset,
+                           wifi_status_state.wpa_replay_counter_hi);
+  wifi_wpa_seed_append_u32(seed, &offset,
+                           wifi_status_state.wpa_replay_counter_lo);
+  wifi_wpa_seed_append_u32(seed, &offset,
+                           ((uint32_t)wifi_status_state.vendor_id << 16) |
+                               wifi_status_state.device_id);
+
+  if (wifi_wpa_prf_sha1(wifi_connect_pmk, sizeof(wifi_connect_pmk),
+                        "Orizon OS WPA2 SNonce", seed, offset,
+                        wifi_wpa_snonce, sizeof(wifi_wpa_snonce)) != 0) {
+    memset(seed, 0, sizeof(seed));
+    return -1;
+  }
+
+  wifi_status_state.wpa_snonce_checksum =
+      wifi_wpa_checksum(wifi_wpa_snonce, sizeof(wifi_wpa_snonce));
+  memset(seed, 0, sizeof(seed));
+  return 0;
+}
+
+static int wifi_wpa_derive_ptk(void) {
+  uint8_t seed[76];
+  uint32_t offset = 0;
+  const uint8_t *mac_low;
+  const uint8_t *mac_high;
+  const uint8_t *nonce_low;
+  const uint8_t *nonce_high;
+
+  if (!wifi_status_state.connect_pmk_ready ||
+      !wifi_status_state.wpa_anonce_seen) {
+    return -1;
+  }
+
+  if (wifi_wpa_generate_snonce() != 0) {
+    return -1;
+  }
+
+  if (wifi_wpa_lexicographic_less(wifi_status_state.connect_local_mac,
+                                  wifi_status_state.connect_bssid, 6U)) {
+    mac_low = wifi_status_state.connect_local_mac;
+    mac_high = wifi_status_state.connect_bssid;
+  } else {
+    mac_low = wifi_status_state.connect_bssid;
+    mac_high = wifi_status_state.connect_local_mac;
+  }
+
+  if (wifi_wpa_lexicographic_less(wifi_wpa_snonce, wifi_wpa_anonce,
+                                  sizeof(wifi_wpa_snonce))) {
+    nonce_low = wifi_wpa_snonce;
+    nonce_high = wifi_wpa_anonce;
+  } else {
+    nonce_low = wifi_wpa_anonce;
+    nonce_high = wifi_wpa_snonce;
+  }
+
+  memcpy(seed + offset, mac_low, 6U);
+  offset += 6U;
+  memcpy(seed + offset, mac_high, 6U);
+  offset += 6U;
+  memcpy(seed + offset, nonce_low, WIFI_WPA_NONCE_BYTES);
+  offset += WIFI_WPA_NONCE_BYTES;
+  memcpy(seed + offset, nonce_high, WIFI_WPA_NONCE_BYTES);
+  offset += WIFI_WPA_NONCE_BYTES;
+
+  if (wifi_wpa_prf_sha1(wifi_connect_pmk, sizeof(wifi_connect_pmk),
+                        "Pairwise key expansion", seed, offset, wifi_wpa_ptk,
+                        sizeof(wifi_wpa_ptk)) != 0) {
+    memset(seed, 0, sizeof(seed));
+    return -1;
+  }
+
+  wifi_status_state.wpa_ptk_ready = 1;
+  wifi_status_state.wpa_ptk_checksum =
+      wifi_wpa_checksum(wifi_wpa_ptk, sizeof(wifi_wpa_ptk));
+  wifi_status_state.wpa_kck_checksum =
+      wifi_wpa_checksum(wifi_wpa_ptk, WIFI_WPA_KCK_BYTES);
+  wifi_status_state.wpa_kek_checksum =
+      wifi_wpa_checksum(wifi_wpa_ptk + WIFI_WPA_KCK_BYTES, WIFI_WPA_KEK_BYTES);
+  wifi_status_state.wpa_tk_checksum =
+      wifi_wpa_checksum(wifi_wpa_ptk + WIFI_WPA_KCK_BYTES + WIFI_WPA_KEK_BYTES,
+                        WIFI_WPA_TK_BYTES);
+  memset(seed, 0, sizeof(seed));
+  return 0;
+}
+
+static int wifi_wpa_build_m2(uint8_t eapol_version, uint8_t descriptor_type) {
+  static const uint8_t rsn_wpa2_psk_ccmp_ie[] = {
+      0x30U, 0x14U, 0x01U, 0x00U, 0x00U, 0x0fU, 0xacU, 0x04U,
+      0x01U, 0x00U, 0x00U, 0x0fU, 0xacU, 0x04U, 0x01U, 0x00U,
+      0x00U, 0x0fU, 0xacU, 0x02U, 0x00U, 0x00U};
+  uint32_t key_body_len = 95U + (uint32_t)sizeof(rsn_wpa2_psk_ccmp_ie);
+  uint32_t frame_len = 4U + key_body_len;
+  uint16_t key_info;
+  uint8_t mic[SHA1_DIGEST_SIZE];
+
+  if (!wifi_status_state.wpa_ptk_ready ||
+      frame_len > sizeof(wifi_wpa_eapol_m2)) {
+    return -1;
+  }
+
+  memset(wifi_wpa_eapol_m2, 0, sizeof(wifi_wpa_eapol_m2));
+  wifi_wpa_eapol_m2[0] = eapol_version ? eapol_version : 2U;
+  wifi_wpa_eapol_m2[1] = WIFI_EAPOL_TYPE_KEY;
+  wifi_write_be16(wifi_wpa_eapol_m2 + 2U, (uint16_t)key_body_len);
+  wifi_wpa_eapol_m2[4] = descriptor_type ? descriptor_type : 2U;
+
+  key_info = (uint16_t)(wifi_status_state.wpa_key_info &
+                        WIFI_WPA_KEY_INFO_TYPE_MASK);
+  if (!key_info) {
+    key_info = 2U;
+  }
+  key_info |= (uint16_t)(WIFI_WPA_KEY_INFO_PAIRWISE | WIFI_WPA_KEY_INFO_MIC);
+  wifi_write_be16(wifi_wpa_eapol_m2 + 5U, key_info);
+  wifi_write_be16(wifi_wpa_eapol_m2 + 7U,
+                  (uint16_t)wifi_status_state.wpa_key_len);
+  wifi_write_be32(wifi_wpa_eapol_m2 + 9U,
+                  wifi_status_state.wpa_replay_counter_hi);
+  wifi_write_be32(wifi_wpa_eapol_m2 + 13U,
+                  wifi_status_state.wpa_replay_counter_lo);
+  memcpy(wifi_wpa_eapol_m2 + 17U, wifi_wpa_snonce, sizeof(wifi_wpa_snonce));
+  wifi_write_be16(wifi_wpa_eapol_m2 + 97U,
+                  (uint16_t)sizeof(rsn_wpa2_psk_ccmp_ie));
+  memcpy(wifi_wpa_eapol_m2 + 99U, rsn_wpa2_psk_ccmp_ie,
+         sizeof(rsn_wpa2_psk_ccmp_ie));
+
+  hmac_sha1(wifi_wpa_ptk, WIFI_WPA_KCK_BYTES, wifi_wpa_eapol_m2, frame_len,
+            mic);
+  memcpy(wifi_wpa_eapol_m2 + 81U, mic, 16U);
+
+  wifi_status_state.wpa_m2_ready = 1;
+  wifi_status_state.wpa_m2_frame_len = frame_len;
+  wifi_status_state.wpa_m2_key_info = key_info;
+  wifi_status_state.wpa_m2_key_data_len =
+      (uint32_t)sizeof(rsn_wpa2_psk_ccmp_ie);
+  wifi_status_state.wpa_m2_mic_checksum = wifi_wpa_checksum(mic, 16U);
+  wifi_status_state.wpa_m2_checksum =
+      wifi_wpa_checksum(wifi_wpa_eapol_m2, frame_len);
+  memset(mic, 0, sizeof(mic));
+  return 0;
+}
+
+static int wifi_wpa_build_m2_data_frame(void) {
+  uint16_t fc =
+      (uint16_t)((WIFI_80211_TYPE_DATA << 2) | WIFI_80211_FC_TODS);
+  uint32_t offset = WIFI_80211_MGMT_HEADER_BYTES;
+  static const uint8_t llc_snap_eapol[] = {
+      0xaaU, 0xaaU, 0x03U, 0x00U, 0x00U, 0x00U, 0x88U, 0x8eU};
+
+  if (!wifi_status_state.wpa_m2_ready ||
+      offset + sizeof(llc_snap_eapol) + wifi_status_state.wpa_m2_frame_len >
+          sizeof(wifi_wpa_m2_data_frame)) {
+    return -1;
+  }
+
+  memset(wifi_wpa_m2_data_frame, 0, sizeof(wifi_wpa_m2_data_frame));
+  wifi_write_le16(wifi_wpa_m2_data_frame + 0U, fc);
+  wifi_write_le16(wifi_wpa_m2_data_frame + 2U, 0);
+  wifi_connect_copy_mac(wifi_wpa_m2_data_frame + 4U,
+                        wifi_status_state.connect_bssid);
+  wifi_connect_copy_mac(wifi_wpa_m2_data_frame + 10U,
+                        wifi_status_state.connect_local_mac);
+  wifi_connect_copy_mac(wifi_wpa_m2_data_frame + 16U,
+                        wifi_status_state.connect_bssid);
+  wifi_write_le16(wifi_wpa_m2_data_frame + 22U, 0);
+  memcpy(wifi_wpa_m2_data_frame + offset, llc_snap_eapol,
+         sizeof(llc_snap_eapol));
+  offset += (uint32_t)sizeof(llc_snap_eapol);
+  memcpy(wifi_wpa_m2_data_frame + offset, wifi_wpa_eapol_m2,
+         wifi_status_state.wpa_m2_frame_len);
+  offset += wifi_status_state.wpa_m2_frame_len;
+
+  wifi_status_state.wpa_m2_data_ready = 1;
+  wifi_status_state.wpa_m2_data_frame_len = offset;
+  return 0;
+}
+
+static int wifi_wpa_prepare_m2(uint8_t eapol_version, uint8_t descriptor_type) {
+  if (wifi_wpa_derive_ptk() != 0 ||
+      wifi_wpa_build_m2(eapol_version, descriptor_type) != 0 ||
+      wifi_wpa_build_m2_data_frame() != 0) {
+    wifi_status_state.wpa_ptk_ready = 0;
+    wifi_status_state.wpa_m2_ready = 0;
+    wifi_status_state.wpa_m2_data_ready = 0;
+    return -1;
+  }
+  return 0;
+}
+
 static int wifi_connect_frame_matches_plan(const uint8_t *frame,
                                            uint32_t frame_len) {
   if (!wifi_status_state.connect_ready ||
@@ -4547,6 +4984,91 @@ static int wifi_connect_parse_response_frame(const uint8_t *frame,
   return 0;
 }
 
+static uint32_t wifi_80211_data_header_len(uint16_t fc, uint32_t subtype) {
+  uint32_t len = WIFI_80211_MGMT_HEADER_BYTES;
+
+  if ((fc & WIFI_80211_FC_TODS) && (fc & WIFI_80211_FC_FROMDS)) {
+    len += 6U;
+  }
+  if (subtype & WIFI_80211_SUBTYPE_QOS_DATA) {
+    len += 2U;
+  }
+  return len;
+}
+
+static int wifi_wpa_parse_eapol_key(const uint8_t *frame, uint32_t frame_len,
+                                    uint16_t fc, uint32_t subtype) {
+  uint32_t hdr_len;
+  const uint8_t *llc;
+  const uint8_t *eapol;
+  uint32_t eapol_len;
+  uint32_t key_body_len;
+  uint32_t key_info;
+  int is_pairwise_m1;
+
+  if (!wifi_status_state.connect_ready ||
+      !wifi_mac_equal6(frame + 4U, wifi_status_state.connect_local_mac) ||
+      !wifi_mac_equal6(frame + 10U, wifi_status_state.connect_bssid)) {
+    return 0;
+  }
+
+  hdr_len = wifi_80211_data_header_len(fc, subtype);
+  if (frame_len < hdr_len + 8U + 4U) {
+    return 0;
+  }
+  llc = frame + hdr_len;
+  if (llc[0] != 0xaaU || llc[1] != 0xaaU || llc[2] != 0x03U ||
+      llc[3] != 0x00U || llc[4] != 0x00U || llc[5] != 0x00U ||
+      wifi_read_be16(llc + 6U) != WIFI_EAPOL_ETHERTYPE) {
+    return 0;
+  }
+
+  eapol = llc + 8U;
+  eapol_len = frame_len - hdr_len - 8U;
+  if (eapol_len < 4U || eapol[1] != WIFI_EAPOL_TYPE_KEY) {
+    return 0;
+  }
+
+  key_body_len = wifi_read_be16(eapol + 2U);
+  if (key_body_len + 4U > eapol_len || key_body_len < 95U) {
+    return 0;
+  }
+
+  wifi_status_state.wpa_eapol_packets++;
+  wifi_status_state.wpa_key_frames++;
+  key_info = wifi_read_be16(eapol + 5U);
+  wifi_status_state.wpa_key_info = key_info;
+  wifi_status_state.wpa_key_len = wifi_read_be16(eapol + 7U);
+  wifi_status_state.wpa_replay_counter_hi = wifi_read_be32(eapol + 9U);
+  wifi_status_state.wpa_replay_counter_lo = wifi_read_be32(eapol + 13U);
+  wifi_status_state.wpa_key_data_len = wifi_read_be16(eapol + 97U);
+  wifi_status_state.wpa_key_desc_type = eapol[4];
+  wifi_status_state.wpa_eapol_version = eapol[0];
+  wifi_status_state.wpa_anonce_seen = 1;
+  memcpy(wifi_wpa_anonce, eapol + 17U, sizeof(wifi_wpa_anonce));
+  wifi_status_state.wpa_anonce_checksum =
+      wifi_wpa_checksum(wifi_wpa_anonce, sizeof(wifi_wpa_anonce));
+
+  is_pairwise_m1 = (key_info & WIFI_WPA_KEY_INFO_PAIRWISE) &&
+                   (key_info & WIFI_WPA_KEY_INFO_ACK) &&
+                   !(key_info & WIFI_WPA_KEY_INFO_MIC);
+  if (is_pairwise_m1) {
+    wifi_status_state.wpa_m1_seen = 1;
+    if (wifi_status_state.connect_pmk_ready &&
+        wifi_wpa_prepare_m2(eapol[0], eapol[4]) == 0) {
+      wifi_status_state.status =
+          "wifi: WPA M1 parsed; PTK and M2 response prepared";
+    } else {
+      wifi_status_state.status =
+          "wifi: WPA M1 parsed; PTK/M2 preparation pending";
+    }
+  } else {
+    wifi_status_state.status =
+        "wifi: WPA EAPOL-Key frame parsed; ANonce captured";
+  }
+  return 1;
+}
+
 static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
                                        uint32_t frame_offset,
                                        uint32_t mpdu_len) {
@@ -4567,6 +5089,18 @@ static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
   fc = wifi_read_le16(frame);
   type = (fc & WIFI_80211_FC_TYPE_MASK) >> 2;
   subtype = (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
+  if (type == WIFI_80211_TYPE_DATA) {
+    if (wifi_wpa_parse_eapol_key(frame, frame_len, fc, subtype)) {
+      wifi_status_state.scan_last_mpdu_len = mpdu_len;
+      wifi_status_state.scan_last_frame_offset = frame_offset;
+      wifi_status_state.scan_last_frame_len = frame_len;
+      wifi_status_state.scan_last_frame_control = fc;
+      wifi_status_state.scan_last_frame_subtype = subtype;
+      return 1;
+    }
+    return 0;
+  }
+
   if (type != WIFI_80211_TYPE_MGMT ||
       (subtype != WIFI_80211_SUBTYPE_BEACON &&
        subtype != WIFI_80211_SUBTYPE_PROBE_RESP &&
@@ -5878,6 +6412,27 @@ static void wifi_connect_append_response_status(char *report,
            s->connect_auth_status, s->connect_assoc_status,
            s->connect_assoc_aid);
   wifi_report_append(report, report_size, line);
+
+  if (s->wpa_eapol_packets || s->wpa_anonce_seen) {
+    snprintf(line, sizeof(line),
+             "wpa-rx: eapol=%lu key=%lu m1=%s anonce=%s "
+             "desc=%u ver=%u key-info=0x%04x key-len=%u data-len=%u\n",
+             s->wpa_eapol_packets, s->wpa_key_frames,
+             s->wpa_m1_seen ? "seen" : "none",
+             s->wpa_anonce_seen ? "seen" : "none",
+             s->wpa_key_desc_type, s->wpa_eapol_version, s->wpa_key_info,
+             s->wpa_key_len, s->wpa_key_data_len);
+    wifi_report_append(report, report_size, line);
+    snprintf(line, sizeof(line),
+             "wpa-rx: replay=0x%08x%08x anonce-check=0x%08x "
+             "snonce-check=0x%08x ptk=%s m2=%s data=%s\n",
+             s->wpa_replay_counter_hi, s->wpa_replay_counter_lo,
+             s->wpa_anonce_checksum, s->wpa_snonce_checksum,
+             s->wpa_ptk_ready ? "ready" : "pending",
+             s->wpa_m2_ready ? "ready" : "pending",
+             s->wpa_m2_data_ready ? "ready" : "pending");
+    wifi_report_append(report, report_size, line);
+  }
 }
 
 static void wifi_scan_append_access_points(char *report, size_t report_size) {
@@ -6585,6 +7140,264 @@ static void wifi_connect_append_known_aps(char *report, size_t report_size) {
   }
 }
 
+int wifi_wpa_probe(char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int prepared_now = 0;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi wpa: no wireless controller detected\n");
+    return -1;
+  }
+
+  if (!s->connect_ready) {
+    snprintf(report, report_size,
+             "wifi wpa: no WPA connection plan yet\n"
+             "run: wifi bringup, wifi scan arm, wifi scan poll, "
+             "wifi connect <ssid> <password>\n");
+    return -1;
+  }
+
+  if (!s->connect_wpa) {
+    snprintf(report, report_size,
+             "wifi wpa: current connection plan is open, no WPA handshake "
+             "needed\n"
+             "target: ssid=\"%s\"\n",
+             s->connect_ssid);
+    return 0;
+  }
+
+  if (s->wpa_m1_seen && s->connect_pmk_ready &&
+      (!s->wpa_ptk_ready || !s->wpa_m2_ready || !s->wpa_m2_data_ready)) {
+    if (wifi_wpa_prepare_m2((uint8_t)s->wpa_eapol_version,
+                            (uint8_t)s->wpa_key_desc_type) == 0) {
+      prepared_now = 1;
+    }
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi wpa: %s\n"
+           "target: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
+           "pmk=%s m1=%s anonce=%s ptk=%s m2=%s data-frame=%s\n"
+           "rx: eapol=%lu key=%lu desc=%u ver=%u key-info=0x%04x "
+           "replay=0x%08x%08x\n"
+           "checks: pmk=0x%08x anonce=0x%08x snonce=0x%08x "
+           "ptk=0x%08x kck=0x%08x kek=0x%08x tk=0x%08x\n"
+           "m2: key-info=0x%04x eapol-len=%u data-frame-len=%u "
+           "key-data-len=%u mic-check=0x%08x frame-check=0x%08x\n"
+           "note: M2 is prepared only for diagnostics; wifi tx m2 stages it "
+           "without ringing TX\n",
+           s->wpa_m2_ready
+               ? (prepared_now ? "PTK/M2 prepared now" : "PTK/M2 ready")
+               : (s->wpa_m1_seen ? "M1 seen, M2 pending"
+                                  : "waiting for AP EAPOL M1"),
+           s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
+           s->connect_bssid[2], s->connect_bssid[3], s->connect_bssid[4],
+           s->connect_bssid[5],
+           s->connect_pmk_ready ? "ready" : "missing",
+           s->wpa_m1_seen ? "seen" : "none",
+           s->wpa_anonce_seen ? "seen" : "none",
+           s->wpa_ptk_ready ? "ready" : "pending",
+           s->wpa_m2_ready ? "ready" : "pending",
+           s->wpa_m2_data_ready ? "ready" : "pending",
+           s->wpa_eapol_packets, s->wpa_key_frames, s->wpa_key_desc_type,
+           s->wpa_eapol_version, s->wpa_key_info, s->wpa_replay_counter_hi,
+           s->wpa_replay_counter_lo, s->connect_pmk_checksum,
+           s->wpa_anonce_checksum, s->wpa_snonce_checksum,
+           s->wpa_ptk_checksum, s->wpa_kck_checksum, s->wpa_kek_checksum,
+           s->wpa_tk_checksum, s->wpa_m2_key_info, s->wpa_m2_frame_len,
+           s->wpa_m2_data_frame_len, s->wpa_m2_key_data_len,
+           s->wpa_m2_mic_checksum, s->wpa_m2_checksum);
+  return s->wpa_m2_ready ? 0 : -1;
+}
+
+static const char *wifi_tx_stage_kind_text(uint32_t kind) {
+  switch (kind) {
+  case WIFI_TX_STAGE_KIND_AUTH:
+    return "auth";
+  case WIFI_TX_STAGE_KIND_ASSOC:
+    return "assoc";
+  case WIFI_TX_STAGE_KIND_EAPOL_M2:
+    return "m2";
+  default:
+    return "none";
+  }
+}
+
+static int wifi_tx_stage_frame(uint32_t kind, const uint8_t *frame,
+                               uint32_t frame_len) {
+  uint32_t idx;
+  uint32_t next_idx;
+  uint64_t frame_phys;
+  wifi_tfh_tfd_t *tfd;
+
+  if (!wifi_status_state.connect_ready || !frame || frame_len == 0 ||
+      frame_len > WIFI_TX_BUFFER_BYTES) {
+    wifi_status_state.tx_stage_failed = 1;
+    wifi_status_state.tx_stage_errors++;
+    wifi_status_state.status = "wifi: TX staging needs a connection frame plan";
+    return -1;
+  }
+
+  if (!wifi_status_state.queues_ready || !wifi_status_state.tx_tfd_phys ||
+      !wifi_status_state.tx_buffer_phys || !wifi_status_state.tx_bc_phys) {
+    wifi_status_state.tx_stage_failed = 1;
+    wifi_status_state.tx_stage_errors++;
+    wifi_status_state.status = "wifi: TX staging needs prepared host queues";
+    return -1;
+  }
+
+  idx = wifi_status_state.tx_write_ptr % WIFI_TX_QUEUE_ENTRIES;
+  next_idx = (idx + 1U) % WIFI_TX_QUEUE_ENTRIES;
+  tfd = (wifi_tfh_tfd_t *)wifi_tx_tfd[idx];
+  frame_phys = wifi_phys_addr(wifi_tx_buffers[idx]);
+  if (!frame_phys) {
+    wifi_status_state.tx_stage_failed = 1;
+    wifi_status_state.tx_stage_errors++;
+    wifi_status_state.status = "wifi: TX staging DMA address missing";
+    return -1;
+  }
+
+  memset(wifi_tx_buffers[idx], 0, WIFI_TX_BUFFER_BYTES);
+  memset(tfd, 0, sizeof(*tfd));
+  memcpy(wifi_tx_buffers[idx], frame, frame_len);
+
+  tfd->num_tbs = 1;
+  tfd->tbs[0].tb_len = (uint16_t)frame_len;
+  tfd->tbs[0].addr = frame_phys;
+  wifi_tx_bc_tbl[idx].tfd_offset =
+      wifi_gen2_byte_count(frame_len, tfd->num_tbs);
+
+  wifi_status_state.tx_stage_ready = 1;
+  wifi_status_state.tx_stage_failed = 0;
+  wifi_status_state.tx_stage_frames++;
+  wifi_status_state.tx_stage_queue = WIFI_DQA_TX_QUEUE;
+  wifi_status_state.tx_stage_index = idx;
+  wifi_status_state.tx_stage_next_index = next_idx;
+  wifi_status_state.tx_stage_kind = kind;
+  wifi_status_state.tx_stage_frame_len = frame_len;
+  wifi_status_state.tx_stage_tfd_tbs = tfd->num_tbs;
+  wifi_status_state.tx_stage_tb0_len = tfd->tbs[0].tb_len;
+  wifi_status_state.tx_stage_tb0_addr = tfd->tbs[0].addr;
+  wifi_status_state.tx_stage_bc_entry = wifi_tx_bc_tbl[idx].tfd_offset;
+  wifi_status_state.tx_stage_wptr_value =
+      (WIFI_DQA_TX_QUEUE << HBUS_TARG_WRPTR_Q_SHIFT) | next_idx;
+  wifi_status_state.tx_stage_checksum =
+      wifi_connect_checksum(frame, frame_len);
+  wifi_status_state.tx_write_ptr = next_idx;
+  wifi_status_state.status =
+      "wifi: management frame staged in TX DMA buffer; doorbell not armed";
+  return 0;
+}
+
+int wifi_tx_stage_probe(const char *target, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  int stage_auth = 0;
+  int stage_assoc = 0;
+  int stage_m2 = 0;
+  int rc = 0;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi tx: no wireless controller detected\n");
+    return -1;
+  }
+
+  if (!target || target[0] == '\0' || strcmp(target, "all") == 0) {
+    stage_auth = 1;
+    stage_assoc = 1;
+  } else if (strcmp(target, "auth") == 0) {
+    stage_auth = 1;
+  } else if (strcmp(target, "assoc") == 0) {
+    stage_assoc = 1;
+  } else if (strcmp(target, "m2") == 0) {
+    stage_m2 = 1;
+  } else {
+    snprintf(report, report_size,
+             "wifi tx: usage wifi tx [auth|assoc|m2|all]\n");
+    return -1;
+  }
+
+  if (!s->connect_ready) {
+    snprintf(report, report_size,
+             "wifi tx: no connection frame plan ready\n"
+             "run: wifi bringup, wifi scan arm, wifi scan poll, "
+             "wifi connect <ssid> [password]\n");
+    return -1;
+  }
+
+  if (stage_auth) {
+    rc = wifi_tx_stage_frame(WIFI_TX_STAGE_KIND_AUTH, wifi_connect_auth_frame,
+                             s->connect_auth_frame_len);
+  }
+  if (rc == 0 && stage_assoc) {
+    rc = wifi_tx_stage_frame(WIFI_TX_STAGE_KIND_ASSOC, wifi_connect_assoc_frame,
+                             s->connect_assoc_frame_len);
+  }
+  if (rc == 0 && stage_m2) {
+    if (!wifi_status_state.wpa_m2_data_ready &&
+        wifi_status_state.wpa_m1_seen &&
+        wifi_status_state.connect_pmk_ready) {
+      wifi_wpa_prepare_m2((uint8_t)wifi_status_state.wpa_eapol_version,
+                          (uint8_t)wifi_status_state.wpa_key_desc_type);
+    }
+    if (!wifi_status_state.wpa_m2_data_ready) {
+      wifi_status_state.tx_stage_failed = 1;
+      wifi_status_state.tx_stage_errors++;
+      wifi_status_state.status =
+          "wifi: WPA M2 data frame is not ready for TX staging";
+      rc = -1;
+    } else {
+      rc = wifi_tx_stage_frame(WIFI_TX_STAGE_KIND_EAPOL_M2,
+                               wifi_wpa_m2_data_frame,
+                               wifi_status_state.wpa_m2_data_frame_len);
+    }
+  }
+
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi tx: %s\n"
+           "target: %s ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
+           "stage: ready=%s failed=%s frames=%lu last=%s queue=%u "
+           "index=%u next=%u\n"
+           "dma: tx-tfd=0x%lx tx-buf=0x%lx tx-bc=0x%lx tb0=0x%lx\n"
+           "tfd: tbs=%u tb0-len=%u frame-len=%u bc=0x%04x "
+           "checksum=0x%08x\n"
+           "doorbell-plan: reg=0x%03x value=0x%08x not-written=yes\n"
+           "next: validate Intel TX_CMD/STA binding before ringing this queue\n",
+           rc == 0 ? "management TX frame staged" : "management TX staging failed",
+           (!target || target[0] == '\0') ? "all" : target,
+           s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
+           s->connect_bssid[2], s->connect_bssid[3], s->connect_bssid[4],
+           s->connect_bssid[5], s->tx_stage_ready ? "yes" : "no",
+           s->tx_stage_failed ? "yes" : "no", s->tx_stage_frames,
+           wifi_tx_stage_kind_text(s->tx_stage_kind), s->tx_stage_queue,
+           s->tx_stage_index, s->tx_stage_next_index,
+           (unsigned long)s->tx_tfd_phys, (unsigned long)s->tx_buffer_phys,
+           (unsigned long)s->tx_bc_phys,
+           (unsigned long)s->tx_stage_tb0_addr, s->tx_stage_tfd_tbs,
+           s->tx_stage_tb0_len, s->tx_stage_frame_len, s->tx_stage_bc_entry,
+           s->tx_stage_checksum, HBUS_TARG_WRPTR, s->tx_stage_wptr_value);
+  return rc;
+}
+
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size) {
   const wifi_status_t *s;
@@ -6753,8 +7566,8 @@ int wifi_connect(const char *ssid, const char *password, char *report,
            "assoc-len=%u checksum=0x%08x\n"
            "wpa2: pmk=%s iterations=%u secret-len=%u pmk-check=0x%08x\n"
            "state: boot=%s context=%s rx=%s scan-aps=%u plan=%s associated=no\n"
-           "next: implement Intel TX_CMD, ADD_STA/MAC binding, then WPA "
-           "4-way handshake/key install\n"
+           "next: run wifi tx all to stage DMA, then implement Intel TX_CMD, "
+           "ADD_STA/MAC binding, and WPA 4-way handshake/key install\n"
            "note: password is not stored; for now it only selects the WPA2 "
            "RSN association template\n",
            wifi_status_state.connect_ssid, wifi_status_state.connect_bssid[0],

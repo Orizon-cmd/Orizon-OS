@@ -66,8 +66,14 @@ development target, not a ZimaOS-only assumption.
   hexadecimal PSKs. `wifi crypto` runs built-in SHA-1 and PBKDF2 known vector
   checks. The RX path already recognizes authentication and association response
   frames that match the prepared local STA/BSSID pair and records status
-  codes/AID for diagnostics. Real traffic still requires the next driver
-  milestones: Intel `TX_CMD`, MAC/STA binding, and WPA key installation.
+  codes/AID for diagnostics. `wifi tx [auth|assoc|all]` can now copy the
+  prepared management frames into TX DMA buffers, fill the TX TFD/byte-count
+  slot, and report the planned doorbell value without writing it. WPA2 EAPOL
+  RX diagnostics now recognize AP key frames, capture ANonce, derive diagnostic
+  PTK material, and prepare an inspectable M2 response through `wifi wpa`.
+  `wifi tx m2` only stages that response in DMA; it still does not transmit.
+  Real traffic still requires the next driver milestones: Intel `TX_CMD`,
+  MAC/STA binding, and WPA key installation.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -97,6 +103,9 @@ wifi scan
 wifi scan arm
 wifi scan poll
 wifi connect <ssid> [password]
+wifi wpa
+wifi tx all
+wifi tx m2
 storage
 disks
 ```

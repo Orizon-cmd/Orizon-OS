@@ -2831,6 +2831,24 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "wpa")) {
+    wifi_wpa_probe(line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
+  if (term_command_is(args, "tx")) {
+    const char *tx_args = term_skip_spaces(args + 2);
+    char target[16];
+    target[0] = '\0';
+    if (*tx_args) {
+      term_read_token(tx_args, target, sizeof(target));
+    }
+    wifi_tx_stage_probe(target, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "connect")) {
     rest = term_skip_spaces(args + 7);
     rest = term_read_token(rest, ssid, sizeof(ssid));
@@ -2848,7 +2866,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|scan [arm|poll]|connect <ssid> [password]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|all]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3451,6 +3469,10 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi scan [arm|poll] - Plan/send/poll experimental passive scan\n");
     term_puts_t(term,
                 "  wifi connect - Prepare Wi-Fi auth/association frames\n");
+    term_puts_t(term,
+                "  wifi wpa - Show WPA M1/PTK/M2 diagnostic state\n");
+    term_puts_t(term,
+                "  wifi tx [auth|assoc|m2|all] - Stage Wi-Fi TX DMA only\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
