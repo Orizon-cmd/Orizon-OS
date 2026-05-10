@@ -40,6 +40,9 @@ anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
 `ssh hostkey` affiche l'identite hote, `ssh hostkey reload` recharge
 `/system/ssh_host_rsa.key`, et `ssh hostkey reset` recree le fichier depuis le
 materiel RSA de bootstrap.
+Apres connexion OpenSSH, les commandes admin utiles peuvent aussi etre lancees
+directement avec `ssh orizon@<ip> "ssh auth max 4"`, `ssh orizon@<ip> "ssh
+lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 
 ## Etat actuel
 
@@ -70,8 +73,18 @@ materiel RSA de bootstrap.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
-  `sync`, `status`, `auth`, `hostkey`, `whoami`, `uname`, `pwd`, `uptime` et
-  `exit`, puis ferme proprement avec `exit-status`.
+  `ps`, `pkg`, `storage`, `timer`, `sync`, `status`, `auth`, `hostkey`,
+  `whoami`, `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec
+  `exit-status`.
+- Commandes admin distantes: `exec` sait modifier la politique auth avec
+  `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
+  mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
+  clear`, et recharger/reinitialiser la cle hote.
+- Robustesse: le chemin SSH utilise des buffers statiques pour les gros
+  paquets et remet l'ecoute TCP/22 en etat apres une fermeture de canal ou une
+  session idle. Le `snprintf` kernel supporte maintenant l'alignement a gauche
+  (`%-Ns`), ce qui evite les corruptions d'arguments dans les sorties comme
+  `ps`.
 - Securite: aucun mot de passe par defaut ni backdoor n'est cree; sans
   `ssh password`, l'auth reste desactivee.
 
@@ -84,8 +97,9 @@ ssh orizon@<ip-orizon>
 Le client doit atteindre Orizon, voir le logiciel distant `OrizonSSH_0.1`,
 recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Apres
 authentification password, OpenSSH peut ouvrir un canal `session`; `exec` et le
-mini-shell interactif fonctionnent deja pour les diagnostics de base. `ssh
-status` et `ssh algorithms` affichent la banniere client, la negociation
+mini-shell interactif fonctionnent deja pour les diagnostics de base et les
+commandes admin listees plus haut. `ssh status` et `ssh algorithms` affichent
+la banniere client, la negociation
 choisie, les empreintes X25519, le hash d'echange, la signature, les cles
 derivees, l'etat auth et l'etat canal.
 

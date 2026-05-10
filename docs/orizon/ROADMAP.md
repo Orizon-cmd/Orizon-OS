@@ -16,9 +16,11 @@
   signature, `ECDH_REPLY`, key derivation, `NEWKEYS`, encrypted
   `SERVICE_REQUEST` parsing, encrypted `SERVICE_ACCEPT`, explicit password
   authentication for user `orizon`, `session` channel open, `pty-req`, `shell`,
-  `exec`, a remote diagnostic shell with VFS/log/network commands,
-  anti-bruteforce lockout, config reload, persistent host-key file management
-  in `/system/ssh_host_rsa.key`, `/system/ssh.conf`, and `/logs/ssh.log`.
+  `exec`, a remote diagnostic/admin shell with VFS/log/network/process/package/
+  storage commands, remote auth/password/lockout/hostkey administration,
+  graceful listener recovery, anti-bruteforce lockout, config reload,
+  persistent host-key file management in `/system/ssh_host_rsa.key`,
+  `/system/ssh.conf`, and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
@@ -41,7 +43,7 @@
    bridge/DHCP failure messages.
 5. Finish SSH remote login hardening: generated per-install host-key material,
    full PTY integration with the local Orizon terminal, safer config
-   permissions, and key rotation.
+   permissions, key rotation, and longer multi-client soak tests.
 
 ## Next Hardware Track
 

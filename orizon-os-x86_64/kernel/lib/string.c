@@ -212,10 +212,18 @@ int snprintf(char *str, size_t size, const char *format, ...) {
       /* Handle flags and width (simplified) */
       int width = 0;
       int pad_zero = 0;
+      int left_align = 0;
       
-      if (*format == '0') {
-        pad_zero = 1;
+      while (*format == '-' || *format == '0') {
+        if (*format == '-') {
+          left_align = 1;
+        } else if (*format == '0') {
+          pad_zero = 1;
+        }
         format++;
+      }
+      if (left_align) {
+        pad_zero = 0;
       }
       
       while (*format >= '0' && *format <= '9') {
@@ -284,7 +292,7 @@ int snprintf(char *str, size_t size, const char *format, ...) {
         len = strlen(s);
         
         /* Padding */
-        while (width > len && out < end) {
+        while (!left_align && width > len && out < end) {
           *out++ = pad_zero ? '0' : ' ';
           width--;
         }
@@ -292,6 +300,11 @@ int snprintf(char *str, size_t size, const char *format, ...) {
         /* Copy string */
         while (*s && out < end) {
           *out++ = *s++;
+        }
+
+        while (left_align && width > len && out < end) {
+          *out++ = ' ';
+          width--;
         }
       }
       
