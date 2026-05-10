@@ -17,6 +17,7 @@
   `SERVICE_REQUEST` parsing, encrypted `SERVICE_ACCEPT`, explicit password
   authentication for user `orizon`, `session` channel open, `pty-req`, `shell`,
   `exec`, a diagnostic mini-shell, anti-bruteforce lockout, config reload,
+  persistent host-key file management in `/system/ssh_host_rsa.key`,
   `/system/ssh.conf`, and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
@@ -38,9 +39,9 @@
    public manifest/index.
 4. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
    bridge/DHCP failure messages.
-5. Finish SSH remote login hardening: persistent per-install host key, real PTY
-   integration with the Orizon console, safer config permissions, and key
-   reload/rotation.
+5. Finish SSH remote login hardening: generated per-install host-key material,
+   real PTY integration with the Orizon console, safer config permissions, and
+   key rotation.
 
 ## Next Hardware Track
 

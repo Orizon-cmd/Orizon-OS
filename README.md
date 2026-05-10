@@ -144,6 +144,7 @@ ssh status
 ssh auth
 ssh auth max <essais>
 ssh auth lockout <secondes>
+ssh hostkey
 ssh algorithms
 ssh reload
 logs ssh
@@ -159,7 +160,8 @@ console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
 de diagnostic (`help`, `status`, `whoami`, `uname`, `pwd`, `exit`). `ssh auth`
 affiche aussi le verrouillage anti-bruteforce, et `ssh lockout clear` permet de
-debloquer l'acces apres trop de mauvais mots de passe.
+debloquer l'acces apres trop de mauvais mots de passe. `ssh hostkey` affiche
+l'identite hote persistante stockee dans `/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

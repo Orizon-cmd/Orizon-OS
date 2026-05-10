@@ -15,6 +15,9 @@ ssh auth
 ssh auth max <essais>
 ssh auth lockout <secondes>
 ssh auth default
+ssh hostkey
+ssh hostkey reload
+ssh hostkey reset
 ssh algorithms
 ssh reload
 ssh lockout clear
@@ -34,6 +37,9 @@ desactive l'authentification par mot de passe.
 `ssh auth max <essais>` et `ssh auth lockout <secondes>` changent la politique
 anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
 `30` secondes de verrouillage.
+`ssh hostkey` affiche l'identite hote, `ssh hostkey reload` recharge
+`/system/ssh_host_rsa.key`, et `ssh hostkey reset` recree le fichier depuis le
+materiel RSA de bootstrap.
 
 ## Etat actuel
 
@@ -50,6 +56,9 @@ anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
   empreintes SHA-256 dans `ssh algorithms`.
 - Signature hote: Orizon construit un blob `ssh-rsa`, signe le hash d'echange
   avec `rsa-sha2-256`, puis envoie `SSH_MSG_KEX_ECDH_REPLY`.
+- Cle hote: Orizon persiste maintenant le materiel RSA CRT dans
+  `/system/ssh_host_rsa.key`, le recharge au demarrage du service SSH et expose
+  le fingerprint via `ssh hostkey` / `ssh algorithms`.
 - Transport chiffre: Orizon derive IV, cles AES-128-CTR et cles HMAC-SHA256,
   echange `SSH_MSG_NEWKEYS`, lit le premier `SERVICE_REQUEST` chiffre et
   repond par `SERVICE_ACCEPT`.
@@ -83,7 +92,7 @@ derivees, l'etat auth et l'etat canal.
 Pour transformer ce listener en acces distant complet, il reste a ajouter:
 
 - remplacer la cle hote RSA de developpement par une cle persistante par
-  installation
+  installation, generee par Orizon au lieu d'etre derivee du bootstrap compile
 - durcir encore l'authentification: rotation du hash, permissions du fichier
   config et journalisation plus detaillee par IP
 - remplacer le mini-shell SSH par une vraie pseudo-console Orizon partageant

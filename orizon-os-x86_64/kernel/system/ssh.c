@@ -54,6 +54,7 @@
 #define SSH_AUTH_LOCKOUT_SECONDS_DEFAULT 30U
 #define SSH_AUTH_MAX_ATTEMPTS_LIMIT 20U
 #define SSH_AUTH_LOCKOUT_SECONDS_LIMIT 3600U
+#define SSH_HOSTKEY_FILE_MAX 1600U
 
 /*
  * Development host key for the current staged SSH server.
@@ -144,6 +145,9 @@ static ssh_status_t ssh_status = {
     .auth_lockout_until = 0,
     .max_auth_attempts = SSH_AUTH_MAX_ATTEMPTS_DEFAULT,
     .auth_lockout_seconds = SSH_AUTH_LOCKOUT_SECONDS_DEFAULT,
+    .hostkey_loaded = 0,
+    .hostkey_persistent = 0,
+    .hostkey_bootstrap = 1,
     .channel_open_seen = 0,
     .channel_open_confirm_sent = 0,
     .shell_ready = 0,
@@ -182,6 +186,8 @@ static ssh_status_t ssh_status = {
     .server_to_client_mac_sha256 = {0},
     .auth_user = {0},
     .auth_method = {0},
+    .hostkey_source = "compiled-bootstrap",
+    .hostkey_status = "ssh: host key not loaded",
     .status = "ssh: stopped",
 };
 
@@ -206,6 +212,26 @@ static uint8_t ssh_session_id[SHA256_DIGEST_SIZE];
 static int ssh_session_id_ready = 0;
 static uint8_t ssh_host_signature[SSH_RSA_SIGNATURE_SIZE];
 static int ssh_host_signature_ready = 0;
+static uint8_t ssh_hostkey_n[SSH_RSA_SIGNATURE_SIZE];
+static uint8_t ssh_hostkey_p[64];
+static uint8_t ssh_hostkey_q[64];
+static uint8_t ssh_hostkey_dmp1[64];
+static uint8_t ssh_hostkey_dmq1[64];
+static uint8_t ssh_hostkey_iqmp[64];
+static rsa_crt_private_key_t ssh_hostkey = {
+    .n = ORIZON_SSH_RSA_N,
+    .n_len = sizeof(ORIZON_SSH_RSA_N),
+    .p = ORIZON_SSH_RSA_P,
+    .p_len = sizeof(ORIZON_SSH_RSA_P),
+    .q = ORIZON_SSH_RSA_Q,
+    .q_len = sizeof(ORIZON_SSH_RSA_Q),
+    .dmp1 = ORIZON_SSH_RSA_DMP1,
+    .dmp1_len = sizeof(ORIZON_SSH_RSA_DMP1),
+    .dmq1 = ORIZON_SSH_RSA_DMQ1,
+    .dmq1_len = sizeof(ORIZON_SSH_RSA_DMQ1),
+    .iqmp = ORIZON_SSH_RSA_IQMP,
+    .iqmp_len = sizeof(ORIZON_SSH_RSA_IQMP),
+};
 static uint8_t ssh_iv_c2s[16];
 static uint8_t ssh_iv_s2c[16];
 static uint8_t ssh_key_c2s[16];
@@ -241,6 +267,12 @@ static char ssh_channel_tx[768];
 static size_t ssh_channel_tx_len = 0;
 static char ssh_shell_line[256];
 static size_t ssh_shell_line_len = 0;
+
+static int ssh_ensure_hostkey(void);
+static int ssh_load_hostkey_file(void);
+static int ssh_write_hostkey_file(void);
+static int ssh_rebuild_host_key_blob(void);
+static void ssh_install_bootstrap_hostkey(void);
 
 static void ssh_log_line(const char *line) {
   file_t *f;
@@ -530,6 +562,48 @@ int ssh_reset_auth_policy(char *report, size_t report_size) {
                              report_size);
 }
 
+int ssh_reload_hostkey(char *report, size_t report_size) {
+  if (ssh_load_hostkey_file() != 0) {
+    if (report && report_size > 0) {
+      snprintf(report, report_size,
+               "ssh: host key reload failed; run 'ssh hostkey reset' to recreate %s.\n",
+               ORIZON_SSH_HOSTKEY_PATH);
+    }
+    return -1;
+  }
+  if (report && report_size > 0) {
+    snprintf(report, report_size,
+             "ssh: host key reloaded from %s\n"
+             "ssh: hostkey-sha256=%s\n",
+             ORIZON_SSH_HOSTKEY_PATH,
+             ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256
+                                          : "none");
+  }
+  return 0;
+}
+
+int ssh_reset_hostkey(char *report, size_t report_size) {
+  vfs_delete(ORIZON_SSH_HOSTKEY_PATH);
+  ssh_install_bootstrap_hostkey();
+  if (ssh_write_hostkey_file() != 0) {
+    if (report && report_size > 0) {
+      snprintf(report, report_size,
+               "ssh: host key reset failed; could not write %s.\n",
+               ORIZON_SSH_HOSTKEY_PATH);
+    }
+    return -1;
+  }
+  if (report && report_size > 0) {
+    snprintf(report, report_size,
+             "ssh: host key reset and persisted to %s\n"
+             "ssh: hostkey-sha256=%s\n",
+             ORIZON_SSH_HOSTKEY_PATH,
+             ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256
+                                          : "none");
+  }
+  return 0;
+}
+
 static void ssh_put_u32(uint8_t *p, uint32_t v) {
   p[0] = (uint8_t)(v >> 24);
   p[1] = (uint8_t)((v >> 16) & 0xff);
@@ -646,6 +720,282 @@ static int ssh_put_mpint(uint8_t *out, size_t cap, size_t *off,
   return 0;
 }
 
+static int ssh_append_text(char *buf, size_t cap, size_t *off,
+                           const char *text) {
+  size_t len;
+
+  if (!buf || !off || !text || *off >= cap) {
+    return -1;
+  }
+  len = strlen(text);
+  if (*off + len >= cap) {
+    return -1;
+  }
+  memcpy(buf + *off, text, len);
+  *off += len;
+  buf[*off] = '\0';
+  return 0;
+}
+
+static int ssh_append_hex_line(char *buf, size_t cap, size_t *off,
+                               const char *name, const uint8_t *data,
+                               size_t len) {
+  static const char hex[] = "0123456789abcdef";
+
+  if (ssh_append_text(buf, cap, off, name) != 0 ||
+      ssh_append_text(buf, cap, off, " ") != 0) {
+    return -1;
+  }
+  for (size_t i = 0; i < len; i++) {
+    if (*off + 3 >= cap) {
+      return -1;
+    }
+    buf[(*off)++] = hex[data[i] >> 4];
+    buf[(*off)++] = hex[data[i] & 0x0f];
+  }
+  buf[(*off)++] = '\n';
+  buf[*off] = '\0';
+  return 0;
+}
+
+static int ssh_hex_value(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
+static const char *ssh_find_line_value(const char *text, const char *name) {
+  size_t name_len;
+  const char *p;
+
+  if (!text || !name) {
+    return NULL;
+  }
+  name_len = strlen(name);
+  p = text;
+  while (*p) {
+    while (*p == '\n' || *p == '\r') {
+      p++;
+    }
+    if (strncmp(p, name, name_len) == 0 && p[name_len] == ' ') {
+      return p + name_len + 1;
+    }
+    while (*p && *p != '\n') {
+      p++;
+    }
+  }
+  return NULL;
+}
+
+static int ssh_parse_hex_field(const char *text, const char *name,
+                               uint8_t *out, size_t out_len) {
+  const char *p = ssh_find_line_value(text, name);
+
+  if (!p || !out) {
+    return -1;
+  }
+  for (size_t i = 0; i < out_len; i++) {
+    int hi = ssh_hex_value(p[i * 2]);
+    int lo = ssh_hex_value(p[i * 2 + 1]);
+    if (hi < 0 || lo < 0) {
+      return -1;
+    }
+    out[i] = (uint8_t)((hi << 4) | lo);
+  }
+  p += out_len * 2;
+  if (*p != '\n' && *p != '\r' && *p != '\0' && *p != ' ') {
+    return -1;
+  }
+  return 0;
+}
+
+static void ssh_set_hostkey_report(const char *source, const char *status,
+                                   int persistent, int bootstrap) {
+  strncpy(ssh_status.hostkey_source, source ? source : "unknown",
+          sizeof(ssh_status.hostkey_source) - 1);
+  ssh_status.hostkey_source[sizeof(ssh_status.hostkey_source) - 1] = '\0';
+  strncpy(ssh_status.hostkey_status, status ? status : "ssh: host key ready",
+          sizeof(ssh_status.hostkey_status) - 1);
+  ssh_status.hostkey_status[sizeof(ssh_status.hostkey_status) - 1] = '\0';
+  ssh_status.hostkey_persistent = persistent;
+  ssh_status.hostkey_bootstrap = bootstrap;
+  ssh_status.hostkey_loaded = 1;
+}
+
+static void ssh_install_hostkey_material(const uint8_t *n, const uint8_t *p,
+                                         const uint8_t *q,
+                                         const uint8_t *dmp1,
+                                         const uint8_t *dmq1,
+                                         const uint8_t *iqmp) {
+  memcpy(ssh_hostkey_n, n, sizeof(ssh_hostkey_n));
+  memcpy(ssh_hostkey_p, p, sizeof(ssh_hostkey_p));
+  memcpy(ssh_hostkey_q, q, sizeof(ssh_hostkey_q));
+  memcpy(ssh_hostkey_dmp1, dmp1, sizeof(ssh_hostkey_dmp1));
+  memcpy(ssh_hostkey_dmq1, dmq1, sizeof(ssh_hostkey_dmq1));
+  memcpy(ssh_hostkey_iqmp, iqmp, sizeof(ssh_hostkey_iqmp));
+  ssh_hostkey.n = ssh_hostkey_n;
+  ssh_hostkey.n_len = sizeof(ssh_hostkey_n);
+  ssh_hostkey.p = ssh_hostkey_p;
+  ssh_hostkey.p_len = sizeof(ssh_hostkey_p);
+  ssh_hostkey.q = ssh_hostkey_q;
+  ssh_hostkey.q_len = sizeof(ssh_hostkey_q);
+  ssh_hostkey.dmp1 = ssh_hostkey_dmp1;
+  ssh_hostkey.dmp1_len = sizeof(ssh_hostkey_dmp1);
+  ssh_hostkey.dmq1 = ssh_hostkey_dmq1;
+  ssh_hostkey.dmq1_len = sizeof(ssh_hostkey_dmq1);
+  ssh_hostkey.iqmp = ssh_hostkey_iqmp;
+  ssh_hostkey.iqmp_len = sizeof(ssh_hostkey_iqmp);
+  ssh_host_key_blob_len = 0;
+  ssh_status.hostkey_sha256[0] = '\0';
+  ssh_host_signature_ready = 0;
+}
+
+static void ssh_install_bootstrap_hostkey(void) {
+  ssh_install_hostkey_material(ORIZON_SSH_RSA_N, ORIZON_SSH_RSA_P,
+                               ORIZON_SSH_RSA_Q, ORIZON_SSH_RSA_DMP1,
+                               ORIZON_SSH_RSA_DMQ1, ORIZON_SSH_RSA_IQMP);
+  ssh_set_hostkey_report("compiled-bootstrap",
+                         "ssh: using compiled bootstrap host key", 0, 1);
+}
+
+static int ssh_rebuild_host_key_blob(void) {
+  static const uint8_t exponent[3] = {0x01, 0x00, 0x01};
+  size_t off = 0;
+
+  if (ssh_put_cstring(ssh_host_key_blob, sizeof(ssh_host_key_blob), &off,
+                      "ssh-rsa") != 0 ||
+      ssh_put_mpint(ssh_host_key_blob, sizeof(ssh_host_key_blob), &off,
+                    exponent, sizeof(exponent)) != 0 ||
+      ssh_put_mpint(ssh_host_key_blob, sizeof(ssh_host_key_blob), &off,
+                    ssh_hostkey.n, ssh_hostkey.n_len) != 0) {
+    return -1;
+  }
+  ssh_host_key_blob_len = off;
+  sha256_buffer_hex(ssh_host_key_blob, ssh_host_key_blob_len,
+                    ssh_status.hostkey_sha256);
+  return 0;
+}
+
+static int ssh_load_hostkey_file(void) {
+  file_t *f;
+  char text[SSH_HOSTKEY_FILE_MAX];
+  uint8_t n_buf[SSH_RSA_SIGNATURE_SIZE];
+  uint8_t p_buf[64];
+  uint8_t q_buf[64];
+  uint8_t dmp1_buf[64];
+  uint8_t dmq1_buf[64];
+  uint8_t iqmp_buf[64];
+  ssize_t n;
+
+  f = vfs_open(ORIZON_SSH_HOSTKEY_PATH, O_RDONLY);
+  if (!f) {
+    return -1;
+  }
+  memset(text, 0, sizeof(text));
+  n = vfs_read(f, text, sizeof(text) - 1);
+  vfs_close(f);
+  if (n <= 0 || !strstr(text, "format orizon-ssh-rsa-crt-v1")) {
+    return -1;
+  }
+  if (ssh_parse_hex_field(text, "n", n_buf, sizeof(n_buf)) != 0 ||
+      ssh_parse_hex_field(text, "p", p_buf, sizeof(p_buf)) != 0 ||
+      ssh_parse_hex_field(text, "q", q_buf, sizeof(q_buf)) != 0 ||
+      ssh_parse_hex_field(text, "dmp1", dmp1_buf, sizeof(dmp1_buf)) != 0 ||
+      ssh_parse_hex_field(text, "dmq1", dmq1_buf, sizeof(dmq1_buf)) != 0 ||
+      ssh_parse_hex_field(text, "iqmp", iqmp_buf, sizeof(iqmp_buf)) != 0) {
+    return -1;
+  }
+  ssh_install_hostkey_material(n_buf, p_buf, q_buf, dmp1_buf, dmq1_buf,
+                               iqmp_buf);
+  if (ssh_rebuild_host_key_blob() != 0) {
+    return -1;
+  }
+  ssh_set_hostkey_report(ORIZON_SSH_HOSTKEY_PATH,
+                         "ssh: loaded persistent host key file", 1,
+                         strstr(text, "generator compiled-bootstrap") != NULL);
+  return 0;
+}
+
+static int ssh_write_hostkey_file(void) {
+  file_t *f;
+  char text[SSH_HOSTKEY_FILE_MAX];
+  char line[128];
+  size_t off = 0;
+
+  if (!ssh_hostkey.n || ssh_rebuild_host_key_blob() != 0) {
+    return -1;
+  }
+  memset(text, 0, sizeof(text));
+  if (ssh_append_text(text, sizeof(text), &off,
+                      "format orizon-ssh-rsa-crt-v1\n"
+                      "algorithm rsa-sha2-256\n"
+                      "source Orizon OS persistent SSH host identity\n") != 0) {
+    return -1;
+  }
+  snprintf(line, sizeof(line), "fingerprint-sha256 %s\n",
+           ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256 : "none");
+  if (ssh_append_text(text, sizeof(text), &off, line) != 0) {
+    return -1;
+  }
+  snprintf(line, sizeof(line), "created-ticks %lu\n",
+           (unsigned long)timer_ticks());
+  if (ssh_append_text(text, sizeof(text), &off, line) != 0 ||
+      ssh_append_text(text, sizeof(text), &off,
+                      "generator compiled-bootstrap\n"
+                      "note rsa-generation-todo\n") != 0 ||
+      ssh_append_hex_line(text, sizeof(text), &off, "n", ssh_hostkey.n,
+                          ssh_hostkey.n_len) != 0 ||
+      ssh_append_hex_line(text, sizeof(text), &off, "p", ssh_hostkey.p,
+                          ssh_hostkey.p_len) != 0 ||
+      ssh_append_hex_line(text, sizeof(text), &off, "q", ssh_hostkey.q,
+                          ssh_hostkey.q_len) != 0 ||
+      ssh_append_hex_line(text, sizeof(text), &off, "dmp1", ssh_hostkey.dmp1,
+                          ssh_hostkey.dmp1_len) != 0 ||
+      ssh_append_hex_line(text, sizeof(text), &off, "dmq1", ssh_hostkey.dmq1,
+                          ssh_hostkey.dmq1_len) != 0 ||
+      ssh_append_hex_line(text, sizeof(text), &off, "iqmp", ssh_hostkey.iqmp,
+                          ssh_hostkey.iqmp_len) != 0) {
+    return -1;
+  }
+
+  vfs_mkdir("/system");
+  f = vfs_open(ORIZON_SSH_HOSTKEY_PATH, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return -1;
+  }
+  if (vfs_write(f, text, strlen(text)) != (ssize_t)strlen(text)) {
+    vfs_close(f);
+    return -1;
+  }
+  vfs_close(f);
+  ssh_set_hostkey_report(ORIZON_SSH_HOSTKEY_PATH,
+                         "ssh: persistent host key file saved", 1,
+                         ssh_status.hostkey_bootstrap);
+  return 0;
+}
+
+static int ssh_ensure_hostkey(void) {
+  if (ssh_status.hostkey_loaded && ssh_hostkey.n &&
+      ssh_status.hostkey_sha256[0]) {
+    return 0;
+  }
+  if (ssh_load_hostkey_file() == 0) {
+    return 0;
+  }
+  ssh_install_bootstrap_hostkey();
+  if (ssh_write_hostkey_file() == 0) {
+    return 0;
+  }
+  return ssh_rebuild_host_key_blob();
+}
+
 static void ssh_fill_cookie(uint8_t cookie[16]) {
   sha256_ctx_t ctx;
   uint8_t digest[SHA256_DIGEST_SIZE];
@@ -753,9 +1103,9 @@ static void ssh_mac_packet(const uint8_t key[SHA256_DIGEST_SIZE],
 }
 
 static int ssh_build_host_key_blob(void) {
-  static const uint8_t exponent[3] = {0x01, 0x00, 0x01};
-  size_t off = 0;
-
+  if (ssh_ensure_hostkey() != 0) {
+    return -1;
+  }
   if (ssh_host_key_blob_len > 0) {
     if (!ssh_status.hostkey_sha256[0]) {
       sha256_buffer_hex(ssh_host_key_blob, ssh_host_key_blob_len,
@@ -763,18 +1113,7 @@ static int ssh_build_host_key_blob(void) {
     }
     return 0;
   }
-  if (ssh_put_cstring(ssh_host_key_blob, sizeof(ssh_host_key_blob), &off,
-                      "ssh-rsa") != 0 ||
-      ssh_put_mpint(ssh_host_key_blob, sizeof(ssh_host_key_blob), &off,
-                    exponent, sizeof(exponent)) != 0 ||
-      ssh_put_mpint(ssh_host_key_blob, sizeof(ssh_host_key_blob), &off,
-                    ORIZON_SSH_RSA_N, sizeof(ORIZON_SSH_RSA_N)) != 0) {
-    return -1;
-  }
-  ssh_host_key_blob_len = off;
-  sha256_buffer_hex(ssh_host_key_blob, ssh_host_key_blob_len,
-                    ssh_status.hostkey_sha256);
-  return 0;
+  return ssh_rebuild_host_key_blob();
 }
 
 static int ssh_build_signature_blob(uint8_t *out, size_t cap, size_t *out_len) {
@@ -991,7 +1330,6 @@ static void ssh_reset_negotiation(void) {
   ssh_status.client_kex_first[0] = '\0';
   ssh_status.client_hostkey_first[0] = '\0';
   ssh_status.client_public_sha256[0] = '\0';
-  ssh_status.hostkey_sha256[0] = '\0';
   ssh_status.server_public_sha256[0] = '\0';
   ssh_status.shared_secret_sha256[0] = '\0';
   ssh_status.exchange_hash_sha256[0] = '\0';
@@ -1308,25 +1646,14 @@ static int ssh_compute_exchange_hash(void) {
 
 static int ssh_sign_exchange_hash(void) {
   uint8_t signature_digest[SHA256_DIGEST_SIZE];
-  rsa_crt_private_key_t key = {
-      .n = ORIZON_SSH_RSA_N,
-      .n_len = sizeof(ORIZON_SSH_RSA_N),
-      .p = ORIZON_SSH_RSA_P,
-      .p_len = sizeof(ORIZON_SSH_RSA_P),
-      .q = ORIZON_SSH_RSA_Q,
-      .q_len = sizeof(ORIZON_SSH_RSA_Q),
-      .dmp1 = ORIZON_SSH_RSA_DMP1,
-      .dmp1_len = sizeof(ORIZON_SSH_RSA_DMP1),
-      .dmq1 = ORIZON_SSH_RSA_DMQ1,
-      .dmq1_len = sizeof(ORIZON_SSH_RSA_DMQ1),
-      .iqmp = ORIZON_SSH_RSA_IQMP,
-      .iqmp_len = sizeof(ORIZON_SSH_RSA_IQMP),
-  };
 
+  if (ssh_ensure_hostkey() != 0) {
+    return -1;
+  }
   sha256_buffer(ssh_exchange_hash, sizeof(ssh_exchange_hash), signature_digest);
   if (rsa_pkcs1v15_sha256_sign_crt(ssh_host_signature,
                                    sizeof(ssh_host_signature),
-                                   signature_digest, &key) != 0) {
+                                   signature_digest, &ssh_hostkey) != 0) {
     return -1;
   }
   ssh_host_signature_ready = 1;
@@ -1614,7 +1941,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell preview\r\n"
-        "Commands: help, status, whoami, uname, pwd, exit\r\n"
+        "Commands: help, status, auth, hostkey, whoami, uname, pwd, exit\r\n"
         "orizon$ ");
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -1654,6 +1981,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "Remote preview commands:\r\n"
         "  help    show this help\r\n"
         "  status  show SSH stage\r\n"
+        "  auth    show SSH auth policy\r\n"
+        "  hostkey show SSH host identity\r\n"
         "  whoami  show current user\r\n"
         "  uname   show OS name\r\n"
         "  pwd     show remote cwd\r\n"
@@ -1663,6 +1992,22 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (strcmp(line, "status") == 0) {
     ssh_format_status(out, sizeof(out));
+    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
+      strcat(out, "\r\norizon$ ");
+    }
+    ssh_queue_channel_text(out);
+    return;
+  }
+  if (strcmp(line, "auth") == 0) {
+    ssh_format_auth(out, sizeof(out));
+    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
+      strcat(out, "\r\norizon$ ");
+    }
+    ssh_queue_channel_text(out);
+    return;
+  }
+  if (strcmp(line, "hostkey") == 0) {
+    ssh_format_hostkey(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
       strcat(out, "\r\norizon$ ");
     }
@@ -1705,9 +2050,21 @@ static void ssh_remote_exec_execute(const uint8_t *command,
 
   if (strstr(cmd, "help")) {
     ssh_queue_channel_text(
-        "Remote preview commands: help, status, whoami, uname, pwd, exit\r\n");
+        "Remote preview commands: help, status, auth, hostkey, whoami, uname, pwd, exit\r\n");
   } else if (strstr(cmd, "status")) {
     ssh_format_status(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strstr(cmd, "auth")) {
+    ssh_format_auth(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strstr(cmd, "hostkey")) {
+    ssh_format_hostkey(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
@@ -2039,6 +2396,15 @@ int ssh_start(char *report, size_t report_size) {
   ssh_seen_connections = ssh_server.connections;
   ssh_disconnect_close_polls = 0;
   ssh_ensure_config();
+  if (ssh_ensure_hostkey() != 0) {
+    ssh_status.errors++;
+    ssh_set_status("ssh: host key unavailable");
+    if (report && report_size > 0) {
+      snprintf(report, report_size,
+               "ssh: start failed; host key could not be loaded or persisted.\n");
+    }
+    return -1;
+  }
   ssh_set_status("ssh: listening on tcp/22");
 
   net = netstack_get_status();
@@ -2046,9 +2412,12 @@ int ssh_start(char *report, size_t report_size) {
   if (report && report_size > 0) {
     snprintf(report, report_size,
              "ssh: listening on %s:%u\n"
-             "ssh: auth=%s; connect with: ssh orizon@%s\n",
+             "ssh: auth=%s hostkey=%s source=%s\n"
+             "ssh: connect with: ssh orizon@%s\n",
              ip, (unsigned)ORIZON_SSH_PORT,
-             ssh_status.auth_configured ? "password" : "disabled", ip);
+             ssh_status.auth_configured ? "password" : "disabled",
+             ssh_status.hostkey_persistent ? "persistent" : "bootstrap",
+             ssh_status.hostkey_source, ip);
   }
   return 0;
 }
@@ -2302,7 +2671,7 @@ void ssh_format_status(char *buf, size_t size) {
            "ssh: enabled=%s state=%s port=%u connected=%s remote=%s:%u "
            "sessions=%lu banner=%s skex=%s ckex=%s pkt=%u ecdh=%s "
            "reply=%s newkeys=%s cnewkeys=%s keys=%s enc=%s svc=%s "
-           "authcfg=%s auth=%s failures=%lu lockout=%lus chan=%s shell=%s kex=%s "
+           "authcfg=%s auth=%s failures=%lu lockout=%lus hostkey=%s chan=%s shell=%s kex=%s "
            "rx=%lu spkts=%lu tx=%lu errors=%lu status=\"%s\"",
            ssh_status.enabled ? "yes" : "no",
            netstack_tcp_server_state_name(&ssh_server),
@@ -2327,6 +2696,7 @@ void ssh_format_status(char *buf, size_t size) {
                : (ssh_status.userauth_request_seen ? "requested" : "pending"),
            (unsigned long)ssh_status.auth_failures,
            (unsigned long)lockout,
+           ssh_status.hostkey_persistent ? "persistent" : "bootstrap",
            ssh_status.channel_open_confirm_sent
                ? "open"
                : (ssh_status.channel_open_seen ? "seen" : "pending"),
@@ -2365,7 +2735,7 @@ void ssh_format_algorithms(char *buf, size_t size) {
            "  key-s2c-sha256: %s\n"
            "  mac-c2s-sha256: %s\n"
            "  mac-s2c-sha256: %s\n"
-           "  next: persistent host key, stronger auth policy and full PTY\n",
+           "  next: generated per-install RSA material and full PTY\n",
            ssh_status.client_banner_seen ? ssh_status.remote_banner : "none",
            ssh_status.client_kex_first[0] ? ssh_status.client_kex_first : "none",
            ssh_status.client_hostkey_first[0]
@@ -2431,9 +2801,34 @@ void ssh_format_auth(char *buf, size_t size) {
            ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_LOG_PATH);
 }
 
+void ssh_format_hostkey(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  ssh_ensure_hostkey();
+  snprintf(buf, size,
+           "ssh hostkey:\n"
+           "  algorithm: rsa-sha2-256\n"
+           "  storage: %s\n"
+           "  bootstrap-material: %s\n"
+           "  source: %s\n"
+           "  path: %s\n"
+           "  fingerprint-sha256: %s\n"
+           "  status: %s\n"
+           "  next: replace bootstrap material with generated per-install RSA\n",
+           ssh_status.hostkey_persistent ? "persistent-file" : "compiled",
+           ssh_status.hostkey_bootstrap ? "yes" : "no",
+           ssh_status.hostkey_source[0] ? ssh_status.hostkey_source : "none",
+           ORIZON_SSH_HOSTKEY_PATH,
+           ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256 : "none",
+           ssh_status.hostkey_status[0] ? ssh_status.hostkey_status
+                                        : "ssh: host key not loaded");
+}
+
 void ssh_format_report(char *buf, size_t size) {
   char status[512];
   char algs[1600];
+  char hostkey[512];
   const netstack_status_t *net = netstack_get_status();
   char ip[24];
 
@@ -2442,16 +2837,18 @@ void ssh_format_report(char *buf, size_t size) {
   }
   ssh_format_status(status, sizeof(status));
   ssh_format_algorithms(algs, sizeof(algs));
+  ssh_format_hostkey(hostkey, sizeof(hostkey));
   netstack_format_ipv4(net->ip, ip, sizeof(ip));
   snprintf(buf, size,
            "%s\n"
            "%s"
+           "%s"
            "config: %s\n"
            "log: %s\n"
            "local: %s:%u\n"
-           "note: SSH remote shell is not enabled until KEX/auth/PTY are implemented.\n",
-           status, algs, ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_LOG_PATH, ip,
-           (unsigned)ORIZON_SSH_PORT);
+           "note: SSH remote shell preview is enabled after password auth.\n",
+           status, algs, hostkey, ORIZON_SSH_CONFIG_PATH,
+           ORIZON_SSH_LOG_PATH, ip, (unsigned)ORIZON_SSH_PORT);
 }
 
 const ssh_status_t *ssh_get_status(void) {

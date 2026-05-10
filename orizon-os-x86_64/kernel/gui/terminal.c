@@ -2531,7 +2531,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
       term_puts_t(term, "\n");
     }
     term_puts_t(term,
-                "commands: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
+                "commands: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
     return;
   }
 
@@ -2626,6 +2626,26 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "hostkey")) {
+    const char *hostkey_args = term_skip_spaces(args + 7);
+    if (term_command_is(hostkey_args, "reload")) {
+      ssh_reload_hostkey(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(hostkey_args, "reset")) {
+      ssh_reset_hostkey(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    ssh_format_hostkey(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
+
   if (term_command_is(args, "lockout")) {
     const char *lock_args = term_skip_spaces(args + 7);
     if (term_command_is(lock_args, "clear") ||
@@ -2650,7 +2670,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
+              "usage: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
 }
 
 static void term_run_net(terminal_t *term, const char *cmd) {
