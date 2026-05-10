@@ -29,6 +29,18 @@
 #define SSH_MSG_NEWKEYS 21
 #define SSH_MSG_KEXDH_INIT 30
 #define SSH_MSG_KEXDH_REPLY 31
+#define SSH_MSG_USERAUTH_REQUEST 50
+#define SSH_MSG_USERAUTH_FAILURE 51
+#define SSH_MSG_USERAUTH_SUCCESS 52
+#define SSH_MSG_CHANNEL_OPEN 90
+#define SSH_MSG_CHANNEL_OPEN_CONFIRMATION 91
+#define SSH_MSG_CHANNEL_OPEN_FAILURE 92
+#define SSH_MSG_CHANNEL_DATA 94
+#define SSH_MSG_CHANNEL_EOF 96
+#define SSH_MSG_CHANNEL_CLOSE 97
+#define SSH_MSG_CHANNEL_REQUEST 98
+#define SSH_MSG_CHANNEL_SUCCESS 99
+#define SSH_MSG_CHANNEL_FAILURE 100
 
 #define SSH_KEX_ALGORITHMS "curve25519-sha256,curve25519-sha256@libssh.org"
 #define SSH_HOSTKEY_ALGORITHMS "rsa-sha2-256"
@@ -36,6 +48,8 @@
 #define SSH_MAC_ALGORITHMS "hmac-sha2-256,hmac-sha1"
 #define SSH_COMPRESSION_ALGORITHMS "none"
 #define SSH_RSA_SIGNATURE_SIZE 128U
+#define SSH_CHANNEL_WINDOW 65536U
+#define SSH_CHANNEL_MAX_PACKET 1024U
 
 /*
  * Development host key for the current staged SSH server.
@@ -119,6 +133,12 @@ static ssh_status_t ssh_status = {
     .encrypted_packet_seen = 0,
     .service_accept_sent = 0,
     .userauth_request_seen = 0,
+    .auth_configured = 0,
+    .authenticated = 0,
+    .auth_failure_sent = 0,
+    .channel_open_seen = 0,
+    .channel_open_confirm_sent = 0,
+    .shell_ready = 0,
     .kex_seen = 0,
     .disconnect_sent = 0,
     .last_packet_type = 0,
@@ -152,6 +172,8 @@ static ssh_status_t ssh_status = {
     .server_to_client_key_sha256 = {0},
     .client_to_server_mac_sha256 = {0},
     .server_to_client_mac_sha256 = {0},
+    .auth_user = {0},
+    .auth_method = {0},
     .status = "ssh: stopped",
 };
 
@@ -189,11 +211,28 @@ static uint32_t ssh_seq_out = 0;
 static int ssh_in_encrypted = 0;
 static int ssh_out_encrypted = 0;
 static int ssh_service_accept_pending = 0;
+static int ssh_auth_failure_pending = 0;
+static int ssh_auth_success_pending = 0;
+static int ssh_channel_open_confirm_pending = 0;
+static int ssh_channel_success_pending = 0;
+static int ssh_channel_failure_pending = 0;
+static int ssh_channel_data_pending = 0;
+static int ssh_channel_exit_status_pending = 0;
+static int ssh_channel_close_pending = 0;
 static uint8_t ssh_encrypted_rx[SSH_PACKET_MAX + SHA256_DIGEST_SIZE];
 static size_t ssh_encrypted_rx_used = 0;
 static uint8_t ssh_pending_ctr_s2c[16];
 static int ssh_pending_ctr_s2c_ready = 0;
 static uint8_t ssh_mac_input[SSH_PACKET_MAX + 4];
+static char ssh_password_sha256[SHA256_HEX_SIZE];
+static uint32_t ssh_client_channel = 0;
+static uint32_t ssh_server_channel = 0;
+static uint32_t ssh_client_window = 0;
+static uint32_t ssh_client_max_packet = 0;
+static char ssh_channel_tx[768];
+static size_t ssh_channel_tx_len = 0;
+static char ssh_shell_line[256];
+static size_t ssh_shell_line_len = 0;
 
 static void ssh_log_line(const char *line) {
   file_t *f;
@@ -218,21 +257,113 @@ static void ssh_set_status(const char *status) {
   ssh_log_line(status);
 }
 
-static void ssh_write_default_config(void) {
+static int ssh_hex64_valid(const char *text) {
+  if (!text || strlen(text) != 64) {
+    return 0;
+  }
+  for (size_t i = 0; i < 64; i++) {
+    char c = text[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+          (c >= 'A' && c <= 'F'))) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void ssh_copy_token(const char *src, char *dst, size_t dst_size) {
+  size_t i = 0;
+
+  if (!dst || dst_size == 0) {
+    return;
+  }
+  while (src && src[i] && src[i] != ' ' && src[i] != '\n' &&
+         src[i] != '\r' && i + 1 < dst_size) {
+    dst[i] = src[i];
+    i++;
+  }
+  dst[i] = '\0';
+}
+
+static void ssh_load_config(void) {
   file_t *f;
-  const char *text =
-      "enabled yes\n"
-      "port 22\n"
-      "mode staged-ssh-kexinit\n"
-      "auth disabled-until-kex-auth-shell\n";
+  char text[512];
+  ssize_t n;
+  const char *needle = "password-sha256 ";
+  char *p;
+
+  ssh_status.auth_configured = ssh_hex64_valid(ssh_password_sha256);
+  f = vfs_open(ORIZON_SSH_CONFIG_PATH, O_RDONLY);
+  if (!f) {
+    return;
+  }
+  memset(text, 0, sizeof(text));
+  n = vfs_read(f, text, sizeof(text) - 1);
+  vfs_close(f);
+  if (n <= 0) {
+    return;
+  }
+  p = strstr(text, needle);
+  if (p) {
+    char hash[SHA256_HEX_SIZE];
+    ssh_copy_token(p + strlen(needle), hash, sizeof(hash));
+    if (ssh_hex64_valid(hash)) {
+      strncpy(ssh_password_sha256, hash, sizeof(ssh_password_sha256) - 1);
+      ssh_password_sha256[sizeof(ssh_password_sha256) - 1] = '\0';
+      ssh_status.auth_configured = 1;
+    }
+  }
+}
+
+static void ssh_write_config(void) {
+  file_t *f;
+  char text[256];
 
   vfs_mkdir("/system");
+  snprintf(text, sizeof(text),
+           "enabled yes\n"
+           "port 22\n"
+           "mode staged-ssh-transport\n"
+           "user orizon\n"
+           "auth %s\n"
+           "password-sha256 %s\n",
+           ssh_status.auth_configured ? "password" : "disabled",
+           ssh_status.auth_configured ? ssh_password_sha256 : "unset");
   f = vfs_open(ORIZON_SSH_CONFIG_PATH, O_CREAT | O_WRONLY | O_TRUNC);
   if (!f) {
     return;
   }
   vfs_write(f, text, strlen(text));
   vfs_close(f);
+}
+
+static void ssh_ensure_config(void) {
+  ssh_load_config();
+  if (!vfs_exists(ORIZON_SSH_CONFIG_PATH)) {
+    ssh_write_config();
+  }
+}
+
+int ssh_set_password(const char *password, char *report, size_t report_size) {
+  char token[96];
+
+  ssh_copy_token(password, token, sizeof(token));
+  if (strlen(token) < 6) {
+    if (report && report_size > 0) {
+      snprintf(report, report_size,
+               "ssh: password not changed; use at least 6 characters.\n");
+    }
+    return -1;
+  }
+  sha256_buffer_hex(token, strlen(token), ssh_password_sha256);
+  ssh_status.auth_configured = 1;
+  ssh_write_config();
+  if (report && report_size > 0) {
+    snprintf(report, report_size,
+             "ssh: password auth enabled for user 'orizon'.\n"
+             "ssh: connect with: ssh orizon@<ip-orizon>\n");
+  }
+  return 0;
 }
 
 static void ssh_put_u32(uint8_t *p, uint32_t v) {
@@ -247,16 +378,21 @@ static uint32_t ssh_get_u32(const uint8_t *p) {
          ((uint32_t)p[2] << 8) | (uint32_t)p[3];
 }
 
-static int ssh_wrap_packet(uint8_t *out, size_t cap, const uint8_t *payload,
-                           size_t payload_len, size_t *out_len) {
-  size_t padding_len = 8 - ((payload_len + 5) % 8);
+static int ssh_wrap_packet_block(uint8_t *out, size_t cap,
+                                 const uint8_t *payload, size_t payload_len,
+                                 size_t block_size, size_t *out_len) {
+  size_t padding_len;
   size_t packet_len;
   size_t off = 0;
   uint32_t seed = 0x4f5a5353U ^ (uint32_t)timer_ticks() ^
                   (uint32_t)ssh_status.sessions;
 
+  if (block_size < 8) {
+    block_size = 8;
+  }
+  padding_len = block_size - ((payload_len + 5) % block_size);
   if (padding_len < 4) {
-    padding_len += 8;
+    padding_len += block_size;
   }
   packet_len = 1 + payload_len + padding_len;
   if (!out || !payload || !out_len || cap < packet_len + 4) {
@@ -274,6 +410,11 @@ static int ssh_wrap_packet(uint8_t *out, size_t cap, const uint8_t *payload,
   }
   *out_len = off;
   return 0;
+}
+
+static int ssh_wrap_packet(uint8_t *out, size_t cap, const uint8_t *payload,
+                           size_t payload_len, size_t *out_len) {
+  return ssh_wrap_packet_block(out, cap, payload, payload_len, 8, out_len);
 }
 
 static int ssh_put_namelist(uint8_t *out, size_t cap, size_t *off,
@@ -523,8 +664,8 @@ static size_t ssh_build_encrypted_packet(uint8_t *out, size_t cap,
   size_t plain_len = 0;
 
   if (!out || !payload || !ssh_out_encrypted || !ssh_status.traffic_keys_ready ||
-      ssh_wrap_packet(plain, sizeof(plain), payload, payload_len, &plain_len) !=
-          0 ||
+      ssh_wrap_packet_block(plain, sizeof(plain), payload, payload_len, 16,
+                            &plain_len) != 0 ||
       cap < plain_len + SHA256_DIGEST_SIZE) {
     return 0;
   }
@@ -549,6 +690,109 @@ static size_t ssh_build_service_accept(uint8_t *out, size_t cap) {
   return ssh_build_encrypted_packet(out, cap, payload, off);
 }
 
+static size_t ssh_build_userauth_failure(uint8_t *out, size_t cap) {
+  uint8_t payload[64];
+  size_t off = 0;
+
+  payload[off++] = SSH_MSG_USERAUTH_FAILURE;
+  if (ssh_put_cstring(payload, sizeof(payload), &off,
+                      ssh_status.auth_configured ? "password" : "") != 0) {
+    return 0;
+  }
+  payload[off++] = 0; /* partial_success */
+  return ssh_build_encrypted_packet(out, cap, payload, off);
+}
+
+static size_t ssh_build_userauth_success(uint8_t *out, size_t cap) {
+  uint8_t payload[1] = {SSH_MSG_USERAUTH_SUCCESS};
+
+  return ssh_build_encrypted_packet(out, cap, payload, sizeof(payload));
+}
+
+static size_t ssh_build_channel_open_confirmation(uint8_t *out, size_t cap) {
+  uint8_t payload[32];
+  size_t off = 0;
+
+  payload[off++] = SSH_MSG_CHANNEL_OPEN_CONFIRMATION;
+  ssh_put_u32(payload + off, ssh_client_channel);
+  off += 4;
+  ssh_put_u32(payload + off, ssh_server_channel);
+  off += 4;
+  ssh_put_u32(payload + off, SSH_CHANNEL_WINDOW);
+  off += 4;
+  ssh_put_u32(payload + off, SSH_CHANNEL_MAX_PACKET);
+  off += 4;
+  return ssh_build_encrypted_packet(out, cap, payload, off);
+}
+
+static size_t ssh_build_channel_status(uint8_t *out, size_t cap,
+                                       uint8_t msg_type) {
+  uint8_t payload[8];
+  size_t off = 0;
+
+  payload[off++] = msg_type;
+  ssh_put_u32(payload + off, ssh_client_channel);
+  off += 4;
+  return ssh_build_encrypted_packet(out, cap, payload, off);
+}
+
+static size_t ssh_build_channel_data(uint8_t *out, size_t cap) {
+  uint8_t payload[900];
+  size_t off = 0;
+
+  if (!ssh_channel_data_pending || ssh_channel_tx_len == 0) {
+    return 0;
+  }
+  payload[off++] = SSH_MSG_CHANNEL_DATA;
+  ssh_put_u32(payload + off, ssh_client_channel);
+  off += 4;
+  if (ssh_put_string(payload, sizeof(payload), &off,
+                     (const uint8_t *)ssh_channel_tx,
+                     ssh_channel_tx_len) != 0) {
+    return 0;
+  }
+  return ssh_build_encrypted_packet(out, cap, payload, off);
+}
+
+static size_t ssh_build_channel_exit_status(uint8_t *out, size_t cap) {
+  uint8_t payload[64];
+  size_t off = 0;
+
+  payload[off++] = SSH_MSG_CHANNEL_REQUEST;
+  ssh_put_u32(payload + off, ssh_client_channel);
+  off += 4;
+  if (ssh_put_cstring(payload, sizeof(payload), &off, "exit-status") != 0) {
+    return 0;
+  }
+  payload[off++] = 0; /* want_reply */
+  ssh_put_u32(payload + off, 0);
+  off += 4;
+  return ssh_build_encrypted_packet(out, cap, payload, off);
+}
+
+static void ssh_queue_channel_text(const char *text) {
+  size_t len;
+  size_t start;
+  size_t room;
+
+  if (!text) {
+    return;
+  }
+  len = strlen(text);
+  start = ssh_channel_data_pending ? ssh_channel_tx_len : 0;
+  if (start >= sizeof(ssh_channel_tx) - 1) {
+    return;
+  }
+  room = sizeof(ssh_channel_tx) - 1 - start;
+  if (len > room) {
+    len = room;
+  }
+  memcpy(ssh_channel_tx + start, text, len);
+  ssh_channel_tx[start + len] = '\0';
+  ssh_channel_tx_len = start + len;
+  ssh_channel_data_pending = 1;
+}
+
 static void ssh_reset_negotiation(void) {
   ssh_status.server_kexinit_sent = 0;
   ssh_status.client_kexinit_seen = 0;
@@ -561,6 +805,11 @@ static void ssh_reset_negotiation(void) {
   ssh_status.encrypted_packet_seen = 0;
   ssh_status.service_accept_sent = 0;
   ssh_status.userauth_request_seen = 0;
+  ssh_status.authenticated = 0;
+  ssh_status.auth_failure_sent = 0;
+  ssh_status.channel_open_seen = 0;
+  ssh_status.channel_open_confirm_sent = 0;
+  ssh_status.shell_ready = 0;
   ssh_status.kex_seen = 0;
   ssh_status.disconnect_sent = 0;
   ssh_status.last_packet_type = 0;
@@ -584,6 +833,8 @@ static void ssh_reset_negotiation(void) {
   ssh_status.server_to_client_key_sha256[0] = '\0';
   ssh_status.client_to_server_mac_sha256[0] = '\0';
   ssh_status.server_to_client_mac_sha256[0] = '\0';
+  ssh_status.auth_user[0] = '\0';
+  ssh_status.auth_method[0] = '\0';
   ssh_binary_rx_used = 0;
   ssh_remote_banner_len = 0;
   ssh_client_kexinit_payload_len = 0;
@@ -610,9 +861,23 @@ static void ssh_reset_negotiation(void) {
   ssh_in_encrypted = 0;
   ssh_out_encrypted = 0;
   ssh_service_accept_pending = 0;
+  ssh_auth_failure_pending = 0;
+  ssh_auth_success_pending = 0;
+  ssh_channel_open_confirm_pending = 0;
+  ssh_channel_success_pending = 0;
+  ssh_channel_failure_pending = 0;
+  ssh_channel_data_pending = 0;
+  ssh_channel_exit_status_pending = 0;
+  ssh_channel_close_pending = 0;
   ssh_encrypted_rx_used = 0;
   memset(ssh_pending_ctr_s2c, 0, sizeof(ssh_pending_ctr_s2c));
   ssh_pending_ctr_s2c_ready = 0;
+  ssh_client_channel = 0;
+  ssh_server_channel = 0;
+  ssh_client_window = 0;
+  ssh_client_max_packet = 0;
+  ssh_channel_tx_len = 0;
+  ssh_shell_line_len = 0;
 }
 
 static int ssh_read_namelist(const uint8_t *payload, size_t payload_len,
@@ -1033,11 +1298,308 @@ static void ssh_process_service_request(const uint8_t *payload,
 
 static void ssh_process_userauth_request(const uint8_t *payload,
                                          size_t payload_len) {
-  UNUSED(payload);
-  UNUSED(payload_len);
+  const uint8_t *user = NULL;
+  const uint8_t *service = NULL;
+  const uint8_t *method = NULL;
+  const uint8_t *password = NULL;
+  size_t user_len = 0;
+  size_t service_len = 0;
+  size_t method_len = 0;
+  size_t password_len = 0;
+  size_t off = 1;
+  char password_hash[SHA256_HEX_SIZE];
+  uint8_t change_request = 0;
+
   ssh_status.encrypted_packet_seen = 1;
   ssh_status.userauth_request_seen = 1;
-  ssh_set_status("ssh: encrypted USERAUTH_REQUEST received; auth next");
+  if (ssh_read_string(payload, payload_len, &off, &user, &user_len) != 0 ||
+      ssh_read_string(payload, payload_len, &off, &service, &service_len) != 0 ||
+      ssh_read_string(payload, payload_len, &off, &method, &method_len) != 0) {
+    ssh_status.errors++;
+    ssh_auth_failure_pending = 1;
+    ssh_set_status("ssh: malformed USERAUTH_REQUEST");
+    return;
+  }
+
+  ssh_copy_name(user, user_len, ssh_status.auth_user,
+                sizeof(ssh_status.auth_user));
+  ssh_copy_name(method, method_len, ssh_status.auth_method,
+                sizeof(ssh_status.auth_method));
+
+  if (service_len != strlen("ssh-connection") ||
+      memcmp(service, "ssh-connection", service_len) != 0 ||
+      user_len != strlen("orizon") || memcmp(user, "orizon", user_len) != 0) {
+    ssh_auth_failure_pending = 1;
+    ssh_set_status("ssh: userauth rejected user/service");
+    return;
+  }
+
+  if (method_len == strlen("none") && memcmp(method, "none", method_len) == 0) {
+    ssh_auth_failure_pending = 1;
+    ssh_set_status("ssh: userauth method list sent");
+    return;
+  }
+
+  if (method_len == strlen("password") &&
+      memcmp(method, "password", method_len) == 0) {
+    if (off + 1 > payload_len) {
+      ssh_auth_failure_pending = 1;
+      ssh_set_status("ssh: malformed password auth");
+      return;
+    }
+    change_request = payload[off++];
+    if (change_request ||
+        ssh_read_string(payload, payload_len, &off, &password,
+                        &password_len) != 0 ||
+        !ssh_status.auth_configured) {
+      ssh_auth_failure_pending = 1;
+      ssh_set_status("ssh: password auth unavailable");
+      return;
+    }
+    sha256_buffer_hex(password, password_len, password_hash);
+    if (strcmp(password_hash, ssh_password_sha256) == 0) {
+      ssh_status.authenticated = 1;
+      ssh_auth_success_pending = 1;
+      ssh_set_status("ssh: password auth accepted");
+      return;
+    }
+    ssh_auth_failure_pending = 1;
+    ssh_set_status("ssh: password auth failed");
+    return;
+  }
+
+  ssh_auth_failure_pending = 1;
+  ssh_set_status("ssh: unsupported userauth method");
+}
+
+static void ssh_process_channel_open(const uint8_t *payload,
+                                     size_t payload_len) {
+  const uint8_t *type = NULL;
+  size_t type_len = 0;
+  size_t off = 1;
+
+  if (!ssh_status.authenticated ||
+      ssh_read_string(payload, payload_len, &off, &type, &type_len) != 0 ||
+      off + 12 > payload_len) {
+    ssh_channel_failure_pending = 1;
+    ssh_set_status("ssh: channel open rejected");
+    return;
+  }
+  ssh_client_channel = ssh_get_u32(payload + off);
+  off += 4;
+  ssh_client_window = ssh_get_u32(payload + off);
+  off += 4;
+  ssh_client_max_packet = ssh_get_u32(payload + off);
+  off += 4;
+
+  if (type_len == strlen("session") && memcmp(type, "session", type_len) == 0) {
+    ssh_server_channel = 0;
+    ssh_status.channel_open_seen = 1;
+    ssh_channel_open_confirm_pending = 1;
+    ssh_set_status("ssh: session channel open received");
+    return;
+  }
+  ssh_channel_failure_pending = 1;
+  ssh_set_status("ssh: unsupported channel type");
+}
+
+static void ssh_remote_exec_execute(const uint8_t *command,
+                                    size_t command_len);
+
+static void ssh_process_channel_request(const uint8_t *payload,
+                                        size_t payload_len) {
+  const uint8_t *request = NULL;
+  size_t request_len = 0;
+  size_t off = 1;
+  uint32_t recipient;
+  uint8_t want_reply;
+
+  if (!ssh_status.authenticated || off + 4 > payload_len) {
+    return;
+  }
+  recipient = ssh_get_u32(payload + off);
+  off += 4;
+  if (recipient != ssh_server_channel ||
+      ssh_read_string(payload, payload_len, &off, &request, &request_len) !=
+          0 ||
+      off + 1 > payload_len) {
+    ssh_channel_failure_pending = 1;
+    ssh_set_status("ssh: malformed channel request");
+    return;
+  }
+  want_reply = payload[off++];
+
+  if ((request_len == strlen("pty-req") &&
+       memcmp(request, "pty-req", request_len) == 0) ||
+      (request_len == strlen("env") && memcmp(request, "env", request_len) == 0)) {
+    if (want_reply) {
+      ssh_channel_success_pending = 1;
+    }
+    ssh_set_status("ssh: channel setup request accepted");
+    return;
+  }
+
+  if (request_len == strlen("shell") &&
+      memcmp(request, "shell", request_len) == 0) {
+    ssh_status.shell_ready = 1;
+    if (want_reply) {
+      ssh_channel_success_pending = 1;
+    }
+    ssh_queue_channel_text(
+        "\r\nOrizon OS remote shell preview\r\n"
+        "Commands: help, status, whoami, uname, pwd, exit\r\n"
+        "orizon$ ");
+    ssh_set_status("ssh: shell channel ready");
+    return;
+  }
+
+  if (request_len == strlen("exec") &&
+      memcmp(request, "exec", request_len) == 0) {
+    const uint8_t *command = NULL;
+    size_t command_len = 0;
+
+    if (ssh_read_string(payload, payload_len, &off, &command, &command_len) ==
+        0) {
+      if (want_reply) {
+        ssh_channel_success_pending = 1;
+      }
+      ssh_remote_exec_execute(command, command_len);
+      ssh_set_status("ssh: exec request accepted");
+      return;
+    }
+  }
+
+  if (want_reply) {
+    ssh_channel_failure_pending = 1;
+  }
+  ssh_set_status("ssh: unsupported channel request");
+}
+
+static void ssh_remote_shell_execute(const char *line) {
+  char out[768];
+
+  if (!line || line[0] == '\0') {
+    ssh_queue_channel_text("orizon$ ");
+    return;
+  }
+  if (strcmp(line, "help") == 0) {
+    ssh_queue_channel_text(
+        "Remote preview commands:\r\n"
+        "  help    show this help\r\n"
+        "  status  show SSH stage\r\n"
+        "  whoami  show current user\r\n"
+        "  uname   show OS name\r\n"
+        "  pwd     show remote cwd\r\n"
+        "  exit    close channel\r\n"
+        "orizon$ ");
+    return;
+  }
+  if (strcmp(line, "status") == 0) {
+    ssh_format_status(out, sizeof(out));
+    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
+      strcat(out, "\r\norizon$ ");
+    }
+    ssh_queue_channel_text(out);
+    return;
+  }
+  if (strcmp(line, "whoami") == 0) {
+    ssh_queue_channel_text("orizon\r\norizon$ ");
+    return;
+  }
+  if (strcmp(line, "uname") == 0 || strcmp(line, "uname -a") == 0) {
+    ssh_queue_channel_text("Orizon OS x86_64 OrizonSSH_0.1\r\norizon$ ");
+    return;
+  }
+  if (strcmp(line, "pwd") == 0) {
+    ssh_queue_channel_text("/home/orizon\r\norizon$ ");
+    return;
+  }
+  if (strcmp(line, "exit") == 0 || strcmp(line, "logout") == 0) {
+    ssh_queue_channel_text("logout\r\n");
+    ssh_channel_exit_status_pending = 1;
+    ssh_channel_close_pending = 1;
+    return;
+  }
+  snprintf(out, sizeof(out), "%s: command not found\r\norizon$ ", line);
+  ssh_queue_channel_text(out);
+}
+
+static void ssh_remote_exec_execute(const uint8_t *command,
+                                    size_t command_len) {
+  char cmd[160];
+  char out[768];
+  size_t copy = command_len;
+
+  if (copy >= sizeof(cmd)) {
+    copy = sizeof(cmd) - 1;
+  }
+  memcpy(cmd, command, copy);
+  cmd[copy] = '\0';
+
+  if (strstr(cmd, "help")) {
+    ssh_queue_channel_text(
+        "Remote preview commands: help, status, whoami, uname, pwd, exit\r\n");
+  } else if (strstr(cmd, "status")) {
+    ssh_format_status(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strstr(cmd, "whoami")) {
+    ssh_queue_channel_text("orizon\r\n");
+  } else if (strstr(cmd, "uname")) {
+    ssh_queue_channel_text("Orizon OS x86_64 OrizonSSH_0.1\r\n");
+  } else if (strstr(cmd, "pwd")) {
+    ssh_queue_channel_text("/home/orizon\r\n");
+  } else {
+    snprintf(out, sizeof(out), "%s: command not found\r\n", cmd);
+    ssh_queue_channel_text(out);
+  }
+  ssh_channel_exit_status_pending = 1;
+  ssh_channel_close_pending = 1;
+}
+
+static void ssh_process_channel_data(const uint8_t *payload,
+                                     size_t payload_len) {
+  const uint8_t *data = NULL;
+  size_t data_len = 0;
+  size_t off = 1;
+  uint32_t recipient;
+
+  if (!ssh_status.shell_ready || off + 4 > payload_len) {
+    return;
+  }
+  recipient = ssh_get_u32(payload + off);
+  off += 4;
+  if (recipient != ssh_server_channel ||
+      ssh_read_string(payload, payload_len, &off, &data, &data_len) != 0) {
+    ssh_status.errors++;
+    ssh_set_status("ssh: malformed channel data");
+    return;
+  }
+
+  for (size_t i = 0; i < data_len; i++) {
+    char ch = (char)data[i];
+    if (ch == '\r') {
+      continue;
+    }
+    if (ch == '\n') {
+      ssh_shell_line[ssh_shell_line_len] = '\0';
+      ssh_remote_shell_execute(ssh_shell_line);
+      ssh_shell_line_len = 0;
+      continue;
+    }
+    if (ch == '\b' || ch == 0x7f) {
+      if (ssh_shell_line_len > 0) {
+        ssh_shell_line_len--;
+      }
+      continue;
+    }
+    if (ssh_shell_line_len + 1 < sizeof(ssh_shell_line)) {
+      ssh_shell_line[ssh_shell_line_len++] = ch;
+    }
+  }
+  ssh_set_status("ssh: shell data received");
 }
 
 static void ssh_process_packet(const uint8_t *payload, size_t payload_len) {
@@ -1068,8 +1630,25 @@ static void ssh_process_packet(const uint8_t *payload, size_t payload_len) {
     ssh_process_service_request(payload, payload_len);
     return;
   }
-  if (type == 50) {
+  if (type == SSH_MSG_USERAUTH_REQUEST) {
     ssh_process_userauth_request(payload, payload_len);
+    return;
+  }
+  if (type == SSH_MSG_CHANNEL_OPEN) {
+    ssh_process_channel_open(payload, payload_len);
+    return;
+  }
+  if (type == SSH_MSG_CHANNEL_REQUEST) {
+    ssh_process_channel_request(payload, payload_len);
+    return;
+  }
+  if (type == SSH_MSG_CHANNEL_DATA) {
+    ssh_process_channel_data(payload, payload_len);
+    return;
+  }
+  if (type == SSH_MSG_CHANNEL_EOF || type == SSH_MSG_CHANNEL_CLOSE) {
+    ssh_channel_close_pending = 1;
+    ssh_set_status("ssh: client channel close received");
     return;
   }
   ssh_set_status("ssh: client SSH packet received");
@@ -1292,7 +1871,7 @@ int ssh_start(char *report, size_t report_size) {
   ssh_reset_negotiation();
   ssh_seen_connections = ssh_server.connections;
   ssh_disconnect_close_polls = 0;
-  ssh_write_default_config();
+  ssh_ensure_config();
   ssh_set_status("ssh: listening on tcp/22");
 
   net = netstack_get_status();
@@ -1300,9 +1879,9 @@ int ssh_start(char *report, size_t report_size) {
   if (report && report_size > 0) {
     snprintf(report, report_size,
              "ssh: listening on %s:%u\n"
-             "ssh: from another machine, test with: ssh root@%s\n"
-             "ssh: current stage accepts TCP and SSH banner diagnostics; encrypted shell is next.\n",
-             ip, (unsigned)ORIZON_SSH_PORT, ip);
+             "ssh: auth=%s; connect with: ssh orizon@%s\n",
+             ip, (unsigned)ORIZON_SSH_PORT,
+             ssh_status.auth_configured ? "password" : "disabled", ip);
   }
   return 0;
 }
@@ -1374,14 +1953,43 @@ int ssh_poll(void) {
     tx_len = ssh_build_service_accept(txbuf, sizeof(txbuf));
     tx = tx_len ? txbuf : NULL;
     tx_kind = 6;
-  } else if (ssh_status.connected && ssh_status.userauth_request_seen) {
-    netstack_tcp_server_close(&ssh_server);
-    netstack_tcp_server_init(&ssh_server, ORIZON_SSH_PORT);
-    ssh_seen_connections = ssh_server.connections;
-    ssh_reset_negotiation();
-    ssh_set_status("ssh: closed before encrypted auth layer");
-    ssh_refresh_state();
-    return 1;
+  } else if (ssh_status.connected && ssh_auth_success_pending) {
+    tx_len = ssh_build_userauth_success(txbuf, sizeof(txbuf));
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 7;
+  } else if (ssh_status.connected && ssh_auth_failure_pending) {
+    tx_len = ssh_build_userauth_failure(txbuf, sizeof(txbuf));
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 8;
+  } else if (ssh_status.connected && ssh_channel_open_confirm_pending) {
+    tx_len = ssh_build_channel_open_confirmation(txbuf, sizeof(txbuf));
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 9;
+  } else if (ssh_status.connected && ssh_channel_success_pending) {
+    tx_len = ssh_build_channel_status(txbuf, sizeof(txbuf),
+                                      SSH_MSG_CHANNEL_SUCCESS);
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 10;
+  } else if (ssh_status.connected && ssh_channel_failure_pending) {
+    tx_len = ssh_build_channel_status(txbuf, sizeof(txbuf),
+                                      SSH_MSG_CHANNEL_FAILURE);
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 11;
+  } else if (ssh_status.connected && ssh_channel_data_pending) {
+    tx_len = ssh_build_channel_data(txbuf, sizeof(txbuf));
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 12;
+  } else if (ssh_status.connected && ssh_channel_exit_status_pending &&
+             !ssh_channel_data_pending) {
+    tx_len = ssh_build_channel_exit_status(txbuf, sizeof(txbuf));
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 14;
+  } else if (ssh_status.connected && ssh_channel_close_pending &&
+             !ssh_channel_data_pending && !ssh_channel_exit_status_pending) {
+    tx_len = ssh_build_channel_status(txbuf, sizeof(txbuf),
+                                      SSH_MSG_CHANNEL_CLOSE);
+    tx = tx_len ? txbuf : NULL;
+    tx_kind = 13;
   } else if (ssh_status.connected && ssh_status.disconnect_sent &&
              ssh_disconnect_close_polls > 0) {
     ssh_disconnect_close_polls--;
@@ -1433,6 +2041,78 @@ int ssh_poll(void) {
       ssh_service_accept_pending = 0;
       ssh_seq_out++;
       ssh_set_status("ssh: encrypted SERVICE_ACCEPT sent");
+    } else if (tx_kind == 7) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_auth_success_pending = 0;
+      ssh_seq_out++;
+      ssh_set_status("ssh: USERAUTH_SUCCESS sent");
+    } else if (tx_kind == 8) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_auth_failure_pending = 0;
+      ssh_status.auth_failure_sent = 1;
+      ssh_seq_out++;
+      ssh_set_status("ssh: USERAUTH_FAILURE sent");
+    } else if (tx_kind == 9) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_channel_open_confirm_pending = 0;
+      ssh_status.channel_open_confirm_sent = 1;
+      ssh_seq_out++;
+      ssh_set_status("ssh: CHANNEL_OPEN_CONFIRMATION sent");
+    } else if (tx_kind == 10) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_channel_success_pending = 0;
+      ssh_seq_out++;
+      ssh_set_status("ssh: CHANNEL_SUCCESS sent");
+    } else if (tx_kind == 11) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_channel_failure_pending = 0;
+      ssh_seq_out++;
+      ssh_set_status("ssh: CHANNEL_FAILURE sent");
+    } else if (tx_kind == 12) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_channel_data_pending = 0;
+      ssh_channel_tx_len = 0;
+      ssh_seq_out++;
+      ssh_set_status("ssh: CHANNEL_DATA sent");
+    } else if (tx_kind == 13) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_seq_out++;
+      netstack_tcp_server_close(&ssh_server);
+      netstack_tcp_server_init(&ssh_server, ORIZON_SSH_PORT);
+      ssh_seen_connections = ssh_server.connections;
+      ssh_reset_negotiation();
+      ssh_set_status("ssh: channel closed");
+      ssh_refresh_state();
+      return 1;
+    } else if (tx_kind == 14) {
+      if (ssh_pending_ctr_s2c_ready) {
+        memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));
+        ssh_pending_ctr_s2c_ready = 0;
+      }
+      ssh_channel_exit_status_pending = 0;
+      ssh_seq_out++;
+      ssh_set_status("ssh: CHANNEL exit-status sent");
     }
   }
   if (rx_len > 0) {
@@ -1452,7 +2132,8 @@ void ssh_format_status(char *buf, size_t size) {
   snprintf(buf, size,
            "ssh: enabled=%s state=%s port=%u connected=%s remote=%s:%u "
            "sessions=%lu banner=%s skex=%s ckex=%s pkt=%u ecdh=%s "
-           "reply=%s newkeys=%s cnewkeys=%s keys=%s enc=%s svc=%s auth=%s kex=%s "
+           "reply=%s newkeys=%s cnewkeys=%s keys=%s enc=%s svc=%s "
+           "authcfg=%s auth=%s chan=%s shell=%s kex=%s "
            "rx=%lu spkts=%lu tx=%lu errors=%lu status=\"%s\"",
            ssh_status.enabled ? "yes" : "no",
            netstack_tcp_server_state_name(&ssh_server),
@@ -1471,7 +2152,14 @@ void ssh_format_status(char *buf, size_t size) {
            ssh_status.traffic_keys_ready ? "ready" : "pending",
            ssh_status.encrypted_packet_seen ? "seen" : "pending",
            ssh_status.service_accept_sent ? "sent" : "pending",
-           ssh_status.userauth_request_seen ? "seen" : "pending",
+           ssh_status.auth_configured ? "password" : "disabled",
+           ssh_status.authenticated
+               ? "ok"
+               : (ssh_status.userauth_request_seen ? "requested" : "pending"),
+           ssh_status.channel_open_confirm_sent
+               ? "open"
+               : (ssh_status.channel_open_seen ? "seen" : "pending"),
+           ssh_status.shell_ready ? "ready" : "pending",
            ssh_status.kex_algorithm[0] ? ssh_status.kex_algorithm : "none",
            (unsigned long)ssh_status.bytes_rx,
            (unsigned long)ssh_status.ssh_packets_rx,
@@ -1506,7 +2194,7 @@ void ssh_format_algorithms(char *buf, size_t size) {
            "  key-s2c-sha256: %s\n"
            "  mac-c2s-sha256: %s\n"
            "  mac-s2c-sha256: %s\n"
-           "  next: implement encrypted packets, auth and PTY\n",
+           "  next: persistent host key, stronger auth policy and full PTY\n",
            ssh_status.client_banner_seen ? ssh_status.remote_banner : "none",
            ssh_status.client_kex_first[0] ? ssh_status.client_kex_first : "none",
            ssh_status.client_hostkey_first[0]

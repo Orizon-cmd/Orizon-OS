@@ -8,6 +8,7 @@ d'activer un vrai shell distant.
 
 ```text
 net dhcp
+ssh password <mot-de-passe>
 ssh start
 ssh status
 ssh algorithms
@@ -16,8 +17,10 @@ ssh stop
 logs ssh
 ```
 
-`ssh start` configure IPv4 si necessaire, ouvre TCP/22, ecrit
-`/system/ssh.conf` et journalise dans `/logs/ssh.log`.
+`ssh password <mot-de-passe>` active l'authentification explicite pour
+l'utilisateur `orizon` et stocke le SHA-256 dans `/system/ssh.conf`.
+`ssh start` configure IPv4 si necessaire, ouvre TCP/22, charge la configuration
+et journalise dans `/logs/ssh.log`.
 
 ## Etat actuel
 
@@ -37,21 +40,27 @@ logs ssh
 - Transport chiffre: Orizon derive IV, cles AES-128-CTR et cles HMAC-SHA256,
   echange `SSH_MSG_NEWKEYS`, lit le premier `SERVICE_REQUEST` chiffre et
   repond par `SERVICE_ACCEPT`.
-- Securite: aucun mot de passe ni backdoor n'est cree tant que KEX/auth/shell
-  ne sont pas termines.
+- Authentification: Orizon refuse `none`, annonce `password`, accepte seulement
+  l'utilisateur `orizon` si un mot de passe a ete configure depuis la console.
+- Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
+  un mini-shell de preview avec `help`, `status`, `whoami`, `uname`, `pwd` et
+  `exit`, puis ferme proprement avec `exit-status`.
+- Securite: aucun mot de passe par defaut ni backdoor n'est cree; sans
+  `ssh password`, l'auth reste desactivee.
 
 Depuis un autre PC du meme reseau:
 
 ```text
-ssh root@<ip-orizon>
+ssh orizon@<ip-orizon>
 ```
 
 Le client doit atteindre Orizon, voir le logiciel distant `OrizonSSH_0.1`,
-recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Il envoie
-ensuite `USERAUTH_REQUEST`; Orizon ferme volontairement ici, car
-l'authentification et le canal shell ne sont pas encore actifs. `ssh status` et
-`ssh algorithms` affichent la banniere client, la negociation choisie, les
-empreintes X25519, le hash d'echange, la signature et les cles derivees.
+recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Apres
+authentification password, OpenSSH peut ouvrir un canal `session`; `exec` et le
+mini-shell interactif fonctionnent deja pour les diagnostics de base. `ssh
+status` et `ssh algorithms` affichent la banniere client, la negociation
+choisie, les empreintes X25519, le hash d'echange, la signature, les cles
+derivees, l'etat auth et l'etat canal.
 
 ## Prochaine brique
 
@@ -59,7 +68,8 @@ Pour transformer ce listener en acces distant complet, il reste a ajouter:
 
 - remplacer la cle hote RSA de developpement par une cle persistante par
   installation
-- authentification explicite configuree par l'utilisateur
-- canal `session`, `pty-req`, `shell` et pseudo-console Orizon
-- limites de tentatives, delais anti-bruteforce et journalisation des echecs
+- durcir l'authentification: delais anti-bruteforce, verrouillage temporaire,
+  rotation du hash et permissions du fichier config
+- remplacer le mini-shell SSH par une vraie pseudo-console Orizon partageant
+  les commandes locales
 - rotation/rechargement propre des cles et options dans `/system/ssh.conf`

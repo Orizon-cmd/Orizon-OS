@@ -35,8 +35,10 @@ le developpement noyau:
 - service `ssh` experimental: listener TCP/22, banniere SSH Orizon, paquet
   `KEXINIT`, X25519, signature hote RSA de developpement, `ECDH_REPLY`,
   `NEWKEYS`, premiere lecture/reponse chiffree `SERVICE_REQUEST` /
-  `SERVICE_ACCEPT`, configuration `/system/ssh.conf`, journal `/logs/ssh.log`
-  et diagnostics `ssh status`
+  `SERVICE_ACCEPT`, authentification password explicite pour `orizon`, canal
+  `session`, `pty-req`, `shell`, `exec`, mini-shell distant de diagnostic,
+  configuration `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics
+  `ssh status`
 - inspection stockage avec `disks`, `storage detail` et selection du disque
   actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
@@ -136,6 +138,7 @@ Le service SSH se demarre explicitement depuis la console:
 
 ```text
 net dhcp
+ssh password <mot-de-passe>
 ssh start
 ssh status
 ssh algorithms
@@ -146,10 +149,11 @@ La commande configure IPv4 si besoin, ouvre TCP/22, ecrit la configuration
 dans `/system/ssh.conf`, envoie la banniere `SSH-2.0-OrizonSSH_0.1`, negocie
 `curve25519-sha256` avec `rsa-sha2-256`, signe `ECDH_REPLY`, derive les cles
 AES-128-CTR/HMAC-SHA256, echange `NEWKEYS`, puis repond au premier
-`SERVICE_REQUEST` chiffre par `SERVICE_ACCEPT`. `ssh algorithms` affiche les
-empreintes SHA-256 du materiel de negociation et des cles derivees. Le shell
-distant n'est pas encore active: Orizon ferme volontairement quand OpenSSH
-envoie `USERAUTH_REQUEST`, donc aucun acces cache non securise n'est cree.
+`SERVICE_REQUEST` chiffre par `SERVICE_ACCEPT`. L'authentification password est
+desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
+console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
+Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
+de diagnostic (`help`, `status`, `whoami`, `uname`, `pwd`, `exit`).
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

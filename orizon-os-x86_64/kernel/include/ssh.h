@@ -29,6 +29,12 @@ typedef struct {
   int encrypted_packet_seen;
   int service_accept_sent;
   int userauth_request_seen;
+  int auth_configured;
+  int authenticated;
+  int auth_failure_sent;
+  int channel_open_seen;
+  int channel_open_confirm_sent;
+  int shell_ready;
   int kex_seen;
   int disconnect_sent;
   uint8_t last_packet_type;
@@ -62,9 +68,12 @@ typedef struct {
   char server_to_client_key_sha256[65];
   char client_to_server_mac_sha256[65];
   char server_to_client_mac_sha256[65];
+  char auth_user[32];
+  char auth_method[32];
   char status[160];
 } ssh_status_t;
 
+int ssh_set_password(const char *password, char *report, size_t report_size);
 int ssh_start(char *report, size_t report_size);
 int ssh_stop(char *report, size_t report_size);
 int ssh_poll(void);

@@ -2531,7 +2531,15 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
       term_puts_t(term, "\n");
     }
     term_puts_t(term,
-                "commands: ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
+                "commands: ssh password <pass> | ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
+    return;
+  }
+
+  if (term_command_is(args, "password") || term_command_is(args, "passwd")) {
+    const char *password =
+        term_skip_spaces(args + (term_command_is(args, "passwd") ? 6 : 8));
+    ssh_set_password(password, report, sizeof(report));
+    term_puts_t(term, report);
     return;
   }
 
@@ -2574,7 +2582,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
+              "usage: ssh password <pass> | ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
 }
 
 static void term_run_net(terminal_t *term, const char *cmd) {
