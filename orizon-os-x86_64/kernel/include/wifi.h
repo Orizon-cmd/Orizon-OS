@@ -455,6 +455,27 @@ typedef struct {
   int wpa_m2_data_ready;
   int wpa_m2_tx_acked;
   uint32_t wpa_m2_tx_sequence;
+  int wpa_m3_seen;
+  uint32_t wpa_m3_key_info;
+  uint32_t wpa_m3_key_data_len;
+  uint32_t wpa_m3_key_data_checksum;
+  int wpa_key_data_decrypted;
+  int wpa_key_data_decrypt_failed;
+  uint32_t wpa_key_data_plain_len;
+  uint32_t wpa_key_data_plain_checksum;
+  int wpa_gtk_seen;
+  uint32_t wpa_gtk_key_id;
+  uint32_t wpa_gtk_len;
+  uint32_t wpa_gtk_checksum;
+  int wpa_m4_ready;
+  int wpa_m4_data_ready;
+  uint32_t wpa_m4_frame_len;
+  uint32_t wpa_m4_data_frame_len;
+  uint32_t wpa_m4_key_info;
+  uint32_t wpa_m4_mic_checksum;
+  uint32_t wpa_m4_checksum;
+  int wpa_m4_tx_acked;
+  uint32_t wpa_m4_tx_sequence;
   int wpa_key_ready;
   int wpa_key_failed;
   unsigned long wpa_key_errors;
@@ -471,11 +492,13 @@ typedef struct {
   uint32_t wpa_key_flags;
   uint32_t wpa_key_material_len;
   uint32_t wpa_key_material_checksum;
+  int wpa_key_is_group;
   int wpa_key_armed;
   int wpa_key_sent;
   int wpa_key_response_seen;
   int wpa_key_timeout;
   int wpa_key_installed;
+  int wpa_gtk_key_installed;
   unsigned long wpa_key_attempts;
   uint32_t wpa_key_sequence;
   uint32_t wpa_key_index;
@@ -574,7 +597,7 @@ int wifi_txcmd_probe(const char *target, int arm, char *report,
                      size_t report_size);
 int wifi_bind_probe(int arm, char *report, size_t report_size);
 int wifi_wpa_probe(char *report, size_t report_size);
-int wifi_key_probe(int arm, char *report, size_t report_size);
+int wifi_key_probe(int group, int arm, char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 

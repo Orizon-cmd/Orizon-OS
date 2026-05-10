@@ -117,6 +117,73 @@ static void aes_mix_columns(uint8_t state[16]) {
   }
 }
 
+static uint8_t gf_mul(uint8_t a, uint8_t b) {
+  uint8_t r = 0;
+  for (int i = 0; i < 8; i++) {
+    if (b & 1) {
+      r ^= a;
+    }
+    a = xtime(a);
+    b >>= 1;
+  }
+  return r;
+}
+
+static void aes_inv_shift_rows(uint8_t state[16]) {
+  uint8_t t;
+  t = state[13];
+  state[13] = state[9];
+  state[9] = state[5];
+  state[5] = state[1];
+  state[1] = t;
+
+  t = state[2];
+  state[2] = state[10];
+  state[10] = t;
+  t = state[6];
+  state[6] = state[14];
+  state[14] = t;
+
+  t = state[3];
+  state[3] = state[7];
+  state[7] = state[11];
+  state[11] = state[15];
+  state[15] = t;
+}
+
+static uint8_t aes_inv_sbox_byte(uint8_t v) {
+  for (int i = 0; i < 256; i++) {
+    if (aes_sbox[i] == v) {
+      return (uint8_t)i;
+    }
+  }
+  return 0;
+}
+
+static void aes_inv_sub_bytes(uint8_t state[16]) {
+  for (int i = 0; i < 16; i++) {
+    state[i] = aes_inv_sbox_byte(state[i]);
+  }
+}
+
+static void aes_inv_mix_columns(uint8_t state[16]) {
+  for (int c = 0; c < 4; c++) {
+    uint8_t *col = state + c * 4;
+    uint8_t a0 = col[0];
+    uint8_t a1 = col[1];
+    uint8_t a2 = col[2];
+    uint8_t a3 = col[3];
+    col[0] = (uint8_t)(gf_mul(a0, 14) ^ gf_mul(a1, 11) ^
+                       gf_mul(a2, 13) ^ gf_mul(a3, 9));
+    col[1] = (uint8_t)(gf_mul(a0, 9) ^ gf_mul(a1, 14) ^
+                       gf_mul(a2, 11) ^ gf_mul(a3, 13));
+    col[2] = (uint8_t)(gf_mul(a0, 13) ^ gf_mul(a1, 9) ^
+                       gf_mul(a2, 14) ^ gf_mul(a3, 11));
+    col[3] = (uint8_t)(gf_mul(a0, 11) ^ gf_mul(a1, 13) ^
+                       gf_mul(a2, 9) ^ gf_mul(a3, 14));
+  }
+}
+
 static void aes128_encrypt_block(const uint8_t key[16], const uint8_t in[16],
                                  uint8_t out[16]) {
   uint8_t round_keys[AES128_ROUND_KEYS];
@@ -134,6 +201,26 @@ static void aes128_encrypt_block(const uint8_t key[16], const uint8_t in[16],
   aes_sub_bytes(state);
   aes_shift_rows(state);
   aes_add_round_key(state, round_keys + 160);
+  memcpy(out, state, 16);
+}
+
+static void aes128_decrypt_block(const uint8_t key[16], const uint8_t in[16],
+                                 uint8_t out[16]) {
+  uint8_t round_keys[AES128_ROUND_KEYS];
+  uint8_t state[16];
+
+  aes_key_expand(key, round_keys);
+  memcpy(state, in, 16);
+  aes_add_round_key(state, round_keys + 160);
+  for (int round = 9; round >= 1; round--) {
+    aes_inv_shift_rows(state);
+    aes_inv_sub_bytes(state);
+    aes_add_round_key(state, round_keys + round * 16);
+    aes_inv_mix_columns(state);
+  }
+  aes_inv_shift_rows(state);
+  aes_inv_sub_bytes(state);
+  aes_add_round_key(state, round_keys);
   memcpy(out, state, 16);
 }
 
@@ -318,5 +405,83 @@ int aes128_gcm_decrypt(const uint8_t key[16], const uint8_t nonce[12],
   memcpy(ctr, j0, 16);
   increment_counter(ctr);
   aes_ctr_crypt(key, ctr, ciphertext, ciphertext_len, plaintext);
+  return 0;
+}
+
+static void xor_t_into_a(uint8_t a[8], uint32_t t) {
+  for (int i = 7; i >= 0 && t; i--) {
+    a[i] ^= (uint8_t)(t & 0xffU);
+    t >>= 8;
+  }
+}
+
+int aes128_key_unwrap(const uint8_t kek[16], const uint8_t *wrapped,
+                      size_t wrapped_len, uint8_t *plaintext,
+                      size_t *plaintext_len) {
+  static const uint8_t default_iv[8] = {
+      0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6};
+  uint8_t a[8];
+  uint8_t block[16];
+  uint8_t out[16];
+  size_t n;
+
+  if (!kek || !wrapped || !plaintext || !plaintext_len ||
+      wrapped_len < 24 || (wrapped_len % 8) != 0) {
+    return -1;
+  }
+
+  n = (wrapped_len / 8U) - 1U;
+  if (n == 0) {
+    return -1;
+  }
+
+  memcpy(a, wrapped, 8);
+  memcpy(plaintext, wrapped + 8, n * 8U);
+
+  for (int j = 5; j >= 0; j--) {
+    for (size_t i = n; i >= 1; i--) {
+      memcpy(block, a, 8);
+      xor_t_into_a(block, (uint32_t)(n * (size_t)j + i));
+      memcpy(block + 8, plaintext + (i - 1U) * 8U, 8);
+      aes128_decrypt_block(kek, block, out);
+      memcpy(a, out, 8);
+      memcpy(plaintext + (i - 1U) * 8U, out + 8, 8);
+      if (i == 1U) {
+        break;
+      }
+    }
+  }
+
+  if (memcmp(a, default_iv, sizeof(default_iv)) != 0) {
+    memset(plaintext, 0, n * 8U);
+    *plaintext_len = 0;
+    return -2;
+  }
+
+  *plaintext_len = n * 8U;
+  return 0;
+}
+
+int aes128_key_unwrap_selftest(void) {
+  static const uint8_t kek[16] = {
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f};
+  static const uint8_t wrapped[24] = {
+      0x1f, 0xa6, 0x8b, 0x0a, 0x81, 0x12, 0xb4, 0x47,
+      0xae, 0xf3, 0x4b, 0xd8, 0xfb, 0x5a, 0x7b, 0x82,
+      0x9d, 0x3e, 0x86, 0x23, 0x71, 0xd2, 0xcf, 0xe5};
+  static const uint8_t expected[16] = {
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+      0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+  uint8_t out[16];
+  size_t out_len = 0;
+
+  if (aes128_key_unwrap(kek, wrapped, sizeof(wrapped), out, &out_len) != 0) {
+    return -1;
+  }
+  if (out_len != sizeof(expected) ||
+      memcmp(out, expected, sizeof(expected)) != 0) {
+    return -2;
+  }
   return 0;
 }

@@ -15,7 +15,9 @@
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
   upload staging, alive polling diagnostics, and host-side command/RX/TX queue
-  memory staging.
+  memory staging. The Intel Wi-Fi WPA2 path can now derive PMK/PTK, prepare
+  M2/M4, unwrap M3 key data, extract GTK, and stage pairwise/group SEC_KEY
+  installs behind strict firmware ACK checks.
 
 ## Next Stability Track
 
@@ -36,9 +38,9 @@
    modes.
 4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
    report parser for ELAN/Wacom multitouch and stylus events.
-5. Build Intel CNVi Wi-Fi properly: finish WPA2 M3/M4 and GTK/group-key
-   handling, harden protected data TX/RX, then bring DHCP over Wi-Fi online
-   once packets are stable.
+5. Build Intel CNVi Wi-Fi properly: validate WPA2 M3/M4 and GTK/group-key
+   handling on the Lenovo, harden protected data TX/RX, then bring DHCP over
+   Wi-Fi online once packets are stable.
 6. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 7. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 8. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and

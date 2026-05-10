@@ -66,14 +66,15 @@ development target, not a ZimaOS-only assumption.
   hexadecimal PSKs. `wifi crypto` runs built-in SHA-1 and PBKDF2 known vector
   checks. The RX path already recognizes authentication and association response
   frames that match the prepared local STA/BSSID pair and records status
-  codes/AID for diagnostics. `wifi tx [auth|assoc|all]` can now copy the
+  codes/AID for diagnostics. `wifi tx [auth|assoc|m2|m4|all]` can now copy the
   prepared management frames into TX DMA buffers, fill the TX TFD/byte-count
   slot, and report the planned doorbell value without writing it. WPA2 EAPOL
   RX diagnostics now recognize AP key frames, capture ANonce, derive diagnostic
-  PTK material, and prepare an inspectable M2 response through `wifi wpa`.
-  `wifi tx m2` only stages that response in DMA; it still does not transmit.
-  `wifi txcmd [auth|assoc|m2]` builds a separate Intel `TX_CMD` v10 diagnostic
-  envelope for those frames without copying it to the command queue. `wifi bind`
+  PTK material, prepare an inspectable M2 response, parse M3, unwrap encrypted
+  key data with the PTK KEK, extract GTK material, and prepare M4 through
+  `wifi wpa`. `wifi tx m2` and `wifi tx m4` stage those responses in DMA.
+  `wifi txcmd [auth|assoc|m2|m4]` builds a separate Intel `TX_CMD` v10
+  diagnostic envelope and can queue it with strict ACK matching. `wifi bind`
   now builds diagnostic Intel `MAC_CONFIG`, `LINK_CONFIG`, and `STA_CONFIG`
   command buffers for the selected AP, records the MAC/link/STA IDs and
   checksums. `wifi bind arm` then queues those commands one by one and requires
@@ -84,10 +85,12 @@ development target, not a ZimaOS-only assumption.
   the transmit path ACKed. Association state now requires both firmware TX ACKs,
   the STA binding ACK, and the matching AP authentication/association responses
   before Orizon reports `confirmed`; open networks can then expose a ready data
-  path. `wifi key [arm]` now builds a guarded Intel data-path `SEC_KEY_CMD`
-  plan for the WPA2 pairwise CCMP TK and can queue it only after association,
-  STA binding, and M2 TX are ACKed. Real WPA traffic still requires M3/M4,
-  group-key/GTK installation, and protected data RX/TX.
+  path. `wifi key pairwise [arm]` now builds a guarded Intel data-path
+  `SEC_KEY_CMD` plan for the WPA2 pairwise CCMP TK and can queue it only after
+  association, STA binding, and M2 TX are ACKed. `wifi key gtk [arm]` builds the
+  group CCMP key command after M3/GTK extraction. The WPA guarded-ready state
+  now requires pairwise key ACK, GTK key ACK, and M4 TX ACK. Real Wi-Fi traffic
+  still requires protected data TX/RX hardening and DHCP over Wi-Fi.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -119,16 +122,22 @@ wifi scan poll
 wifi connect <ssid> [password]
 wifi wpa
 wifi key
-wifi key arm
+wifi key pairwise arm
+wifi key gtk
+wifi key gtk arm
 wifi bind
 wifi bind arm
 wifi txcmd auth
 wifi txcmd auth arm
 wifi tx all
 wifi tx m2
+wifi tx m4
 wifi txcmd assoc
 wifi txcmd assoc arm
 wifi txcmd m2
+wifi txcmd m2 arm
+wifi txcmd m4
+wifi txcmd m4 arm
 storage
 disks
 ```
@@ -174,6 +183,6 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: WPA2 M3/M4 parsing, GTK/group-key
-   installation, protected data TX/RX, then DHCP over Wi-Fi once encrypted
+6. Grow the Intel Wi-Fi path in order: validate WPA2 M3/M4 plus GTK install on
+   real APs, harden protected data TX/RX, then DHCP over Wi-Fi once encrypted
    frames are stable.

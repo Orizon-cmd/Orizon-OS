@@ -2839,9 +2839,33 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "key")) {
     const char *key_args = term_skip_spaces(args + 3);
-    int arm_key = term_command_is(key_args, "arm") ||
-                  term_command_is(key_args, "go");
-    wifi_key_probe(arm_key, line, sizeof(line));
+    char target[16];
+    char mode[16];
+    int group_key = 0;
+    int arm_key = 0;
+    target[0] = '\0';
+    mode[0] = '\0';
+    if (*key_args) {
+      const char *rest_key = term_read_token(key_args, target, sizeof(target));
+      if (strcmp(target, "arm") == 0 || strcmp(target, "go") == 0) {
+        arm_key = 1;
+      } else if (strcmp(target, "gtk") == 0 ||
+                 strcmp(target, "group") == 0) {
+        group_key = 1;
+        if (rest_key && *rest_key) {
+          term_read_token(rest_key, mode, sizeof(mode));
+          arm_key = strcmp(mode, "arm") == 0 || strcmp(mode, "go") == 0;
+        }
+      } else if (strcmp(target, "pairwise") == 0 ||
+                 strcmp(target, "ptk") == 0) {
+        group_key = 0;
+        if (rest_key && *rest_key) {
+          term_read_token(rest_key, mode, sizeof(mode));
+          arm_key = strcmp(mode, "arm") == 0 || strcmp(mode, "go") == 0;
+        }
+      }
+    }
+    wifi_key_probe(group_key, arm_key, line, sizeof(line));
     term_puts_t(term, line);
     return;
   }
@@ -2909,7 +2933,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [arm]|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|all]|txcmd [auth|assoc|m2] [arm]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|m4|all]|txcmd [auth|assoc|m2|m4] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3513,15 +3537,15 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term,
                 "  wifi connect - Prepare Wi-Fi auth/association frames\n");
     term_puts_t(term,
-                "  wifi wpa - Show WPA M1/PTK/M2 diagnostic state\n");
+                "  wifi wpa - Show WPA M1/M2/M3/M4 diagnostic state\n");
     term_puts_t(term,
-                "  wifi key [arm] - Build/queue WPA pairwise SEC_KEY\n");
+                "  wifi key [pairwise|gtk] [arm] - Build/queue WPA SEC_KEY\n");
     term_puts_t(term,
                 "  wifi bind [arm] - Build/queue MAC/LINK/STA binding\n");
     term_puts_t(term,
-                "  wifi tx [auth|assoc|m2|all] - Stage Wi-Fi TX DMA only\n");
+                "  wifi tx [auth|assoc|m2|m4|all] - Stage Wi-Fi TX DMA only\n");
     term_puts_t(term,
-                "  wifi txcmd [auth|assoc|m2] [arm] - Build/queue TX_CMD\n");
+                "  wifi txcmd [auth|assoc|m2|m4] [arm] - Build/queue TX_CMD\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");

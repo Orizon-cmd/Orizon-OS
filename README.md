@@ -206,14 +206,15 @@ derive aussi la PMK par PBKDF2-HMAC-SHA1 sans afficher la cle; `wifi crypto`
 verifie les vecteurs SHA-1/PBKDF2 integres. Les passphrases 8-63 caracteres et
 les PSK hexadecimales 64 caracteres sont acceptees. Le chemin RX reconnait deja
 les reponses authentication/association correspondant au plan de connexion et
-stocke leurs status codes. `wifi tx [auth|assoc|all]`
+stocke leurs status codes. `wifi tx [auth|assoc|m2|m4|all]`
 prepare maintenant les trames de gestion dans les buffers DMA TX et affiche le
 doorbell prevu sans l'ecrire. Le chemin RX detecte aussi les trames
 EAPOL-Key WPA2, capture l'ANonce, derive un PTK de diagnostic, prepare une
-reponse M2 inspectable avec `wifi wpa`, puis `wifi tx m2` peut seulement la
-placer en DMA sans transmission reelle. `wifi txcmd [auth|assoc|m2]` construit
-aussi une enveloppe Intel `TX_CMD` v10 de diagnostic dans un buffer separe:
-elle est mesuree et verifiee, mais pas encore copiee dans la queue commande.
+reponse M2 inspectable avec `wifi wpa`, puis prepare aussi M3/GTK/M4 quand les
+trames EAPOL suivantes arrivent. `wifi tx m2` et `wifi tx m4` peuvent placer ces
+reponses WPA en DMA. `wifi txcmd [auth|assoc|m2|m4]` construit aussi une
+enveloppe Intel `TX_CMD` v10 de diagnostic dans un buffer separe, puis peut
+l'envoyer avec `arm` si le contexte, RX et le binding STA sont prets.
 `wifi bind` prepare maintenant les enveloppes diagnostiques `MAC_CONFIG`,
 `LINK_CONFIG` et `STA_CONFIG` avec un `sta-id` AP local; apres cela,
 `wifi bind arm` peut les envoyer une par une dans la queue commande avec ACK
@@ -226,12 +227,15 @@ firmware de la reponse AP: Orizon ne marque une association comme confirmee que
 si authentication TX, association TX, binding STA, authentication response et
 association response sont tous acceptes. Pour les reseaux ouverts, ce chemin
 rend la data path disponible; pour WPA2, il reste volontairement bloque tant que
-les cles de chiffrement ne sont pas installees. `wifi key [arm]` prepare
-maintenant la commande Intel `SEC_KEY_CMD` du groupe data-path pour installer la
-cle paire CCMP derivee du PTK; `wifi key arm` ne l'envoie qu'apres association
-confirmee, binding STA ACKe et `wifi txcmd m2 arm` ACKe. Le Wi-Fi WPA n'est pas
-encore considere complet: il reste a traiter M3/M4, GTK/groupe et les trames de
-donnees avant DHCP.
+les cles de chiffrement ne sont pas installees. `wifi key pairwise [arm]`
+prepare la commande Intel `SEC_KEY_CMD` du groupe data-path pour installer la
+cle paire CCMP derivee du PTK; elle ne s'envoie qu'apres association confirmee,
+binding STA ACKe et `wifi txcmd m2 arm` ACKe. Apres M3, Orizon dechiffre le key
+data avec AES key unwrap, extrait la GTK, puis `wifi key gtk [arm]` prepare et
+peut envoyer la cle groupe CCMP. Le chemin WPA attend ensuite `wifi txcmd m4 arm`
+avant de marquer la data path comme prete. Le Wi-Fi n'est pas encore une pile IP
+complete: il reste a stabiliser les trames de donnees protegees et DHCP sur
+vrai AP.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
