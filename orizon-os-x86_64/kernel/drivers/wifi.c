@@ -651,14 +651,14 @@ static wifi_status_t wifi_status_state = {
   (FH_MEM_LOWER_BOUND + 0xd18U + (0x20U * (ch)))
 
 #define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_ENABLE (1U << 31)
-#define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CREDIT_DISABLE (1U << 3)
+#define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CREDIT_DISABLE 0U
+#define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CREDIT_ENABLE (1U << 3)
 #define FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_HOST_ENDTFD (1U << 20)
 #define FH_TCSR_TX_CONFIG_REG_VAL_CIRQ_RTC_NOINT 0U
 #define FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE 0U
-#define FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID (1U << 20)
-#define FH_TCSR_CHNL_TX_BUF_STS_REG_BIT_TFDB_WPTR 12U
-#define FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM 0U
-#define FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX 3U
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID 0x00000003U
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM 20U
+#define FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX 12U
 #define FH_MEM_TFDIB_DRAM_ADDR_LSB_MSK 0xffffffffU
 #define FH_MEM_TFDIB_REG1_ADDR_BITSHIFT 28U
 #define FH_MEM_TFDIB_REG1_ADDR_MASK 0xfU
@@ -3031,10 +3031,9 @@ static uint32_t wifi_dma_hi_addr(uint64_t phys) {
 }
 
 static uint32_t wifi_fh_buf_status_value(void) {
-  return FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID |
-         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_BIT_TFDB_WPTR) |
-         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM) |
-         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX);
+  return (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_NUM) |
+         (1U << FH_TCSR_CHNL_TX_BUF_STS_REG_POS_TB_IDX) |
+         FH_TCSR_CHNL_TX_BUF_STS_REG_VAL_TFDB_VALID;
 }
 
 static uint32_t wifi_fh_tx_config_enable_value(void) {
@@ -3110,6 +3109,12 @@ static int wifi_arm_fh_current_chunk(void) {
   wifi_status_state.fh_complete = 0;
   wifi_status_state.fh_timeout = 0;
 
+  if (wifi_grab_nic_access() != 0) {
+    wifi_status_state.fh_errors++;
+    wifi_status_state.status = "wifi: FH DMA arm could not grab NIC access";
+    return -1;
+  }
+
   /* Ack stale status before arming the service DMA channel. */
   wifi_csr_write32(CSR_INT, CSR_INT_BIT_FH_TX | CSR_INT_BIT_HW_ERR |
                             CSR_INT_BIT_SW_ERR);
@@ -3127,6 +3132,7 @@ static int wifi_arm_fh_current_chunk(void) {
                    wifi_status_state.fh_buf_status_value);
   wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
                    wifi_status_state.fh_tx_config_value);
+  wifi_release_nic_access();
 
   for (uint32_t i = 0; i < WIFI_FH_POLL_LOOPS; i++) {
     uint32_t csr_int = wifi_csr_read32(CSR_INT);
@@ -3140,17 +3146,21 @@ static int wifi_arm_fh_current_chunk(void) {
 
     if ((csr_int & errors) || (fh_int & FH_INT_ERR_MASK) || tx_error) {
       wifi_status_state.fh_errors++;
+      wifi_grab_nic_access();
       wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
                        FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+      wifi_release_nic_access();
       return -1;
     }
 
     if ((csr_int & done) || (fh_int & FH_INT_TX_MASK)) {
       wifi_status_state.fh_complete = 1;
+      wifi_grab_nic_access();
       wifi_csr_write32(CSR_INT, CSR_INT_BIT_FH_TX);
       wifi_csr_write32(CSR_FH_INT_STATUS, fh_int & FH_INT_TX_MASK);
       wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
                        FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+      wifi_release_nic_access();
       return 0;
     }
 
@@ -3159,8 +3169,10 @@ static int wifi_arm_fh_current_chunk(void) {
 
   wifi_status_state.fh_timeout = 1;
   wifi_status_state.fh_errors++;
+  wifi_grab_nic_access();
   wifi_csr_write32(FH_TCSR_CHNL_TX_CONFIG_REG(FH_SRVC_CHNL),
                    FH_TCSR_TX_CONFIG_REG_VAL_DMA_CHNL_PAUSE);
+  wifi_release_nic_access();
   return -1;
 }
 
@@ -7545,7 +7557,7 @@ static void wifi_scan_append_access_points(char *report, size_t report_size) {
 }
 
 int wifi_bringup_probe(char *report, size_t report_size) {
-  char scratch[256];
+  char scratch[1024];
   const wifi_status_t *s;
   int rc;
 
@@ -7559,48 +7571,56 @@ int wifi_bringup_probe(char *report, size_t report_size) {
   rc = wifi_firmware_probe(scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "firmware", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_apm_probe(scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "apm", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_boot_firmware(1, scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "boot", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_alive_probe(scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "alive", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_queue_probe(1, scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "queues", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_context_probe(1, scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "context", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_scheduler_probe(1, scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "scheduler", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
   rc = wifi_rx_probe(1, scratch, sizeof(scratch));
   wifi_report_step(report, report_size, "rx", rc);
   if (rc != 0) {
+    wifi_report_append(report, report_size, scratch);
     goto done;
   }
 
