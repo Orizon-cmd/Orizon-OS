@@ -99,6 +99,17 @@ Depuis un autre PC du meme reseau:
 ssh orizon@<ip-orizon>
 ```
 
+Pour relancer la regression SSH depuis ce poste via le serveur ZimaOS:
+
+```powershell
+$env:ORIZON_SSH_PASSWORD = "orizonpw"
+.\scripts\orizon\test_orizon_ssh.ps1
+```
+
+Le script utilise `zimaos-orizon` et `192.168.122.138` par defaut. Ces valeurs
+peuvent etre changees avec `-ZimaHost`, `-VmIp`, ou les variables
+`ORIZON_ZIMA_HOST` et `ORIZON_VM_IP`.
+
 Le client doit atteindre Orizon, voir le logiciel distant `OrizonSSH_0.1`,
 recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Apres
 authentification password, OpenSSH peut ouvrir un canal `session`; `exec` et le
