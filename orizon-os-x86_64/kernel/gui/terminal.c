@@ -2870,6 +2870,12 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "data")) {
+    wifi_data_probe(line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "bind")) {
     const char *bind_args = term_skip_spaces(args + 4);
     int arm_bind = term_command_is(bind_args, "arm") ||
@@ -2933,7 +2939,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|m4|all]|txcmd [auth|assoc|m2|m4] [arm]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3541,11 +3547,13 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term,
                 "  wifi key [pairwise|gtk] [arm] - Build/queue WPA SEC_KEY\n");
     term_puts_t(term,
+                "  wifi data - Build protected CCMP diagnostic data frame\n");
+    term_puts_t(term,
                 "  wifi bind [arm] - Build/queue MAC/LINK/STA binding\n");
     term_puts_t(term,
-                "  wifi tx [auth|assoc|m2|m4|all] - Stage Wi-Fi TX DMA only\n");
+                "  wifi tx [auth|assoc|m2|m4|data|all] - Stage Wi-Fi TX DMA only\n");
     term_puts_t(term,
-                "  wifi txcmd [auth|assoc|m2|m4] [arm] - Build/queue TX_CMD\n");
+                "  wifi txcmd [auth|assoc|m2|m4|data] [arm] - Build/queue TX_CMD\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");

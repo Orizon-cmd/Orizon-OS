@@ -478,6 +478,17 @@ static wifi_status_t wifi_status_state = {
     .wpa_key_timeout = 0,
     .wpa_key_installed = 0,
     .wpa_gtk_key_installed = 0,
+    .ccmp_data_ready = 0,
+    .ccmp_data_frame_len = 0,
+    .ccmp_plain_len = 0,
+    .ccmp_pn_low = 0,
+    .ccmp_pn_high = 0,
+    .ccmp_nonce_checksum = 0,
+    .ccmp_aad_checksum = 0,
+    .ccmp_mic_checksum = 0,
+    .ccmp_frame_checksum = 0,
+    .ccmp_tx_acked = 0,
+    .ccmp_tx_sequence = 0,
     .wpa_key_attempts = 0,
     .wpa_key_sequence = 0,
     .wpa_key_index = 0,
@@ -740,6 +751,7 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_80211_TYPE_DATA 2U
 #define WIFI_80211_FC_TODS 0x0100U
 #define WIFI_80211_FC_FROMDS 0x0200U
+#define WIFI_80211_FC_PROTECTED 0x4000U
 #define WIFI_80211_SUBTYPE_QOS_DATA 8U
 #define WIFI_80211_SUBTYPE_ASSOC_REQ 0U
 #define WIFI_80211_SUBTYPE_ASSOC_RESP 1U
@@ -763,10 +775,16 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_WPA_EAPOL_M4_BYTES 128U
 #define WIFI_WPA_KEY_DATA_BYTES 256U
 #define WIFI_WPA_GTK_BYTES 32U
+#define WIFI_CCMP_HEADER_BYTES 8U
+#define WIFI_CCMP_MIC_BYTES 8U
+#define WIFI_CCMP_NONCE_BYTES 13U
+#define WIFI_CCMP_AAD_BYTES 22U
+#define WIFI_CCMP_DIAG_PLAIN_BYTES 48U
 #define WIFI_TX_STAGE_KIND_AUTH 1U
 #define WIFI_TX_STAGE_KIND_ASSOC 2U
 #define WIFI_TX_STAGE_KIND_EAPOL_M2 3U
 #define WIFI_TX_STAGE_KIND_EAPOL_M4 4U
+#define WIFI_TX_STAGE_KIND_DATA 5U
 #define WIFI_TX_CMD_FLAG_ENCRYPT_DIS (1U << 1)
 #define WIFI_TX_CMD_FLAG_HIGH_PRI (1U << 2)
 #define WIFI_TX_CMD_OFFLD_MH_SIZE_SHIFT 8U
@@ -1348,6 +1366,10 @@ static uint8_t wifi_wpa_eapol_m4[WIFI_WPA_EAPOL_M4_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_wpa_m4_data_frame[WIFI_CONNECT_FRAME_BYTES]
     __attribute__((aligned(16)));
+static uint8_t wifi_ccmp_data_frame[WIFI_CONNECT_FRAME_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_ccmp_plain_payload[WIFI_CCMP_DIAG_PLAIN_BYTES]
+    __attribute__((aligned(16)));
 static uint8_t wifi_wpa_key_data_encrypted[WIFI_WPA_KEY_DATA_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_wpa_key_data_plain[WIFI_WPA_KEY_DATA_BYTES]
@@ -1773,6 +1795,17 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.wpa_key_timeout = 0;
   wifi_status_state.wpa_key_installed = 0;
   wifi_status_state.wpa_gtk_key_installed = 0;
+  wifi_status_state.ccmp_data_ready = 0;
+  wifi_status_state.ccmp_data_frame_len = 0;
+  wifi_status_state.ccmp_plain_len = 0;
+  wifi_status_state.ccmp_pn_low = 0;
+  wifi_status_state.ccmp_pn_high = 0;
+  wifi_status_state.ccmp_nonce_checksum = 0;
+  wifi_status_state.ccmp_aad_checksum = 0;
+  wifi_status_state.ccmp_mic_checksum = 0;
+  wifi_status_state.ccmp_frame_checksum = 0;
+  wifi_status_state.ccmp_tx_acked = 0;
+  wifi_status_state.ccmp_tx_sequence = 0;
   wifi_status_state.wpa_key_attempts = 0;
   wifi_status_state.wpa_key_sequence = 0;
   wifi_status_state.wpa_key_index = 0;
@@ -1844,6 +1877,8 @@ static void wifi_connect_clear_plan(void) {
   memset(wifi_wpa_m2_data_frame, 0, sizeof(wifi_wpa_m2_data_frame));
   memset(wifi_wpa_eapol_m4, 0, sizeof(wifi_wpa_eapol_m4));
   memset(wifi_wpa_m4_data_frame, 0, sizeof(wifi_wpa_m4_data_frame));
+  memset(wifi_ccmp_data_frame, 0, sizeof(wifi_ccmp_data_frame));
+  memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
   memset(wifi_wpa_key_data_encrypted, 0, sizeof(wifi_wpa_key_data_encrypted));
   memset(wifi_wpa_key_data_plain, 0, sizeof(wifi_wpa_key_data_plain));
   memset(wifi_wpa_gtk, 0, sizeof(wifi_wpa_gtk));
@@ -2021,6 +2056,17 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.wpa_key_timeout = 0;
   wifi_status_state.wpa_key_installed = 0;
   wifi_status_state.wpa_gtk_key_installed = 0;
+  wifi_status_state.ccmp_data_ready = 0;
+  wifi_status_state.ccmp_data_frame_len = 0;
+  wifi_status_state.ccmp_plain_len = 0;
+  wifi_status_state.ccmp_pn_low = 0;
+  wifi_status_state.ccmp_pn_high = 0;
+  wifi_status_state.ccmp_nonce_checksum = 0;
+  wifi_status_state.ccmp_aad_checksum = 0;
+  wifi_status_state.ccmp_mic_checksum = 0;
+  wifi_status_state.ccmp_frame_checksum = 0;
+  wifi_status_state.ccmp_tx_acked = 0;
+  wifi_status_state.ccmp_tx_sequence = 0;
   wifi_status_state.wpa_key_attempts = 0;
   wifi_status_state.wpa_key_sequence = 0;
   wifi_status_state.wpa_key_index = 0;
@@ -2034,6 +2080,8 @@ static void wifi_reset_firmware_parse(void) {
   }
   memset(wifi_wpa_eapol_m4, 0, sizeof(wifi_wpa_eapol_m4));
   memset(wifi_wpa_m4_data_frame, 0, sizeof(wifi_wpa_m4_data_frame));
+  memset(wifi_ccmp_data_frame, 0, sizeof(wifi_ccmp_data_frame));
+  memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
   memset(wifi_wpa_key_data_encrypted, 0, sizeof(wifi_wpa_key_data_encrypted));
   memset(wifi_wpa_key_data_plain, 0, sizeof(wifi_wpa_key_data_plain));
   memset(wifi_wpa_gtk, 0, sizeof(wifi_wpa_gtk));
@@ -7375,6 +7423,14 @@ static void wifi_connect_append_response_status(char *report,
              s->wpa_gtk_key_installed ? "installed" : "pending",
              s->wpa_key_sta_mask, s->wpa_key_flags, s->wpa_key_sequence);
     wifi_report_append(report, report_size, line);
+    snprintf(line, sizeof(line),
+             "ccmp-data: ready=%s len=%u plain=%u pn=0x%08x%08x "
+             "mic=0x%08x frame=0x%08x tx=%s seq=0x%04x\n",
+             s->ccmp_data_ready ? "yes" : "no", s->ccmp_data_frame_len,
+             s->ccmp_plain_len, s->ccmp_pn_high, s->ccmp_pn_low,
+             s->ccmp_mic_checksum, s->ccmp_frame_checksum,
+             s->ccmp_tx_acked ? "acked" : "pending", s->ccmp_tx_sequence);
+    wifi_report_append(report, report_size, line);
   }
 }
 
@@ -7777,6 +7833,7 @@ int wifi_scan_poll(char *report, size_t report_size) {
 int wifi_crypto_probe(char *report, size_t report_size) {
   int rc;
   int aes_rc;
+  int ccm_rc;
 
   if (!report || report_size == 0) {
     return -1;
@@ -7784,22 +7841,26 @@ int wifi_crypto_probe(char *report, size_t report_size) {
 
   rc = sha1_selftest();
   aes_rc = aes128_key_unwrap_selftest();
+  ccm_rc = aes128_ccm_selftest();
   snprintf(report, report_size,
            "wifi crypto: %s\n"
            "sha1: %s\n"
            "pbkdf2-hmac-sha1: %s\n"
            "aes-128-key-unwrap: %s\n"
+           "aes-128-ccm: %s\n"
            "wpa2: pmk-bytes=%u iterations=%u passphrase-len=%u..%u "
            "hex-psk-len=%u\n"
            "note: connect reports only PMK/GTK checksums, never keys\n",
-           rc == 0 && aes_rc == 0 ? "self-test passed" : "self-test failed",
+           rc == 0 && aes_rc == 0 && ccm_rc == 0 ? "self-test passed"
+                                                  : "self-test failed",
            rc == 0 || rc == -2 || rc == -3 ? "ok" : "failed",
            rc == 0 ? "ok" : "failed",
            aes_rc == 0 ? "ok" : "failed",
+           ccm_rc == 0 ? "ok" : "failed",
            WIFI_WPA2_PMK_BYTES, WIFI_WPA2_PBKDF2_ITERATIONS,
            WIFI_WPA2_MIN_PASSPHRASE, WIFI_WPA2_MAX_PASSPHRASE,
            WIFI_WPA2_HEX_PSK_CHARS);
-  return rc == 0 && aes_rc == 0 ? 0 : -1;
+  return rc == 0 && aes_rc == 0 && ccm_rc == 0 ? 0 : -1;
 }
 
 static void wifi_connect_copy_mac(uint8_t *dst, const uint8_t *src) {
@@ -8697,6 +8758,219 @@ int wifi_key_probe(int group, int arm, char *report, size_t report_size) {
   return 0;
 }
 
+static uint64_t wifi_ccmp_tx_pn_counter = 1;
+
+static void wifi_ccmp_reset_plan(void) {
+  wifi_status_state.ccmp_data_ready = 0;
+  wifi_status_state.ccmp_data_frame_len = 0;
+  wifi_status_state.ccmp_plain_len = 0;
+  wifi_status_state.ccmp_pn_low = 0;
+  wifi_status_state.ccmp_pn_high = 0;
+  wifi_status_state.ccmp_nonce_checksum = 0;
+  wifi_status_state.ccmp_aad_checksum = 0;
+  wifi_status_state.ccmp_mic_checksum = 0;
+  wifi_status_state.ccmp_frame_checksum = 0;
+  wifi_status_state.ccmp_tx_acked = 0;
+  wifi_status_state.ccmp_tx_sequence = 0;
+  memset(wifi_ccmp_data_frame, 0, sizeof(wifi_ccmp_data_frame));
+  memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
+}
+
+static void wifi_ccmp_pn_from_u64(uint64_t pn64, uint8_t pn[6]) {
+  pn[0] = (uint8_t)((pn64 >> 40) & 0xffU);
+  pn[1] = (uint8_t)((pn64 >> 32) & 0xffU);
+  pn[2] = (uint8_t)((pn64 >> 24) & 0xffU);
+  pn[3] = (uint8_t)((pn64 >> 16) & 0xffU);
+  pn[4] = (uint8_t)((pn64 >> 8) & 0xffU);
+  pn[5] = (uint8_t)(pn64 & 0xffU);
+}
+
+static void wifi_ccmp_write_header(uint8_t *hdr, const uint8_t pn[6],
+                                   uint32_t key_id) {
+  hdr[0] = pn[5];
+  hdr[1] = pn[4];
+  hdr[2] = 0;
+  hdr[3] = (uint8_t)(0x20U | ((key_id & 0x03U) << 6));
+  hdr[4] = pn[3];
+  hdr[5] = pn[2];
+  hdr[6] = pn[1];
+  hdr[7] = pn[0];
+}
+
+static uint32_t wifi_ccmp_build_aad(const uint8_t *frame, uint8_t aad[22]) {
+  uint16_t fc = wifi_read_le16(frame);
+  uint16_t masked_fc =
+      (uint16_t)((fc & ~(uint16_t)(0x0800U | 0x1000U | 0x2000U)) &
+                 ~(uint16_t)0x0070U);
+
+  masked_fc |= WIFI_80211_FC_PROTECTED;
+  memset(aad, 0, WIFI_CCMP_AAD_BYTES);
+  wifi_write_le16(aad, masked_fc);
+  memcpy(aad + 2U, frame + 4U, 18U);
+  aad[20] = frame[22] & 0x0fU;
+  aad[21] = 0;
+  return WIFI_CCMP_AAD_BYTES;
+}
+
+static uint32_t wifi_ccmp_build_diag_payload(void) {
+  static const uint8_t llc_snap_orizon[] = {
+      0xaaU, 0xaaU, 0x03U, 0x00U, 0x00U, 0x00U, 0x88U, 0xb5U};
+  static const char text[] = "Orizon CCMP protected data probe";
+  uint32_t offset = 0;
+
+  memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
+  memcpy(wifi_ccmp_plain_payload + offset, llc_snap_orizon,
+         sizeof(llc_snap_orizon));
+  offset += (uint32_t)sizeof(llc_snap_orizon);
+  memcpy(wifi_ccmp_plain_payload + offset, text, sizeof(text) - 1U);
+  offset += (uint32_t)sizeof(text) - 1U;
+  return offset;
+}
+
+static int wifi_ccmp_build_data_frame(char *report, size_t report_size) {
+  static const uint8_t broadcast[6] = {
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  const uint8_t *tk;
+  uint8_t aad[WIFI_CCMP_AAD_BYTES];
+  uint8_t nonce[WIFI_CCMP_NONCE_BYTES];
+  uint8_t pn[6];
+  uint64_t pn64;
+  uint32_t plain_len;
+  uint32_t offset;
+  uint32_t frame_len;
+  uint16_t fc;
+
+  if (!wifi_status_state.connect_ready || !wifi_status_state.connect_wpa) {
+    wifi_status_state.status =
+        "wifi: CCMP data frame needs a WPA connection plan";
+    wifi_report_append(report, report_size,
+                       "wifi data: no WPA connection plan ready\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.connect_data_ready) {
+    wifi_status_state.status =
+        "wifi: CCMP data frame needs completed WPA keys and M4";
+    wifi_report_append(report, report_size,
+                       "wifi data: WPA data path is not guarded-ready yet\n"
+                       "run: wifi key pairwise arm, wifi key gtk arm, "
+                       "wifi txcmd m4 arm\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.wpa_ptk_ready || !wifi_status_state.wpa_key_installed) {
+    wifi_status_state.status = "wifi: CCMP data frame needs pairwise TK";
+    wifi_report_append(report, report_size,
+                       "wifi data: pairwise TK is not installed yet\n");
+    return -1;
+  }
+
+  wifi_ccmp_reset_plan();
+  tk = wifi_wpa_ptk + WIFI_WPA_KCK_BYTES + WIFI_WPA_KEK_BYTES;
+  plain_len = wifi_ccmp_build_diag_payload();
+  offset = WIFI_80211_MGMT_HEADER_BYTES;
+  frame_len = offset + WIFI_CCMP_HEADER_BYTES + plain_len + WIFI_CCMP_MIC_BYTES;
+  if (frame_len > sizeof(wifi_ccmp_data_frame)) {
+    wifi_status_state.status = "wifi: CCMP data frame buffer too small";
+    wifi_report_append(report, report_size,
+                       "wifi data: protected frame buffer too small\n");
+    return -1;
+  }
+
+  fc = (uint16_t)((WIFI_80211_TYPE_DATA << 2) | WIFI_80211_FC_TODS |
+                  WIFI_80211_FC_PROTECTED);
+  wifi_write_le16(wifi_ccmp_data_frame + 0U, fc);
+  wifi_write_le16(wifi_ccmp_data_frame + 2U, 0);
+  wifi_connect_copy_mac(wifi_ccmp_data_frame + 4U,
+                        wifi_status_state.connect_bssid);
+  wifi_connect_copy_mac(wifi_ccmp_data_frame + 10U,
+                        wifi_status_state.connect_local_mac);
+  wifi_connect_copy_mac(wifi_ccmp_data_frame + 16U, broadcast);
+  wifi_write_le16(wifi_ccmp_data_frame + 22U, 0);
+
+  pn64 = wifi_ccmp_tx_pn_counter++;
+  wifi_ccmp_pn_from_u64(pn64, pn);
+  wifi_ccmp_write_header(wifi_ccmp_data_frame + offset, pn,
+                         WIFI_SEC_KEY_PAIRWISE_KEY_ID);
+  offset += WIFI_CCMP_HEADER_BYTES;
+
+  memset(nonce, 0, sizeof(nonce));
+  nonce[0] = 0;
+  memcpy(nonce + 1U, wifi_status_state.connect_local_mac, 6U);
+  memcpy(nonce + 7U, pn, sizeof(pn));
+
+  wifi_ccmp_build_aad(wifi_ccmp_data_frame, aad);
+  if (aes128_ccm_encrypt(tk, nonce, sizeof(nonce), aad, sizeof(aad),
+                         wifi_ccmp_plain_payload, plain_len,
+                         wifi_ccmp_data_frame + offset,
+                         wifi_ccmp_data_frame + offset + plain_len,
+                         WIFI_CCMP_MIC_BYTES) != 0) {
+    wifi_status_state.status = "wifi: CCMP data frame encryption failed";
+    wifi_report_append(report, report_size,
+                       "wifi data: AES-CCM encryption failed\n");
+    return -1;
+  }
+
+  wifi_status_state.ccmp_data_ready = 1;
+  wifi_status_state.ccmp_data_frame_len = frame_len;
+  wifi_status_state.ccmp_plain_len = plain_len;
+  wifi_status_state.ccmp_pn_low = (uint32_t)(pn64 & 0xffffffffU);
+  wifi_status_state.ccmp_pn_high = (uint32_t)(pn64 >> 32);
+  wifi_status_state.ccmp_nonce_checksum =
+      wifi_wpa_checksum(nonce, sizeof(nonce));
+  wifi_status_state.ccmp_aad_checksum = wifi_wpa_checksum(aad, sizeof(aad));
+  wifi_status_state.ccmp_mic_checksum =
+      wifi_wpa_checksum(wifi_ccmp_data_frame + offset + plain_len,
+                        WIFI_CCMP_MIC_BYTES);
+  wifi_status_state.ccmp_frame_checksum =
+      wifi_connect_checksum(wifi_ccmp_data_frame, frame_len);
+  wifi_status_state.status =
+      "wifi: protected CCMP diagnostic data frame built; not queued";
+  return 0;
+}
+
+int wifi_data_probe(char *report, size_t report_size) {
+  const wifi_status_t *s;
+  char line[256];
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_init();
+  s = &wifi_status_state;
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi data: no wireless controller detected\n");
+    return -1;
+  }
+
+  rc = wifi_ccmp_build_data_frame(report, report_size);
+  s = &wifi_status_state;
+  snprintf(line, sizeof(line),
+           "wifi data: %s\n"
+           "state: assoc=%s data=%s pairwise=%s gtk=%s m4=%s\n"
+           "ccmp: ready=%s frame-len=%u plain-len=%u pn=0x%08x%08x "
+           "nonce=0x%08x aad=0x%08x mic=0x%08x frame=0x%08x\n"
+           "next: wifi tx data, then wifi txcmd data arm once real AP "
+           "validation is active\n",
+           rc == 0 ? "protected CCMP diagnostic frame ready"
+                   : "protected CCMP diagnostic frame failed",
+           s->connect_assoc_confirmed ? "confirmed" : "pending",
+           s->connect_data_ready ? "ready" : "pending",
+           s->wpa_key_installed ? "installed" : "pending",
+           s->wpa_gtk_key_installed ? "installed" : "pending",
+           s->wpa_m4_tx_acked ? "acked" : "pending",
+           s->ccmp_data_ready ? "yes" : "no", s->ccmp_data_frame_len,
+           s->ccmp_plain_len, s->ccmp_pn_high, s->ccmp_pn_low,
+           s->ccmp_nonce_checksum, s->ccmp_aad_checksum,
+           s->ccmp_mic_checksum, s->ccmp_frame_checksum);
+  wifi_report_append(report, report_size, line);
+  return rc;
+}
+
 static void wifi_bind_mark_failure(const char *status) {
   wifi_status_state.bind_ready = 0;
   wifi_status_state.bind_failed = 1;
@@ -9202,6 +9476,15 @@ static int wifi_txcmd_select_frame(const char *target, uint32_t *kind,
     *frame_len = wifi_status_state.wpa_m4_data_frame_len;
     return wifi_status_state.wpa_m4_data_ready ? 0 : -1;
   }
+  if (strcmp(target, "data") == 0) {
+    if (!wifi_status_state.ccmp_data_ready) {
+      wifi_ccmp_build_data_frame(NULL, 0);
+    }
+    *kind = WIFI_TX_STAGE_KIND_DATA;
+    *frame = wifi_ccmp_data_frame;
+    *frame_len = wifi_status_state.ccmp_data_frame_len;
+    return wifi_status_state.ccmp_data_ready ? 0 : -1;
+  }
   return -1;
 }
 
@@ -9410,6 +9693,10 @@ static int wifi_txcmd_arm_plan(char *report, size_t report_size) {
       wifi_status_state.wpa_m4_tx_acked = 1;
       wifi_status_state.wpa_m4_tx_sequence =
           wifi_status_state.scheduler_cmd_sequence;
+    } else if (wifi_status_state.txcmd_kind == WIFI_TX_STAGE_KIND_DATA) {
+      wifi_status_state.ccmp_tx_acked = 1;
+      wifi_status_state.ccmp_tx_sequence =
+          wifi_status_state.scheduler_cmd_sequence;
     }
     wifi_connect_refresh_association_state();
     if (!wifi_status_state.connect_assoc_confirmed) {
@@ -9423,6 +9710,10 @@ static int wifi_txcmd_arm_plan(char *report, size_t report_size) {
           wifi_status_state.wpa_gtk_key_installed
               ? "wifi: WPA M4 TX_CMD ACKed; data path guarded-ready"
               : "wifi: WPA M4 TX_CMD ACKed; GTK install pending";
+    }
+    if (wifi_status_state.txcmd_kind == WIFI_TX_STAGE_KIND_DATA) {
+      wifi_status_state.status =
+          "wifi: protected CCMP data TX_CMD ACKed";
     }
     snprintf(line, sizeof(line),
              "arm: ack=yes seq=0x%04x index=%u loops=%u "
@@ -9490,10 +9781,11 @@ int wifi_txcmd_probe(const char *target, int arm, char *report,
     wifi_status_state.txcmd_failed = 1;
     wifi_status_state.txcmd_errors++;
     snprintf(report, report_size,
-             "wifi txcmd: usage wifi txcmd [auth|assoc|m2|m4] [arm]\n"
+             "wifi txcmd: usage wifi txcmd [auth|assoc|m2|m4|data] [arm]\n"
              "m2 requires: association response + WPA EAPOL M1 parsed by "
              "wifi rx poll\n"
-             "m4 requires: WPA EAPOL M3 parsed by wifi rx poll\n");
+             "m4 requires: WPA EAPOL M3 parsed by wifi rx poll\n"
+             "data requires: WPA pairwise/GTK keys and M4 ACK\n");
     return -1;
   }
 
@@ -9555,6 +9847,8 @@ static const char *wifi_tx_stage_kind_text(uint32_t kind) {
     return "m2";
   case WIFI_TX_STAGE_KIND_EAPOL_M4:
     return "m4";
+  case WIFI_TX_STAGE_KIND_DATA:
+    return "data";
   default:
     return "none";
   }
@@ -9622,7 +9916,9 @@ static int wifi_tx_stage_frame(uint32_t kind, const uint8_t *frame,
       wifi_connect_checksum(frame, frame_len);
   wifi_status_state.tx_write_ptr = next_idx;
   wifi_status_state.status =
-      "wifi: management frame staged in TX DMA buffer; doorbell not armed";
+      kind == WIFI_TX_STAGE_KIND_DATA
+          ? "wifi: protected data frame staged in TX DMA buffer; doorbell not armed"
+          : "wifi: management frame staged in TX DMA buffer; doorbell not armed";
   return 0;
 }
 
@@ -9632,6 +9928,7 @@ int wifi_tx_stage_probe(const char *target, char *report, size_t report_size) {
   int stage_assoc = 0;
   int stage_m2 = 0;
   int stage_m4 = 0;
+  int stage_data = 0;
   int rc = 0;
 
   if (!report || report_size == 0) {
@@ -9659,9 +9956,11 @@ int wifi_tx_stage_probe(const char *target, char *report, size_t report_size) {
     stage_m2 = 1;
   } else if (strcmp(target, "m4") == 0) {
     stage_m4 = 1;
+  } else if (strcmp(target, "data") == 0) {
+    stage_data = 1;
   } else {
     snprintf(report, report_size,
-             "wifi tx: usage wifi tx [auth|assoc|m2|m4|all]\n");
+             "wifi tx: usage wifi tx [auth|assoc|m2|m4|data|all]\n");
     return -1;
   }
 
@@ -9719,6 +10018,21 @@ int wifi_tx_stage_probe(const char *target, char *report, size_t report_size) {
                                wifi_status_state.wpa_m4_data_frame_len);
     }
   }
+  if (rc == 0 && stage_data) {
+    if (!wifi_status_state.ccmp_data_ready) {
+      wifi_ccmp_build_data_frame(NULL, 0);
+    }
+    if (!wifi_status_state.ccmp_data_ready) {
+      wifi_status_state.tx_stage_failed = 1;
+      wifi_status_state.tx_stage_errors++;
+      wifi_status_state.status =
+          "wifi: CCMP protected data frame is not ready for TX staging";
+      rc = -1;
+    } else {
+      rc = wifi_tx_stage_frame(WIFI_TX_STAGE_KIND_DATA, wifi_ccmp_data_frame,
+                               wifi_status_state.ccmp_data_frame_len);
+    }
+  }
 
   s = &wifi_status_state;
   snprintf(report, report_size,
@@ -9731,7 +10045,7 @@ int wifi_tx_stage_probe(const char *target, char *report, size_t report_size) {
            "checksum=0x%08x\n"
            "doorbell-plan: reg=0x%03x value=0x%08x not-written=yes\n"
            "next: validate Intel TX_CMD/STA binding before ringing this queue\n",
-           rc == 0 ? "management TX frame staged" : "management TX staging failed",
+           rc == 0 ? "Wi-Fi TX frame staged" : "Wi-Fi TX staging failed",
            (!target || target[0] == '\0') ? "all" : target,
            s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
            s->connect_bssid[2], s->connect_bssid[3], s->connect_bssid[4],

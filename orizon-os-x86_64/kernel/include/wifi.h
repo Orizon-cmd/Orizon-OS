@@ -499,6 +499,17 @@ typedef struct {
   int wpa_key_timeout;
   int wpa_key_installed;
   int wpa_gtk_key_installed;
+  int ccmp_data_ready;
+  uint32_t ccmp_data_frame_len;
+  uint32_t ccmp_plain_len;
+  uint32_t ccmp_pn_low;
+  uint32_t ccmp_pn_high;
+  uint32_t ccmp_nonce_checksum;
+  uint32_t ccmp_aad_checksum;
+  uint32_t ccmp_mic_checksum;
+  uint32_t ccmp_frame_checksum;
+  int ccmp_tx_acked;
+  uint32_t ccmp_tx_sequence;
   unsigned long wpa_key_attempts;
   uint32_t wpa_key_sequence;
   uint32_t wpa_key_index;
@@ -598,6 +609,7 @@ int wifi_txcmd_probe(const char *target, int arm, char *report,
 int wifi_bind_probe(int arm, char *report, size_t report_size);
 int wifi_wpa_probe(char *report, size_t report_size);
 int wifi_key_probe(int group, int arm, char *report, size_t report_size);
+int wifi_data_probe(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 

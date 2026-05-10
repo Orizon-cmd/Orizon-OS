@@ -485,3 +485,272 @@ int aes128_key_unwrap_selftest(void) {
   }
   return 0;
 }
+
+static int ccm_valid_tag_len(size_t tag_len) {
+  return tag_len >= 4 && tag_len <= 16 && (tag_len & 1U) == 0;
+}
+
+static int ccm_len_fits(size_t value, size_t len_bytes) {
+  while (len_bytes > 0) {
+    value >>= 8;
+    len_bytes--;
+  }
+  return value == 0;
+}
+
+static void ccm_write_len(uint8_t *dst, size_t len_bytes, size_t value) {
+  for (size_t i = 0; i < len_bytes; i++) {
+    dst[len_bytes - 1U - i] = (uint8_t)(value & 0xffU);
+    value >>= 8;
+  }
+}
+
+static void ccm_mac_block(const uint8_t key[16], uint8_t x[16],
+                          const uint8_t block[16]) {
+  uint8_t tmp[16];
+
+  for (int i = 0; i < 16; i++) {
+    tmp[i] = (uint8_t)(x[i] ^ block[i]);
+  }
+  aes128_encrypt_block(key, tmp, x);
+}
+
+static void ccm_mac_feed_byte(const uint8_t key[16], uint8_t x[16],
+                              uint8_t block[16], size_t *used,
+                              uint8_t value) {
+  block[*used] = value;
+  (*used)++;
+  if (*used == 16U) {
+    ccm_mac_block(key, x, block);
+    memset(block, 0, 16);
+    *used = 0;
+  }
+}
+
+static void ccm_mac_finish(const uint8_t key[16], uint8_t x[16],
+                           uint8_t block[16], size_t *used) {
+  if (*used == 0) {
+    return;
+  }
+  ccm_mac_block(key, x, block);
+  memset(block, 0, 16);
+  *used = 0;
+}
+
+static int ccm_mac_aad(const uint8_t key[16], uint8_t x[16],
+                       const uint8_t *aad, size_t aad_len) {
+  uint8_t block[16];
+  size_t used = 0;
+
+  if (aad_len == 0) {
+    return 0;
+  }
+  if (!aad || aad_len >= 0xff00U) {
+    return -1;
+  }
+
+  memset(block, 0, sizeof(block));
+  ccm_mac_feed_byte(key, x, block, &used, (uint8_t)(aad_len >> 8));
+  ccm_mac_feed_byte(key, x, block, &used, (uint8_t)(aad_len & 0xffU));
+  for (size_t i = 0; i < aad_len; i++) {
+    ccm_mac_feed_byte(key, x, block, &used, aad[i]);
+  }
+  ccm_mac_finish(key, x, block, &used);
+  return 0;
+}
+
+static void ccm_mac_data(const uint8_t key[16], uint8_t x[16],
+                         const uint8_t *data, size_t data_len) {
+  uint8_t block[16];
+  size_t pos = 0;
+
+  while (pos < data_len) {
+    size_t take = data_len - pos;
+    if (take > 16U) {
+      take = 16U;
+    }
+    memset(block, 0, sizeof(block));
+    memcpy(block, data + pos, take);
+    ccm_mac_block(key, x, block);
+    pos += take;
+  }
+}
+
+static void ccm_format_counter(uint8_t counter_block[16],
+                               const uint8_t *nonce, size_t nonce_len,
+                               size_t counter) {
+  size_t len_bytes = 15U - nonce_len;
+
+  memset(counter_block, 0, 16);
+  counter_block[0] = (uint8_t)(len_bytes - 1U);
+  memcpy(counter_block + 1U, nonce, nonce_len);
+  ccm_write_len(counter_block + 1U + nonce_len, len_bytes, counter);
+}
+
+static int ccm_compute_tag(const uint8_t key[16], const uint8_t *nonce,
+                           size_t nonce_len, const uint8_t *aad,
+                           size_t aad_len, const uint8_t *plaintext,
+                           size_t plaintext_len, uint8_t *tag,
+                           size_t tag_len) {
+  uint8_t b0[16];
+  uint8_t x[16];
+  uint8_t s0[16];
+  size_t len_bytes;
+
+  if (!key || !nonce || !tag || !ccm_valid_tag_len(tag_len) ||
+      nonce_len < 7U || nonce_len > 13U ||
+      (!aad && aad_len > 0) ||
+      (!plaintext && plaintext_len > 0)) {
+    return -1;
+  }
+
+  len_bytes = 15U - nonce_len;
+  if (!ccm_len_fits(plaintext_len, len_bytes)) {
+    return -1;
+  }
+
+  memset(b0, 0, sizeof(b0));
+  b0[0] = (uint8_t)(((aad_len > 0) ? 0x40U : 0U) |
+                    ((((tag_len - 2U) / 2U) & 0x07U) << 3) |
+                    ((len_bytes - 1U) & 0x07U));
+  memcpy(b0 + 1U, nonce, nonce_len);
+  ccm_write_len(b0 + 1U + nonce_len, len_bytes, plaintext_len);
+
+  memset(x, 0, sizeof(x));
+  ccm_mac_block(key, x, b0);
+  if (ccm_mac_aad(key, x, aad, aad_len) != 0) {
+    return -1;
+  }
+  ccm_mac_data(key, x, plaintext, plaintext_len);
+
+  ccm_format_counter(b0, nonce, nonce_len, 0);
+  aes128_encrypt_block(key, b0, s0);
+  for (size_t i = 0; i < tag_len; i++) {
+    tag[i] = (uint8_t)(x[i] ^ s0[i]);
+  }
+  memset(x, 0, sizeof(x));
+  memset(s0, 0, sizeof(s0));
+  memset(b0, 0, sizeof(b0));
+  return 0;
+}
+
+static int ccm_ctr_crypt(const uint8_t key[16], const uint8_t *nonce,
+                         size_t nonce_len, const uint8_t *input,
+                         size_t input_len, uint8_t *output) {
+  uint8_t counter_block[16];
+  uint8_t stream[16];
+  size_t pos = 0;
+  size_t counter = 1;
+
+  if (!key || !nonce || (!input && input_len > 0) ||
+      (!output && input_len > 0) || nonce_len < 7U || nonce_len > 13U) {
+    return -1;
+  }
+
+  while (pos < input_len) {
+    size_t take = input_len - pos;
+    if (take > 16U) {
+      take = 16U;
+    }
+    ccm_format_counter(counter_block, nonce, nonce_len, counter++);
+    aes128_encrypt_block(key, counter_block, stream);
+    for (size_t i = 0; i < take; i++) {
+      output[pos + i] = (uint8_t)(input[pos + i] ^ stream[i]);
+    }
+    pos += take;
+  }
+  memset(counter_block, 0, sizeof(counter_block));
+  memset(stream, 0, sizeof(stream));
+  return 0;
+}
+
+int aes128_ccm_encrypt(const uint8_t key[16], const uint8_t *nonce,
+                       size_t nonce_len, const uint8_t *aad, size_t aad_len,
+                       const uint8_t *plaintext, size_t plaintext_len,
+                       uint8_t *ciphertext, uint8_t *tag, size_t tag_len) {
+  if (ccm_compute_tag(key, nonce, nonce_len, aad, aad_len, plaintext,
+                      plaintext_len, tag, tag_len) != 0) {
+    return -1;
+  }
+  return ccm_ctr_crypt(key, nonce, nonce_len, plaintext, plaintext_len,
+                       ciphertext);
+}
+
+int aes128_ccm_decrypt(const uint8_t key[16], const uint8_t *nonce,
+                       size_t nonce_len, const uint8_t *aad, size_t aad_len,
+                       const uint8_t *ciphertext, size_t ciphertext_len,
+                       const uint8_t *tag, size_t tag_len,
+                       uint8_t *plaintext) {
+  uint8_t expected[16];
+  uint8_t diff = 0;
+
+  if (!tag || !plaintext ||
+      ccm_ctr_crypt(key, nonce, nonce_len, ciphertext, ciphertext_len,
+                    plaintext) != 0 ||
+      ccm_compute_tag(key, nonce, nonce_len, aad, aad_len, plaintext,
+                      ciphertext_len, expected, tag_len) != 0) {
+    return -1;
+  }
+
+  for (size_t i = 0; i < tag_len; i++) {
+    diff |= (uint8_t)(expected[i] ^ tag[i]);
+  }
+  memset(expected, 0, sizeof(expected));
+  if (diff != 0) {
+    memset(plaintext, 0, ciphertext_len);
+    return -2;
+  }
+  return 0;
+}
+
+int aes128_ccm_selftest(void) {
+  static const uint8_t key[16] = {
+      0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+      0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf};
+  static const uint8_t nonce[13] = {
+      0x00, 0x00, 0x00, 0x03, 0x02, 0x01, 0x00,
+      0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5};
+  static const uint8_t aad[8] = {
+      0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07};
+  static const uint8_t plain[23] = {
+      0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+      0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+      0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e};
+  static const uint8_t expected_cipher[23] = {
+      0x58, 0x8c, 0x97, 0x9a, 0x61, 0xc6, 0x63, 0xd2,
+      0xf0, 0x66, 0xd0, 0xc2, 0xc0, 0xf9, 0x89, 0x80,
+      0x6d, 0x5f, 0x6b, 0x61, 0xda, 0xc3, 0x84};
+  static const uint8_t expected_tag[8] = {
+      0x17, 0xe8, 0xd1, 0x2c, 0xfd, 0xf9, 0x26, 0xe0};
+  uint8_t cipher[23];
+  uint8_t tag[8];
+  uint8_t out[23];
+  uint8_t bad_tag[8];
+
+  if (aes128_ccm_encrypt(key, nonce, sizeof(nonce), aad, sizeof(aad), plain,
+                         sizeof(plain), cipher, tag, sizeof(tag)) != 0) {
+    return -1;
+  }
+  if (memcmp(cipher, expected_cipher, sizeof(expected_cipher)) != 0 ||
+      memcmp(tag, expected_tag, sizeof(expected_tag)) != 0) {
+    return -2;
+  }
+  if (aes128_ccm_decrypt(key, nonce, sizeof(nonce), aad, sizeof(aad),
+                         expected_cipher, sizeof(expected_cipher),
+                         expected_tag, sizeof(expected_tag), out) != 0 ||
+      memcmp(out, plain, sizeof(plain)) != 0) {
+    return -3;
+  }
+  memcpy(bad_tag, expected_tag, sizeof(bad_tag));
+  bad_tag[0] ^= 0x01U;
+  if (aes128_ccm_decrypt(key, nonce, sizeof(nonce), aad, sizeof(aad),
+                         expected_cipher, sizeof(expected_cipher), bad_tag,
+                         sizeof(bad_tag), out) != -2) {
+    return -4;
+  }
+  memset(cipher, 0, sizeof(cipher));
+  memset(tag, 0, sizeof(tag));
+  memset(out, 0, sizeof(out));
+  memset(bad_tag, 0, sizeof(bad_tag));
+  return 0;
+}

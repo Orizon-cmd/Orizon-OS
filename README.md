@@ -203,16 +203,17 @@ parseur sur vrai materiel.
 preparer les trames 802.11 open-system authentication + association request,
 avec template RSN WPA2-PSK si un mot de passe est fourni. Pour WPA2, Orizon
 derive aussi la PMK par PBKDF2-HMAC-SHA1 sans afficher la cle; `wifi crypto`
-verifie les vecteurs SHA-1/PBKDF2 integres. Les passphrases 8-63 caracteres et
-les PSK hexadecimales 64 caracteres sont acceptees. Le chemin RX reconnait deja
+verifie les vecteurs SHA-1/PBKDF2, AES key unwrap et AES-CCM integres. Les
+passphrases 8-63 caracteres et les PSK hexadecimales 64 caracteres sont
+acceptees. Le chemin RX reconnait deja
 les reponses authentication/association correspondant au plan de connexion et
-stocke leurs status codes. `wifi tx [auth|assoc|m2|m4|all]`
+stocke leurs status codes. `wifi tx [auth|assoc|m2|m4|data|all]`
 prepare maintenant les trames de gestion dans les buffers DMA TX et affiche le
 doorbell prevu sans l'ecrire. Le chemin RX detecte aussi les trames
 EAPOL-Key WPA2, capture l'ANonce, derive un PTK de diagnostic, prepare une
 reponse M2 inspectable avec `wifi wpa`, puis prepare aussi M3/GTK/M4 quand les
 trames EAPOL suivantes arrivent. `wifi tx m2` et `wifi tx m4` peuvent placer ces
-reponses WPA en DMA. `wifi txcmd [auth|assoc|m2|m4]` construit aussi une
+reponses WPA en DMA. `wifi txcmd [auth|assoc|m2|m4|data]` construit aussi une
 enveloppe Intel `TX_CMD` v10 de diagnostic dans un buffer separe, puis peut
 l'envoyer avec `arm` si le contexte, RX et le binding STA sont prets.
 `wifi bind` prepare maintenant les enveloppes diagnostiques `MAC_CONFIG`,
@@ -233,8 +234,11 @@ cle paire CCMP derivee du PTK; elle ne s'envoie qu'apres association confirmee,
 binding STA ACKe et `wifi txcmd m2 arm` ACKe. Apres M3, Orizon dechiffre le key
 data avec AES key unwrap, extrait la GTK, puis `wifi key gtk [arm]` prepare et
 peut envoyer la cle groupe CCMP. Le chemin WPA attend ensuite `wifi txcmd m4 arm`
-avant de marquer la data path comme prete. Le Wi-Fi n'est pas encore une pile IP
-complete: il reste a stabiliser les trames de donnees protegees et DHCP sur
+avant de marquer la data path comme prete. `wifi data` construit alors une
+premiere trame data protegee CCMP de diagnostic, et `wifi tx data` /
+`wifi txcmd data arm` peuvent la faire passer par le meme chemin TX garde. Le
+Wi-Fi n'est pas encore une pile IP complete: il reste a remplacer cette trame de
+diagnostic par de vrais paquets ARP/DHCP/IPv4 et a valider le RX protege sur
 vrai AP.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
