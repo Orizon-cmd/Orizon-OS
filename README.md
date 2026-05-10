@@ -236,10 +236,12 @@ data avec AES key unwrap, extrait la GTK, puis `wifi key gtk [arm]` prepare et
 peut envoyer la cle groupe CCMP. Le chemin WPA attend ensuite `wifi txcmd m4 arm`
 avant de marquer la data path comme prete. `wifi data` construit alors une
 premiere trame data protegee CCMP de diagnostic, et `wifi tx data` /
-`wifi txcmd data arm` peuvent la faire passer par le meme chemin TX garde. Le
-Wi-Fi n'est pas encore une pile IP complete: il reste a remplacer cette trame de
-diagnostic par de vrais paquets ARP/DHCP/IPv4 et a valider le RX protege sur
-vrai AP.
+`wifi txcmd data arm` peuvent la faire passer par le meme chemin TX garde. La
+pile IPv4 sait maintenant choisir ce lien Wi-Fi quand WPA2 est guarded-ready:
+`net status` affiche `link=wifi`, puis `net dhcp`, ARP, IPv4 et les essais
+GitHub passent par des trames Ethernet encapsulees en CCMP. Il reste a valider
+ce chemin sur le Lenovo avec un vrai AP et a durcir les traces de diagnostic
+quand un AP refuse ou chiffre differemment une trame protegee.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

@@ -18,7 +18,8 @@
   memory staging. The Intel Wi-Fi WPA2 path can now derive PMK/PTK, prepare
   M2/M4, unwrap M3 key data, extract GTK, and stage pairwise/group SEC_KEY
   installs behind strict firmware ACK checks. It also has an AES-CCM self-test
-  and a first software-encrypted CCMP diagnostic data frame path.
+  and a software-encrypted CCMP Ethernet data path that the IPv4 stack can use
+  for ARP/DHCP/IPv4 once WPA2 is guarded-ready.
 
 ## Next Stability Track
 
@@ -40,8 +41,8 @@
 4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
    report parser for ELAN/Wacom multitouch and stylus events.
 5. Build Intel CNVi Wi-Fi properly: validate WPA2 M3/M4 and GTK/group-key
-   handling on the Lenovo, replace the CCMP diagnostic frame with ARP/DHCP/IPv4
-   payloads, harden protected RX, then bring DHCP over Wi-Fi online.
+   handling on the Lenovo, test DHCP over the new CCMP L2 bridge, then harden
+   protected RX/retry diagnostics against real AP behaviour.
 6. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 7. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 8. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and

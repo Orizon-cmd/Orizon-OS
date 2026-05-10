@@ -94,8 +94,10 @@ development target, not a ZimaOS-only assumption.
   now requires pairwise key ACK, GTK key ACK, and M4 TX ACK. `wifi data` builds
   a first software-encrypted CCMP protected data frame using the pairwise TK,
   and `wifi tx data` / `wifi txcmd data arm` target that frame through the
-  staged TX path. Real Wi-Fi traffic still requires ARP/DHCP/IPv4 payload
-  integration and protected data RX validation.
+  staged TX path. The IPv4 stack can now use that guarded Wi-Fi link as an L2
+  backend for ARP, DHCP, IPv4, and GitHub update probes; `net status` reports
+  `link=wifi` when this path is selected. Real hardware validation still needs
+  a full AP test for DHCP replies and protected CCMP RX traces.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware

@@ -13,6 +13,7 @@
 #include "../include/string.h"
 #include "../include/timer.h"
 #include "../include/vfs.h"
+#include "../include/wifi.h"
 
 #define ETH_TYPE_ARP 0x0806
 #define ETH_TYPE_IPV4 0x0800
@@ -91,6 +92,59 @@ static char tls_last_http_status[80];
 static uint8_t tls_last_http_first_record_type = 0;
 static size_t tls_last_http_first_record_len = 0;
 static size_t tls_last_http_decrypt_failures = 0;
+
+static int l2_link_up(void) {
+  if (net_link_up()) {
+    return 1;
+  }
+  return wifi_data_link_ready();
+}
+
+static const char *l2_link_name(void) {
+  if (net_link_up()) {
+    return "ethernet";
+  }
+  if (wifi_data_link_ready()) {
+    return "wifi";
+  }
+  return "down";
+}
+
+static int l2_get_mac(uint8_t mac[6]) {
+  const net_device_status_t *dev;
+
+  if (!mac) {
+    return -1;
+  }
+  if (net_link_up()) {
+    dev = net_get_status();
+    memcpy(mac, dev->mac, 6);
+    return 0;
+  }
+  return wifi_copy_local_mac(mac);
+}
+
+static int l2_send_ethernet(const uint8_t dst_mac[6], uint16_t ether_type,
+                            const void *payload, size_t payload_len) {
+  if (net_link_up()) {
+    return net_send_ethernet(dst_mac, ether_type, payload, payload_len);
+  }
+  if (wifi_data_link_ready()) {
+    return wifi_send_ethernet(dst_mac, ether_type, payload, payload_len);
+  }
+  return -1;
+}
+
+static int l2_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
+                            void *payload, size_t payload_cap) {
+  if (net_link_up()) {
+    return net_recv_ethernet(src_mac, ether_type, payload, payload_cap);
+  }
+  if (wifi_data_link_ready()) {
+    return wifi_recv_ethernet(src_mac, ether_type, payload, payload_cap);
+  }
+  return -1;
+}
 
 static uint16_t get_be16(const uint8_t *p) {
   return (uint16_t)(((uint16_t)p[0] << 8) | p[1]);
@@ -248,7 +302,7 @@ static int same_subnet(uint32_t a, uint32_t b) {
 
 static int recv_frame(uint8_t src_mac[6], uint16_t *eth_type, uint8_t *payload,
                       size_t cap) {
-  int n = net_recv_ethernet(src_mac, eth_type, payload, cap);
+  int n = l2_recv_ethernet(src_mac, eth_type, payload, cap);
   if (n <= 0) {
     return n;
   }
@@ -276,7 +330,8 @@ static int send_ipv4_raw(const uint8_t dst_mac[6], uint32_t src_ip,
     memcpy(packet_buf + 20, payload, payload_len);
   }
   put_be16(packet_buf + 10, checksum16(packet_buf, 20));
-  return net_send_ethernet(dst_mac, ETH_TYPE_IPV4, packet_buf, 20 + payload_len);
+  return l2_send_ethernet(dst_mac, ETH_TYPE_IPV4, packet_buf,
+                          20 + payload_len);
 }
 
 static int send_udp_raw(const uint8_t dst_mac[6], uint32_t src_ip,
@@ -300,19 +355,22 @@ static int send_udp_raw(const uint8_t dst_mac[6], uint32_t src_ip,
 
 static void send_arp_reply(const uint8_t dst_mac[6], uint32_t dst_ip) {
   uint8_t arp[28];
-  const net_device_status_t *dev = net_get_status();
+  uint8_t local_mac[6];
 
   memset(arp, 0, sizeof(arp));
+  if (l2_get_mac(local_mac) != 0) {
+    return;
+  }
   put_be16(arp + 0, 1);
   put_be16(arp + 2, ETH_TYPE_IPV4);
   arp[4] = 6;
   arp[5] = 4;
   put_be16(arp + 6, 2);
-  memcpy(arp + 8, dev->mac, 6);
+  memcpy(arp + 8, local_mac, 6);
   put_be32(arp + 14, stack_status.ip);
   memcpy(arp + 18, dst_mac, 6);
   put_be32(arp + 24, dst_ip);
-  net_send_ethernet(dst_mac, ETH_TYPE_ARP, arp, sizeof(arp));
+  l2_send_ethernet(dst_mac, ETH_TYPE_ARP, arp, sizeof(arp));
 }
 
 static void handle_arp(const uint8_t src_mac[6], const uint8_t *arp,
@@ -336,19 +394,22 @@ static void handle_arp(const uint8_t src_mac[6], const uint8_t *arp,
 
 static int send_arp_request(uint32_t target_ip) {
   uint8_t arp[28];
-  const net_device_status_t *dev = net_get_status();
+  uint8_t local_mac[6];
 
   memset(arp, 0, sizeof(arp));
+  if (l2_get_mac(local_mac) != 0) {
+    return -1;
+  }
   put_be16(arp + 0, 1);
   put_be16(arp + 2, ETH_TYPE_IPV4);
   arp[4] = 6;
   arp[5] = 4;
   put_be16(arp + 6, 1);
-  memcpy(arp + 8, dev->mac, 6);
+  memcpy(arp + 8, local_mac, 6);
   put_be32(arp + 14, stack_status.ip);
   memset(arp + 18, 0, 6);
   put_be32(arp + 24, target_ip);
-  return net_send_ethernet(mac_broadcast, ETH_TYPE_ARP, arp, sizeof(arp));
+  return l2_send_ethernet(mac_broadcast, ETH_TYPE_ARP, arp, sizeof(arp));
 }
 
 static int arp_resolve(uint32_t ip, uint8_t out_mac[6]) {
@@ -548,17 +609,20 @@ static int dhcp_add_option(uint8_t *opts, size_t *off, uint8_t code,
 
 static size_t build_dhcp_packet(uint8_t *out, uint8_t msg_type, uint32_t xid,
                                 uint32_t requested_ip, uint32_t server_id) {
-  const net_device_status_t *dev = net_get_status();
   uint8_t param_req[] = {1, 3, 6, 15, 51, 54};
+  uint8_t local_mac[6];
   size_t off = 240;
 
+  if (l2_get_mac(local_mac) != 0) {
+    memset(local_mac, 0, sizeof(local_mac));
+  }
   memset(out, 0, 548);
   out[0] = 1;
   out[1] = 1;
   out[2] = 6;
   put_be32(out + 4, xid);
   put_be16(out + 10, 0x8000);
-  memcpy(out + 28, dev->mac, 6);
+  memcpy(out + 28, local_mac, 6);
   out[236] = 99;
   out[237] = 130;
   out[238] = 83;
@@ -567,7 +631,7 @@ static size_t build_dhcp_packet(uint8_t *out, uint8_t msg_type, uint32_t xid,
   dhcp_add_option(out, &off, 53, &msg_type, 1);
   uint8_t client_id[7];
   client_id[0] = 1;
-  memcpy(client_id + 1, dev->mac, 6);
+  memcpy(client_id + 1, local_mac, 6);
   dhcp_add_option(out, &off, 61, client_id, sizeof(client_id));
   dhcp_add_option(out, &off, 55, param_req, sizeof(param_req));
   if (requested_ip != 0) {
@@ -761,8 +825,8 @@ int netstack_configure_ipv4_static(uint32_t ip, uint32_t subnet,
     set_status("ipv4: invalid static config");
     return -1;
   }
-  if (net_init() != 0 || !net_link_up()) {
-    set_status("ipv4: ethernet link unavailable");
+  if (!l2_link_up()) {
+    set_status("ipv4: network link unavailable");
     return -1;
   }
 
@@ -885,8 +949,8 @@ int netstack_configure_ipv4_dhcp(void) {
   if (stack_status.ipv4_ready) {
     return 0;
   }
-  if (net_init() != 0 || !net_link_up()) {
-    set_status("ipv4: ethernet link unavailable");
+  if (!l2_link_up()) {
+    set_status("ipv4: network link unavailable");
     return -1;
   }
 
@@ -4354,8 +4418,9 @@ void netstack_format_status(char *buf, size_t size) {
   netstack_format_ipv4(stack_status.dns, dns, sizeof(dns));
   netstack_format_ipv4(stack_status.last_resolved_ip, resolved, sizeof(resolved));
   snprintf(buf, size,
-           "ipv4=%s mode=%s ip=%s gateway=%s dns=%s host=%s resolved=%s",
+           "ipv4=%s link=%s mode=%s ip=%s gateway=%s dns=%s host=%s resolved=%s",
            stack_status.ipv4_ready ? "yes" : "no",
+           l2_link_name(),
            stack_status.static_config_loaded ? "static" : "dhcp",
            ip, gw, dns,
            stack_status.last_host[0] ? stack_status.last_host : "none",

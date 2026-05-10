@@ -12,7 +12,7 @@
 #define WIFI_SCAN_SSID_MAX 32U
 #define WIFI_SCAN_CANDIDATE_SLOTS 8U
 #define WIFI_SCAN_DEBUG_BYTES 32U
-#define WIFI_CONNECT_FRAME_BYTES 512U
+#define WIFI_CONNECT_FRAME_BYTES 2048U
 #define WIFI_SCAN_SECURITY_OPEN 0U
 #define WIFI_SCAN_SECURITY_WEP 1U
 #define WIFI_SCAN_SECURITY_WPA 2U
@@ -510,6 +510,12 @@ typedef struct {
   uint32_t ccmp_frame_checksum;
   int ccmp_tx_acked;
   uint32_t ccmp_tx_sequence;
+  int ccmp_rx_ready;
+  int ccmp_rx_decrypt_failed;
+  uint32_t ccmp_rx_len;
+  uint32_t ccmp_rx_eth_type;
+  uint32_t ccmp_rx_checksum;
+  uint32_t ccmp_rx_packets;
   unsigned long wpa_key_attempts;
   uint32_t wpa_key_sequence;
   uint32_t wpa_key_index;
@@ -610,6 +616,12 @@ int wifi_bind_probe(int arm, char *report, size_t report_size);
 int wifi_wpa_probe(char *report, size_t report_size);
 int wifi_key_probe(int group, int arm, char *report, size_t report_size);
 int wifi_data_probe(char *report, size_t report_size);
+int wifi_data_link_ready(void);
+int wifi_copy_local_mac(uint8_t mac[6]);
+int wifi_send_ethernet(const uint8_t dst_mac[6], uint16_t ether_type,
+                       const void *payload, size_t payload_len);
+int wifi_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
+                       void *payload, size_t payload_cap);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 

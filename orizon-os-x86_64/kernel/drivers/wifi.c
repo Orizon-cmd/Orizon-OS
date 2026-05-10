@@ -489,6 +489,12 @@ static wifi_status_t wifi_status_state = {
     .ccmp_frame_checksum = 0,
     .ccmp_tx_acked = 0,
     .ccmp_tx_sequence = 0,
+    .ccmp_rx_ready = 0,
+    .ccmp_rx_decrypt_failed = 0,
+    .ccmp_rx_len = 0,
+    .ccmp_rx_eth_type = 0,
+    .ccmp_rx_checksum = 0,
+    .ccmp_rx_packets = 0,
     .wpa_key_attempts = 0,
     .wpa_key_sequence = 0,
     .wpa_key_index = 0,
@@ -778,8 +784,8 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CCMP_HEADER_BYTES 8U
 #define WIFI_CCMP_MIC_BYTES 8U
 #define WIFI_CCMP_NONCE_BYTES 13U
-#define WIFI_CCMP_AAD_BYTES 22U
-#define WIFI_CCMP_DIAG_PLAIN_BYTES 48U
+#define WIFI_CCMP_AAD_BYTES 32U
+#define WIFI_CCMP_ETH_PAYLOAD_BYTES 1600U
 #define WIFI_TX_STAGE_KIND_AUTH 1U
 #define WIFI_TX_STAGE_KIND_ASSOC 2U
 #define WIFI_TX_STAGE_KIND_EAPOL_M2 3U
@@ -1368,8 +1374,13 @@ static uint8_t wifi_wpa_m4_data_frame[WIFI_CONNECT_FRAME_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_ccmp_data_frame[WIFI_CONNECT_FRAME_BYTES]
     __attribute__((aligned(16)));
-static uint8_t wifi_ccmp_plain_payload[WIFI_CCMP_DIAG_PLAIN_BYTES]
+static uint8_t wifi_ccmp_plain_payload[WIFI_CCMP_ETH_PAYLOAD_BYTES]
     __attribute__((aligned(16)));
+static uint8_t wifi_ccmp_rx_plain[WIFI_CCMP_ETH_PAYLOAD_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_ccmp_rx_payload[WIFI_CCMP_ETH_PAYLOAD_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_ccmp_rx_src_mac[6];
 static uint8_t wifi_wpa_key_data_encrypted[WIFI_WPA_KEY_DATA_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_wpa_key_data_plain[WIFI_WPA_KEY_DATA_BYTES]
@@ -1806,6 +1817,12 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.ccmp_frame_checksum = 0;
   wifi_status_state.ccmp_tx_acked = 0;
   wifi_status_state.ccmp_tx_sequence = 0;
+  wifi_status_state.ccmp_rx_ready = 0;
+  wifi_status_state.ccmp_rx_decrypt_failed = 0;
+  wifi_status_state.ccmp_rx_len = 0;
+  wifi_status_state.ccmp_rx_eth_type = 0;
+  wifi_status_state.ccmp_rx_checksum = 0;
+  wifi_status_state.ccmp_rx_packets = 0;
   wifi_status_state.wpa_key_attempts = 0;
   wifi_status_state.wpa_key_sequence = 0;
   wifi_status_state.wpa_key_index = 0;
@@ -1879,6 +1896,9 @@ static void wifi_connect_clear_plan(void) {
   memset(wifi_wpa_m4_data_frame, 0, sizeof(wifi_wpa_m4_data_frame));
   memset(wifi_ccmp_data_frame, 0, sizeof(wifi_ccmp_data_frame));
   memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
+  memset(wifi_ccmp_rx_plain, 0, sizeof(wifi_ccmp_rx_plain));
+  memset(wifi_ccmp_rx_payload, 0, sizeof(wifi_ccmp_rx_payload));
+  memset(wifi_ccmp_rx_src_mac, 0, sizeof(wifi_ccmp_rx_src_mac));
   memset(wifi_wpa_key_data_encrypted, 0, sizeof(wifi_wpa_key_data_encrypted));
   memset(wifi_wpa_key_data_plain, 0, sizeof(wifi_wpa_key_data_plain));
   memset(wifi_wpa_gtk, 0, sizeof(wifi_wpa_gtk));
@@ -2067,6 +2087,12 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.ccmp_frame_checksum = 0;
   wifi_status_state.ccmp_tx_acked = 0;
   wifi_status_state.ccmp_tx_sequence = 0;
+  wifi_status_state.ccmp_rx_ready = 0;
+  wifi_status_state.ccmp_rx_decrypt_failed = 0;
+  wifi_status_state.ccmp_rx_len = 0;
+  wifi_status_state.ccmp_rx_eth_type = 0;
+  wifi_status_state.ccmp_rx_checksum = 0;
+  wifi_status_state.ccmp_rx_packets = 0;
   wifi_status_state.wpa_key_attempts = 0;
   wifi_status_state.wpa_key_sequence = 0;
   wifi_status_state.wpa_key_index = 0;
@@ -2082,6 +2108,9 @@ static void wifi_reset_firmware_parse(void) {
   memset(wifi_wpa_m4_data_frame, 0, sizeof(wifi_wpa_m4_data_frame));
   memset(wifi_ccmp_data_frame, 0, sizeof(wifi_ccmp_data_frame));
   memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
+  memset(wifi_ccmp_rx_plain, 0, sizeof(wifi_ccmp_rx_plain));
+  memset(wifi_ccmp_rx_payload, 0, sizeof(wifi_ccmp_rx_payload));
+  memset(wifi_ccmp_rx_src_mac, 0, sizeof(wifi_ccmp_rx_src_mac));
   memset(wifi_wpa_key_data_encrypted, 0, sizeof(wifi_wpa_key_data_encrypted));
   memset(wifi_wpa_key_data_plain, 0, sizeof(wifi_wpa_key_data_plain));
   memset(wifi_wpa_gtk, 0, sizeof(wifi_wpa_gtk));
@@ -6006,6 +6035,11 @@ static int wifi_wpa_parse_eapol_key(const uint8_t *frame, uint32_t frame_len,
   return 1;
 }
 
+static int wifi_ccmp_parse_protected_data(const uint8_t *frame,
+                                          uint32_t frame_len,
+                                          uint16_t fc,
+                                          uint32_t subtype);
+
 static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
                                        uint32_t frame_offset,
                                        uint32_t mpdu_len) {
@@ -6028,6 +6062,14 @@ static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
   subtype = (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
   if (type == WIFI_80211_TYPE_DATA) {
     if (wifi_wpa_parse_eapol_key(frame, frame_len, fc, subtype)) {
+      wifi_status_state.scan_last_mpdu_len = mpdu_len;
+      wifi_status_state.scan_last_frame_offset = frame_offset;
+      wifi_status_state.scan_last_frame_len = frame_len;
+      wifi_status_state.scan_last_frame_control = fc;
+      wifi_status_state.scan_last_frame_subtype = subtype;
+      return 1;
+    }
+    if (wifi_ccmp_parse_protected_data(frame, frame_len, fc, subtype)) {
       wifi_status_state.scan_last_mpdu_len = mpdu_len;
       wifi_status_state.scan_last_frame_offset = frame_offset;
       wifi_status_state.scan_last_frame_len = frame_len;
@@ -8797,48 +8839,89 @@ static void wifi_ccmp_write_header(uint8_t *hdr, const uint8_t pn[6],
   hdr[7] = pn[0];
 }
 
-static uint32_t wifi_ccmp_build_aad(const uint8_t *frame, uint8_t aad[22]) {
+static int wifi_mac_is_multicast(const uint8_t mac[6]) {
+  return mac && (mac[0] & 0x01U);
+}
+
+static uint32_t wifi_ccmp_build_aad(const uint8_t *frame, uint32_t hdr_len,
+                                    uint8_t aad[WIFI_CCMP_AAD_BYTES],
+                                    uint8_t *qos_tid_out) {
   uint16_t fc = wifi_read_le16(frame);
+  uint32_t subtype = (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
   uint16_t masked_fc =
       (uint16_t)((fc & ~(uint16_t)(0x0800U | 0x1000U | 0x2000U)) &
                  ~(uint16_t)0x0070U);
+  uint32_t aad_len = 22U;
+  uint8_t qos_tid = 0;
 
+  if (subtype & WIFI_80211_SUBTYPE_QOS_DATA) {
+    masked_fc &= ~(uint16_t)0x8000U;
+    qos_tid = frame[24U] & 0x0fU;
+    aad_len += 2U;
+  }
   masked_fc |= WIFI_80211_FC_PROTECTED;
   memset(aad, 0, WIFI_CCMP_AAD_BYTES);
   wifi_write_le16(aad, masked_fc);
   memcpy(aad + 2U, frame + 4U, 18U);
   aad[20] = frame[22] & 0x0fU;
   aad[21] = 0;
-  return WIFI_CCMP_AAD_BYTES;
+  if (aad_len > 22U && hdr_len >= 26U) {
+    aad[22] = qos_tid;
+    aad[23] = 0;
+  }
+  if (qos_tid_out) {
+    *qos_tid_out = qos_tid;
+  }
+  return aad_len;
 }
 
-static uint32_t wifi_ccmp_build_diag_payload(void) {
-  static const uint8_t llc_snap_orizon[] = {
-      0xaaU, 0xaaU, 0x03U, 0x00U, 0x00U, 0x00U, 0x88U, 0xb5U};
-  static const char text[] = "Orizon CCMP protected data probe";
+static int wifi_ccmp_build_plain_payload(uint16_t ether_type,
+                                         const void *payload,
+                                         size_t payload_len,
+                                         uint32_t *plain_len) {
+  static const uint8_t llc_snap[] = {
+      0xaaU, 0xaaU, 0x03U, 0x00U, 0x00U, 0x00U, 0x00U, 0x00U};
   uint32_t offset = 0;
 
+  if (!plain_len || (!payload && payload_len > 0) ||
+      payload_len + 8U > sizeof(wifi_ccmp_plain_payload)) {
+    return -1;
+  }
   memset(wifi_ccmp_plain_payload, 0, sizeof(wifi_ccmp_plain_payload));
-  memcpy(wifi_ccmp_plain_payload + offset, llc_snap_orizon,
-         sizeof(llc_snap_orizon));
-  offset += (uint32_t)sizeof(llc_snap_orizon);
-  memcpy(wifi_ccmp_plain_payload + offset, text, sizeof(text) - 1U);
-  offset += (uint32_t)sizeof(text) - 1U;
-  return offset;
+  memcpy(wifi_ccmp_plain_payload + offset, llc_snap, sizeof(llc_snap));
+  wifi_write_be16(wifi_ccmp_plain_payload + 6U, ether_type);
+  offset += (uint32_t)sizeof(llc_snap);
+  if (payload_len > 0) {
+    memcpy(wifi_ccmp_plain_payload + offset, payload, payload_len);
+    offset += (uint32_t)payload_len;
+  }
+  *plain_len = offset;
+  return 0;
 }
 
-static int wifi_ccmp_build_data_frame(char *report, size_t report_size) {
-  static const uint8_t broadcast[6] = {
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+static int wifi_ccmp_build_ethernet_frame(const uint8_t dst_mac[6],
+                                          uint16_t ether_type,
+                                          const void *payload,
+                                          size_t payload_len,
+                                          char *report,
+                                          size_t report_size) {
   const uint8_t *tk;
   uint8_t aad[WIFI_CCMP_AAD_BYTES];
   uint8_t nonce[WIFI_CCMP_NONCE_BYTES];
   uint8_t pn[6];
+  uint8_t qos_tid = 0;
   uint64_t pn64;
   uint32_t plain_len;
   uint32_t offset;
   uint32_t frame_len;
+  uint32_t aad_len;
   uint16_t fc;
+
+  static const uint8_t broadcast[6] = {
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  if (!dst_mac) {
+    dst_mac = broadcast;
+  }
 
   if (!wifi_status_state.connect_ready || !wifi_status_state.connect_wpa) {
     wifi_status_state.status =
@@ -8867,7 +8950,13 @@ static int wifi_ccmp_build_data_frame(char *report, size_t report_size) {
 
   wifi_ccmp_reset_plan();
   tk = wifi_wpa_ptk + WIFI_WPA_KCK_BYTES + WIFI_WPA_KEK_BYTES;
-  plain_len = wifi_ccmp_build_diag_payload();
+  if (wifi_ccmp_build_plain_payload(ether_type, payload, payload_len,
+                                    &plain_len) != 0) {
+    wifi_status_state.status = "wifi: CCMP Ethernet payload is too large";
+    wifi_report_append(report, report_size,
+                       "wifi data: Ethernet payload is too large\n");
+    return -1;
+  }
   offset = WIFI_80211_MGMT_HEADER_BYTES;
   frame_len = offset + WIFI_CCMP_HEADER_BYTES + plain_len + WIFI_CCMP_MIC_BYTES;
   if (frame_len > sizeof(wifi_ccmp_data_frame)) {
@@ -8885,7 +8974,7 @@ static int wifi_ccmp_build_data_frame(char *report, size_t report_size) {
                         wifi_status_state.connect_bssid);
   wifi_connect_copy_mac(wifi_ccmp_data_frame + 10U,
                         wifi_status_state.connect_local_mac);
-  wifi_connect_copy_mac(wifi_ccmp_data_frame + 16U, broadcast);
+  wifi_connect_copy_mac(wifi_ccmp_data_frame + 16U, dst_mac);
   wifi_write_le16(wifi_ccmp_data_frame + 22U, 0);
 
   pn64 = wifi_ccmp_tx_pn_counter++;
@@ -8895,12 +8984,14 @@ static int wifi_ccmp_build_data_frame(char *report, size_t report_size) {
   offset += WIFI_CCMP_HEADER_BYTES;
 
   memset(nonce, 0, sizeof(nonce));
-  nonce[0] = 0;
+  nonce[0] = qos_tid;
   memcpy(nonce + 1U, wifi_status_state.connect_local_mac, 6U);
   memcpy(nonce + 7U, pn, sizeof(pn));
 
-  wifi_ccmp_build_aad(wifi_ccmp_data_frame, aad);
-  if (aes128_ccm_encrypt(tk, nonce, sizeof(nonce), aad, sizeof(aad),
+  aad_len = wifi_ccmp_build_aad(wifi_ccmp_data_frame,
+                                WIFI_80211_MGMT_HEADER_BYTES, aad, &qos_tid);
+  nonce[0] = qos_tid;
+  if (aes128_ccm_encrypt(tk, nonce, sizeof(nonce), aad, aad_len,
                          wifi_ccmp_plain_payload, plain_len,
                          wifi_ccmp_data_frame + offset,
                          wifi_ccmp_data_frame + offset + plain_len,
@@ -8918,15 +9009,129 @@ static int wifi_ccmp_build_data_frame(char *report, size_t report_size) {
   wifi_status_state.ccmp_pn_high = (uint32_t)(pn64 >> 32);
   wifi_status_state.ccmp_nonce_checksum =
       wifi_wpa_checksum(nonce, sizeof(nonce));
-  wifi_status_state.ccmp_aad_checksum = wifi_wpa_checksum(aad, sizeof(aad));
+  wifi_status_state.ccmp_aad_checksum = wifi_wpa_checksum(aad, aad_len);
   wifi_status_state.ccmp_mic_checksum =
       wifi_wpa_checksum(wifi_ccmp_data_frame + offset + plain_len,
                         WIFI_CCMP_MIC_BYTES);
   wifi_status_state.ccmp_frame_checksum =
       wifi_connect_checksum(wifi_ccmp_data_frame, frame_len);
   wifi_status_state.status =
-      "wifi: protected CCMP diagnostic data frame built; not queued";
+      "wifi: protected CCMP Ethernet data frame built; not queued";
   return 0;
+}
+
+static void wifi_ccmp_pn_from_header(const uint8_t *hdr, uint8_t pn[6]) {
+  pn[0] = hdr[7];
+  pn[1] = hdr[6];
+  pn[2] = hdr[5];
+  pn[3] = hdr[4];
+  pn[4] = hdr[1];
+  pn[5] = hdr[0];
+}
+
+static int wifi_ccmp_parse_protected_data(const uint8_t *frame,
+                                          uint32_t frame_len,
+                                          uint16_t fc,
+                                          uint32_t subtype) {
+  const uint8_t *tk;
+  const uint8_t *ccmp;
+  const uint8_t *cipher;
+  const uint8_t *tag;
+  uint8_t aad[WIFI_CCMP_AAD_BYTES];
+  uint8_t nonce[WIFI_CCMP_NONCE_BYTES];
+  uint8_t pn[6];
+  uint8_t qos_tid = 0;
+  uint32_t hdr_len;
+  uint32_t aad_len;
+  uint32_t cipher_len;
+  uint32_t eth_len;
+  uint32_t key_id;
+
+  if (!wifi_data_link_ready() || !(fc & WIFI_80211_FC_PROTECTED) ||
+      !(fc & WIFI_80211_FC_FROMDS) || (fc & WIFI_80211_FC_TODS)) {
+    return 0;
+  }
+
+  if (!wifi_mac_equal6(frame + 10U, wifi_status_state.connect_bssid) ||
+      (!wifi_mac_equal6(frame + 4U, wifi_status_state.connect_local_mac) &&
+       !wifi_mac_is_multicast(frame + 4U))) {
+    return 0;
+  }
+
+  hdr_len = wifi_80211_data_header_len(fc, subtype);
+  if (hdr_len < WIFI_80211_MGMT_HEADER_BYTES ||
+      frame_len < hdr_len + WIFI_CCMP_HEADER_BYTES + WIFI_CCMP_MIC_BYTES) {
+    return 0;
+  }
+
+  ccmp = frame + hdr_len;
+  cipher = ccmp + WIFI_CCMP_HEADER_BYTES;
+  cipher_len = frame_len - hdr_len - WIFI_CCMP_HEADER_BYTES -
+               WIFI_CCMP_MIC_BYTES;
+  tag = cipher + cipher_len;
+  if (cipher_len < 8U || cipher_len > sizeof(wifi_ccmp_rx_plain)) {
+    return 0;
+  }
+
+  key_id = (ccmp[3] >> 6) & 0x03U;
+  if (wifi_mac_is_multicast(frame + 4U)) {
+    if (key_id != wifi_status_state.wpa_gtk_key_id ||
+        !wifi_status_state.wpa_gtk_key_installed) {
+      return 0;
+    }
+    tk = wifi_wpa_gtk;
+  } else if (wifi_status_state.wpa_key_installed) {
+    tk = wifi_wpa_ptk + WIFI_WPA_KCK_BYTES + WIFI_WPA_KEK_BYTES;
+  } else {
+    return 0;
+  }
+
+  wifi_ccmp_pn_from_header(ccmp, pn);
+  aad_len = wifi_ccmp_build_aad(frame, hdr_len, aad, &qos_tid);
+  memset(nonce, 0, sizeof(nonce));
+  nonce[0] = qos_tid;
+  memcpy(nonce + 1U, frame + 10U, 6U);
+  memcpy(nonce + 7U, pn, sizeof(pn));
+
+  if (aes128_ccm_decrypt(tk, nonce, sizeof(nonce), aad, aad_len, cipher,
+                         cipher_len, tag, WIFI_CCMP_MIC_BYTES,
+                         wifi_ccmp_rx_plain) != 0) {
+    wifi_status_state.ccmp_rx_decrypt_failed = 1;
+    wifi_status_state.status = "wifi: protected CCMP RX decrypt failed";
+    return 0;
+  }
+
+  if (wifi_ccmp_rx_plain[0] != 0xaaU || wifi_ccmp_rx_plain[1] != 0xaaU ||
+      wifi_ccmp_rx_plain[2] != 0x03U || wifi_ccmp_rx_plain[3] != 0x00U ||
+      wifi_ccmp_rx_plain[4] != 0x00U || wifi_ccmp_rx_plain[5] != 0x00U) {
+    return 0;
+  }
+
+  eth_len = cipher_len - 8U;
+  if (eth_len > sizeof(wifi_ccmp_rx_payload)) {
+    return 0;
+  }
+  memcpy(wifi_ccmp_rx_src_mac, frame + 16U, sizeof(wifi_ccmp_rx_src_mac));
+  memcpy(wifi_ccmp_rx_payload, wifi_ccmp_rx_plain + 8U, eth_len);
+  wifi_status_state.ccmp_rx_ready = 1;
+  wifi_status_state.ccmp_rx_decrypt_failed = 0;
+  wifi_status_state.ccmp_rx_len = eth_len;
+  wifi_status_state.ccmp_rx_eth_type = wifi_read_be16(wifi_ccmp_rx_plain + 6U);
+  wifi_status_state.ccmp_rx_checksum =
+      wifi_wpa_checksum(wifi_ccmp_rx_payload, eth_len);
+  wifi_status_state.ccmp_rx_packets++;
+  wifi_status_state.status = "wifi: protected CCMP Ethernet payload received";
+  return 1;
+}
+
+static int wifi_ccmp_build_diag_frame(char *report, size_t report_size) {
+  static const uint8_t broadcast[6] = {
+      0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+  static const char text[] = "Orizon CCMP protected data probe";
+
+  return wifi_ccmp_build_ethernet_frame(broadcast, 0x88b5U, text,
+                                        sizeof(text) - 1U, report,
+                                        report_size);
 }
 
 int wifi_data_probe(char *report, size_t report_size) {
@@ -8947,13 +9152,15 @@ int wifi_data_probe(char *report, size_t report_size) {
     return -1;
   }
 
-  rc = wifi_ccmp_build_data_frame(report, report_size);
+  rc = wifi_ccmp_build_diag_frame(report, report_size);
   s = &wifi_status_state;
   snprintf(line, sizeof(line),
            "wifi data: %s\n"
            "state: assoc=%s data=%s pairwise=%s gtk=%s m4=%s\n"
            "ccmp: ready=%s frame-len=%u plain-len=%u pn=0x%08x%08x "
            "nonce=0x%08x aad=0x%08x mic=0x%08x frame=0x%08x\n"
+           "rx: ready=%s len=%u eth=0x%04x packets=%u decrypt-failed=%s "
+           "checksum=0x%08x\n"
            "next: wifi tx data, then wifi txcmd data arm once real AP "
            "validation is active\n",
            rc == 0 ? "protected CCMP diagnostic frame ready"
@@ -8966,7 +9173,11 @@ int wifi_data_probe(char *report, size_t report_size) {
            s->ccmp_data_ready ? "yes" : "no", s->ccmp_data_frame_len,
            s->ccmp_plain_len, s->ccmp_pn_high, s->ccmp_pn_low,
            s->ccmp_nonce_checksum, s->ccmp_aad_checksum,
-           s->ccmp_mic_checksum, s->ccmp_frame_checksum);
+           s->ccmp_mic_checksum, s->ccmp_frame_checksum,
+           s->ccmp_rx_ready ? "yes" : "no", s->ccmp_rx_len,
+           s->ccmp_rx_eth_type, s->ccmp_rx_packets,
+           s->ccmp_rx_decrypt_failed ? "yes" : "no",
+           s->ccmp_rx_checksum);
   wifi_report_append(report, report_size, line);
   return rc;
 }
@@ -9478,7 +9689,7 @@ static int wifi_txcmd_select_frame(const char *target, uint32_t *kind,
   }
   if (strcmp(target, "data") == 0) {
     if (!wifi_status_state.ccmp_data_ready) {
-      wifi_ccmp_build_data_frame(NULL, 0);
+      wifi_ccmp_build_diag_frame(NULL, 0);
     }
     *kind = WIFI_TX_STAGE_KIND_DATA;
     *frame = wifi_ccmp_data_frame;
@@ -9837,6 +10048,78 @@ int wifi_txcmd_probe(const char *target, int arm, char *report,
   return rc;
 }
 
+int wifi_data_link_ready(void) {
+  return wifi_status_state.present && wifi_status_state.driver_ready &&
+         wifi_status_state.connect_data_ready &&
+         wifi_status_state.wpa_key_installed &&
+         wifi_status_state.wpa_gtk_key_installed &&
+         wifi_status_state.wpa_m4_tx_acked;
+}
+
+int wifi_copy_local_mac(uint8_t mac[6]) {
+  if (!mac || !wifi_data_link_ready()) {
+    return -1;
+  }
+  memcpy(mac, wifi_status_state.connect_local_mac, 6U);
+  return 0;
+}
+
+int wifi_send_ethernet(const uint8_t dst_mac[6], uint16_t ether_type,
+                       const void *payload, size_t payload_len) {
+  char scratch[384];
+  int rc;
+
+  if (!wifi_data_link_ready()) {
+    return -1;
+  }
+
+  rc = wifi_ccmp_build_ethernet_frame(dst_mac, ether_type, payload,
+                                      payload_len, NULL, 0);
+  if (rc != 0) {
+    return -1;
+  }
+
+  rc = wifi_txcmd_build_plan(WIFI_TX_STAGE_KIND_DATA, wifi_ccmp_data_frame,
+                             wifi_status_state.ccmp_data_frame_len);
+  if (rc != 0) {
+    return -1;
+  }
+
+  scratch[0] = '\0';
+  rc = wifi_txcmd_arm_plan(scratch, sizeof(scratch));
+  return rc == 0 ? (int)wifi_status_state.ccmp_data_frame_len : -1;
+}
+
+int wifi_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
+                       void *payload, size_t payload_cap) {
+  char scratch[256];
+  uint32_t len;
+
+  if (!ether_type || !payload || !wifi_data_link_ready()) {
+    return -1;
+  }
+
+  if (!wifi_status_state.ccmp_rx_ready) {
+    scratch[0] = '\0';
+    wifi_rx_probe(1, scratch, sizeof(scratch));
+  }
+  if (!wifi_status_state.ccmp_rx_ready) {
+    return 0;
+  }
+
+  len = wifi_status_state.ccmp_rx_len;
+  if (len > payload_cap) {
+    return -1;
+  }
+  if (src_mac) {
+    memcpy(src_mac, wifi_ccmp_rx_src_mac, 6U);
+  }
+  *ether_type = (uint16_t)wifi_status_state.ccmp_rx_eth_type;
+  memcpy(payload, wifi_ccmp_rx_payload, len);
+  wifi_status_state.ccmp_rx_ready = 0;
+  return (int)len;
+}
+
 static const char *wifi_tx_stage_kind_text(uint32_t kind) {
   switch (kind) {
   case WIFI_TX_STAGE_KIND_AUTH:
@@ -10020,7 +10303,7 @@ int wifi_tx_stage_probe(const char *target, char *report, size_t report_size) {
   }
   if (rc == 0 && stage_data) {
     if (!wifi_status_state.ccmp_data_ready) {
-      wifi_ccmp_build_data_frame(NULL, 0);
+      wifi_ccmp_build_diag_frame(NULL, 0);
     }
     if (!wifi_status_state.ccmp_data_ready) {
       wifi_status_state.tx_stage_failed = 1;
