@@ -8,6 +8,7 @@
 
 #include "../include/ssh.h"
 #include "../include/aes_gcm.h"
+#include "../include/kmalloc.h"
 #include "../include/klog.h"
 #include "../include/netstack.h"
 #include "../include/packages.h"
@@ -258,6 +259,7 @@ static int ssh_channel_failure_pending = 0;
 static int ssh_channel_data_pending = 0;
 static int ssh_channel_exit_status_pending = 0;
 static int ssh_channel_close_pending = 0;
+static int ssh_channel_close_sent = 0;
 static uint8_t ssh_encrypted_rx[SSH_PACKET_MAX + SHA256_DIGEST_SIZE];
 static size_t ssh_encrypted_rx_used = 0;
 static uint8_t ssh_pending_ctr_s2c[16];
@@ -278,6 +280,16 @@ static char ssh_shell_line[256];
 static size_t ssh_shell_line_len = 0;
 static char ssh_shell_cwd[MAX_PATH] = "/home/orizon";
 static int ssh_shell_suppress_prompt = 0;
+static uint32_t ssh_auth_success_total = 0;
+static uint32_t ssh_auth_failure_total = 0;
+static uint32_t ssh_session_total = 0;
+static uint32_t ssh_exec_request_total = 0;
+static uint32_t ssh_shell_command_total = 0;
+static uint32_t ssh_listener_reset_total = 0;
+static uint32_t ssh_listener_recover_total = 0;
+static uint32_t ssh_channel_close_total = 0;
+static char ssh_last_command[160] = "none";
+static char ssh_last_audit[192] = "none";
 
 static int ssh_ensure_hostkey(void);
 static int ssh_load_hostkey_file(void);
@@ -308,6 +320,48 @@ static void ssh_set_status(const char *status) {
   ssh_status.status[sizeof(ssh_status.status) - 1] = '\0';
   klog_info("ssh", status);
   ssh_log_line(status);
+}
+
+static void ssh_audit_event(const char *event) {
+  char remote[24];
+  char line[224];
+
+  if (!event) {
+    event = "event";
+  }
+  netstack_format_ipv4(ssh_status.remote_ip, remote, sizeof(remote));
+  snprintf(line, sizeof(line), "audit: %s remote=%s:%u sessions=%lu",
+           event, remote, (unsigned)ssh_status.remote_port,
+           (unsigned long)ssh_status.sessions);
+  strncpy(ssh_last_audit, line, sizeof(ssh_last_audit) - 1);
+  ssh_last_audit[sizeof(ssh_last_audit) - 1] = '\0';
+  ssh_log_line(line);
+}
+
+static void ssh_record_command(const char *kind, const char *command) {
+  char safe[128];
+  char event[176];
+  size_t i = 0;
+
+  if (!kind) {
+    kind = "command";
+  }
+  if (!command) {
+    command = "";
+  }
+  if (strncmp(command, "ssh password", strlen("ssh password")) == 0) {
+    snprintf(safe, sizeof(safe), "ssh password <redacted>");
+  } else {
+    while (command[i] && command[i] != '\r' && command[i] != '\n' &&
+           i + 1 < sizeof(safe)) {
+      safe[i] = command[i];
+      i++;
+    }
+    safe[i] = '\0';
+  }
+  snprintf(ssh_last_command, sizeof(ssh_last_command), "%s: %s", kind, safe);
+  snprintf(event, sizeof(event), "%s command=\"%s\"", kind, safe);
+  ssh_audit_event(event);
 }
 
 static int ssh_hex64_valid(const char *text) {
@@ -380,15 +434,18 @@ static uint64_t ssh_lockout_remaining(void) {
 static void ssh_note_auth_failure(const char *reason) {
   ssh_auth_failure_pending = 1;
   ssh_status.auth_failures++;
+  ssh_auth_failure_total++;
   if (ssh_status.max_auth_attempts > 0 &&
       ssh_status.auth_failures >= ssh_status.max_auth_attempts) {
     ssh_status.auth_lockout_until =
         timer_uptime_seconds() + ssh_status.auth_lockout_seconds;
     ssh_status.auth_failures = 0;
     ssh_set_status("ssh: auth locked after repeated failures");
+    ssh_audit_event("auth failure lockout");
     return;
   }
   ssh_set_status(reason ? reason : "ssh: authentication failed");
+  ssh_audit_event("auth failure");
 }
 
 static void ssh_note_auth_success(void) {
@@ -396,7 +453,9 @@ static void ssh_note_auth_success(void) {
   ssh_status.auth_failures = 0;
   ssh_status.auth_lockout_until = 0;
   ssh_auth_success_pending = 1;
+  ssh_auth_success_total++;
   ssh_set_status("ssh: password auth accepted");
+  ssh_audit_event("auth success");
 }
 
 static void ssh_load_config(void) {
@@ -1327,6 +1386,7 @@ static void ssh_reopen_listener(const char *reason) {
   ssh_disconnect_close_polls = 0;
   ssh_reset_negotiation();
   ssh_last_activity_tick = timer_ticks();
+  ssh_listener_reset_total++;
   ssh_set_status(reason ? reason : "ssh: listener reset");
   ssh_refresh_state();
 }
@@ -1343,6 +1403,7 @@ static void ssh_ensure_listener_alive(void) {
   ssh_disconnect_close_polls = 0;
   ssh_reset_negotiation();
   ssh_last_activity_tick = timer_ticks();
+  ssh_listener_recover_total++;
   ssh_set_status("ssh: listener recovered");
   ssh_refresh_state();
 }
@@ -1422,6 +1483,7 @@ static void ssh_reset_negotiation(void) {
   ssh_channel_data_pending = 0;
   ssh_channel_exit_status_pending = 0;
   ssh_channel_close_pending = 0;
+  ssh_channel_close_sent = 0;
   ssh_encrypted_rx_used = 0;
   memset(ssh_pending_ctr_s2c, 0, sizeof(ssh_pending_ctr_s2c));
   ssh_pending_ctr_s2c_ready = 0;
@@ -2301,6 +2363,124 @@ static void ssh_shell_print_pkg(const char *args) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_free(void) {
+  kmalloc_stats_t stats;
+  char out[256];
+
+  kmalloc_get_stats(&stats);
+  snprintf(out, sizeof(out),
+           "          total_kb used_kb free_kb largest_kb\r\n"
+           "heap      %8lu %7lu %7lu %10lu\r\n"
+           "blocks: used=%lu free=%lu total=%lu\r\n",
+           (unsigned long)(stats.total / 1024),
+           (unsigned long)(stats.used / 1024),
+           (unsigned long)(stats.free / 1024),
+           (unsigned long)(stats.largest_free / 1024),
+           (unsigned long)stats.used_blocks,
+           (unsigned long)stats.free_blocks,
+           (unsigned long)stats.blocks);
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_mutate_path(const char *arg, const char *op) {
+  static char path[MAX_PATH];
+  int rc = -1;
+  char out[64];
+
+  if (!op) {
+    op = "path";
+  }
+  if (ssh_shell_resolve_path(arg, path, sizeof(path)) < 0) {
+    snprintf(out, sizeof(out), "%s: invalid path\r\n", op);
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(op, "touch") == 0) {
+    rc = vfs_create(path);
+  } else if (strcmp(op, "mkdir") == 0) {
+    rc = vfs_mkdir(path);
+  } else if (strcmp(op, "rm") == 0) {
+    rc = vfs_delete(path);
+  }
+  snprintf(out, sizeof(out), "%s: %s\r\n", op, rc == 0 ? "ok" : "failed");
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_write_text(const char *args, int append) {
+  static char file_arg[MAX_PATH];
+  static char path[MAX_PATH];
+  const char *text = NULL;
+  file_t *f;
+
+  if (ssh_shell_split_path_text(args, file_arg, sizeof(file_arg), &text) < 0 ||
+      ssh_shell_resolve_path(file_arg, path, sizeof(path)) < 0) {
+    ssh_queue_channel_text(append ? "usage: append <file> <text>\r\n"
+                                  : "usage: write <file> <text>\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
+  if (!f) {
+    ssh_queue_channel_text(append ? "append: failed\r\n" : "write: failed\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (vfs_write(f, text, strlen(text)) < 0 ||
+      vfs_write(f, "\n", 1) < 0) {
+    ssh_queue_channel_text(append ? "append: write error\r\n"
+                                  : "write: write error\r\n");
+    vfs_close(f);
+    ssh_shell_prompt();
+    return;
+  }
+  vfs_close(f);
+  ssh_queue_channel_text(append ? "append: ok\r\n" : "write: ok\r\n");
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_audit(void) {
+  char remote[24];
+  char out[768];
+  uint64_t idle_seconds = 0;
+  uint64_t hz = timer_hz();
+
+  netstack_format_ipv4(ssh_status.remote_ip, remote, sizeof(remote));
+  if (hz > 0 && ssh_last_activity_tick > 0 &&
+      timer_ticks() >= ssh_last_activity_tick) {
+    idle_seconds = (timer_ticks() - ssh_last_activity_tick) / hz;
+  }
+  snprintf(out, sizeof(out),
+           "ssh audit:\r\n"
+           "  remote: %s:%u\r\n"
+           "  sessions: %lu\r\n"
+           "  auth-success: %lu\r\n"
+           "  auth-failure: %lu\r\n"
+           "  exec-requests: %lu\r\n"
+           "  shell-commands: %lu\r\n"
+           "  channel-closes: %lu\r\n"
+           "  listener-resets: %lu\r\n"
+           "  listener-recovers: %lu\r\n"
+           "  idle-seconds: %lu\r\n"
+           "  last-command: %s\r\n"
+           "  last-audit: %s\r\n",
+           remote, (unsigned)ssh_status.remote_port,
+           (unsigned long)ssh_status.sessions,
+           (unsigned long)ssh_auth_success_total,
+           (unsigned long)ssh_auth_failure_total,
+           (unsigned long)ssh_exec_request_total,
+           (unsigned long)ssh_shell_command_total,
+           (unsigned long)ssh_channel_close_total,
+           (unsigned long)ssh_listener_reset_total,
+           (unsigned long)ssh_listener_recover_total,
+           (unsigned long)idle_seconds,
+           ssh_last_command, ssh_last_audit);
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_set_password(const char *password) {
   char out[256];
 
@@ -2397,7 +2577,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell preview\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, ps, pkg, storage, status, auth, hostkey, exit\r\n");
+        "Commands: help, ls, cd, cat, write, logs, net, ps, pkg, storage, free, audit, status, auth, hostkey, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -2433,6 +2613,8 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
+  ssh_shell_command_total++;
+  ssh_record_command("shell", line);
   if (strcmp(line, "help") == 0) {
     ssh_queue_channel_text(
         "Remote Orizon commands:\r\n"
@@ -2449,7 +2631,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  write|append f text  write text to a file\r\n"
         "  logs [ssh|boot]      show logs\r\n"
         "  net|route|dns        show network diagnostics\r\n"
-        "  ps|pkg|storage       show system state\r\n"
+        "  ps|pkg|storage|free  show system state\r\n"
+        "  audit                show SSH session counters\r\n"
         "  ssh password <pass>  change remote SSH password\r\n"
         "  ssh auth ...         change auth policy\r\n"
         "  sync                 persist Orizon data roots\r\n"
@@ -2474,6 +2657,10 @@ static void ssh_remote_shell_execute(const char *line) {
     }
     ssh_queue_channel_text(out);
     ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "audit") == 0 || strcmp(line, "ssh audit") == 0) {
+    ssh_shell_print_audit();
     return;
   }
   if (strcmp(line, "hostkey") == 0 || strcmp(line, "ssh hostkey") == 0) {
@@ -2564,71 +2751,23 @@ static void ssh_remote_shell_execute(const char *line) {
     return;
   }
   if (ssh_shell_command_is(line, "touch")) {
-    char path[MAX_PATH];
-    if (ssh_shell_resolve_path(line + 5, path, sizeof(path)) < 0 ||
-        vfs_create(path) < 0) {
-      ssh_queue_channel_text("touch: failed\r\n");
-    } else {
-      ssh_queue_channel_text("touch: ok\r\n");
-    }
-    ssh_shell_prompt();
+    ssh_shell_mutate_path(line + 5, "touch");
     return;
   }
   if (ssh_shell_command_is(line, "mkdir")) {
-    char path[MAX_PATH];
-    if (ssh_shell_resolve_path(line + 5, path, sizeof(path)) < 0 ||
-        vfs_mkdir(path) < 0) {
-      ssh_queue_channel_text("mkdir: failed\r\n");
-    } else {
-      ssh_queue_channel_text("mkdir: ok\r\n");
-    }
-    ssh_shell_prompt();
+    ssh_shell_mutate_path(line + 5, "mkdir");
     return;
   }
   if (ssh_shell_command_is(line, "rm")) {
-    char path[MAX_PATH];
-    if (ssh_shell_resolve_path(line + 2, path, sizeof(path)) < 0 ||
-        vfs_delete(path) < 0) {
-      ssh_queue_channel_text("rm: failed\r\n");
-    } else {
-      ssh_queue_channel_text("rm: ok\r\n");
-    }
-    ssh_shell_prompt();
+    ssh_shell_mutate_path(line + 2, "rm");
     return;
   }
   if (ssh_shell_command_is(line, "write") ||
       ssh_shell_command_is(line, "append")) {
-    char file_arg[MAX_PATH];
-    char path[MAX_PATH];
-    const char *text = NULL;
     int append = ssh_shell_command_is(line, "append");
-    file_t *f;
 
     args = line + (append ? 6 : 5);
-    if (ssh_shell_split_path_text(args, file_arg, sizeof(file_arg), &text) < 0 ||
-        ssh_shell_resolve_path(file_arg, path, sizeof(path)) < 0) {
-      ssh_queue_channel_text(append ? "usage: append <file> <text>\r\n"
-                                    : "usage: write <file> <text>\r\n");
-      ssh_shell_prompt();
-      return;
-    }
-    f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
-    if (!f) {
-      ssh_queue_channel_text(append ? "append: failed\r\n" : "write: failed\r\n");
-      ssh_shell_prompt();
-      return;
-    }
-    if (vfs_write(f, text, strlen(text)) < 0 ||
-        vfs_write(f, "\n", 1) < 0) {
-      ssh_queue_channel_text(append ? "append: write error\r\n"
-                                    : "write: write error\r\n");
-      vfs_close(f);
-      ssh_shell_prompt();
-      return;
-    }
-    vfs_close(f);
-    ssh_queue_channel_text(append ? "append: ok\r\n" : "write: ok\r\n");
-    ssh_shell_prompt();
+    ssh_shell_write_text(args, append);
     return;
   }
   if (ssh_shell_command_is(line, "logs")) {
@@ -2657,8 +2796,7 @@ static void ssh_remote_shell_execute(const char *line) {
     return;
   }
   if (strcmp(line, "free") == 0) {
-    ssh_queue_channel_text("memory: 64 MB heap profile; detailed allocator stats pending\r\n");
-    ssh_shell_prompt();
+    ssh_shell_print_free();
     return;
   }
   if (strcmp(line, "net") == 0 || strcmp(line, "network-status") == 0) {
@@ -2743,17 +2881,29 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   }
   memcpy(cmd, command, copy);
   cmd[copy] = '\0';
+  ssh_exec_request_total++;
+  ssh_record_command("exec", cmd);
 
   ssh_shell_suppress_prompt = 1;
   if (strstr(cmd, "help")) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, write, logs, net, ps, pkg, storage, timer, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ps, pkg, storage, free, timer, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
     ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), 1400);
   } else if (ssh_shell_command_is(cmd, "head")) {
     ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 700);
+  } else if (ssh_shell_command_is(cmd, "touch")) {
+    ssh_shell_mutate_path(cmd + 5, "touch");
+  } else if (ssh_shell_command_is(cmd, "mkdir")) {
+    ssh_shell_mutate_path(cmd + 5, "mkdir");
+  } else if (ssh_shell_command_is(cmd, "rm")) {
+    ssh_shell_mutate_path(cmd + 2, "rm");
+  } else if (ssh_shell_command_is(cmd, "write")) {
+    ssh_shell_write_text(cmd + 5, 0);
+  } else if (ssh_shell_command_is(cmd, "append")) {
+    ssh_shell_write_text(cmd + 6, 1);
   } else if (ssh_shell_command_is(cmd, "logs")) {
     ssh_shell_print_log(ssh_shell_skip_spaces(cmd + 4));
   } else if (strcmp(cmd, "ps") == 0) {
@@ -2762,6 +2912,14 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_print_pkg(cmd + 3);
   } else if (strcmp(cmd, "storage") == 0 || strcmp(cmd, "disks") == 0) {
     ssh_shell_print_storage();
+  } else if (strcmp(cmd, "free") == 0) {
+    ssh_shell_print_free();
+  } else if (strcmp(cmd, "audit") == 0 || strcmp(cmd, "ssh audit") == 0) {
+    ssh_shell_print_audit();
+  } else if (strcmp(cmd, "sync") == 0) {
+    ssh_queue_channel_text(vfs_persist_save() == 0
+                               ? "sync: persistent roots saved\r\n"
+                               : "sync: save failed or not installed\r\n");
   } else if (strcmp(cmd, "timer") == 0) {
     timer_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
@@ -2940,7 +3098,9 @@ static void ssh_process_packet(const uint8_t *payload, size_t payload_len) {
     return;
   }
   if (type == SSH_MSG_CHANNEL_EOF || type == SSH_MSG_CHANNEL_CLOSE) {
-    ssh_channel_close_pending = 1;
+    if (!ssh_channel_close_sent) {
+      ssh_channel_close_pending = 1;
+    }
     ssh_set_status("ssh: client channel close received");
     return;
   }
@@ -3121,10 +3281,12 @@ static void ssh_refresh_state(void) {
       ssh_server.state == NETSTACK_TCP_SERVER_ESTABLISHED;
   ssh_status.remote_ip = ssh_server.remote_ip;
   ssh_status.remote_port = ssh_server.remote_port;
-  ssh_status.sessions = ssh_server.connections;
+  ssh_status.sessions = ssh_session_total;
 
   if (ssh_server.connections != ssh_seen_connections) {
     ssh_seen_connections = ssh_server.connections;
+    ssh_session_total++;
+    ssh_status.sessions = ssh_session_total;
     ssh_last_activity_tick = timer_ticks();
     ssh_status.banner_sent = 0;
     ssh_status.client_banner_seen = 0;
@@ -3162,6 +3324,16 @@ int ssh_start(char *report, size_t report_size) {
   ssh_status.banner_sent = 0;
   ssh_status.client_banner_seen = 0;
   ssh_status.remote_banner[0] = '\0';
+  ssh_session_total = 0;
+  ssh_exec_request_total = 0;
+  ssh_shell_command_total = 0;
+  ssh_channel_close_total = 0;
+  ssh_listener_reset_total = 0;
+  ssh_listener_recover_total = 0;
+  ssh_auth_success_total = 0;
+  ssh_auth_failure_total = 0;
+  strcpy(ssh_last_command, "none");
+  strcpy(ssh_last_audit, "none");
   ssh_reset_negotiation();
   ssh_seen_connections = ssh_server.connections;
   ssh_disconnect_close_polls = 0;
@@ -3413,7 +3585,9 @@ int ssh_poll(void) {
       }
       ssh_seq_out++;
       ssh_channel_close_pending = 0;
+      ssh_channel_close_sent = 1;
       ssh_disconnect_close_polls = 6;
+      ssh_channel_close_total++;
       ssh_set_status("ssh: channel close sent; graceful relisten pending");
     } else if (tx_kind == 14) {
       if (ssh_pending_ctr_s2c_ready) {
@@ -3565,6 +3739,8 @@ void ssh_format_auth(char *buf, size_t size) {
            "  max-attempts: %lu\n"
            "  lockout-seconds: %lu\n"
            "  current-failures: %lu\n"
+           "  total-success: %lu\n"
+           "  total-failure: %lu\n"
            "  lockout-remaining: %lus\n"
            "  config: %s\n"
            "  log: %s\n",
@@ -3572,6 +3748,8 @@ void ssh_format_auth(char *buf, size_t size) {
            (unsigned long)ssh_status.max_auth_attempts,
            (unsigned long)ssh_status.auth_lockout_seconds,
            (unsigned long)ssh_status.auth_failures,
+           (unsigned long)ssh_auth_success_total,
+           (unsigned long)ssh_auth_failure_total,
            (unsigned long)lockout,
            ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_LOG_PATH);
 }

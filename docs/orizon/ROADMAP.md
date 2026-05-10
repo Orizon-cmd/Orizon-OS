@@ -18,9 +18,10 @@
   authentication for user `orizon`, `session` channel open, `pty-req`, `shell`,
   `exec`, a remote diagnostic/admin shell with VFS/log/network/process/package/
   storage commands, remote auth/password/lockout/hostkey administration,
-  graceful listener recovery, anti-bruteforce lockout, config reload,
-  persistent host-key file management in `/system/ssh_host_rsa.key`,
-  `/system/ssh.conf`, and `/logs/ssh.log`.
+  direct remote file edits, heap diagnostics, audit counters/logging, graceful
+  listener recovery, anti-bruteforce lockout, config reload, persistent
+  host-key file management in `/system/ssh_host_rsa.key`, `/system/ssh.conf`,
+  and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA

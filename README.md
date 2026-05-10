@@ -162,14 +162,16 @@ AES-128-CTR/HMAC-SHA256, echange `NEWKEYS`, puis repond au premier
 desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
 console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
-de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `write`, `append`, `logs`,
-`net`, `route`, `dns`, `ps`, `pkg`, `storage`, `timer`, `status`, `auth`,
-`hostkey`, `whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin
-`ssh auth`, `ssh lockout`, `ssh password` et `ssh hostkey reload/reset`
-fonctionnent aussi en commande distante directe. Le service remet l'ecoute TCP
-en etat apres une session fermee et garde une protection anti-bruteforce dans
-`/system/ssh.conf`. `ssh hostkey` affiche l'identite hote persistante stockee
-dans `/system/ssh_host_rsa.key`.
+de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `touch`, `mkdir`, `rm`,
+`write`, `append`, `logs`, `net`, `route`, `dns`, `ps`, `pkg`, `storage`,
+`free`, `timer`, `audit`, `sync`, `status`, `auth`, `hostkey`, `whoami`,
+`uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`, `ssh
+lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
+commande distante directe. Le service remet l'ecoute TCP en etat apres une
+session fermee, garde une protection anti-bruteforce dans `/system/ssh.conf`,
+et expose `audit` pour verifier sessions, auth, commandes et fermetures de
+canal. `ssh hostkey` affiche l'identite hote persistante stockee dans
+`/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

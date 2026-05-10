@@ -73,13 +73,18 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
-  `ps`, `pkg`, `storage`, `timer`, `sync`, `status`, `auth`, `hostkey`,
-  `whoami`, `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec
-  `exit-status`.
+  `ps`, `pkg`, `storage`, `free`, `timer`, `audit`, `sync`, `status`, `auth`,
+  `hostkey`, `whoami`, `uname`, `pwd`, `uptime` et `exit`, puis ferme
+  proprement avec `exit-status`.
+- Audit: `audit` affiche le cumul des sessions, auth reussies/echouees,
+  commandes `exec`, commandes shell, fermetures de canal, recoveries listener,
+  temps idle et derniere commande; les evenements sont aussi journalises dans
+  `/logs/ssh.log` avec le mot de passe masque.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
-  clear`, et recharger/reinitialiser la cle hote.
+  clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
+  `write`/`append`/`touch`/`mkdir`/`rm`, et sauvegarder avec `sync`.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros
   paquets et remet l'ecoute TCP/22 en etat apres une fermeture de canal ou une
   session idle. Le `snprintf` kernel supporte maintenant l'alignement a gauche
