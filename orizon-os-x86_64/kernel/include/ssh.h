@@ -32,6 +32,10 @@ typedef struct {
   int auth_configured;
   int authenticated;
   int auth_failure_sent;
+  uint32_t auth_failures;
+  uint64_t auth_lockout_until;
+  uint32_t max_auth_attempts;
+  uint32_t auth_lockout_seconds;
   int channel_open_seen;
   int channel_open_confirm_sent;
   int shell_ready;
@@ -74,12 +78,19 @@ typedef struct {
 } ssh_status_t;
 
 int ssh_set_password(const char *password, char *report, size_t report_size);
+int ssh_disable_password(char *report, size_t report_size);
+int ssh_reload_config(char *report, size_t report_size);
+int ssh_clear_lockout(char *report, size_t report_size);
+int ssh_set_auth_policy(uint32_t max_attempts, uint32_t lockout_seconds,
+                        char *report, size_t report_size);
+int ssh_reset_auth_policy(char *report, size_t report_size);
 int ssh_start(char *report, size_t report_size);
 int ssh_stop(char *report, size_t report_size);
 int ssh_poll(void);
 void ssh_format_status(char *buf, size_t size);
 void ssh_format_report(char *buf, size_t size);
 void ssh_format_algorithms(char *buf, size_t size);
+void ssh_format_auth(char *buf, size_t size);
 const ssh_status_t *ssh_get_status(void);
 
 #endif /* _SSH_H */

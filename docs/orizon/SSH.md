@@ -11,7 +11,14 @@ net dhcp
 ssh password <mot-de-passe>
 ssh start
 ssh status
+ssh auth
+ssh auth max <essais>
+ssh auth lockout <secondes>
+ssh auth default
 ssh algorithms
+ssh reload
+ssh lockout clear
+ssh password off
 ssh poll
 ssh stop
 logs ssh
@@ -21,6 +28,12 @@ logs ssh
 l'utilisateur `orizon` et stocke le SHA-256 dans `/system/ssh.conf`.
 `ssh start` configure IPv4 si necessaire, ouvre TCP/22, charge la configuration
 et journalise dans `/logs/ssh.log`.
+`ssh auth` affiche la politique active, `ssh reload` recharge `/system/ssh.conf`,
+`ssh lockout clear` retire un verrouillage temporaire, et `ssh password off`
+desactive l'authentification par mot de passe.
+`ssh auth max <essais>` et `ssh auth lockout <secondes>` changent la politique
+anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
+`30` secondes de verrouillage.
 
 ## Etat actuel
 
@@ -42,6 +55,9 @@ et journalise dans `/logs/ssh.log`.
   repond par `SERVICE_ACCEPT`.
 - Authentification: Orizon refuse `none`, annonce `password`, accepte seulement
   l'utilisateur `orizon` si un mot de passe a ete configure depuis la console.
+- Durcissement auth: les echecs de mot de passe sont comptes, avec verrouillage
+  temporaire configurable dans `/system/ssh.conf` (`max-attempts`,
+  `lockout-seconds`).
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un mini-shell de preview avec `help`, `status`, `whoami`, `uname`, `pwd` et
   `exit`, puis ferme proprement avec `exit-status`.
@@ -68,8 +84,8 @@ Pour transformer ce listener en acces distant complet, il reste a ajouter:
 
 - remplacer la cle hote RSA de developpement par une cle persistante par
   installation
-- durcir l'authentification: delais anti-bruteforce, verrouillage temporaire,
-  rotation du hash et permissions du fichier config
+- durcir encore l'authentification: rotation du hash, permissions du fichier
+  config et journalisation plus detaillee par IP
 - remplacer le mini-shell SSH par une vraie pseudo-console Orizon partageant
   les commandes locales
-- rotation/rechargement propre des cles et options dans `/system/ssh.conf`
+- rotation/rechargement propre des cles hote dans `/system/ssh.conf`

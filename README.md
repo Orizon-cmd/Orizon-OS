@@ -141,7 +141,11 @@ net dhcp
 ssh password <mot-de-passe>
 ssh start
 ssh status
+ssh auth
+ssh auth max <essais>
+ssh auth lockout <secondes>
 ssh algorithms
+ssh reload
 logs ssh
 ```
 
@@ -153,7 +157,9 @@ AES-128-CTR/HMAC-SHA256, echange `NEWKEYS`, puis repond au premier
 desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
 console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
-de diagnostic (`help`, `status`, `whoami`, `uname`, `pwd`, `exit`).
+de diagnostic (`help`, `status`, `whoami`, `uname`, `pwd`, `exit`). `ssh auth`
+affiche aussi le verrouillage anti-bruteforce, et `ssh lockout clear` permet de
+debloquer l'acces apres trop de mauvais mots de passe.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

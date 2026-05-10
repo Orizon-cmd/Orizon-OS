@@ -50,6 +50,10 @@
 #define SSH_RSA_SIGNATURE_SIZE 128U
 #define SSH_CHANNEL_WINDOW 65536U
 #define SSH_CHANNEL_MAX_PACKET 1024U
+#define SSH_AUTH_MAX_ATTEMPTS_DEFAULT 3U
+#define SSH_AUTH_LOCKOUT_SECONDS_DEFAULT 30U
+#define SSH_AUTH_MAX_ATTEMPTS_LIMIT 20U
+#define SSH_AUTH_LOCKOUT_SECONDS_LIMIT 3600U
 
 /*
  * Development host key for the current staged SSH server.
@@ -136,6 +140,10 @@ static ssh_status_t ssh_status = {
     .auth_configured = 0,
     .authenticated = 0,
     .auth_failure_sent = 0,
+    .auth_failures = 0,
+    .auth_lockout_until = 0,
+    .max_auth_attempts = SSH_AUTH_MAX_ATTEMPTS_DEFAULT,
+    .auth_lockout_seconds = SSH_AUTH_LOCKOUT_SECONDS_DEFAULT,
     .channel_open_seen = 0,
     .channel_open_confirm_sent = 0,
     .shell_ready = 0,
@@ -285,18 +293,85 @@ static void ssh_copy_token(const char *src, char *dst, size_t dst_size) {
   dst[i] = '\0';
 }
 
-static void ssh_load_config(void) {
-  file_t *f;
-  char text[512];
-  ssize_t n;
-  const char *needle = "password-sha256 ";
-  char *p;
+static uint32_t ssh_parse_uint_token(const char *src, uint32_t fallback,
+                                     uint32_t min_value,
+                                     uint32_t max_value) {
+  uint32_t value = 0;
+  int seen = 0;
 
-  ssh_status.auth_configured = ssh_hex64_valid(ssh_password_sha256);
-  f = vfs_open(ORIZON_SSH_CONFIG_PATH, O_RDONLY);
-  if (!f) {
+  if (!src) {
+    return fallback;
+  }
+  while (*src == ' ' || *src == '\t') {
+    src++;
+  }
+  while (*src >= '0' && *src <= '9') {
+    uint32_t digit = (uint32_t)(*src - '0');
+    seen = 1;
+    if (value > (max_value - digit) / 10U) {
+      return max_value;
+    }
+    value = value * 10U + digit;
+    src++;
+  }
+  if (!seen || value < min_value) {
+    return fallback;
+  }
+  if (value > max_value) {
+    return max_value;
+  }
+  return value;
+}
+
+static uint64_t ssh_lockout_remaining(void) {
+  uint64_t now = timer_uptime_seconds();
+
+  if (ssh_status.auth_lockout_until <= now) {
+    return 0;
+  }
+  return ssh_status.auth_lockout_until - now;
+}
+
+static void ssh_note_auth_failure(const char *reason) {
+  ssh_auth_failure_pending = 1;
+  ssh_status.auth_failures++;
+  if (ssh_status.max_auth_attempts > 0 &&
+      ssh_status.auth_failures >= ssh_status.max_auth_attempts) {
+    ssh_status.auth_lockout_until =
+        timer_uptime_seconds() + ssh_status.auth_lockout_seconds;
+    ssh_status.auth_failures = 0;
+    ssh_set_status("ssh: auth locked after repeated failures");
     return;
   }
+  ssh_set_status(reason ? reason : "ssh: authentication failed");
+}
+
+static void ssh_note_auth_success(void) {
+  ssh_status.authenticated = 1;
+  ssh_status.auth_failures = 0;
+  ssh_status.auth_lockout_until = 0;
+  ssh_auth_success_pending = 1;
+  ssh_set_status("ssh: password auth accepted");
+}
+
+static void ssh_load_config(void) {
+  file_t *f;
+  char text[768];
+  ssize_t n;
+  const char *needle = "password-sha256 ";
+  const char *max_attempts_needle = "max-attempts ";
+  const char *lockout_needle = "lockout-seconds ";
+  char *p;
+
+  f = vfs_open(ORIZON_SSH_CONFIG_PATH, O_RDONLY);
+  if (!f) {
+    ssh_status.auth_configured = ssh_hex64_valid(ssh_password_sha256);
+    return;
+  }
+  ssh_status.auth_configured = 0;
+  ssh_password_sha256[0] = '\0';
+  ssh_status.max_auth_attempts = SSH_AUTH_MAX_ATTEMPTS_DEFAULT;
+  ssh_status.auth_lockout_seconds = SSH_AUTH_LOCKOUT_SECONDS_DEFAULT;
   memset(text, 0, sizeof(text));
   n = vfs_read(f, text, sizeof(text) - 1);
   vfs_close(f);
@@ -313,11 +388,25 @@ static void ssh_load_config(void) {
       ssh_status.auth_configured = 1;
     }
   }
+  p = strstr(text, max_attempts_needle);
+  if (p) {
+    ssh_status.max_auth_attempts =
+        ssh_parse_uint_token(p + strlen(max_attempts_needle),
+                             SSH_AUTH_MAX_ATTEMPTS_DEFAULT, 1,
+                             SSH_AUTH_MAX_ATTEMPTS_LIMIT);
+  }
+  p = strstr(text, lockout_needle);
+  if (p) {
+    ssh_status.auth_lockout_seconds =
+        ssh_parse_uint_token(p + strlen(lockout_needle),
+                             SSH_AUTH_LOCKOUT_SECONDS_DEFAULT, 1,
+                             SSH_AUTH_LOCKOUT_SECONDS_LIMIT);
+  }
 }
 
 static void ssh_write_config(void) {
   file_t *f;
-  char text[256];
+  char text[384];
 
   vfs_mkdir("/system");
   snprintf(text, sizeof(text),
@@ -326,9 +415,13 @@ static void ssh_write_config(void) {
            "mode staged-ssh-transport\n"
            "user orizon\n"
            "auth %s\n"
-           "password-sha256 %s\n",
+           "password-sha256 %s\n"
+           "max-attempts %lu\n"
+           "lockout-seconds %lu\n",
            ssh_status.auth_configured ? "password" : "disabled",
-           ssh_status.auth_configured ? ssh_password_sha256 : "unset");
+           ssh_status.auth_configured ? ssh_password_sha256 : "unset",
+           (unsigned long)ssh_status.max_auth_attempts,
+           (unsigned long)ssh_status.auth_lockout_seconds);
   f = vfs_open(ORIZON_SSH_CONFIG_PATH, O_CREAT | O_WRONLY | O_TRUNC);
   if (!f) {
     return;
@@ -357,6 +450,8 @@ int ssh_set_password(const char *password, char *report, size_t report_size) {
   }
   sha256_buffer_hex(token, strlen(token), ssh_password_sha256);
   ssh_status.auth_configured = 1;
+  ssh_status.auth_failures = 0;
+  ssh_status.auth_lockout_until = 0;
   ssh_write_config();
   if (report && report_size > 0) {
     snprintf(report, report_size,
@@ -364,6 +459,75 @@ int ssh_set_password(const char *password, char *report, size_t report_size) {
              "ssh: connect with: ssh orizon@<ip-orizon>\n");
   }
   return 0;
+}
+
+int ssh_disable_password(char *report, size_t report_size) {
+  ssh_password_sha256[0] = '\0';
+  ssh_status.auth_configured = 0;
+  ssh_status.authenticated = 0;
+  ssh_status.auth_failures = 0;
+  ssh_status.auth_lockout_until = 0;
+  ssh_write_config();
+  if (report && report_size > 0) {
+    snprintf(report, report_size,
+             "ssh: password auth disabled; existing sessions remain until closed.\n");
+  }
+  return 0;
+}
+
+int ssh_reload_config(char *report, size_t report_size) {
+  ssh_load_config();
+  if (report && report_size > 0) {
+    snprintf(report, report_size,
+             "ssh: config reloaded from %s; auth=%s max-attempts=%lu lockout=%lus\n",
+             ORIZON_SSH_CONFIG_PATH,
+             ssh_status.auth_configured ? "password" : "disabled",
+             (unsigned long)ssh_status.max_auth_attempts,
+             (unsigned long)ssh_status.auth_lockout_seconds);
+  }
+  return 0;
+}
+
+int ssh_clear_lockout(char *report, size_t report_size) {
+  ssh_status.auth_failures = 0;
+  ssh_status.auth_lockout_until = 0;
+  if (report && report_size > 0) {
+    snprintf(report, report_size, "ssh: auth lockout cleared.\n");
+  }
+  return 0;
+}
+
+int ssh_set_auth_policy(uint32_t max_attempts, uint32_t lockout_seconds,
+                        char *report, size_t report_size) {
+  if (max_attempts < 1 || max_attempts > SSH_AUTH_MAX_ATTEMPTS_LIMIT ||
+      lockout_seconds < 1 ||
+      lockout_seconds > SSH_AUTH_LOCKOUT_SECONDS_LIMIT) {
+    if (report && report_size > 0) {
+      snprintf(report, report_size,
+               "ssh: invalid auth policy; max-attempts=1..%lu lockout=1..%lus.\n",
+               (unsigned long)SSH_AUTH_MAX_ATTEMPTS_LIMIT,
+               (unsigned long)SSH_AUTH_LOCKOUT_SECONDS_LIMIT);
+    }
+    return -1;
+  }
+  ssh_status.max_auth_attempts = max_attempts;
+  ssh_status.auth_lockout_seconds = lockout_seconds;
+  ssh_status.auth_failures = 0;
+  ssh_status.auth_lockout_until = 0;
+  ssh_write_config();
+  if (report && report_size > 0) {
+    snprintf(report, report_size,
+             "ssh: auth policy saved; max-attempts=%lu lockout=%lus.\n",
+             (unsigned long)ssh_status.max_auth_attempts,
+             (unsigned long)ssh_status.auth_lockout_seconds);
+  }
+  return 0;
+}
+
+int ssh_reset_auth_policy(char *report, size_t report_size) {
+  return ssh_set_auth_policy(SSH_AUTH_MAX_ATTEMPTS_DEFAULT,
+                             SSH_AUTH_LOCKOUT_SECONDS_DEFAULT, report,
+                             report_size);
 }
 
 static void ssh_put_u32(uint8_t *p, uint32_t v) {
@@ -696,7 +860,10 @@ static size_t ssh_build_userauth_failure(uint8_t *out, size_t cap) {
 
   payload[off++] = SSH_MSG_USERAUTH_FAILURE;
   if (ssh_put_cstring(payload, sizeof(payload), &off,
-                      ssh_status.auth_configured ? "password" : "") != 0) {
+                      (ssh_status.auth_configured &&
+                       ssh_lockout_remaining() == 0)
+                          ? "password"
+                          : "") != 0) {
     return 0;
   }
   payload[off++] = 0; /* partial_success */
@@ -1316,8 +1483,7 @@ static void ssh_process_userauth_request(const uint8_t *payload,
       ssh_read_string(payload, payload_len, &off, &service, &service_len) != 0 ||
       ssh_read_string(payload, payload_len, &off, &method, &method_len) != 0) {
     ssh_status.errors++;
-    ssh_auth_failure_pending = 1;
-    ssh_set_status("ssh: malformed USERAUTH_REQUEST");
+    ssh_note_auth_failure("ssh: malformed USERAUTH_REQUEST");
     return;
   }
 
@@ -1326,11 +1492,16 @@ static void ssh_process_userauth_request(const uint8_t *payload,
   ssh_copy_name(method, method_len, ssh_status.auth_method,
                 sizeof(ssh_status.auth_method));
 
+  if (ssh_lockout_remaining() > 0) {
+    ssh_auth_failure_pending = 1;
+    ssh_set_status("ssh: authentication locked temporarily");
+    return;
+  }
+
   if (service_len != strlen("ssh-connection") ||
       memcmp(service, "ssh-connection", service_len) != 0 ||
       user_len != strlen("orizon") || memcmp(user, "orizon", user_len) != 0) {
-    ssh_auth_failure_pending = 1;
-    ssh_set_status("ssh: userauth rejected user/service");
+    ssh_note_auth_failure("ssh: userauth rejected user/service");
     return;
   }
 
@@ -1343,8 +1514,7 @@ static void ssh_process_userauth_request(const uint8_t *payload,
   if (method_len == strlen("password") &&
       memcmp(method, "password", method_len) == 0) {
     if (off + 1 > payload_len) {
-      ssh_auth_failure_pending = 1;
-      ssh_set_status("ssh: malformed password auth");
+      ssh_note_auth_failure("ssh: malformed password auth");
       return;
     }
     change_request = payload[off++];
@@ -1358,13 +1528,10 @@ static void ssh_process_userauth_request(const uint8_t *payload,
     }
     sha256_buffer_hex(password, password_len, password_hash);
     if (strcmp(password_hash, ssh_password_sha256) == 0) {
-      ssh_status.authenticated = 1;
-      ssh_auth_success_pending = 1;
-      ssh_set_status("ssh: password auth accepted");
+      ssh_note_auth_success();
       return;
     }
-    ssh_auth_failure_pending = 1;
-    ssh_set_status("ssh: password auth failed");
+    ssh_note_auth_failure("ssh: password auth failed");
     return;
   }
 
@@ -2124,16 +2291,18 @@ int ssh_poll(void) {
 
 void ssh_format_status(char *buf, size_t size) {
   char rip[24];
+  uint64_t lockout;
 
   if (!buf || size == 0) {
     return;
   }
   netstack_format_ipv4(ssh_status.remote_ip, rip, sizeof(rip));
+  lockout = ssh_lockout_remaining();
   snprintf(buf, size,
            "ssh: enabled=%s state=%s port=%u connected=%s remote=%s:%u "
            "sessions=%lu banner=%s skex=%s ckex=%s pkt=%u ecdh=%s "
            "reply=%s newkeys=%s cnewkeys=%s keys=%s enc=%s svc=%s "
-           "authcfg=%s auth=%s chan=%s shell=%s kex=%s "
+           "authcfg=%s auth=%s failures=%lu lockout=%lus chan=%s shell=%s kex=%s "
            "rx=%lu spkts=%lu tx=%lu errors=%lu status=\"%s\"",
            ssh_status.enabled ? "yes" : "no",
            netstack_tcp_server_state_name(&ssh_server),
@@ -2156,6 +2325,8 @@ void ssh_format_status(char *buf, size_t size) {
            ssh_status.authenticated
                ? "ok"
                : (ssh_status.userauth_request_seen ? "requested" : "pending"),
+           (unsigned long)ssh_status.auth_failures,
+           (unsigned long)lockout,
            ssh_status.channel_open_confirm_sent
                ? "open"
                : (ssh_status.channel_open_seen ? "seen" : "pending"),
@@ -2233,6 +2404,31 @@ void ssh_format_algorithms(char *buf, size_t size) {
            ssh_status.server_to_client_mac_sha256[0]
                ? ssh_status.server_to_client_mac_sha256
                : "none");
+}
+
+void ssh_format_auth(char *buf, size_t size) {
+  uint64_t lockout;
+
+  if (!buf || size == 0) {
+    return;
+  }
+  lockout = ssh_lockout_remaining();
+  snprintf(buf, size,
+           "ssh auth:\n"
+           "  user: orizon\n"
+           "  password-auth: %s\n"
+           "  max-attempts: %lu\n"
+           "  lockout-seconds: %lu\n"
+           "  current-failures: %lu\n"
+           "  lockout-remaining: %lus\n"
+           "  config: %s\n"
+           "  log: %s\n",
+           ssh_status.auth_configured ? "enabled" : "disabled",
+           (unsigned long)ssh_status.max_auth_attempts,
+           (unsigned long)ssh_status.auth_lockout_seconds,
+           (unsigned long)ssh_status.auth_failures,
+           (unsigned long)lockout,
+           ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_LOG_PATH);
 }
 
 void ssh_format_report(char *buf, size_t size) {

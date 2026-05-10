@@ -2531,13 +2531,20 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
       term_puts_t(term, "\n");
     }
     term_puts_t(term,
-                "commands: ssh password <pass> | ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
+                "commands: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
     return;
   }
 
   if (term_command_is(args, "password") || term_command_is(args, "passwd")) {
     const char *password =
         term_skip_spaces(args + (term_command_is(args, "passwd") ? 6 : 8));
+    if (term_command_is(password, "off") ||
+        term_command_is(password, "disable") ||
+        term_command_is(password, "disabled")) {
+      ssh_disable_password(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
     ssh_set_password(password, report, sizeof(report));
     term_puts_t(term, report);
     return;
@@ -2572,6 +2579,67 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "auth") || term_command_is(args, "security")) {
+    const char *auth_args =
+        term_skip_spaces(args + (term_command_is(args, "auth") ? 4 : 8));
+    const ssh_status_t *st = ssh_get_status();
+    int value = 0;
+    if (term_command_is(auth_args, "max")) {
+      const char *value_arg = term_skip_spaces(auth_args + 3);
+      if (term_parse_uint(value_arg, &value) < 0) {
+        term_puts_t(term, "usage: ssh auth max <attempts>\n");
+        return;
+      }
+      ssh_set_auth_policy((uint32_t)value, st->auth_lockout_seconds, report,
+                          sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(auth_args, "lockout")) {
+      const char *value_arg = term_skip_spaces(auth_args + 7);
+      if (term_parse_uint(value_arg, &value) < 0) {
+        term_puts_t(term, "usage: ssh auth lockout <seconds>\n");
+        return;
+      }
+      ssh_set_auth_policy(st->max_auth_attempts, (uint32_t)value, report,
+                          sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(auth_args, "default") ||
+        term_command_is(auth_args, "defaults")) {
+      ssh_reset_auth_policy(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    ssh_format_auth(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
+
+  if (term_command_is(args, "reload")) {
+    ssh_reload_config(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "lockout")) {
+    const char *lock_args = term_skip_spaces(args + 7);
+    if (term_command_is(lock_args, "clear") ||
+        term_command_is(lock_args, "reset") ||
+        term_command_is(lock_args, "unlock")) {
+      ssh_clear_lockout(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    ssh_format_auth(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
   if (term_command_is(args, "algorithms") || term_command_is(args, "algo")) {
     ssh_format_algorithms(report, sizeof(report));
     term_puts_t(term, report);
@@ -2582,7 +2650,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: ssh password <pass> | ssh start | ssh stop | ssh status | ssh algorithms | ssh poll\n");
+              "usage: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
 }
 
 static void term_run_net(terminal_t *term, const char *cmd) {
