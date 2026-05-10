@@ -212,7 +212,9 @@ prepare maintenant les trames de gestion dans les buffers DMA TX et affiche le
 doorbell prevu sans l'ecrire. Le chemin RX detecte aussi les trames
 EAPOL-Key WPA2, capture l'ANonce, derive un PTK de diagnostic, prepare une
 reponse M2 inspectable avec `wifi wpa`, puis `wifi tx m2` peut seulement la
-placer en DMA sans transmission reelle.
+placer en DMA sans transmission reelle. `wifi txcmd [auth|assoc|m2]` construit
+aussi une enveloppe Intel `TX_CMD` v10 de diagnostic dans un buffer separe:
+elle est mesuree et verifiee, mais pas encore copiee dans la queue commande.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

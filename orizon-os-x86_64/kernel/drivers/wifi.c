@@ -108,6 +108,24 @@ static wifi_status_t wifi_status_state = {
     .tx_stage_bc_entry = 0,
     .tx_stage_wptr_value = 0,
     .tx_stage_checksum = 0,
+    .txcmd_ready = 0,
+    .txcmd_failed = 0,
+    .txcmd_errors = 0,
+    .txcmd_plans = 0,
+    .txcmd_kind = 0,
+    .txcmd_api_version = 0,
+    .txcmd_id = 0,
+    .txcmd_group = 0,
+    .txcmd_sequence = 0,
+    .txcmd_payload_len = 0,
+    .txcmd_command_len = 0,
+    .txcmd_frame_len = 0,
+    .txcmd_header_len = 0,
+    .txcmd_flags = 0,
+    .txcmd_offload_assist = 0,
+    .txcmd_rate_n_flags = 0,
+    .txcmd_sta_id = 0,
+    .txcmd_checksum = 0,
     .context_ready = 0,
     .context_armed = 0,
     .context_failed = 0,
@@ -533,6 +551,7 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_TFH_NUM_TBS 25U
 #define WIFI_DQA_CMD_QUEUE 0U
 #define WIFI_DQA_TX_QUEUE 1U
+#define WIFI_CMD_TX 0x1cU
 #define WIFI_CMD_SCD_QUEUE_CFG 0x1dU
 #define WIFI_CMD_NVM_ACCESS 0x88U
 #define WIFI_CMD_NVM_GET_INFO 0x02U
@@ -547,6 +566,7 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CMD_GROUP_LEGACY 0x00U
 #define WIFI_CMD_GROUP_SCAN 0x06U
 #define WIFI_CMD_GROUP_REGULATORY_NVM 0x0cU
+#define WIFI_CMD_VERSION_TX_API_V10 10U
 #define WIFI_CMD_VERSION_TX_QUEUE_CFG 2U
 #define WIFI_CMD_VERSION_NVM_ACCESS 0U
 #define WIFI_CMD_VERSION_NVM_GET_INFO 1U
@@ -611,6 +631,11 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_TX_STAGE_KIND_AUTH 1U
 #define WIFI_TX_STAGE_KIND_ASSOC 2U
 #define WIFI_TX_STAGE_KIND_EAPOL_M2 3U
+#define WIFI_TX_CMD_FLAG_ENCRYPT_DIS (1U << 1)
+#define WIFI_TX_CMD_FLAG_HIGH_PRI (1U << 2)
+#define WIFI_TX_CMD_OFFLD_MH_SIZE_SHIFT 8U
+#define WIFI_TX_CMD_OFFLD_PAD (1U << 13)
+#define WIFI_TX_CMD_STA_ID_UNBOUND 0xffU
 #define WIFI_EAPOL_ETHERTYPE 0x888eU
 #define WIFI_EAPOL_TYPE_KEY 3U
 #define WIFI_WPA_KEY_INFO_PAIRWISE 0x0008U
@@ -714,6 +739,21 @@ typedef struct __attribute__((packed)) {
   uint64_t byte_cnt_addr;
   uint64_t tfdq_addr;
 } wifi_tx_queue_cfg_cmd_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t pn_low;
+  uint16_t pn_high;
+  uint16_t aux_info;
+} wifi_tx_dram_sec_info_t;
+
+typedef struct __attribute__((packed)) {
+  uint16_t len;
+  uint16_t flags;
+  uint32_t offload_assist;
+  wifi_tx_dram_sec_info_t dram_info;
+  uint32_t rate_n_flags;
+  uint8_t reserved[8];
+} wifi_tx_cmd_v10_t;
 
 typedef struct __attribute__((packed)) {
   uint8_t op_code;
@@ -994,6 +1034,8 @@ static uint8_t wifi_tx_buffers[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_rx_buffers[WIFI_RX_QUEUE_ENTRIES][WIFI_RX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
+static uint8_t wifi_txcmd_plan_buffer[WIFI_CMD_BUFFER_BYTES]
+    __attribute__((aligned(16)));
 static uint8_t wifi_scan_payload[WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_connect_auth_frame[64] __attribute__((aligned(16)));
@@ -1340,6 +1382,24 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.tx_stage_bc_entry = 0;
   wifi_status_state.tx_stage_wptr_value = 0;
   wifi_status_state.tx_stage_checksum = 0;
+  wifi_status_state.txcmd_ready = 0;
+  wifi_status_state.txcmd_failed = 0;
+  wifi_status_state.txcmd_errors = 0;
+  wifi_status_state.txcmd_plans = 0;
+  wifi_status_state.txcmd_kind = 0;
+  wifi_status_state.txcmd_api_version = 0;
+  wifi_status_state.txcmd_id = 0;
+  wifi_status_state.txcmd_group = 0;
+  wifi_status_state.txcmd_sequence = 0;
+  wifi_status_state.txcmd_payload_len = 0;
+  wifi_status_state.txcmd_command_len = 0;
+  wifi_status_state.txcmd_frame_len = 0;
+  wifi_status_state.txcmd_header_len = 0;
+  wifi_status_state.txcmd_flags = 0;
+  wifi_status_state.txcmd_offload_assist = 0;
+  wifi_status_state.txcmd_rate_n_flags = 0;
+  wifi_status_state.txcmd_sta_id = 0;
+  wifi_status_state.txcmd_checksum = 0;
   memset(wifi_status_state.connect_bssid, 0,
          sizeof(wifi_status_state.connect_bssid));
   memset(wifi_status_state.connect_local_mac, 0,
@@ -1354,6 +1414,7 @@ static void wifi_connect_clear_plan(void) {
   memset(wifi_wpa_ptk, 0, sizeof(wifi_wpa_ptk));
   memset(wifi_wpa_eapol_m2, 0, sizeof(wifi_wpa_eapol_m2));
   memset(wifi_wpa_m2_data_frame, 0, sizeof(wifi_wpa_m2_data_frame));
+  memset(wifi_txcmd_plan_buffer, 0, sizeof(wifi_txcmd_plan_buffer));
 }
 
 static void wifi_reset_firmware_parse(void) {
@@ -1448,6 +1509,24 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.tx_stage_bc_entry = 0;
   wifi_status_state.tx_stage_wptr_value = 0;
   wifi_status_state.tx_stage_checksum = 0;
+  wifi_status_state.txcmd_ready = 0;
+  wifi_status_state.txcmd_failed = 0;
+  wifi_status_state.txcmd_errors = 0;
+  wifi_status_state.txcmd_plans = 0;
+  wifi_status_state.txcmd_kind = 0;
+  wifi_status_state.txcmd_api_version = 0;
+  wifi_status_state.txcmd_id = 0;
+  wifi_status_state.txcmd_group = 0;
+  wifi_status_state.txcmd_sequence = 0;
+  wifi_status_state.txcmd_payload_len = 0;
+  wifi_status_state.txcmd_command_len = 0;
+  wifi_status_state.txcmd_frame_len = 0;
+  wifi_status_state.txcmd_header_len = 0;
+  wifi_status_state.txcmd_flags = 0;
+  wifi_status_state.txcmd_offload_assist = 0;
+  wifi_status_state.txcmd_rate_n_flags = 0;
+  wifi_status_state.txcmd_sta_id = 0;
+  wifi_status_state.txcmd_checksum = 0;
   wifi_status_state.context_ready = 0;
   wifi_status_state.context_armed = 0;
   wifi_status_state.context_failed = 0;
@@ -3284,7 +3363,7 @@ void wifi_format_status(char *buf, size_t size) {
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
            "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s scan=%s "
-           "connect=%s txstage=%s status=%s",
+           "connect=%s txstage=%s txcmd=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -3346,6 +3425,9 @@ void wifi_format_status(char *buf, size_t size) {
            s->tx_stage_ready
                ? wifi_tx_stage_kind_text(s->tx_stage_kind)
                : (s->tx_stage_failed ? "failed" : "idle"),
+           s->txcmd_ready
+               ? wifi_tx_stage_kind_text(s->txcmd_kind)
+               : (s->txcmd_failed ? "failed" : "idle"),
            s->status);
 }
 
@@ -7218,6 +7300,206 @@ int wifi_wpa_probe(char *report, size_t report_size) {
            s->wpa_m2_data_frame_len, s->wpa_m2_key_data_len,
            s->wpa_m2_mic_checksum, s->wpa_m2_checksum);
   return s->wpa_m2_ready ? 0 : -1;
+}
+
+static uint32_t wifi_txcmd_header_len(const uint8_t *frame,
+                                      uint32_t frame_len) {
+  uint16_t fc;
+  uint32_t type;
+  uint32_t subtype;
+  uint32_t hdr_len;
+
+  if (!frame || frame_len < WIFI_80211_MGMT_HEADER_BYTES) {
+    return 0;
+  }
+
+  fc = wifi_read_le16(frame);
+  type = (fc & WIFI_80211_FC_TYPE_MASK) >> 2;
+  subtype = (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4;
+  hdr_len = type == WIFI_80211_TYPE_DATA
+                ? wifi_80211_data_header_len(fc, subtype)
+                : WIFI_80211_MGMT_HEADER_BYTES;
+  return hdr_len <= frame_len ? hdr_len : 0;
+}
+
+static uint32_t wifi_txcmd_offload_assist(uint32_t hdr_len) {
+  uint32_t assist = (hdr_len / 2U) << WIFI_TX_CMD_OFFLD_MH_SIZE_SHIFT;
+
+  if (hdr_len % 4U) {
+    assist |= WIFI_TX_CMD_OFFLD_PAD;
+  }
+  return assist;
+}
+
+static int wifi_txcmd_select_frame(const char *target, uint32_t *kind,
+                                   const uint8_t **frame,
+                                   uint32_t *frame_len) {
+  if (!target || target[0] == '\0') {
+    target = "assoc";
+  }
+
+  if (strcmp(target, "auth") == 0) {
+    *kind = WIFI_TX_STAGE_KIND_AUTH;
+    *frame = wifi_connect_auth_frame;
+    *frame_len = wifi_status_state.connect_auth_frame_len;
+    return 0;
+  }
+  if (strcmp(target, "assoc") == 0) {
+    *kind = WIFI_TX_STAGE_KIND_ASSOC;
+    *frame = wifi_connect_assoc_frame;
+    *frame_len = wifi_status_state.connect_assoc_frame_len;
+    return 0;
+  }
+  if (strcmp(target, "m2") == 0) {
+    if (!wifi_status_state.wpa_m2_data_ready &&
+        wifi_status_state.wpa_m1_seen &&
+        wifi_status_state.connect_pmk_ready) {
+      wifi_wpa_prepare_m2((uint8_t)wifi_status_state.wpa_eapol_version,
+                          (uint8_t)wifi_status_state.wpa_key_desc_type);
+    }
+    *kind = WIFI_TX_STAGE_KIND_EAPOL_M2;
+    *frame = wifi_wpa_m2_data_frame;
+    *frame_len = wifi_status_state.wpa_m2_data_frame_len;
+    return wifi_status_state.wpa_m2_data_ready ? 0 : -1;
+  }
+  return -1;
+}
+
+static int wifi_txcmd_build_plan(uint32_t kind, const uint8_t *frame,
+                                 uint32_t frame_len) {
+  wifi_cmd_header_wide_t *cmd;
+  wifi_tx_cmd_v10_t *tx;
+  uint32_t hdr_len;
+  uint32_t payload_len;
+  uint32_t command_len;
+  uint32_t flags;
+
+  if (!wifi_status_state.connect_ready || !frame ||
+      frame_len < WIFI_80211_MGMT_HEADER_BYTES || frame_len > 2342U) {
+    wifi_status_state.txcmd_ready = 0;
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    wifi_status_state.status = "wifi: TX_CMD plan needs a valid frame plan";
+    return -1;
+  }
+
+  hdr_len = wifi_txcmd_header_len(frame, frame_len);
+  payload_len = (uint32_t)sizeof(wifi_tx_cmd_v10_t) + frame_len;
+  command_len = (uint32_t)sizeof(wifi_cmd_header_wide_t) + payload_len;
+  if (!hdr_len || command_len > sizeof(wifi_txcmd_plan_buffer)) {
+    wifi_status_state.txcmd_ready = 0;
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    wifi_status_state.status = "wifi: TX_CMD diagnostic buffer is too small";
+    return -1;
+  }
+
+  memset(wifi_txcmd_plan_buffer, 0, sizeof(wifi_txcmd_plan_buffer));
+  cmd = (wifi_cmd_header_wide_t *)wifi_txcmd_plan_buffer;
+  tx = (wifi_tx_cmd_v10_t *)(wifi_txcmd_plan_buffer + sizeof(*cmd));
+
+  cmd->cmd = WIFI_CMD_TX;
+  cmd->group_id = WIFI_CMD_GROUP_LEGACY;
+  cmd->sequence = 0;
+  cmd->length = (uint16_t)payload_len;
+  cmd->reserved = 0;
+  cmd->version = WIFI_CMD_VERSION_TX_API_V10;
+
+  flags = WIFI_TX_CMD_FLAG_HIGH_PRI | WIFI_TX_CMD_FLAG_ENCRYPT_DIS;
+  tx->len = (uint16_t)frame_len;
+  tx->flags = (uint16_t)flags;
+  tx->offload_assist = wifi_txcmd_offload_assist(hdr_len);
+  tx->rate_n_flags = 0;
+  memcpy((uint8_t *)tx + sizeof(*tx), frame, frame_len);
+
+  wifi_status_state.txcmd_ready = 1;
+  wifi_status_state.txcmd_failed = 0;
+  wifi_status_state.txcmd_plans++;
+  wifi_status_state.txcmd_kind = kind;
+  wifi_status_state.txcmd_api_version = WIFI_CMD_VERSION_TX_API_V10;
+  wifi_status_state.txcmd_id = WIFI_CMD_TX;
+  wifi_status_state.txcmd_group = WIFI_CMD_GROUP_LEGACY;
+  wifi_status_state.txcmd_sequence = 0;
+  wifi_status_state.txcmd_payload_len = payload_len;
+  wifi_status_state.txcmd_command_len = command_len;
+  wifi_status_state.txcmd_frame_len = frame_len;
+  wifi_status_state.txcmd_header_len = hdr_len;
+  wifi_status_state.txcmd_flags = flags;
+  wifi_status_state.txcmd_offload_assist = tx->offload_assist;
+  wifi_status_state.txcmd_rate_n_flags = tx->rate_n_flags;
+  wifi_status_state.txcmd_sta_id = WIFI_TX_CMD_STA_ID_UNBOUND;
+  wifi_status_state.txcmd_checksum =
+      wifi_connect_checksum(wifi_txcmd_plan_buffer, command_len);
+  wifi_status_state.status =
+      "wifi: Intel TX_CMD v10 diagnostic plan built; not queued";
+  return 0;
+}
+
+int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  const uint8_t *frame = NULL;
+  uint32_t frame_len = 0;
+  uint32_t kind = 0;
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi txcmd: no wireless controller detected\n");
+    return -1;
+  }
+
+  if (!s->connect_ready) {
+    snprintf(report, report_size,
+             "wifi txcmd: no connection frame plan ready\n"
+             "run: wifi bringup, wifi scan arm, wifi scan poll, "
+             "wifi connect <ssid> [password]\n");
+    return -1;
+  }
+
+  rc = wifi_txcmd_select_frame(target, &kind, &frame, &frame_len);
+  if (rc != 0) {
+    wifi_status_state.txcmd_ready = 0;
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    snprintf(report, report_size,
+             "wifi txcmd: usage wifi txcmd [auth|assoc|m2]\n"
+             "m2 requires: association response + WPA EAPOL M1 parsed by "
+             "wifi rx poll\n");
+    return -1;
+  }
+
+  rc = wifi_txcmd_build_plan(kind, frame, frame_len);
+  s = &wifi_status_state;
+  snprintf(report, report_size,
+           "wifi txcmd: %s\n"
+           "target: %s ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
+           "cmd: id=0x%02x group=0x%02x api=%u payload-len=%u "
+           "command-len=%u plans=%lu checksum=0x%08x\n"
+           "frame: kind=%s len=%u hdr-len=%u sta-id=%u unbound=yes\n"
+           "flags: tx=0x%04x offload=0x%08x rate=0x%08x "
+           "encrypt-disabled=yes high-priority=yes\n"
+           "safety: diagnostic buffer only; not copied to command queue and "
+           "doorbell not armed\n"
+           "next: bind MAC/STA context, then allow guarded TX_CMD queueing\n",
+           rc == 0 ? "Intel TX_CMD v10 plan ready" : "Intel TX_CMD plan failed",
+           (!target || target[0] == '\0') ? "assoc" : target,
+           s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
+           s->connect_bssid[2], s->connect_bssid[3], s->connect_bssid[4],
+           s->connect_bssid[5], s->txcmd_id, s->txcmd_group,
+           s->txcmd_api_version, s->txcmd_payload_len,
+           s->txcmd_command_len, s->txcmd_plans, s->txcmd_checksum,
+           wifi_tx_stage_kind_text(s->txcmd_kind), s->txcmd_frame_len,
+           s->txcmd_header_len, s->txcmd_sta_id, s->txcmd_flags,
+           s->txcmd_offload_assist, s->txcmd_rate_n_flags);
+  return rc;
 }
 
 static const char *wifi_tx_stage_kind_text(uint32_t kind) {

@@ -72,8 +72,10 @@ development target, not a ZimaOS-only assumption.
   RX diagnostics now recognize AP key frames, capture ANonce, derive diagnostic
   PTK material, and prepare an inspectable M2 response through `wifi wpa`.
   `wifi tx m2` only stages that response in DMA; it still does not transmit.
-  Real traffic still requires the next driver milestones: Intel `TX_CMD`,
-  MAC/STA binding, and WPA key installation.
+  `wifi txcmd [auth|assoc|m2]` builds a separate Intel `TX_CMD` v10 diagnostic
+  envelope for those frames without copying it to the command queue. Real
+  traffic still requires the next driver milestones: MAC/STA binding, guarded
+  TXCMD queueing, and WPA key installation.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -106,6 +108,8 @@ wifi connect <ssid> [password]
 wifi wpa
 wifi tx all
 wifi tx m2
+wifi txcmd assoc
+wifi txcmd m2
 storage
 disks
 ```
@@ -151,5 +155,5 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: Intel TX command emission, MAC/STA
-   binding, association response parsing, then WPA2/WPA3.
+6. Grow the Intel Wi-Fi path in order: MAC/STA binding, guarded Intel TXCMD
+   queueing, association response parsing, then WPA2/WPA3.
