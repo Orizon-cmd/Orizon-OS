@@ -226,7 +226,12 @@ firmware de la reponse AP: Orizon ne marque une association comme confirmee que
 si authentication TX, association TX, binding STA, authentication response et
 association response sont tous acceptes. Pour les reseaux ouverts, ce chemin
 rend la data path disponible; pour WPA2, il reste volontairement bloque tant que
-les cles de chiffrement ne sont pas installees.
+les cles de chiffrement ne sont pas installees. `wifi key [arm]` prepare
+maintenant la commande Intel `SEC_KEY_CMD` du groupe data-path pour installer la
+cle paire CCMP derivee du PTK; `wifi key arm` ne l'envoie qu'apres association
+confirmee, binding STA ACKe et `wifi txcmd m2 arm` ACKe. Le Wi-Fi WPA n'est pas
+encore considere complet: il reste a traiter M3/M4, GTK/groupe et les trames de
+donnees avant DHCP.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

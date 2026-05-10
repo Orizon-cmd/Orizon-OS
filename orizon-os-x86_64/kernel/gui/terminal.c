@@ -2837,6 +2837,15 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "key")) {
+    const char *key_args = term_skip_spaces(args + 3);
+    int arm_key = term_command_is(key_args, "arm") ||
+                  term_command_is(key_args, "go");
+    wifi_key_probe(arm_key, line, sizeof(line));
+    term_puts_t(term, line);
+    return;
+  }
+
   if (term_command_is(args, "bind")) {
     const char *bind_args = term_skip_spaces(args + 4);
     int arm_bind = term_command_is(bind_args, "arm") ||
@@ -2900,7 +2909,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|all]|txcmd [auth|assoc|m2] [arm]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [arm]|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|all]|txcmd [auth|assoc|m2] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3505,6 +3514,8 @@ void term_execute(terminal_t *term, const char *cmd) {
                 "  wifi connect - Prepare Wi-Fi auth/association frames\n");
     term_puts_t(term,
                 "  wifi wpa - Show WPA M1/PTK/M2 diagnostic state\n");
+    term_puts_t(term,
+                "  wifi key [arm] - Build/queue WPA pairwise SEC_KEY\n");
     term_puts_t(term,
                 "  wifi bind [arm] - Build/queue MAC/LINK/STA binding\n");
     term_puts_t(term,

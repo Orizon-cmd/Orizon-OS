@@ -455,6 +455,34 @@ typedef struct {
   int wpa_m2_data_ready;
   int wpa_m2_tx_acked;
   uint32_t wpa_m2_tx_sequence;
+  int wpa_key_ready;
+  int wpa_key_failed;
+  unsigned long wpa_key_errors;
+  unsigned long wpa_key_plans;
+  uint32_t wpa_key_cmd_id;
+  uint32_t wpa_key_group;
+  uint32_t wpa_key_version;
+  uint32_t wpa_key_payload_len;
+  uint32_t wpa_key_command_len;
+  uint32_t wpa_key_checksum;
+  uint32_t wpa_key_sta_id;
+  uint32_t wpa_key_sta_mask;
+  uint32_t wpa_key_id;
+  uint32_t wpa_key_flags;
+  uint32_t wpa_key_material_len;
+  uint32_t wpa_key_material_checksum;
+  int wpa_key_armed;
+  int wpa_key_sent;
+  int wpa_key_response_seen;
+  int wpa_key_timeout;
+  int wpa_key_installed;
+  unsigned long wpa_key_attempts;
+  uint32_t wpa_key_sequence;
+  uint32_t wpa_key_index;
+  uint32_t wpa_key_rx_cmd;
+  uint32_t wpa_key_rx_group;
+  uint32_t wpa_key_rx_sequence;
+  uint32_t wpa_key_rx_len;
   uint8_t connect_bssid[6];
   uint8_t connect_local_mac[6];
   char connect_ssid[WIFI_SCAN_SSID_MAX + 1U];
@@ -546,6 +574,7 @@ int wifi_txcmd_probe(const char *target, int arm, char *report,
                      size_t report_size);
 int wifi_bind_probe(int arm, char *report, size_t report_size);
 int wifi_wpa_probe(char *report, size_t report_size);
+int wifi_key_probe(int arm, char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size);
 

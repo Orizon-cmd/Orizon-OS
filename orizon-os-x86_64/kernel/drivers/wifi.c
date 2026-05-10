@@ -433,6 +433,34 @@ static wifi_status_t wifi_status_state = {
     .wpa_m2_data_ready = 0,
     .wpa_m2_tx_acked = 0,
     .wpa_m2_tx_sequence = 0,
+    .wpa_key_ready = 0,
+    .wpa_key_failed = 0,
+    .wpa_key_errors = 0,
+    .wpa_key_plans = 0,
+    .wpa_key_cmd_id = 0,
+    .wpa_key_group = 0,
+    .wpa_key_version = 0,
+    .wpa_key_payload_len = 0,
+    .wpa_key_command_len = 0,
+    .wpa_key_checksum = 0,
+    .wpa_key_sta_id = 0,
+    .wpa_key_sta_mask = 0,
+    .wpa_key_id = 0,
+    .wpa_key_flags = 0,
+    .wpa_key_material_len = 0,
+    .wpa_key_material_checksum = 0,
+    .wpa_key_armed = 0,
+    .wpa_key_sent = 0,
+    .wpa_key_response_seen = 0,
+    .wpa_key_timeout = 0,
+    .wpa_key_installed = 0,
+    .wpa_key_attempts = 0,
+    .wpa_key_sequence = 0,
+    .wpa_key_index = 0,
+    .wpa_key_rx_cmd = 0,
+    .wpa_key_rx_group = 0,
+    .wpa_key_rx_sequence = 0,
+    .wpa_key_rx_len = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -635,15 +663,18 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CMD_GROUP_LONG 0x01U
 #define WIFI_CMD_GROUP_LEGACY 0x00U
 #define WIFI_CMD_GROUP_MAC_CONF 0x03U
+#define WIFI_CMD_GROUP_DATA_PATH 0x05U
 #define WIFI_CMD_GROUP_SCAN 0x06U
 #define WIFI_CMD_GROUP_REGULATORY_NVM 0x0cU
 #define WIFI_CMD_MAC_CONFIG 0x08U
 #define WIFI_CMD_LINK_CONFIG 0x09U
 #define WIFI_CMD_STA_CONFIG 0x0aU
+#define WIFI_CMD_SEC_KEY 0x18U
 #define WIFI_CMD_VERSION_TX_API_V10 10U
 #define WIFI_CMD_VERSION_MAC_CONFIG 1U
 #define WIFI_CMD_VERSION_LINK_CONFIG 1U
 #define WIFI_CMD_VERSION_STA_CONFIG 1U
+#define WIFI_CMD_VERSION_SEC_KEY 1U
 #define WIFI_CMD_VERSION_TX_QUEUE_CFG 2U
 #define WIFI_CMD_VERSION_NVM_ACCESS 0U
 #define WIFI_CMD_VERSION_NVM_GET_INFO 1U
@@ -731,6 +762,9 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_BIND_MAC_FILTER_MGMT (1U << 1)
 #define WIFI_BIND_MAC_FILTER_GROUP (1U << 2)
 #define WIFI_BIND_MAC_FILTER_DECRYPT_OFF (1U << 3)
+#define WIFI_FW_CTXT_ACTION_ADD 1U
+#define WIFI_SEC_KEY_FLAG_CIPHER_CCMP 0x02U
+#define WIFI_SEC_KEY_PAIRWISE_KEY_ID 0U
 #define WIFI_EAPOL_ETHERTYPE 0x888eU
 #define WIFI_EAPOL_TYPE_KEY 3U
 #define WIFI_WPA_KEY_INFO_PAIRWISE 0x0008U
@@ -849,6 +883,18 @@ typedef struct __attribute__((packed)) {
   uint32_t rate_n_flags;
   uint8_t reserved[8];
 } wifi_tx_cmd_v10_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t action;
+  uint32_t sta_mask;
+  uint32_t key_id;
+  uint32_t key_flags;
+  uint8_t key[32];
+  uint8_t tkip_mic_rx_key[8];
+  uint8_t tkip_mic_tx_key[8];
+  uint64_t rx_seq;
+  uint64_t tx_seq;
+} wifi_sec_key_add_cmd_t;
 
 typedef struct __attribute__((packed)) {
   uint16_t cw_min;
@@ -1240,6 +1286,8 @@ static uint8_t wifi_tx_buffers[WIFI_TX_QUEUE_ENTRIES][WIFI_TX_BUFFER_BYTES]
 static uint8_t wifi_rx_buffers[WIFI_RX_QUEUE_ENTRIES][WIFI_RX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_txcmd_plan_buffer[WIFI_CMD_BUFFER_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_wpa_key_buffer[WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_bind_mac_buffer[WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(16)));
@@ -1639,6 +1687,34 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.wpa_m2_data_ready = 0;
   wifi_status_state.wpa_m2_tx_acked = 0;
   wifi_status_state.wpa_m2_tx_sequence = 0;
+  wifi_status_state.wpa_key_ready = 0;
+  wifi_status_state.wpa_key_failed = 0;
+  wifi_status_state.wpa_key_errors = 0;
+  wifi_status_state.wpa_key_plans = 0;
+  wifi_status_state.wpa_key_cmd_id = 0;
+  wifi_status_state.wpa_key_group = 0;
+  wifi_status_state.wpa_key_version = 0;
+  wifi_status_state.wpa_key_payload_len = 0;
+  wifi_status_state.wpa_key_command_len = 0;
+  wifi_status_state.wpa_key_checksum = 0;
+  wifi_status_state.wpa_key_sta_id = 0;
+  wifi_status_state.wpa_key_sta_mask = 0;
+  wifi_status_state.wpa_key_id = 0;
+  wifi_status_state.wpa_key_flags = 0;
+  wifi_status_state.wpa_key_material_len = 0;
+  wifi_status_state.wpa_key_material_checksum = 0;
+  wifi_status_state.wpa_key_armed = 0;
+  wifi_status_state.wpa_key_sent = 0;
+  wifi_status_state.wpa_key_response_seen = 0;
+  wifi_status_state.wpa_key_timeout = 0;
+  wifi_status_state.wpa_key_installed = 0;
+  wifi_status_state.wpa_key_attempts = 0;
+  wifi_status_state.wpa_key_sequence = 0;
+  wifi_status_state.wpa_key_index = 0;
+  wifi_status_state.wpa_key_rx_cmd = 0;
+  wifi_status_state.wpa_key_rx_group = 0;
+  wifi_status_state.wpa_key_rx_sequence = 0;
+  wifi_status_state.wpa_key_rx_len = 0;
   wifi_status_state.tx_stage_ready = 0;
   wifi_status_state.tx_stage_failed = 0;
   wifi_status_state.tx_stage_errors = 0;
@@ -1702,6 +1778,7 @@ static void wifi_connect_clear_plan(void) {
   memset(wifi_wpa_eapol_m2, 0, sizeof(wifi_wpa_eapol_m2));
   memset(wifi_wpa_m2_data_frame, 0, sizeof(wifi_wpa_m2_data_frame));
   memset(wifi_txcmd_plan_buffer, 0, sizeof(wifi_txcmd_plan_buffer));
+  memset(wifi_wpa_key_buffer, 0, sizeof(wifi_wpa_key_buffer));
   wifi_bind_clear_plan();
 }
 
@@ -1830,6 +1907,39 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.txcmd_response_word1 = 0;
   wifi_status_state.txcmd_response_word2 = 0;
   wifi_status_state.txcmd_response_word3 = 0;
+  wifi_status_state.wpa_key_ready = 0;
+  wifi_status_state.wpa_key_failed = 0;
+  wifi_status_state.wpa_key_errors = 0;
+  wifi_status_state.wpa_key_plans = 0;
+  wifi_status_state.wpa_key_cmd_id = 0;
+  wifi_status_state.wpa_key_group = 0;
+  wifi_status_state.wpa_key_version = 0;
+  wifi_status_state.wpa_key_payload_len = 0;
+  wifi_status_state.wpa_key_command_len = 0;
+  wifi_status_state.wpa_key_checksum = 0;
+  wifi_status_state.wpa_key_sta_id = 0;
+  wifi_status_state.wpa_key_sta_mask = 0;
+  wifi_status_state.wpa_key_id = 0;
+  wifi_status_state.wpa_key_flags = 0;
+  wifi_status_state.wpa_key_material_len = 0;
+  wifi_status_state.wpa_key_material_checksum = 0;
+  wifi_status_state.wpa_key_armed = 0;
+  wifi_status_state.wpa_key_sent = 0;
+  wifi_status_state.wpa_key_response_seen = 0;
+  wifi_status_state.wpa_key_timeout = 0;
+  wifi_status_state.wpa_key_installed = 0;
+  wifi_status_state.wpa_key_attempts = 0;
+  wifi_status_state.wpa_key_sequence = 0;
+  wifi_status_state.wpa_key_index = 0;
+  wifi_status_state.wpa_key_rx_cmd = 0;
+  wifi_status_state.wpa_key_rx_group = 0;
+  wifi_status_state.wpa_key_rx_sequence = 0;
+  wifi_status_state.wpa_key_rx_len = 0;
+  if (wifi_status_state.connect_wpa) {
+    wifi_status_state.connect_data_ready = 0;
+    wifi_status_state.driver_ready = 0;
+  }
+  memset(wifi_wpa_key_buffer, 0, sizeof(wifi_wpa_key_buffer));
   wifi_bind_clear_plan();
   wifi_status_state.context_ready = 0;
   wifi_status_state.context_armed = 0;
@@ -3667,7 +3777,7 @@ void wifi_format_status(char *buf, size_t size) {
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
            "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s scan=%s "
-           "connect=%s bind=%s txstage=%s txcmd=%s status=%s",
+           "connect=%s bind=%s txstage=%s txcmd=%s key=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -3745,6 +3855,16 @@ void wifi_format_status(char *buf, size_t size) {
                       : (s->txcmd_sent ? "sent"
                                        : wifi_tx_stage_kind_text(s->txcmd_kind)))
                : (s->txcmd_failed ? "failed" : "idle"),
+           s->wpa_key_installed
+               ? "installed"
+               : (s->wpa_key_response_seen
+                      ? "acked"
+                      : (s->wpa_key_sent
+                             ? "sent"
+                             : (s->wpa_key_ready
+                                    ? "ready"
+                                    : (s->wpa_key_failed ? "failed"
+                                                         : "idle")))),
            s->status);
 }
 
@@ -5348,13 +5468,17 @@ static void wifi_connect_refresh_association_state(void) {
   wifi_status_state.connect_assoc_confirmed = auth_ok && assoc_ok;
   wifi_status_state.associated = wifi_status_state.connect_assoc_confirmed;
   wifi_status_state.connect_data_ready =
-      wifi_status_state.connect_assoc_confirmed && wifi_status_state.connect_open;
+      wifi_status_state.connect_assoc_confirmed &&
+      (wifi_status_state.connect_open ||
+       (wifi_status_state.connect_wpa && wifi_status_state.wpa_key_installed));
   wifi_status_state.driver_ready = wifi_status_state.connect_data_ready;
 
   if (wifi_status_state.connect_assoc_confirmed) {
     wifi_status_state.status =
         wifi_status_state.connect_wpa
-            ? "wifi: association confirmed; WPA key install pending"
+            ? (wifi_status_state.wpa_key_installed
+                   ? "wifi: WPA pairwise key installed; data path guarded-ready"
+                   : "wifi: association confirmed; WPA key install pending")
             : "wifi: open association confirmed; data path ready";
   }
 }
@@ -6899,6 +7023,14 @@ static void wifi_connect_append_response_status(char *report,
              s->wpa_m2_tx_acked ? "acked" : "pending",
              s->wpa_m2_tx_sequence);
     wifi_report_append(report, report_size, line);
+    snprintf(line, sizeof(line),
+             "wpa-key: plan=%s ack=%s installed=%s sta-mask=0x%08x "
+             "flags=0x%02x seq=0x%04x\n",
+             s->wpa_key_ready ? "ready" : "pending",
+             s->wpa_key_response_seen ? "yes" : "no",
+             s->wpa_key_installed ? "yes" : "no", s->wpa_key_sta_mask,
+             s->wpa_key_flags, s->wpa_key_sequence);
+    wifi_report_append(report, report_size, line);
   }
 }
 
@@ -7662,9 +7794,11 @@ int wifi_wpa_probe(char *report, size_t report_size) {
            "m2: key-info=0x%04x eapol-len=%u data-frame-len=%u "
            "key-data-len=%u mic-check=0x%08x frame-check=0x%08x tx=%s "
            "seq=0x%04x\n"
+           "key: plan=%s ack=%s installed=%s sta-mask=0x%08x flags=0x%02x "
+           "tk-check=0x%08x\n"
            "assoc: confirmed=%s data=%s\n"
-           "note: use wifi txcmd m2 arm after M1/M2 is ready; key install "
-           "is the next protected firmware step\n",
+           "note: use wifi txcmd m2 arm after M1/M2, then wifi key arm to "
+           "install the pairwise CCMP key\n",
            s->wpa_m2_ready
                ? (prepared_now ? "PTK/M2 prepared now" : "PTK/M2 ready")
                : (s->wpa_m1_seen ? "M1 seen, M2 pending"
@@ -7688,6 +7822,10 @@ int wifi_wpa_probe(char *report, size_t report_size) {
            s->wpa_m2_mic_checksum, s->wpa_m2_checksum,
            s->wpa_m2_tx_acked ? "acked" : "pending",
            s->wpa_m2_tx_sequence,
+           s->wpa_key_ready ? "ready" : "pending",
+           s->wpa_key_response_seen ? "yes" : "no",
+           s->wpa_key_installed ? "yes" : "no", s->wpa_key_sta_mask,
+           s->wpa_key_flags, s->wpa_key_material_checksum,
            s->connect_assoc_confirmed ? "yes" : "no",
            s->connect_data_ready ? "ready" : "pending");
   return s->wpa_m2_ready ? 0 : -1;
@@ -7752,6 +7890,337 @@ static uint32_t wifi_bind_build_command(uint32_t cmd_id, uint32_t group_id,
   cmd->version = (uint8_t)version;
   memcpy(buffer + sizeof(*cmd), payload, payload_len);
   return command_len;
+}
+
+static void wifi_key_record_last(void) {
+  wifi_status_state.wpa_key_sequence = wifi_status_state.scheduler_cmd_sequence;
+  wifi_status_state.wpa_key_index = wifi_status_state.scheduler_cmd_index;
+  wifi_status_state.wpa_key_rx_cmd = wifi_status_state.rx_last_cmd;
+  wifi_status_state.wpa_key_rx_group = wifi_status_state.rx_last_group;
+  wifi_status_state.wpa_key_rx_sequence = wifi_status_state.rx_last_sequence;
+  wifi_status_state.wpa_key_rx_len = wifi_status_state.rx_last_len;
+}
+
+static int wifi_key_response_matches(void) {
+  return wifi_status_state.command_response_seen &&
+         !wifi_status_state.command_failed &&
+         wifi_status_state.rx_last_cmd == WIFI_CMD_SEC_KEY &&
+         wifi_status_state.rx_last_group == WIFI_CMD_GROUP_DATA_PATH &&
+         wifi_status_state.rx_last_sequence ==
+             wifi_status_state.scheduler_cmd_sequence &&
+         wifi_status_state.rx_last_sequence != 0;
+}
+
+static int wifi_key_build_plan(char *report, size_t report_size) {
+  wifi_sec_key_add_cmd_t key_cmd;
+  const uint8_t *tk;
+  uint32_t sta_id;
+  uint32_t sta_mask;
+  uint32_t key_len;
+  uint32_t command_len;
+  char line[256];
+
+  if (!wifi_status_state.connect_ready || !wifi_status_state.connect_wpa) {
+    wifi_status_state.wpa_key_ready = 0;
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key install needs a WPA connection plan";
+    wifi_report_append(report, report_size,
+                       "wifi key: no WPA connection plan ready\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.connect_assoc_confirmed) {
+    wifi_status_state.wpa_key_ready = 0;
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key install needs confirmed association first";
+    wifi_report_append(report, report_size,
+                       "wifi key: association is not confirmed yet\n"
+                       "run: wifi txcmd auth arm, wifi rx poll, wifi bind arm, "
+                       "wifi txcmd assoc arm, wifi rx poll\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.bind_sta_response_seen) {
+    wifi_status_state.wpa_key_ready = 0;
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key install needs ACKed AP STA binding";
+    wifi_report_append(report, report_size,
+                       "wifi key: AP STA binding is not ACKed yet\n"
+                       "run: wifi bind arm\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.wpa_ptk_ready &&
+      wifi_status_state.wpa_m1_seen &&
+      wifi_status_state.connect_pmk_ready) {
+    wifi_wpa_prepare_m2((uint8_t)wifi_status_state.wpa_eapol_version,
+                        (uint8_t)wifi_status_state.wpa_key_desc_type);
+  }
+
+  if (!wifi_status_state.wpa_ptk_ready) {
+    wifi_status_state.wpa_key_ready = 0;
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key install needs PTK material from EAPOL M1";
+    wifi_report_append(report, report_size,
+                       "wifi key: PTK is not ready yet\n"
+                       "run: wifi rx poll until M1 is seen, then wifi wpa\n");
+    return -1;
+  }
+
+  sta_id = wifi_status_state.bind_sta_id;
+  if (sta_id >= 32U) {
+    wifi_status_state.wpa_key_ready = 0;
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key install STA id is outside the SEC_KEY mask";
+    snprintf(line, sizeof(line),
+             "wifi key: sta-id=%u cannot fit SEC_KEY sta-mask\n", sta_id);
+    wifi_report_append(report, report_size, line);
+    return -1;
+  }
+
+  sta_mask = 1U << sta_id;
+  tk = wifi_wpa_ptk + WIFI_WPA_KCK_BYTES + WIFI_WPA_KEK_BYTES;
+  key_len = WIFI_WPA_TK_BYTES;
+
+  memset(&key_cmd, 0, sizeof(key_cmd));
+  key_cmd.action = WIFI_FW_CTXT_ACTION_ADD;
+  key_cmd.sta_mask = sta_mask;
+  key_cmd.key_id = WIFI_SEC_KEY_PAIRWISE_KEY_ID;
+  key_cmd.key_flags = WIFI_SEC_KEY_FLAG_CIPHER_CCMP;
+  memcpy(key_cmd.key, tk, key_len);
+
+  command_len = wifi_bind_build_command(
+      WIFI_CMD_SEC_KEY, WIFI_CMD_GROUP_DATA_PATH, WIFI_CMD_VERSION_SEC_KEY,
+      &key_cmd, sizeof(key_cmd), wifi_wpa_key_buffer,
+      sizeof(wifi_wpa_key_buffer));
+  if (!command_len) {
+    wifi_status_state.wpa_key_ready = 0;
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA SEC_KEY diagnostic buffer build failed";
+    wifi_report_append(report, report_size,
+                       "wifi key: SEC_KEY buffer build failed\n");
+    return -1;
+  }
+
+  wifi_status_state.wpa_key_ready = 1;
+  wifi_status_state.wpa_key_failed = 0;
+  wifi_status_state.wpa_key_plans++;
+  wifi_status_state.wpa_key_cmd_id = WIFI_CMD_SEC_KEY;
+  wifi_status_state.wpa_key_group = WIFI_CMD_GROUP_DATA_PATH;
+  wifi_status_state.wpa_key_version = WIFI_CMD_VERSION_SEC_KEY;
+  wifi_status_state.wpa_key_payload_len = sizeof(key_cmd);
+  wifi_status_state.wpa_key_command_len = command_len;
+  wifi_status_state.wpa_key_checksum =
+      wifi_connect_checksum(wifi_wpa_key_buffer, command_len);
+  wifi_status_state.wpa_key_sta_id = sta_id;
+  wifi_status_state.wpa_key_sta_mask = sta_mask;
+  wifi_status_state.wpa_key_id = WIFI_SEC_KEY_PAIRWISE_KEY_ID;
+  wifi_status_state.wpa_key_flags = WIFI_SEC_KEY_FLAG_CIPHER_CCMP;
+  wifi_status_state.wpa_key_material_len = key_len;
+  wifi_status_state.wpa_key_material_checksum =
+      wifi_wpa_checksum(tk, key_len);
+  wifi_status_state.wpa_key_armed = 0;
+  wifi_status_state.wpa_key_sent = 0;
+  wifi_status_state.wpa_key_response_seen = 0;
+  wifi_status_state.wpa_key_timeout = 0;
+  wifi_status_state.wpa_key_sequence = 0;
+  wifi_status_state.wpa_key_index = 0;
+  wifi_status_state.wpa_key_rx_cmd = 0;
+  wifi_status_state.wpa_key_rx_group = 0;
+  wifi_status_state.wpa_key_rx_sequence = 0;
+  wifi_status_state.wpa_key_rx_len = 0;
+  wifi_status_state.status =
+      "wifi: WPA pairwise SEC_KEY diagnostic plan built; not queued";
+  return 0;
+}
+
+static int wifi_key_arm_plan(char *report, size_t report_size) {
+  const uint8_t *payload;
+  uint32_t payload_len;
+  char scratch[1024];
+  char line[256];
+  int rc;
+
+  if (!wifi_status_state.wpa_m2_tx_acked) {
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key arm needs M2 TX_CMD ACK first";
+    wifi_report_append(report, report_size,
+                       "arm: refused, run wifi txcmd m2 arm first\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.context_armed || !wifi_status_state.rx_path_ready) {
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key arm needs armed context and RX path";
+    snprintf(line, sizeof(line),
+             "arm: refused context=%s rx=%s m2=%s\n",
+             wifi_status_state.context_armed ? "armed" : "not-armed",
+             wifi_status_state.rx_path_ready ? "ready" : "not-ready",
+             wifi_status_state.wpa_m2_tx_acked ? "acked" : "pending");
+    wifi_report_append(report, report_size, line);
+    return -1;
+  }
+
+  if (!wifi_status_state.wpa_key_ready ||
+      wifi_status_state.wpa_key_command_len <=
+          (uint32_t)sizeof(wifi_cmd_header_wide_t)) {
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA key arm needs a built SEC_KEY plan";
+    wifi_report_append(report, report_size,
+                       "arm: refused, SEC_KEY plan missing\n");
+    return -1;
+  }
+
+  payload = wifi_wpa_key_buffer + sizeof(wifi_cmd_header_wide_t);
+  payload_len = wifi_status_state.wpa_key_command_len -
+                (uint32_t)sizeof(wifi_cmd_header_wide_t);
+  rc = wifi_stage_command_payload(
+      WIFI_CMD_SEC_KEY, WIFI_CMD_GROUP_DATA_PATH, WIFI_CMD_VERSION_SEC_KEY,
+      payload, payload_len,
+      "wifi: WPA pairwise SEC_KEY staged for guarded firmware queueing");
+  if (rc != 0) {
+    wifi_status_state.wpa_key_failed = 1;
+    wifi_status_state.wpa_key_errors++;
+    wifi_status_state.status =
+        "wifi: WPA SEC_KEY command queue staging failed";
+    snprintf(line, sizeof(line),
+             "arm: stage failed payload=%u errors=%lu\n", payload_len,
+             wifi_status_state.wpa_key_errors);
+    wifi_report_append(report, report_size, line);
+    return -1;
+  }
+
+  wifi_status_state.wpa_key_armed = 1;
+  wifi_status_state.wpa_key_attempts++;
+  wifi_status_state.wpa_key_timeout = 0;
+  wifi_key_record_last();
+
+  scratch[0] = '\0';
+  rc = wifi_command_probe(1, scratch, sizeof(scratch));
+  wifi_key_record_last();
+  wifi_status_state.wpa_key_sent = wifi_status_state.command_sent;
+  wifi_status_state.wpa_key_timeout = wifi_status_state.command_timeout;
+
+  if (wifi_key_response_matches()) {
+    wifi_status_state.wpa_key_response_seen = 1;
+    wifi_status_state.wpa_key_failed = 0;
+    wifi_status_state.wpa_key_installed = 1;
+    wifi_connect_refresh_association_state();
+    snprintf(line, sizeof(line),
+             "arm: ack=yes cmd=0x%02x group=0x%02x seq=0x%04x "
+             "index=%u loops=%u\n",
+             WIFI_CMD_SEC_KEY, WIFI_CMD_GROUP_DATA_PATH,
+             wifi_status_state.scheduler_cmd_sequence,
+             wifi_status_state.scheduler_cmd_index,
+             wifi_status_state.command_poll_loops);
+    wifi_report_append(report, report_size, line);
+    return 0;
+  }
+
+  wifi_status_state.wpa_key_failed = 1;
+  wifi_status_state.wpa_key_errors++;
+  wifi_status_state.status = "wifi: WPA SEC_KEY ACK mismatch/timeout";
+  snprintf(line, sizeof(line),
+           "arm: ack=no cmd=0x%02x group=0x%02x seq=0x%04x "
+           "rx=0x%02x/0x%02x/0x%04x timeout=%s rc=%d errors=%lu\n",
+           WIFI_CMD_SEC_KEY, WIFI_CMD_GROUP_DATA_PATH,
+           wifi_status_state.scheduler_cmd_sequence,
+           wifi_status_state.rx_last_cmd, wifi_status_state.rx_last_group,
+           wifi_status_state.rx_last_sequence,
+           wifi_status_state.wpa_key_timeout ? "yes" : "no", rc,
+           wifi_status_state.wpa_key_errors);
+  wifi_report_append(report, report_size, line);
+  return -1;
+}
+
+int wifi_key_probe(int arm, char *report, size_t report_size) {
+  const wifi_status_t *s;
+  char line[256];
+  int rc;
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi key: no wireless controller detected\n");
+    return -1;
+  }
+
+  rc = wifi_key_build_plan(report, report_size);
+  s = &wifi_status_state;
+  snprintf(line, sizeof(line),
+           "wifi key: %s\n"
+           "target: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
+           "sta-id=%u sta-mask=0x%08x\n"
+           "sec-key: cmd=0x%02x group=0x%02x ver=%u payload=%u len=%u "
+           "plans=%lu checksum=0x%08x\n"
+           "key: id=%u flags=0x%02x len=%u tk-check=0x%08x "
+           "m2=%s assoc=%s\n",
+           rc == 0 ? "pairwise CCMP SEC_KEY plan ready"
+                   : "pairwise CCMP SEC_KEY plan failed",
+           s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
+           s->connect_bssid[2], s->connect_bssid[3], s->connect_bssid[4],
+           s->connect_bssid[5], s->wpa_key_sta_id, s->wpa_key_sta_mask,
+           s->wpa_key_cmd_id, s->wpa_key_group, s->wpa_key_version,
+           s->wpa_key_payload_len, s->wpa_key_command_len,
+           s->wpa_key_plans, s->wpa_key_checksum, s->wpa_key_id,
+           s->wpa_key_flags, s->wpa_key_material_len,
+           s->wpa_key_material_checksum,
+           s->wpa_m2_tx_acked ? "acked" : "pending",
+           s->connect_assoc_confirmed ? "confirmed" : "pending");
+  wifi_report_append(report, report_size, line);
+
+  if (rc != 0) {
+    return -1;
+  }
+
+  if (arm) {
+    rc = wifi_key_arm_plan(report, report_size);
+    s = &wifi_status_state;
+    snprintf(line, sizeof(line),
+             "state: armed=%s sent=%s response=%s timeout=%s installed=%s "
+             "attempts=%lu seq=0x%04x rx=0x%02x/0x%02x/0x%04x data=%s\n",
+             s->wpa_key_armed ? "yes" : "no",
+             s->wpa_key_sent ? "yes" : "no",
+             s->wpa_key_response_seen ? "yes" : "no",
+             s->wpa_key_timeout ? "yes" : "no",
+             s->wpa_key_installed ? "yes" : "no",
+             s->wpa_key_attempts, s->wpa_key_sequence,
+             s->wpa_key_rx_cmd, s->wpa_key_rx_group,
+             s->wpa_key_rx_sequence,
+             s->connect_data_ready ? "ready" : "pending");
+    wifi_report_append(report, report_size, line);
+    return rc;
+  }
+
+  wifi_report_append(report, report_size,
+                     "safety: diagnostic buffer only; run wifi key arm after "
+                     "wifi txcmd m2 arm ACKs\n");
+  return 0;
 }
 
 static void wifi_bind_mark_failure(const char *status) {
