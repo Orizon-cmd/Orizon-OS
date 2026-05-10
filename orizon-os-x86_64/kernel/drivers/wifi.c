@@ -389,6 +389,12 @@ static wifi_status_t wifi_status_state = {
     .connect_password_len = 0,
     .connect_pmk_iterations = 0,
     .connect_pmk_checksum = 0,
+    .connect_auth_tx_acked = 0,
+    .connect_assoc_tx_acked = 0,
+    .connect_assoc_confirmed = 0,
+    .connect_data_ready = 0,
+    .connect_auth_tx_sequence = 0,
+    .connect_assoc_tx_sequence = 0,
     .connect_auth_response_seen = 0,
     .connect_assoc_response_seen = 0,
     .connect_response_failed = 0,
@@ -425,6 +431,8 @@ static wifi_status_t wifi_status_state = {
     .wpa_ptk_ready = 0,
     .wpa_m2_ready = 0,
     .wpa_m2_data_ready = 0,
+    .wpa_m2_tx_acked = 0,
+    .wpa_m2_tx_sequence = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -1587,6 +1595,12 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.connect_password_len = 0;
   wifi_status_state.connect_pmk_iterations = 0;
   wifi_status_state.connect_pmk_checksum = 0;
+  wifi_status_state.connect_auth_tx_acked = 0;
+  wifi_status_state.connect_assoc_tx_acked = 0;
+  wifi_status_state.connect_assoc_confirmed = 0;
+  wifi_status_state.connect_data_ready = 0;
+  wifi_status_state.connect_auth_tx_sequence = 0;
+  wifi_status_state.connect_assoc_tx_sequence = 0;
   wifi_status_state.connect_auth_response_seen = 0;
   wifi_status_state.connect_assoc_response_seen = 0;
   wifi_status_state.connect_response_failed = 0;
@@ -1623,6 +1637,8 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.wpa_ptk_ready = 0;
   wifi_status_state.wpa_m2_ready = 0;
   wifi_status_state.wpa_m2_data_ready = 0;
+  wifi_status_state.wpa_m2_tx_acked = 0;
+  wifi_status_state.wpa_m2_tx_sequence = 0;
   wifi_status_state.tx_stage_ready = 0;
   wifi_status_state.tx_stage_failed = 0;
   wifi_status_state.tx_stage_errors = 0;
@@ -3704,7 +3720,10 @@ void wifi_format_status(char *buf, size_t size) {
                                                   : (s->scan_failed ? "failed"
                                                                     : "idle")))))),
            s->connect_assoc_response_seen
-               ? (s->connect_assoc_status ? "assoc-failed" : "assoc-rx")
+               ? (s->connect_assoc_confirmed
+                      ? (s->connect_data_ready ? "data-ready" : "associated")
+                      : (s->connect_assoc_status ? "assoc-failed"
+                                                 : "assoc-rx"))
                : (s->connect_auth_response_seen
                       ? (s->connect_auth_status ? "auth-failed" : "auth-rx")
                       : (s->connect_ready
@@ -5307,6 +5326,39 @@ static int wifi_connect_frame_matches_plan(const uint8_t *frame,
          wifi_mac_equal6(frame + 16U, wifi_status_state.connect_bssid);
 }
 
+static void wifi_connect_refresh_association_state(void) {
+  int auth_ok;
+  int assoc_ok;
+
+  if (!wifi_status_state.connect_ready) {
+    wifi_status_state.associated = 0;
+    wifi_status_state.connect_assoc_confirmed = 0;
+    wifi_status_state.connect_data_ready = 0;
+    return;
+  }
+
+  auth_ok = wifi_status_state.connect_auth_tx_acked &&
+            wifi_status_state.connect_auth_response_seen &&
+            wifi_status_state.connect_auth_status == 0;
+  assoc_ok = wifi_status_state.connect_assoc_tx_acked &&
+             wifi_status_state.connect_assoc_response_seen &&
+             wifi_status_state.connect_assoc_status == 0 &&
+             wifi_status_state.bind_sta_response_seen;
+
+  wifi_status_state.connect_assoc_confirmed = auth_ok && assoc_ok;
+  wifi_status_state.associated = wifi_status_state.connect_assoc_confirmed;
+  wifi_status_state.connect_data_ready =
+      wifi_status_state.connect_assoc_confirmed && wifi_status_state.connect_open;
+  wifi_status_state.driver_ready = wifi_status_state.connect_data_ready;
+
+  if (wifi_status_state.connect_assoc_confirmed) {
+    wifi_status_state.status =
+        wifi_status_state.connect_wpa
+            ? "wifi: association confirmed; WPA key install pending"
+            : "wifi: open association confirmed; data path ready";
+  }
+}
+
 static int wifi_connect_parse_response_frame(const uint8_t *frame,
                                              uint32_t frame_len,
                                              uint32_t subtype) {
@@ -5333,6 +5385,7 @@ static int wifi_connect_parse_response_frame(const uint8_t *frame,
     wifi_status_state.status = wifi_status_state.connect_auth_status
                                    ? "wifi: authentication response failed"
                                    : "wifi: authentication response accepted";
+    wifi_connect_refresh_association_state();
     return 1;
   }
 
@@ -5350,14 +5403,17 @@ static int wifi_connect_parse_response_frame(const uint8_t *frame,
     wifi_status_state.connect_response_failed =
         wifi_status_state.connect_assoc_status ? 1 : 0;
     if (wifi_status_state.connect_assoc_status == 0) {
-      wifi_status_state.associated = wifi_status_state.connect_wpa ? 0 : 1;
-      wifi_status_state.driver_ready = wifi_status_state.connect_wpa ? 0 : 1;
       wifi_status_state.status = wifi_status_state.connect_wpa
                                      ? "wifi: association accepted; WPA pending"
-                                     : "wifi: open association accepted";
+                                     : "wifi: open association accepted; TX ACK pending";
     } else {
+      wifi_status_state.associated = 0;
+      wifi_status_state.connect_assoc_confirmed = 0;
+      wifi_status_state.connect_data_ready = 0;
+      wifi_status_state.driver_ready = 0;
       wifi_status_state.status = "wifi: association response failed";
     }
+    wifi_connect_refresh_association_state();
     return 1;
   }
 
@@ -6790,7 +6846,7 @@ static const char *wifi_scan_security_text(uint32_t security) {
 static void wifi_connect_append_response_status(char *report,
                                                 size_t report_size) {
   const wifi_status_t *s = &wifi_status_state;
-  char line[224];
+  char line[256];
 
   if (!s->connect_ready && s->connect_response_packets == 0) {
     return;
@@ -6807,6 +6863,16 @@ static void wifi_connect_append_response_status(char *report,
            wifi_scan_frame_subtype_text(s->connect_last_rx_subtype),
            s->connect_auth_status, s->connect_assoc_status,
            s->connect_assoc_aid);
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "connect-state: auth-tx=%s assoc-tx=%s bind=%s confirmed=%s "
+           "data=%s seq-auth=0x%04x seq-assoc=0x%04x\n",
+           s->connect_auth_tx_acked ? "acked" : "pending",
+           s->connect_assoc_tx_acked ? "acked" : "pending",
+           s->bind_sta_response_seen ? "acked" : "pending",
+           s->connect_assoc_confirmed ? "yes" : "no",
+           s->connect_data_ready ? "ready" : "pending",
+           s->connect_auth_tx_sequence, s->connect_assoc_tx_sequence);
   wifi_report_append(report, report_size, line);
 
   if (s->wpa_eapol_packets || s->wpa_anonce_seen) {
@@ -6827,6 +6893,11 @@ static void wifi_connect_append_response_status(char *report,
              s->wpa_ptk_ready ? "ready" : "pending",
              s->wpa_m2_ready ? "ready" : "pending",
              s->wpa_m2_data_ready ? "ready" : "pending");
+    wifi_report_append(report, report_size, line);
+    snprintf(line, sizeof(line),
+             "wpa-tx: m2=%s seq=0x%04x keys=pending\n",
+             s->wpa_m2_tx_acked ? "acked" : "pending",
+             s->wpa_m2_tx_sequence);
     wifi_report_append(report, report_size, line);
   }
 }
@@ -7589,9 +7660,11 @@ int wifi_wpa_probe(char *report, size_t report_size) {
            "checks: pmk=0x%08x anonce=0x%08x snonce=0x%08x "
            "ptk=0x%08x kck=0x%08x kek=0x%08x tk=0x%08x\n"
            "m2: key-info=0x%04x eapol-len=%u data-frame-len=%u "
-           "key-data-len=%u mic-check=0x%08x frame-check=0x%08x\n"
-           "note: M2 is prepared only for diagnostics; wifi tx m2 stages it "
-           "without ringing TX\n",
+           "key-data-len=%u mic-check=0x%08x frame-check=0x%08x tx=%s "
+           "seq=0x%04x\n"
+           "assoc: confirmed=%s data=%s\n"
+           "note: use wifi txcmd m2 arm after M1/M2 is ready; key install "
+           "is the next protected firmware step\n",
            s->wpa_m2_ready
                ? (prepared_now ? "PTK/M2 prepared now" : "PTK/M2 ready")
                : (s->wpa_m1_seen ? "M1 seen, M2 pending"
@@ -7612,7 +7685,11 @@ int wifi_wpa_probe(char *report, size_t report_size) {
            s->wpa_ptk_checksum, s->wpa_kck_checksum, s->wpa_kek_checksum,
            s->wpa_tk_checksum, s->wpa_m2_key_info, s->wpa_m2_frame_len,
            s->wpa_m2_data_frame_len, s->wpa_m2_key_data_len,
-           s->wpa_m2_mic_checksum, s->wpa_m2_checksum);
+           s->wpa_m2_mic_checksum, s->wpa_m2_checksum,
+           s->wpa_m2_tx_acked ? "acked" : "pending",
+           s->wpa_m2_tx_sequence,
+           s->connect_assoc_confirmed ? "yes" : "no",
+           s->connect_data_ready ? "ready" : "pending");
   return s->wpa_m2_ready ? 0 : -1;
 }
 
@@ -8362,7 +8439,26 @@ static int wifi_txcmd_arm_plan(char *report, size_t report_size) {
   if (wifi_txcmd_response_matches()) {
     wifi_status_state.txcmd_response_seen = 1;
     wifi_status_state.txcmd_failed = 0;
-    wifi_status_state.status = "wifi: TX_CMD ACKed by firmware";
+    if (wifi_status_state.txcmd_kind == WIFI_TX_STAGE_KIND_AUTH) {
+      wifi_status_state.connect_auth_tx_acked = 1;
+      wifi_status_state.connect_auth_tx_sequence =
+          wifi_status_state.scheduler_cmd_sequence;
+    } else if (wifi_status_state.txcmd_kind == WIFI_TX_STAGE_KIND_ASSOC) {
+      wifi_status_state.connect_assoc_tx_acked = 1;
+      wifi_status_state.connect_assoc_tx_sequence =
+          wifi_status_state.scheduler_cmd_sequence;
+    } else if (wifi_status_state.txcmd_kind == WIFI_TX_STAGE_KIND_EAPOL_M2) {
+      wifi_status_state.wpa_m2_tx_acked = 1;
+      wifi_status_state.wpa_m2_tx_sequence =
+          wifi_status_state.scheduler_cmd_sequence;
+    }
+    wifi_connect_refresh_association_state();
+    if (!wifi_status_state.connect_assoc_confirmed) {
+      wifi_status_state.status = "wifi: TX_CMD ACKed; AP response still pending";
+    }
+    if (wifi_status_state.txcmd_kind == WIFI_TX_STAGE_KIND_EAPOL_M2) {
+      wifi_status_state.status = "wifi: WPA M2 TX_CMD ACKed; key install pending";
+    }
     snprintf(line, sizeof(line),
              "arm: ack=yes seq=0x%04x index=%u loops=%u "
              "resp=%08x %08x %08x %08x\n",

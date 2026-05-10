@@ -206,8 +206,7 @@ derive aussi la PMK par PBKDF2-HMAC-SHA1 sans afficher la cle; `wifi crypto`
 verifie les vecteurs SHA-1/PBKDF2 integres. Les passphrases 8-63 caracteres et
 les PSK hexadecimales 64 caracteres sont acceptees. Le chemin RX reconnait deja
 les reponses authentication/association correspondant au plan de connexion et
-stocke leurs status codes. L'association reelle attend encore l'emission Intel
-`TX_CMD` protegee et le handshake WPA complet. `wifi tx [auth|assoc|all]`
+stocke leurs status codes. `wifi tx [auth|assoc|all]`
 prepare maintenant les trames de gestion dans les buffers DMA TX et affiche le
 doorbell prevu sans l'ecrire. Le chemin RX detecte aussi les trames
 EAPOL-Key WPA2, capture l'ANonce, derive un PTK de diagnostic, prepare une
@@ -222,6 +221,12 @@ firmware strict avant de passer a la suivante. Quand les trois ACKs sont vus,
 `wifi txcmd` indique `bound=acked` dans son rapport, et `wifi txcmd <cible> arm`
 peut envoyer le `TX_CMD` avec le meme garde-fou: contexte arme, RX pret,
 binding ACKe, puis reponse firmware strictement associee a la sequence TX.
+L'etat `wifi status` et le rapport `wifi rx poll` separent maintenant l'ACK
+firmware de la reponse AP: Orizon ne marque une association comme confirmee que
+si authentication TX, association TX, binding STA, authentication response et
+association response sont tous acceptes. Pour les reseaux ouverts, ce chemin
+rend la data path disponible; pour WPA2, il reste volontairement bloque tant que
+les cles de chiffrement ne sont pas installees.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

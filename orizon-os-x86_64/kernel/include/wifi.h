@@ -411,6 +411,12 @@ typedef struct {
   uint32_t connect_password_len;
   uint32_t connect_pmk_iterations;
   uint32_t connect_pmk_checksum;
+  int connect_auth_tx_acked;
+  int connect_assoc_tx_acked;
+  int connect_assoc_confirmed;
+  int connect_data_ready;
+  uint32_t connect_auth_tx_sequence;
+  uint32_t connect_assoc_tx_sequence;
   int connect_auth_response_seen;
   int connect_assoc_response_seen;
   int connect_response_failed;
@@ -447,6 +453,8 @@ typedef struct {
   int wpa_ptk_ready;
   int wpa_m2_ready;
   int wpa_m2_data_ready;
+  int wpa_m2_tx_acked;
+  uint32_t wpa_m2_tx_sequence;
   uint8_t connect_bssid[6];
   uint8_t connect_local_mac[6];
   char connect_ssid[WIFI_SCAN_SSID_MAX + 1U];

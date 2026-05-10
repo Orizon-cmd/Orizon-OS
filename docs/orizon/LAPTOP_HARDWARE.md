@@ -81,8 +81,11 @@ development target, not a ZimaOS-only assumption.
   STA ACK, later `wifi txcmd` diagnostics report `bound=acked` with the planned
   AP station ID. `wifi txcmd <auth|assoc|m2> arm` now stages that `TX_CMD` into
   the command queue and requires a matching firmware response before marking
-  the transmit path ACKed. Real traffic still requires the next driver
-  milestone: WPA key installation and stronger association-state handling.
+  the transmit path ACKed. Association state now requires both firmware TX ACKs,
+  the STA binding ACK, and the matching AP authentication/association responses
+  before Orizon reports `confirmed`; open networks can then expose a ready data
+  path, while WPA remains held until encrypted keys are installed. Real traffic
+  still requires the next driver milestone: WPA key installation.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -115,6 +118,8 @@ wifi connect <ssid> [password]
 wifi wpa
 wifi bind
 wifi bind arm
+wifi txcmd auth
+wifi txcmd auth arm
 wifi tx all
 wifi tx m2
 wifi txcmd assoc
@@ -165,5 +170,5 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: association response hardening, WPA2/WPA3
-   key installation, then DHCP over Wi-Fi once encrypted data frames are stable.
+6. Grow the Intel Wi-Fi path in order: WPA2/WPA3 key installation, protected
+   data TX/RX, then DHCP over Wi-Fi once encrypted data frames are stable.
