@@ -153,6 +153,26 @@ static wifi_status_t wifi_status_state = {
     .bind_assoc_aid = 0,
     .bind_security = 0,
     .bind_channel = 0,
+    .bind_armed = 0,
+    .bind_sent = 0,
+    .bind_response_seen = 0,
+    .bind_mac_response_seen = 0,
+    .bind_link_response_seen = 0,
+    .bind_sta_response_seen = 0,
+    .bind_timeout = 0,
+    .bind_attempts = 0,
+    .bind_last_step = 0,
+    .bind_last_cmd_id = 0,
+    .bind_last_group = 0,
+    .bind_last_sequence = 0,
+    .bind_last_index = 0,
+    .bind_last_rx_cmd = 0,
+    .bind_last_rx_group = 0,
+    .bind_last_rx_sequence = 0,
+    .bind_last_rx_len = 0,
+    .bind_mac_sequence = 0,
+    .bind_link_sequence = 0,
+    .bind_sta_sequence = 0,
     .context_ready = 0,
     .context_armed = 0,
     .context_failed = 0,
@@ -672,6 +692,9 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_TX_CMD_STA_ID_UNBOUND 0xffU
 #define WIFI_BIND_CTXT_ID_POS 0U
 #define WIFI_BIND_CTXT_COLOR_POS 8U
+#define WIFI_BIND_STEP_MAC 1U
+#define WIFI_BIND_STEP_LINK 2U
+#define WIFI_BIND_STEP_STA 3U
 #define WIFI_BIND_MAC_ID_CLIENT 0U
 #define WIFI_BIND_COLOR_CLIENT 1U
 #define WIFI_BIND_LINK_ID_PRIMARY 0U
@@ -1507,6 +1530,26 @@ static void wifi_bind_clear_plan(void) {
   wifi_status_state.bind_assoc_aid = 0;
   wifi_status_state.bind_security = 0;
   wifi_status_state.bind_channel = 0;
+  wifi_status_state.bind_armed = 0;
+  wifi_status_state.bind_sent = 0;
+  wifi_status_state.bind_response_seen = 0;
+  wifi_status_state.bind_mac_response_seen = 0;
+  wifi_status_state.bind_link_response_seen = 0;
+  wifi_status_state.bind_sta_response_seen = 0;
+  wifi_status_state.bind_timeout = 0;
+  wifi_status_state.bind_attempts = 0;
+  wifi_status_state.bind_last_step = 0;
+  wifi_status_state.bind_last_cmd_id = 0;
+  wifi_status_state.bind_last_group = 0;
+  wifi_status_state.bind_last_sequence = 0;
+  wifi_status_state.bind_last_index = 0;
+  wifi_status_state.bind_last_rx_cmd = 0;
+  wifi_status_state.bind_last_rx_group = 0;
+  wifi_status_state.bind_last_rx_sequence = 0;
+  wifi_status_state.bind_last_rx_len = 0;
+  wifi_status_state.bind_mac_sequence = 0;
+  wifi_status_state.bind_link_sequence = 0;
+  wifi_status_state.bind_sta_sequence = 0;
   memset(wifi_bind_mac_buffer, 0, sizeof(wifi_bind_mac_buffer));
   memset(wifi_bind_link_buffer, 0, sizeof(wifi_bind_link_buffer));
   memset(wifi_bind_sta_buffer, 0, sizeof(wifi_bind_sta_buffer));
@@ -3622,7 +3665,13 @@ void wifi_format_status(char *buf, size_t size) {
                       : (s->connect_ready
                              ? (s->connect_wpa ? "wpa-plan" : "open-plan")
                              : (s->connect_failed ? "failed" : "idle"))),
-           s->bind_ready ? "ready" : (s->bind_failed ? "failed" : "idle"),
+           s->bind_sta_response_seen
+               ? "acked"
+               : (s->bind_sent
+                      ? "sent"
+                      : (s->bind_ready
+                             ? "ready"
+                             : (s->bind_failed ? "failed" : "idle"))),
            s->tx_stage_ready
                ? wifi_tx_stage_kind_text(s->tx_stage_kind)
                : (s->tx_stage_failed ? "failed" : "idle"),
@@ -7567,11 +7616,137 @@ static uint32_t wifi_bind_build_command(uint32_t cmd_id, uint32_t group_id,
 static void wifi_bind_mark_failure(const char *status) {
   wifi_status_state.bind_ready = 0;
   wifi_status_state.bind_failed = 1;
+  wifi_status_state.bind_armed = 0;
   wifi_status_state.bind_errors++;
   wifi_status_state.status = status;
 }
 
-int wifi_bind_probe(char *report, size_t report_size) {
+static const char *wifi_bind_step_text(uint32_t step) {
+  switch (step) {
+  case WIFI_BIND_STEP_MAC:
+    return "mac";
+  case WIFI_BIND_STEP_LINK:
+    return "link";
+  case WIFI_BIND_STEP_STA:
+    return "sta";
+  default:
+    return "none";
+  }
+}
+
+static void wifi_bind_record_last(uint32_t step, uint32_t cmd_id,
+                                  uint32_t group_id) {
+  wifi_status_state.bind_last_step = step;
+  wifi_status_state.bind_last_cmd_id = cmd_id;
+  wifi_status_state.bind_last_group = group_id;
+  wifi_status_state.bind_last_sequence = wifi_status_state.scheduler_cmd_sequence;
+  wifi_status_state.bind_last_index = wifi_status_state.scheduler_cmd_index;
+  wifi_status_state.bind_last_rx_cmd = wifi_status_state.rx_last_cmd;
+  wifi_status_state.bind_last_rx_group = wifi_status_state.rx_last_group;
+  wifi_status_state.bind_last_rx_sequence = wifi_status_state.rx_last_sequence;
+  wifi_status_state.bind_last_rx_len = wifi_status_state.rx_last_len;
+
+  if (step == WIFI_BIND_STEP_MAC) {
+    wifi_status_state.bind_mac_sequence =
+        wifi_status_state.scheduler_cmd_sequence;
+  } else if (step == WIFI_BIND_STEP_LINK) {
+    wifi_status_state.bind_link_sequence =
+        wifi_status_state.scheduler_cmd_sequence;
+  } else if (step == WIFI_BIND_STEP_STA) {
+    wifi_status_state.bind_sta_sequence =
+        wifi_status_state.scheduler_cmd_sequence;
+  }
+}
+
+static int wifi_bind_response_matches(uint32_t cmd_id, uint32_t group_id) {
+  return wifi_status_state.command_response_seen &&
+         !wifi_status_state.command_failed &&
+         wifi_status_state.rx_last_cmd == cmd_id &&
+         wifi_status_state.rx_last_group == group_id &&
+         wifi_status_state.rx_last_sequence ==
+             wifi_status_state.scheduler_cmd_sequence &&
+         wifi_status_state.rx_last_sequence != 0;
+}
+
+static int wifi_bind_arm_one(uint32_t step, uint32_t cmd_id,
+                             uint32_t group_id, uint32_t version,
+                             const uint8_t *command_buffer,
+                             uint32_t command_len, char *report,
+                             size_t report_size) {
+  const uint8_t *payload;
+  uint32_t payload_len;
+  char scratch[1024];
+  char line[256];
+  int rc;
+
+  if (!command_buffer ||
+      command_len <= (uint32_t)sizeof(wifi_cmd_header_wide_t)) {
+    wifi_bind_mark_failure("wifi: binding command buffer is empty");
+    return -1;
+  }
+
+  payload = command_buffer + sizeof(wifi_cmd_header_wide_t);
+  payload_len = command_len - (uint32_t)sizeof(wifi_cmd_header_wide_t);
+
+  rc = wifi_stage_command_payload((uint8_t)cmd_id, (uint8_t)group_id,
+                                  (uint8_t)version, payload, payload_len,
+                                  "wifi: binding command staged");
+  if (rc != 0) {
+    wifi_bind_mark_failure("wifi: binding command staging failed");
+    snprintf(line, sizeof(line),
+             "arm-%s: stage failed cmd=0x%02x group=0x%02x len=%u\n",
+             wifi_bind_step_text(step), cmd_id, group_id, payload_len);
+    wifi_report_append(report, report_size, line);
+    return -1;
+  }
+
+  wifi_status_state.bind_armed = 1;
+  wifi_status_state.bind_attempts++;
+  wifi_status_state.bind_timeout = 0;
+  wifi_bind_record_last(step, cmd_id, group_id);
+
+  scratch[0] = '\0';
+  rc = wifi_command_probe(1, scratch, sizeof(scratch));
+  wifi_bind_record_last(step, cmd_id, group_id);
+
+  if (wifi_bind_response_matches(cmd_id, group_id)) {
+    wifi_status_state.bind_sent = 1;
+    wifi_status_state.bind_response_seen = 1;
+    wifi_status_state.bind_failed = 0;
+    if (step == WIFI_BIND_STEP_MAC) {
+      wifi_status_state.bind_mac_response_seen = 1;
+    } else if (step == WIFI_BIND_STEP_LINK) {
+      wifi_status_state.bind_link_response_seen = 1;
+    } else if (step == WIFI_BIND_STEP_STA) {
+      wifi_status_state.bind_sta_response_seen = 1;
+    }
+    snprintf(line, sizeof(line),
+             "arm-%s: ack=yes cmd=0x%02x group=0x%02x seq=0x%04x "
+             "index=%u loops=%u\n",
+             wifi_bind_step_text(step), cmd_id, group_id,
+             wifi_status_state.scheduler_cmd_sequence,
+             wifi_status_state.scheduler_cmd_index,
+             wifi_status_state.command_poll_loops);
+    wifi_report_append(report, report_size, line);
+    return 0;
+  }
+
+  wifi_status_state.bind_sent = wifi_status_state.command_sent;
+  wifi_status_state.bind_timeout = wifi_status_state.command_timeout;
+  wifi_bind_mark_failure("wifi: binding command ACK mismatch/timeout");
+  snprintf(line, sizeof(line),
+           "arm-%s: ack=no cmd=0x%02x group=0x%02x seq=0x%04x "
+           "rx=0x%02x/0x%02x/0x%04x timeout=%s rc=%d\n",
+           wifi_bind_step_text(step), cmd_id, group_id,
+           wifi_status_state.scheduler_cmd_sequence,
+           wifi_status_state.rx_last_cmd, wifi_status_state.rx_last_group,
+           wifi_status_state.rx_last_sequence,
+           wifi_status_state.command_timeout ? "yes" : "no", rc);
+  wifi_report_append(report, report_size, line);
+  return -1;
+}
+
+int wifi_bind_probe(int arm, char *report, size_t report_size) {
   const wifi_status_t *s;
   wifi_bind_mac_config_diag_t mac_cmd;
   wifi_bind_link_config_diag_t link_cmd;
@@ -7730,6 +7905,26 @@ int wifi_bind_probe(char *report, size_t report_size) {
   wifi_status_state.bind_assoc_aid = assoc_aid;
   wifi_status_state.bind_security = security;
   wifi_status_state.bind_channel = s->connect_channel;
+  wifi_status_state.bind_armed = 0;
+  wifi_status_state.bind_sent = 0;
+  wifi_status_state.bind_response_seen = 0;
+  wifi_status_state.bind_mac_response_seen = 0;
+  wifi_status_state.bind_link_response_seen = 0;
+  wifi_status_state.bind_sta_response_seen = 0;
+  wifi_status_state.bind_timeout = 0;
+  wifi_status_state.bind_attempts = 0;
+  wifi_status_state.bind_last_step = 0;
+  wifi_status_state.bind_last_cmd_id = 0;
+  wifi_status_state.bind_last_group = 0;
+  wifi_status_state.bind_last_sequence = 0;
+  wifi_status_state.bind_last_index = 0;
+  wifi_status_state.bind_last_rx_cmd = 0;
+  wifi_status_state.bind_last_rx_group = 0;
+  wifi_status_state.bind_last_rx_sequence = 0;
+  wifi_status_state.bind_last_rx_len = 0;
+  wifi_status_state.bind_mac_sequence = 0;
+  wifi_status_state.bind_link_sequence = 0;
+  wifi_status_state.bind_sta_sequence = 0;
   wifi_status_state.status =
       "wifi: MAC/LINK/STA diagnostic binding plan built; not queued";
 
@@ -7778,12 +7973,76 @@ int wifi_bind_probe(char *report, size_t report_size) {
            wifi_status_state.bind_sta_checksum,
            wifi_status_state.bind_plans);
   wifi_report_append(report, report_size, line);
+
+  if (!arm) {
+    wifi_report_append(report, report_size,
+                       "safety: diagnostic buffers only; not copied to "
+                       "command queue and doorbell not armed\n");
+    wifi_report_append(report, report_size,
+                       "run: wifi bind arm to queue MAC/LINK/STA commands "
+                       "with strict firmware ACK checks\n");
+    return 0;
+  }
+
+  s = &wifi_status_state;
+  if (!s->context_armed || !s->rx_path_ready) {
+    wifi_status_state.bind_failed = 1;
+    wifi_status_state.bind_errors++;
+    wifi_status_state.status =
+        "wifi: binding arm needs armed context and RX path first";
+    snprintf(line, sizeof(line),
+             "arm: refused context=%s rx=%s command=%s errors=%lu\n",
+             s->context_armed ? "armed" : "not-armed",
+             s->rx_path_ready ? "ready" : "not-ready",
+             s->command_ready ? "ready" : "not-ready",
+             wifi_status_state.bind_errors);
+    wifi_report_append(report, report_size, line);
+    wifi_report_append(report, report_size,
+                       "run: wifi bringup, wifi rx, then wifi bind arm\n");
+    return -1;
+  }
+
   wifi_report_append(report, report_size,
-                     "safety: diagnostic buffers only; not copied to "
-                     "command queue and doorbell not armed\n");
+                     "arm: strict firmware queueing requested; each command "
+                     "must ACK before the next one\n");
+  if (wifi_bind_arm_one(WIFI_BIND_STEP_MAC, WIFI_CMD_MAC_CONFIG,
+                        WIFI_CMD_GROUP_MAC_CONF, WIFI_CMD_VERSION_MAC_CONFIG,
+                        wifi_bind_mac_buffer, wifi_status_state.bind_mac_len,
+                        report, report_size) != 0) {
+    return -1;
+  }
+  if (wifi_bind_arm_one(WIFI_BIND_STEP_LINK, WIFI_CMD_LINK_CONFIG,
+                        WIFI_CMD_GROUP_MAC_CONF, WIFI_CMD_VERSION_LINK_CONFIG,
+                        wifi_bind_link_buffer,
+                        wifi_status_state.bind_link_len, report,
+                        report_size) != 0) {
+    return -1;
+  }
+  if (wifi_bind_arm_one(WIFI_BIND_STEP_STA, WIFI_CMD_STA_CONFIG,
+                        WIFI_CMD_GROUP_MAC_CONF, WIFI_CMD_VERSION_STA_CONFIG,
+                        wifi_bind_sta_buffer, wifi_status_state.bind_sta_len,
+                        report, report_size) != 0) {
+    return -1;
+  }
+
+  wifi_status_state.bind_ready = 1;
+  wifi_status_state.bind_failed = 0;
+  wifi_status_state.bind_armed = 1;
+  wifi_status_state.bind_sent = 1;
+  wifi_status_state.bind_response_seen = 1;
+  wifi_status_state.status =
+      "wifi: MAC/LINK/STA binding ACKed by firmware";
+  snprintf(line, sizeof(line),
+           "result: binding ACKed mac-seq=0x%04x link-seq=0x%04x "
+           "sta-seq=0x%04x sta-id=%u\n",
+           wifi_status_state.bind_mac_sequence,
+           wifi_status_state.bind_link_sequence,
+           wifi_status_state.bind_sta_sequence,
+           wifi_status_state.bind_sta_id);
+  wifi_report_append(report, report_size, line);
   wifi_report_append(report, report_size,
-                     "next: guard firmware ACKs for these commands, then "
-                     "queue TX_CMD with the bound station context\n");
+                     "next: wifi txcmd assoc should now report bound=yes; "
+                     "the next milestone is guarded TX_CMD queueing\n");
   return 0;
 }
 

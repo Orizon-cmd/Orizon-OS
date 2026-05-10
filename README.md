@@ -217,8 +217,9 @@ aussi une enveloppe Intel `TX_CMD` v10 de diagnostic dans un buffer separe:
 elle est mesuree et verifiee, mais pas encore copiee dans la queue commande.
 `wifi bind` prepare maintenant les enveloppes diagnostiques `MAC_CONFIG`,
 `LINK_CONFIG` et `STA_CONFIG` avec un `sta-id` AP local; apres cela,
-`wifi txcmd` indique `bound=yes` dans son rapport, toujours sans armer le
-doorbell firmware.
+`wifi bind arm` peut les envoyer une par une dans la queue commande avec ACK
+firmware strict avant de passer a la suivante. Quand les trois ACKs sont vus,
+`wifi txcmd` indique `bound=yes` dans son rapport.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

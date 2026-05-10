@@ -1,12 +1,12 @@
 manifest-version 1
 os Orizon OS
 channel main
-version 2026.05.10-1341
+version 2026.05.10-1350
 commit public-main
 source https://github.com/Orizon-cmd/Orizon-OS.git
 kernel-path updates/x86_64/kernel.elf
-kernel-size 3088368
-kernel-sha256 a692a5a2ceac3fd87ce06a4ad39f180c9f5b6f5ba9a3df1d288a54d54e486e30
+kernel-size 3100408
+kernel-sha256 d5e8552b3324f71d44b3f1d45dc1cb3855b007e2a79e81ff3e576e22cb959bd7
 efi-path updates/x86_64/BOOTX64.EFI
 efi-size 249856
 efi-sha256 51ca2b20ed14bbc678a396cdfb0c1d941acbc155cabebc9bfafabe4cdae1be73
