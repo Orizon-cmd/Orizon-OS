@@ -1237,6 +1237,225 @@ static int parse_ipv4_tcp(const uint8_t *packet, size_t len, uint32_t *src_ip,
   return 0;
 }
 
+static void tcp_server_to_conn(netstack_tcp_server_t *srv, tcp_conn_t *conn) {
+  memset(conn, 0, sizeof(*conn));
+  conn->remote_ip = srv->remote_ip;
+  conn->remote_port = srv->remote_port;
+  conn->local_port = srv->listen_port;
+  conn->seq = srv->seq;
+  conn->ack = srv->ack;
+  memcpy(conn->remote_mac, srv->remote_mac, 6);
+}
+
+static int tcp_server_send(netstack_tcp_server_t *srv, uint8_t flags,
+                           const void *data, size_t data_len) {
+  tcp_conn_t conn;
+  int rc;
+
+  tcp_server_to_conn(srv, &conn);
+  rc = send_tcp(&conn, flags, data, data_len);
+  if (rc >= 0) {
+    srv->tx_packets++;
+    srv->tx_bytes += (uint32_t)data_len;
+  }
+  return rc;
+}
+
+static void tcp_server_reset_peer(netstack_tcp_server_t *srv) {
+  srv->state = srv->enabled ? NETSTACK_TCP_SERVER_LISTEN
+                            : NETSTACK_TCP_SERVER_CLOSED;
+  srv->remote_ip = 0;
+  srv->remote_port = 0;
+  srv->seq = 0;
+  srv->ack = 0;
+  srv->last_flags = 0;
+  memset(srv->remote_mac, 0, sizeof(srv->remote_mac));
+}
+
+static int tcp_server_peer_matches(const netstack_tcp_server_t *srv,
+                                   uint32_t src_ip, uint16_t src_port) {
+  return srv->remote_ip == src_ip && srv->remote_port == src_port;
+}
+
+void netstack_tcp_server_init(netstack_tcp_server_t *srv, uint16_t port) {
+  if (!srv) {
+    return;
+  }
+  memset(srv, 0, sizeof(*srv));
+  srv->enabled = 1;
+  srv->state = NETSTACK_TCP_SERVER_LISTEN;
+  srv->listen_port = port;
+}
+
+int netstack_tcp_server_close(netstack_tcp_server_t *srv) {
+  if (!srv) {
+    return -1;
+  }
+  if (srv->enabled && srv->state == NETSTACK_TCP_SERVER_ESTABLISHED) {
+    if (tcp_server_send(srv, TCP_FIN | TCP_ACK, NULL, 0) >= 0) {
+      srv->seq++;
+    }
+  }
+  srv->enabled = 0;
+  tcp_server_reset_peer(srv);
+  return 0;
+}
+
+const char *netstack_tcp_server_state_name(const netstack_tcp_server_t *srv) {
+  if (!srv || !srv->enabled) {
+    return "closed";
+  }
+  switch (srv->state) {
+  case NETSTACK_TCP_SERVER_LISTEN:
+    return "listen";
+  case NETSTACK_TCP_SERVER_SYN_RCVD:
+    return "syn-received";
+  case NETSTACK_TCP_SERVER_ESTABLISHED:
+    return "established";
+  case NETSTACK_TCP_SERVER_CLOSED:
+  default:
+    return "closed";
+  }
+}
+
+int netstack_tcp_server_poll(netstack_tcp_server_t *srv, const void *tx,
+                             size_t tx_len, uint8_t *rx, size_t rx_cap,
+                             size_t *rx_len) {
+  uint8_t src_mac[6];
+  uint16_t eth_type = 0;
+  int n;
+  uint32_t src_ip = 0;
+  uint32_t dst_ip = 0;
+  uint16_t src_port = 0;
+  uint16_t dst_port = 0;
+  uint32_t rseq = 0;
+  uint32_t rack = 0;
+  uint8_t flags = 0;
+  const uint8_t *payload = NULL;
+  size_t payload_len = 0;
+
+  if (rx_len) {
+    *rx_len = 0;
+  }
+  if (!srv || !srv->enabled || srv->state == NETSTACK_TCP_SERVER_CLOSED) {
+    return 0;
+  }
+  if (!stack_status.ipv4_ready) {
+    return -1;
+  }
+
+  if (srv->state == NETSTACK_TCP_SERVER_ESTABLISHED && tx && tx_len > 0) {
+    if (tcp_server_send(srv, TCP_PSH | TCP_ACK, tx, tx_len) < 0) {
+      return -2;
+    }
+    srv->seq += (uint32_t)tx_len;
+    return 4;
+  }
+
+  n = recv_frame(src_mac, &eth_type, frame_buf, sizeof(frame_buf));
+  if (n <= 0) {
+    return 0;
+  }
+  if (eth_type == ETH_TYPE_ARP) {
+    handle_arp(src_mac, frame_buf, (size_t)n);
+    return 1;
+  }
+  if (eth_type != ETH_TYPE_IPV4) {
+    return 0;
+  }
+  if (parse_ipv4_tcp(frame_buf, (size_t)n, &src_ip, &dst_ip, &src_port,
+                     &dst_port, &rseq, &rack, &flags, &payload,
+                     &payload_len) != 0) {
+    return 0;
+  }
+  if (dst_ip != stack_status.ip || dst_port != srv->listen_port) {
+    return 0;
+  }
+
+  srv->last_flags = flags;
+
+  if (srv->state == NETSTACK_TCP_SERVER_LISTEN) {
+    if (!(flags & TCP_SYN)) {
+      return 0;
+    }
+    srv->remote_ip = src_ip;
+    srv->remote_port = src_port;
+    memcpy(srv->remote_mac, src_mac, 6);
+    srv->seq = 0x53534800U ^ (uint32_t)timer_ticks();
+    srv->ack = rseq + 1;
+    srv->connections++;
+    srv->state = NETSTACK_TCP_SERVER_SYN_RCVD;
+    if (tcp_server_send(srv, TCP_SYN | TCP_ACK, NULL, 0) < 0) {
+      srv->resets++;
+      tcp_server_reset_peer(srv);
+      return -3;
+    }
+    return 2;
+  }
+
+  if (!tcp_server_peer_matches(srv, src_ip, src_port)) {
+    return 0;
+  }
+
+  if (flags & TCP_RST) {
+    srv->resets++;
+    tcp_server_reset_peer(srv);
+    return -4;
+  }
+
+  if (srv->state == NETSTACK_TCP_SERVER_SYN_RCVD) {
+    if ((flags & TCP_SYN) && !(flags & TCP_ACK)) {
+      tcp_server_send(srv, TCP_SYN | TCP_ACK, NULL, 0);
+      return 2;
+    }
+    if ((flags & TCP_ACK) && rack == srv->seq + 1) {
+      srv->seq++;
+      srv->state = NETSTACK_TCP_SERVER_ESTABLISHED;
+      return 3;
+    }
+    return 0;
+  }
+
+  if (srv->state != NETSTACK_TCP_SERVER_ESTABLISHED) {
+    return 0;
+  }
+
+  if (flags & TCP_FIN) {
+    srv->ack = rseq + 1;
+    tcp_server_send(srv, TCP_ACK, NULL, 0);
+    tcp_server_reset_peer(srv);
+    return 5;
+  }
+
+  if (payload_len > 0) {
+    srv->rx_packets++;
+    srv->rx_bytes += (uint32_t)payload_len;
+    if (rseq == srv->ack) {
+      size_t copy = payload_len;
+      if (rx && rx_cap > 0) {
+        if (copy > rx_cap) {
+          copy = rx_cap;
+        }
+        memcpy(rx, payload, copy);
+        if (rx_len) {
+          *rx_len = copy;
+        }
+      }
+      srv->ack += (uint32_t)payload_len;
+      tcp_server_send(srv, TCP_ACK, NULL, 0);
+      return 6;
+    }
+    tcp_server_send(srv, TCP_ACK, NULL, 0);
+    return 7;
+  }
+
+  if (flags & TCP_ACK) {
+    return 8;
+  }
+
+  return 0;
+}
+
 static int tcp_connect(tcp_conn_t *conn, uint32_t remote_ip, uint16_t port) {
   uint32_t next_hop = same_subnet(stack_status.ip, remote_ip) ? remote_ip : stack_status.gateway;
   uint64_t deadline;

@@ -32,6 +32,9 @@ le developpement noyau:
 - diagnostics `sysinfo`, `hw`, `mounts` et `report` pour voir CPU, memoire,
   stockage, racines data, reseau, USB/PS2, installation, update et principaux
   peripheriques PCI
+- service `ssh` experimental: listener TCP/22, banniere SSH Orizon,
+  configuration `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics
+  `ssh status` pour preparer l'acces distant securise
 - inspection stockage avec `disks`, `storage detail` et selection du disque
   actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
@@ -124,6 +127,26 @@ En cas de machine Proxmox configuree en VirtIO moderne-only, choisir le modele
 `Intel E1000` reste un fallback compatible.
 
 Details: [docs/orizon/NETWORK.md](docs/orizon/NETWORK.md).
+
+## Acces SSH Orizon
+
+Le service SSH se demarre explicitement depuis la console:
+
+```text
+net dhcp
+ssh start
+ssh status
+logs ssh
+```
+
+La commande configure IPv4 si besoin, ouvre TCP/22 et ecrit la configuration
+dans `/system/ssh.conf`. Depuis une autre machine du meme reseau, un client SSH
+peut atteindre la banniere `SSH-2.0-OrizonSSH_0.1`, ce qui valide le chemin
+entrant. La couche shell chiffree n'est volontairement pas active tant que
+l'echange de cles, l'authentification et la pseudo-console ne sont pas
+termines; Orizon ne cree donc pas d'acces cache non securise.
+
+Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA, une ESP de 1 MiB a

@@ -16,6 +16,7 @@
 #include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
+#include "../include/ssh.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
 #include "../include/timer.h"
@@ -448,6 +449,7 @@ void gui_main_loop(void) {
     }
     if (net_ready) {
       net_poll();
+      ssh_poll();
     }
     if (wifi_ready) {
       wifi_poll();

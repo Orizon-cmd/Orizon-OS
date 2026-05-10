@@ -17,6 +17,7 @@
 #include "../include/power.h"
 #include "../include/ps2.h"
 #include "../include/sched.h"
+#include "../include/ssh.h"
 #include "../include/storage.h"
 #include "../include/string.h"
 #include "../include/terminal.h"
@@ -685,7 +686,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "input", "keyboard", "ls", "mkdir", "mounts", "mv",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
-      "sysinfo", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
+      "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write"};
   const char *matches[16];
   int count = 0;
@@ -2122,7 +2123,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   if (default_view) {
     term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
     term_puts_t(term,
-                "Use: logs boot | logs network | logs update | logs install | logs all\n");
+                "Use: logs boot | logs network | logs ssh | logs update | logs install | logs all\n");
     if (vfs_exists(KLOG_BOOT_PATH)) {
       term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
     } else {
@@ -2135,6 +2136,9 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     }
     if (vfs_exists(netstack_log_path())) {
       term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 1024);
+    }
+    if (vfs_exists(ORIZON_SSH_LOG_PATH)) {
+      term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 1024);
     }
     return;
   }
@@ -2156,6 +2160,10 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 8192);
     return;
   }
+  if (term_command_is(args, "ssh")) {
+    term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 8192);
+    return;
+  }
   if (term_command_is(args, "install")) {
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 8192);
@@ -2170,6 +2178,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, "/workspace/.orizon/update.log",
                          "/workspace/.orizon/update.log", 4096);
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 4096);
+    term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 4096);
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 4096);
     term_print_file_tail(term, "/workspace/.orizon/rollback-info",
@@ -2177,7 +2186,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     return;
   }
 
-  term_puts_t(term, "usage: logs [boot|update|install|all]\n");
+  term_puts_t(term, "usage: logs [boot|network|ssh|update|install|all]\n");
 }
 
 static void term_print_diagnostic_hints(terminal_t *term) {
@@ -2509,6 +2518,53 @@ static void term_print_net_status(terminal_t *term) {
   netstack_format_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
+}
+
+static void term_run_ssh(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 3);
+  char report[1024];
+
+  if (*args == '\0' || term_command_is(args, "status")) {
+    ssh_format_report(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    term_puts_t(term,
+                "commands: ssh start | ssh stop | ssh status | ssh poll\n");
+    return;
+  }
+
+  if (term_command_is(args, "start")) {
+    term_puts_t(term, "ssh: starting TCP/22 listener...\n");
+    if (ssh_start(report, sizeof(report)) == 0) {
+      term_puts_t(term, report);
+    } else {
+      term_puts_t(term, report);
+    }
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
+
+  if (term_command_is(args, "stop")) {
+    ssh_stop(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "poll")) {
+    int rc = ssh_poll();
+    ssh_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    term_puts_t(term, "\n");
+    snprintf(report, sizeof(report), "poll=%d\n", rc);
+    term_puts_t(term, report);
+    return;
+  }
+
+  term_puts_t(term, "usage: ssh start | ssh stop | ssh status | ssh poll\n");
 }
 
 static void term_run_net(terminal_t *term, const char *cmd) {
@@ -3572,6 +3628,7 @@ void term_execute(terminal_t *term, const char *cmd) {
                 "  wifi tx [auth|assoc|m2|m4|data|all] - Stage Wi-Fi TX DMA only\n");
     term_puts_t(term,
                 "  wifi txcmd [auth|assoc|m2|m4|data] [arm] - Build/queue TX_CMD\n");
+    term_puts_t(term, "  ssh start/status/stop - Manage TCP/22 SSH listener\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
@@ -4054,6 +4111,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_run_net(term, cmd);
   } else if (term_command_is(cmd, "wifi")) {
     term_run_wifi(term, cmd);
+  } else if (term_command_is(cmd, "ssh")) {
+    term_run_ssh(term, cmd);
   } else if (term_command_is(cmd, "network-status")) {
     term_run_net(term, "net status");
   } else if (term_command_is(cmd, "ping")) {
