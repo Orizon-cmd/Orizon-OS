@@ -3442,7 +3442,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  wifi nvm-info [arm] - Read Intel radio/NVM capabilities\n");
     term_puts_t(term, "  wifi bringup - Run Intel Wi-Fi boot/readiness sequence\n");
     term_puts_t(term, "  wifi scan [arm|poll] - Plan/send/poll experimental passive scan\n");
-    term_puts_t(term, "  wifi connect - Wi-Fi association staging diagnostics\n");
+    term_puts_t(term,
+                "  wifi connect - Prepare Wi-Fi auth/association frames\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");

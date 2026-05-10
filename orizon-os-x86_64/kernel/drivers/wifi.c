@@ -276,6 +276,19 @@ static wifi_status_t wifi_status_state = {
     .scan_candidate_count = 0,
     .scan_ap_count = 0,
     .scan_ap_overflow = 0,
+    .connect_ready = 0,
+    .connect_failed = 0,
+    .connect_wpa = 0,
+    .connect_open = 0,
+    .connect_attempts = 0,
+    .connect_ap_index = 0xffffffffU,
+    .connect_channel = 0,
+    .connect_ssid_len = 0,
+    .connect_auth_frame_len = 0,
+    .connect_assoc_frame_len = 0,
+    .connect_auth_fc = 0,
+    .connect_assoc_fc = 0,
+    .connect_frame_checksum = 0,
     .chipset = "none",
     .driver = "none",
     .status = "wifi: not initialized",
@@ -515,8 +528,13 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_80211_FC_TYPE_MASK 0x000cU
 #define WIFI_80211_FC_SUBTYPE_MASK 0x00f0U
 #define WIFI_80211_TYPE_MGMT 0U
+#define WIFI_80211_SUBTYPE_ASSOC_REQ 0U
+#define WIFI_80211_SUBTYPE_AUTH 11U
 #define WIFI_80211_SUBTYPE_PROBE_RESP 5U
 #define WIFI_80211_SUBTYPE_BEACON 8U
+#define WIFI_80211_CAP_ESS 0x0001U
+#define WIFI_80211_CAP_PRIVACY 0x0010U
+#define WIFI_80211_LISTEN_INTERVAL 10U
 #define HBUS_TARG_WRPTR 0x460U
 #define HBUS_TARG_WRPTR_Q_SHIFT 16U
 #define FH_RSCSR_FRAME_SIZE_MSK 0x00003fffU
@@ -896,6 +914,9 @@ static uint8_t wifi_rx_buffers[WIFI_RX_QUEUE_ENTRIES][WIFI_RX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_scan_payload[WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(16)));
+static uint8_t wifi_connect_auth_frame[64] __attribute__((aligned(16)));
+static uint8_t wifi_connect_assoc_frame[WIFI_CONNECT_FRAME_BYTES]
+    __attribute__((aligned(16)));
 static wifi_legacy_context_info_t wifi_legacy_context
     __attribute__((aligned(4096)));
 static wifi_context_info_v2_t wifi_context_v2 __attribute__((aligned(4096)));
@@ -1096,6 +1117,11 @@ static uint16_t wifi_read_le16(const uint8_t *p) {
   return (uint16_t)p[0] | (uint16_t)((uint16_t)p[1] << 8);
 }
 
+static void wifi_write_le16(uint8_t *p, uint16_t value) {
+  p[0] = (uint8_t)(value & 0xffU);
+  p[1] = (uint8_t)((value >> 8) & 0xffU);
+}
+
 static size_t wifi_align4(size_t value) {
   return (value + 3U) & ~(size_t)3U;
 }
@@ -1140,12 +1166,39 @@ static void wifi_scan_clear_access_points(void) {
          sizeof(wifi_status_state.scan_ap_frame_subtype));
   memset(wifi_status_state.scan_ap_seen_count, 0,
          sizeof(wifi_status_state.scan_ap_seen_count));
+  memset(wifi_status_state.scan_ap_capability, 0,
+         sizeof(wifi_status_state.scan_ap_capability));
+  memset(wifi_status_state.scan_ap_security, 0,
+         sizeof(wifi_status_state.scan_ap_security));
   memset(wifi_status_state.scan_ap_ssid_len, 0,
          sizeof(wifi_status_state.scan_ap_ssid_len));
   memset(wifi_status_state.scan_ap_bssid, 0,
          sizeof(wifi_status_state.scan_ap_bssid));
   memset(wifi_status_state.scan_ap_ssid, 0,
          sizeof(wifi_status_state.scan_ap_ssid));
+}
+
+static void wifi_connect_clear_plan(void) {
+  wifi_status_state.connect_ready = 0;
+  wifi_status_state.connect_failed = 0;
+  wifi_status_state.connect_wpa = 0;
+  wifi_status_state.connect_open = 0;
+  wifi_status_state.connect_ap_index = 0xffffffffU;
+  wifi_status_state.connect_channel = 0;
+  wifi_status_state.connect_ssid_len = 0;
+  wifi_status_state.connect_auth_frame_len = 0;
+  wifi_status_state.connect_assoc_frame_len = 0;
+  wifi_status_state.connect_auth_fc = 0;
+  wifi_status_state.connect_assoc_fc = 0;
+  wifi_status_state.connect_frame_checksum = 0;
+  memset(wifi_status_state.connect_bssid, 0,
+         sizeof(wifi_status_state.connect_bssid));
+  memset(wifi_status_state.connect_local_mac, 0,
+         sizeof(wifi_status_state.connect_local_mac));
+  memset(wifi_status_state.connect_ssid, 0,
+         sizeof(wifi_status_state.connect_ssid));
+  memset(wifi_connect_auth_frame, 0, sizeof(wifi_connect_auth_frame));
+  memset(wifi_connect_assoc_frame, 0, sizeof(wifi_connect_assoc_frame));
 }
 
 static void wifi_reset_firmware_parse(void) {
@@ -1403,6 +1456,8 @@ static void wifi_reset_firmware_parse(void) {
   memset(wifi_status_state.scan_result_duration, 0,
          sizeof(wifi_status_state.scan_result_duration));
   wifi_scan_clear_access_points();
+  wifi_connect_clear_plan();
+  wifi_status_state.connect_attempts = 0;
   wifi_status_state.fh_plan_ready = 0;
   wifi_status_state.fh_armed = 0;
   wifi_status_state.fh_complete = 0;
@@ -2651,6 +2706,7 @@ static void wifi_reset_queue_runtime(void) {
   memset(wifi_status_state.scan_result_duration, 0,
          sizeof(wifi_status_state.scan_result_duration));
   wifi_scan_clear_access_points();
+  wifi_connect_clear_plan();
 }
 
 static int wifi_prepare_host_queues(void) {
@@ -3055,7 +3111,8 @@ void wifi_format_status(char *buf, size_t size) {
            "slot=%02x:%02x.%u chipset=%s mmio=%s phys=0x%lx "
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
-           "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s scan=%s status=%s",
+           "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s scan=%s "
+           "connect=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -3107,6 +3164,9 @@ void wifi_format_status(char *buf, size_t size) {
                                                   ? "ready"
                                                   : (s->scan_failed ? "failed"
                                                                     : "idle")))))),
+           s->connect_ready
+               ? (s->connect_wpa ? "wpa-plan" : "open-plan")
+               : (s->connect_failed ? "failed" : "idle"),
            s->status);
 }
 
@@ -4236,7 +4296,8 @@ static void wifi_scan_copy_ssid(uint32_t slot, const uint8_t *ssid,
 
 static int wifi_scan_store_ap(const uint8_t *bssid, const uint8_t *ssid,
                               uint32_t ssid_len, uint32_t channel,
-                              uint32_t subtype) {
+                              uint32_t subtype, uint32_t capability,
+                              uint32_t security) {
   uint32_t slot = WIFI_SCAN_AP_SLOTS;
 
   if (!bssid || !ssid) {
@@ -4266,6 +4327,8 @@ static int wifi_scan_store_ap(const uint8_t *bssid, const uint8_t *ssid,
   }
   wifi_status_state.scan_ap_channel[slot] = channel;
   wifi_status_state.scan_ap_frame_subtype[slot] = subtype;
+  wifi_status_state.scan_ap_capability[slot] = capability;
+  wifi_status_state.scan_ap_security[slot] = security;
   wifi_status_state.scan_ap_seen_count[slot]++;
   wifi_status_state.scan_ssid_updates++;
   return 0;
@@ -4318,10 +4381,16 @@ static void wifi_scan_capture_mpdu_debug(const uint8_t *payload,
   }
 }
 
+static int wifi_scan_vendor_ie_is_wpa(const uint8_t *data, uint32_t len) {
+  return data && len >= 4U && data[0] == 0x00U && data[1] == 0x50U &&
+         data[2] == 0xf2U && data[3] == 0x01U;
+}
+
 static int wifi_scan_parse_80211_ies(const uint8_t *frame, uint32_t frame_len,
                                      uint32_t *channel,
                                      const uint8_t **ssid,
-                                     uint32_t *ssid_len) {
+                                     uint32_t *ssid_len,
+                                     uint32_t *security) {
   uint32_t pos = WIFI_80211_MGMT_HEADER_BYTES + WIFI_80211_BEACON_FIXED_BYTES;
   int ssid_seen = 0;
 
@@ -4343,6 +4412,11 @@ static int wifi_scan_parse_80211_ies(const uint8_t *frame, uint32_t frame_len,
       ssid_seen = 1;
     } else if (id == 3U && len >= 1U) {
       *channel = data[0];
+    } else if (id == 48U) {
+      *security = WIFI_SCAN_SECURITY_WPA2;
+    } else if (id == 221U && *security != WIFI_SCAN_SECURITY_WPA2 &&
+               wifi_scan_vendor_ie_is_wpa(data, len)) {
+      *security = WIFI_SCAN_SECURITY_WPA;
     }
     pos += 2U + (uint32_t)len;
   }
@@ -4357,6 +4431,8 @@ static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
   uint32_t type;
   uint32_t subtype;
   uint32_t channel;
+  uint32_t capability;
+  uint32_t security;
   const uint8_t *ssid;
   uint32_t ssid_len;
 
@@ -4374,8 +4450,12 @@ static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
     return 0;
   }
 
+  capability = wifi_read_le16(frame + WIFI_80211_MGMT_HEADER_BYTES + 10U);
+  security = (capability & WIFI_80211_CAP_PRIVACY)
+                 ? WIFI_SCAN_SECURITY_WEP
+                 : WIFI_SCAN_SECURITY_OPEN;
   if (!wifi_scan_parse_80211_ies(frame, frame_len, &channel, &ssid,
-                                 &ssid_len)) {
+                                 &ssid_len, &security)) {
     return 0;
   }
   if (channel == 0) {
@@ -4394,7 +4474,8 @@ static int wifi_scan_parse_80211_frame(const uint8_t *frame, uint32_t frame_len,
   wifi_status_state.scan_last_frame_control = fc;
   wifi_status_state.scan_last_frame_subtype = subtype;
   wifi_status_state.scan_last_frame_channel = channel;
-  wifi_scan_store_ap(frame + 16U, ssid, ssid_len, channel, subtype);
+  wifi_scan_store_ap(frame + 16U, ssid, ssid_len, channel, subtype, capability,
+                     security);
   return 1;
 }
 
@@ -4792,6 +4873,7 @@ static int wifi_prepare_scan_command(void) {
   memset(wifi_status_state.scan_result_duration, 0,
          sizeof(wifi_status_state.scan_result_duration));
   wifi_scan_clear_access_points();
+  wifi_connect_clear_plan();
   return 0;
 }
 
@@ -5613,6 +5695,21 @@ static const char *wifi_scan_frame_subtype_text(uint32_t subtype) {
   }
 }
 
+static const char *wifi_scan_security_text(uint32_t security) {
+  switch (security) {
+  case WIFI_SCAN_SECURITY_OPEN:
+    return "open";
+  case WIFI_SCAN_SECURITY_WEP:
+    return "wep";
+  case WIFI_SCAN_SECURITY_WPA:
+    return "wpa";
+  case WIFI_SCAN_SECURITY_WPA2:
+    return "wpa2-rsn";
+  default:
+    return "unknown";
+  }
+}
+
 static void wifi_scan_append_access_points(char *report, size_t report_size) {
   const wifi_status_t *s = &wifi_status_state;
   char line[224];
@@ -5668,11 +5765,13 @@ static void wifi_scan_append_access_points(char *report, size_t report_size) {
     const char *ssid = s->scan_ap_ssid_len[i] ? s->scan_ap_ssid[i] : "<hidden>";
     snprintf(line, sizeof(line),
              "ap[%u]: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
-             "channel=%u source=%s seen=%u\n",
+             "channel=%u security=%s cap=0x%04x source=%s seen=%u\n",
              i, ssid, s->scan_ap_bssid[i][0], s->scan_ap_bssid[i][1],
              s->scan_ap_bssid[i][2], s->scan_ap_bssid[i][3],
              s->scan_ap_bssid[i][4], s->scan_ap_bssid[i][5],
              s->scan_ap_channel[i],
+             wifi_scan_security_text(s->scan_ap_security[i]),
+             s->scan_ap_capability[i],
              wifi_scan_frame_subtype_text(s->scan_ap_frame_subtype[i]),
              s->scan_ap_seen_count[i]);
     wifi_report_append(report, report_size, line);
@@ -6005,14 +6104,224 @@ int wifi_scan_poll(char *report, size_t report_size) {
   return s->scan_failed ? -1 : 0;
 }
 
+static void wifi_connect_copy_mac(uint8_t *dst, const uint8_t *src) {
+  for (uint32_t i = 0; i < 6U; i++) {
+    dst[i] = src[i];
+  }
+}
+
+static void wifi_connect_make_local_mac(uint8_t *mac) {
+  mac[0] = 0x02U;
+  mac[1] = 0x4fU;
+  mac[2] = 0x5aU;
+  mac[3] = (uint8_t)(wifi_status_state.vendor_id & 0xffU);
+  mac[4] = (uint8_t)(wifi_status_state.device_id & 0xffU);
+  mac[5] = (uint8_t)(wifi_status_state.scan_generation ?
+                         wifi_status_state.scan_generation : 1U);
+}
+
+static int wifi_connect_ssid_matches(const char *target,
+                                     const char *candidate,
+                                     uint32_t candidate_len) {
+  size_t target_len;
+
+  if (!target || !candidate || candidate_len == 0 ||
+      candidate_len > WIFI_SCAN_SSID_MAX) {
+    return 0;
+  }
+
+  target_len = strlen(target);
+  if (target_len != (size_t)candidate_len) {
+    return 0;
+  }
+  return memcmp(target, candidate, candidate_len) == 0;
+}
+
+static int wifi_connect_find_ap(const char *ssid, uint32_t *index) {
+  const wifi_status_t *s = &wifi_status_state;
+
+  for (uint32_t i = 0; i < s->scan_ap_count; i++) {
+    if (wifi_connect_ssid_matches(ssid, s->scan_ap_ssid[i],
+                                  s->scan_ap_ssid_len[i])) {
+      if (index) {
+        *index = i;
+      }
+      return 0;
+    }
+  }
+  return -1;
+}
+
+static uint32_t wifi_connect_checksum(const uint8_t *data, uint32_t len) {
+  uint32_t hash = 2166136261U;
+
+  for (uint32_t i = 0; i < len; i++) {
+    hash ^= data[i];
+    hash *= 16777619U;
+  }
+  return hash ? hash : 1U;
+}
+
+static void wifi_connect_write_mgmt_header(uint8_t *frame, uint16_t fc,
+                                           const uint8_t *bssid,
+                                           const uint8_t *local_mac) {
+  wifi_write_le16(frame + 0U, fc);
+  wifi_write_le16(frame + 2U, 0);
+  wifi_connect_copy_mac(frame + 4U, bssid);
+  wifi_connect_copy_mac(frame + 10U, local_mac);
+  wifi_connect_copy_mac(frame + 16U, bssid);
+  wifi_write_le16(frame + 22U, 0);
+}
+
+static int wifi_connect_add_ie(uint8_t *frame, uint32_t capacity,
+                               uint32_t *offset, uint8_t id,
+                               const uint8_t *data, uint32_t len) {
+  uint32_t pos;
+
+  if (!frame || !offset || *offset + 2U + len > capacity || len > 255U) {
+    return -1;
+  }
+
+  pos = *offset;
+  frame[pos++] = id;
+  frame[pos++] = (uint8_t)len;
+  if (len > 0 && data) {
+    memcpy(frame + pos, data, len);
+  }
+  *offset = pos + len;
+  return 0;
+}
+
+static int wifi_connect_build_auth_frame(const uint8_t *bssid,
+                                         const uint8_t *local_mac) {
+  uint16_t fc =
+      (uint16_t)(WIFI_80211_SUBTYPE_AUTH << 4);
+  uint32_t offset = WIFI_80211_MGMT_HEADER_BYTES;
+
+  memset(wifi_connect_auth_frame, 0, sizeof(wifi_connect_auth_frame));
+  wifi_connect_write_mgmt_header(wifi_connect_auth_frame, fc, bssid, local_mac);
+  wifi_write_le16(wifi_connect_auth_frame + offset, 0);
+  offset += 2U;
+  wifi_write_le16(wifi_connect_auth_frame + offset, 1);
+  offset += 2U;
+  wifi_write_le16(wifi_connect_auth_frame + offset, 0);
+  offset += 2U;
+
+  wifi_status_state.connect_auth_fc = fc;
+  wifi_status_state.connect_auth_frame_len = offset;
+  return 0;
+}
+
+static int wifi_connect_build_assoc_frame(const char *ssid, uint32_t ssid_len,
+                                          int use_wpa, const uint8_t *bssid,
+                                          const uint8_t *local_mac) {
+  static const uint8_t rates_24ghz[] = {
+      0x82U, 0x84U, 0x8bU, 0x96U, 0x0cU, 0x12U, 0x18U, 0x24U};
+  static const uint8_t rates_5ghz[] = {
+      0x8cU, 0x12U, 0x98U, 0x24U, 0xb0U, 0x48U, 0x60U, 0x6cU};
+  static const uint8_t rsn_wpa2_psk_ccmp[] = {
+      0x01U, 0x00U, 0x00U, 0x0fU, 0xacU, 0x04U, 0x01U,
+      0x00U, 0x00U, 0x0fU, 0xacU, 0x04U, 0x01U, 0x00U,
+      0x00U, 0x0fU, 0xacU, 0x02U, 0x00U, 0x00U};
+  uint16_t fc =
+      (uint16_t)(WIFI_80211_SUBTYPE_ASSOC_REQ << 4);
+  uint16_t capability = WIFI_80211_CAP_ESS;
+  const uint8_t *rates = rates_24ghz;
+  uint32_t rates_len = (uint32_t)sizeof(rates_24ghz);
+  uint32_t offset = WIFI_80211_MGMT_HEADER_BYTES;
+
+  if (!ssid || ssid_len == 0 || ssid_len > WIFI_SCAN_SSID_MAX) {
+    return -1;
+  }
+
+  if (wifi_status_state.connect_channel > 14U) {
+    rates = rates_5ghz;
+    rates_len = (uint32_t)sizeof(rates_5ghz);
+  }
+  if (use_wpa) {
+    capability |= WIFI_80211_CAP_PRIVACY;
+  }
+
+  memset(wifi_connect_assoc_frame, 0, sizeof(wifi_connect_assoc_frame));
+  wifi_connect_write_mgmt_header(wifi_connect_assoc_frame, fc, bssid,
+                                 local_mac);
+  wifi_write_le16(wifi_connect_assoc_frame + offset, capability);
+  offset += 2U;
+  wifi_write_le16(wifi_connect_assoc_frame + offset,
+                  WIFI_80211_LISTEN_INTERVAL);
+  offset += 2U;
+
+  if (wifi_connect_add_ie(wifi_connect_assoc_frame,
+                          sizeof(wifi_connect_assoc_frame), &offset, 0,
+                          (const uint8_t *)ssid, ssid_len) != 0) {
+    return -1;
+  }
+  if (wifi_connect_add_ie(wifi_connect_assoc_frame,
+                          sizeof(wifi_connect_assoc_frame), &offset, 1,
+                          rates, rates_len) != 0) {
+    return -1;
+  }
+  if (use_wpa &&
+      wifi_connect_add_ie(wifi_connect_assoc_frame,
+                          sizeof(wifi_connect_assoc_frame), &offset, 48,
+                          rsn_wpa2_psk_ccmp,
+                          (uint32_t)sizeof(rsn_wpa2_psk_ccmp)) != 0) {
+    return -1;
+  }
+
+  wifi_status_state.connect_assoc_fc = fc;
+  wifi_status_state.connect_assoc_frame_len = offset;
+  return 0;
+}
+
+static void wifi_connect_append_known_aps(char *report, size_t report_size) {
+  const wifi_status_t *s = &wifi_status_state;
+  char line[192];
+  uint32_t limit = s->scan_ap_count < 8U ? s->scan_ap_count : 8U;
+
+  if (s->scan_ap_count == 0) {
+    wifi_report_append(report, report_size,
+                       "known-aps: none; run wifi scan arm, then wifi scan poll\n");
+    return;
+  }
+
+  for (uint32_t i = 0; i < limit; i++) {
+    const char *known =
+        s->scan_ap_ssid_len[i] ? s->scan_ap_ssid[i] : "<hidden>";
+    snprintf(line, sizeof(line),
+             "known-ap[%u]: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
+             "channel=%u security=%s seen=%u\n",
+             i, known, s->scan_ap_bssid[i][0], s->scan_ap_bssid[i][1],
+             s->scan_ap_bssid[i][2], s->scan_ap_bssid[i][3],
+             s->scan_ap_bssid[i][4], s->scan_ap_bssid[i][5],
+             s->scan_ap_channel[i],
+             wifi_scan_security_text(s->scan_ap_security[i]),
+             s->scan_ap_seen_count[i]);
+    wifi_report_append(report, report_size, line);
+  }
+  if (s->scan_ap_count > limit) {
+    snprintf(line, sizeof(line), "known-aps: +%u more\n",
+             s->scan_ap_count - limit);
+    wifi_report_append(report, report_size, line);
+  }
+}
+
 int wifi_connect(const char *ssid, const char *password, char *report,
                  size_t report_size) {
   const wifi_status_t *s;
+  uint32_t ap_index = 0;
+  uint32_t ap_security;
+  uint32_t ssid_len;
+  int use_wpa;
+  const char *password_note;
+  uint32_t auth_hash;
+  uint32_t assoc_hash;
 
   if (!report || report_size == 0) {
     return -1;
   }
 
+  report[0] = '\0';
   wifi_init();
   wifi_find_firmware();
   s = &wifi_status_state;
@@ -6024,22 +6333,157 @@ int wifi_connect(const char *ssid, const char *password, char *report,
   }
 
   if (!ssid || ssid[0] == '\0') {
-    snprintf(report, report_size, "wifi connect: usage wifi connect <ssid>\n");
+    snprintf(report, report_size,
+             "wifi connect: usage wifi connect <ssid> [password]\n");
     return -1;
   }
 
+  ssid_len = (uint32_t)strlen(ssid);
+  if (ssid_len > WIFI_SCAN_SSID_MAX) {
+    snprintf(report, report_size,
+             "wifi connect: SSID too long (%u, max %u)\n",
+             ssid_len, WIFI_SCAN_SSID_MAX);
+    return -1;
+  }
+
+  wifi_status_state.connect_attempts++;
+  wifi_connect_clear_plan();
+
+  if (!s->firmware_present || !s->boot_ready || !s->context_armed ||
+      !s->rx_path_ready) {
+    wifi_status_state.connect_failed = 1;
+    snprintf(report, report_size,
+             "wifi connect: radio stack is not ready yet\n"
+             "state: firmware=%s boot=%s alive=%s context=%s rx=%s scan-aps=%u\n"
+             "run: wifi bringup, wifi scan arm, wifi scan poll, then retry\n",
+             s->firmware_present ? s->firmware_name : "missing",
+             s->boot_ready ? "ready" : "not-ready",
+             s->alive_seen ? "seen" : "not-seen",
+             s->context_armed ? "armed" : "not-armed",
+             s->rx_path_ready ? "ready" : "not-ready", s->scan_ap_count);
+    return -1;
+  }
+
+  if (wifi_connect_find_ap(ssid, &ap_index) != 0) {
+    wifi_status_state.connect_failed = 1;
+    snprintf(report, report_size,
+             "wifi connect: SSID not found in the current scan table\n"
+             "target: ssid=\"%s\"\n"
+             "scan: response=%s complete=%s aps=%u\n",
+             ssid, s->scan_response_seen ? "yes" : "no",
+             s->scan_complete_seen ? "yes" : "no", s->scan_ap_count);
+    wifi_connect_append_known_aps(report, report_size);
+    wifi_report_append(report, report_size,
+                       "run: wifi scan arm, then repeat wifi scan poll until the AP appears\n");
+    return -1;
+  }
+
+  s = &wifi_status_state;
+  ap_security = s->scan_ap_security[ap_index];
+  if (ap_security == WIFI_SCAN_SECURITY_WEP ||
+      ap_security == WIFI_SCAN_SECURITY_WPA) {
+    wifi_status_state.connect_failed = 1;
+    snprintf(report, report_size,
+             "wifi connect: unsupported AP security for now\n"
+             "target: ssid=\"%s\" channel=%u security=%s\n"
+             "supported-now: open plan or WPA2/RSN association template\n",
+             ssid, s->scan_ap_channel[ap_index],
+             wifi_scan_security_text(ap_security));
+    return -1;
+  }
+
+  if (ap_security == WIFI_SCAN_SECURITY_WPA2 &&
+      (!password || password[0] == '\0')) {
+    wifi_status_state.connect_failed = 1;
+    snprintf(report, report_size,
+             "wifi connect: password required by scanned AP\n"
+             "target: ssid=\"%s\" channel=%u security=%s\n"
+             "usage: wifi connect <ssid> <password>\n",
+             ssid, s->scan_ap_channel[ap_index],
+             wifi_scan_security_text(ap_security));
+    return -1;
+  }
+
+  use_wpa = ap_security == WIFI_SCAN_SECURITY_WPA2 ||
+            (ap_security == WIFI_SCAN_SECURITY_UNKNOWN && password &&
+             password[0]);
+  password_note = use_wpa ? "provided"
+                          : (password && password[0] ? "ignored-open-ap"
+                                                      : "none");
+  wifi_status_state.connect_ap_index = ap_index;
+  wifi_status_state.connect_channel = s->scan_ap_channel[ap_index];
+  wifi_status_state.connect_ssid_len = ssid_len;
+  wifi_status_state.connect_wpa = use_wpa ? 1 : 0;
+  wifi_status_state.connect_open = use_wpa ? 0 : 1;
+  memcpy(wifi_status_state.connect_ssid, ssid, ssid_len);
+  wifi_status_state.connect_ssid[ssid_len] = '\0';
+  wifi_connect_copy_mac(wifi_status_state.connect_bssid,
+                        s->scan_ap_bssid[ap_index]);
+  wifi_connect_make_local_mac(wifi_status_state.connect_local_mac);
+
+  if (wifi_connect_build_auth_frame(wifi_status_state.connect_bssid,
+                                    wifi_status_state.connect_local_mac) != 0 ||
+      wifi_connect_build_assoc_frame(ssid, ssid_len, use_wpa,
+                                     wifi_status_state.connect_bssid,
+                                     wifi_status_state.connect_local_mac) != 0) {
+    wifi_status_state.connect_failed = 1;
+    snprintf(report, report_size,
+             "wifi connect: failed to build association frame plan\n"
+             "target: ssid=\"%s\" channel=%u security=%s\n",
+             ssid, wifi_status_state.connect_channel,
+             use_wpa ? "wpa2-psk" : "open");
+    return -1;
+  }
+
+  auth_hash = wifi_connect_checksum(wifi_connect_auth_frame,
+                                    wifi_status_state.connect_auth_frame_len);
+  assoc_hash = wifi_connect_checksum(wifi_connect_assoc_frame,
+                                     wifi_status_state.connect_assoc_frame_len);
+  wifi_status_state.connect_frame_checksum =
+      auth_hash ^ (assoc_hash * 16777619U);
+  wifi_status_state.connect_ready = 1;
+  wifi_status_state.connect_failed = 0;
+  wifi_status_state.driver_ready = 0;
+  wifi_status_state.associated = 0;
+  wifi_status_state.status =
+      "wifi: association frames prepared; TX/WPA layer pending";
+
   snprintf(report, report_size,
-           "wifi connect: association/WPA is not available yet\n"
-           "target: ssid='%s' password=%s\n"
-           "detected: %s (%04x:%04x)\n"
-           "state: firmware=%s boot=%s alive=%s scan=%s aps=%u\n"
-           "next: MAC context, auth/assoc management frames, WPA\n",
-           ssid ? ssid : "", password && password[0] ? "provided" : "none",
-           s->chipset, s->vendor_id, s->device_id,
-           s->firmware_present ? s->firmware_name : "missing",
+           "wifi connect: association frame plan ready\n"
+           "target: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
+           "channel=%u ap-security=%s frame-security=%s password=%s\n"
+           "local: sta-mac=%02x:%02x:%02x:%02x:%02x:%02x\n"
+           "frames: auth-fc=0x%04x auth-len=%u assoc-fc=0x%04x "
+           "assoc-len=%u checksum=0x%08x\n"
+           "state: boot=%s context=%s rx=%s scan-aps=%u plan=%s associated=no\n"
+           "next: implement Intel TX_CMD, ADD_STA/MAC binding, then WPA "
+           "4-way handshake/key install\n"
+           "note: password is not stored; for now it only selects the WPA2 "
+           "RSN association template\n",
+           wifi_status_state.connect_ssid, wifi_status_state.connect_bssid[0],
+           wifi_status_state.connect_bssid[1],
+           wifi_status_state.connect_bssid[2],
+           wifi_status_state.connect_bssid[3],
+           wifi_status_state.connect_bssid[4],
+           wifi_status_state.connect_bssid[5],
+           wifi_status_state.connect_channel,
+           wifi_scan_security_text(ap_security),
+           use_wpa ? "wpa2-psk" : "open",
+           password_note,
+           wifi_status_state.connect_local_mac[0],
+           wifi_status_state.connect_local_mac[1],
+           wifi_status_state.connect_local_mac[2],
+           wifi_status_state.connect_local_mac[3],
+           wifi_status_state.connect_local_mac[4],
+           wifi_status_state.connect_local_mac[5],
+           wifi_status_state.connect_auth_fc,
+           wifi_status_state.connect_auth_frame_len,
+           wifi_status_state.connect_assoc_fc,
+           wifi_status_state.connect_assoc_frame_len,
+           wifi_status_state.connect_frame_checksum,
            s->boot_ready ? "ready" : "not-ready",
-           s->alive_seen ? "seen" : "not-seen",
-           s->scan_response_seen ? "started" : "not-started",
-           s->scan_ap_count);
-  return -1;
+           s->context_armed ? "armed" : "not-armed",
+           s->rx_path_ready ? "ready" : "not-ready", s->scan_ap_count,
+           wifi_status_state.connect_ready ? "ready" : "failed");
+  return 0;
 }

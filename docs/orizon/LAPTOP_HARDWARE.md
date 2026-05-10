@@ -54,11 +54,15 @@ development target, not a ZimaOS-only assumption.
   first per-channel scan telemetry rows: channel, band, probe status, skipped
   probes, and dwell duration. Orizon now also watches `REPLY_RX_MPDU` packets
   during scan polling and records the first SSID/BSSID/channel rows from
-  beacon/probe-response management frames. `wifi scan poll` includes an
+  beacon/probe-response management frames, including capability/security hints
+  for open, WEP, WPA vendor IE, and WPA2/RSN APs. `wifi scan poll` includes an
   `mpdu-debug` block with raw bytes and candidate frame offsets when no AP is
   parsed yet, which is the key feedback loop for fixing real-hardware RX
-  layouts. Real connections still require the next driver milestones: MAC
-  context setup, 802.11 association management frames, and WPA association.
+  layouts. `wifi connect <ssid> [password]` now matches a scanned AP, refuses
+  unsupported WEP/WPA1 paths, requires a password for WPA2/RSN, and prepares
+  open-system authentication plus association request frames. Real traffic still
+  requires the next driver milestones: Intel `TX_CMD`, MAC/STA binding,
+  association response parsing, and WPA key installation.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -86,6 +90,7 @@ wifi bringup
 wifi scan
 wifi scan arm
 wifi scan poll
+wifi connect <ssid> [password]
 storage
 disks
 ```
@@ -131,5 +136,5 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: hardware context/scheduler programming,
-   scan command, association, then WPA2/WPA3.
+6. Grow the Intel Wi-Fi path in order: Intel TX command emission, MAC/STA
+   binding, association response parsing, then WPA2/WPA3.

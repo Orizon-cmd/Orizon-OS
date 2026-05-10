@@ -12,6 +12,12 @@
 #define WIFI_SCAN_SSID_MAX 32U
 #define WIFI_SCAN_CANDIDATE_SLOTS 8U
 #define WIFI_SCAN_DEBUG_BYTES 32U
+#define WIFI_CONNECT_FRAME_BYTES 512U
+#define WIFI_SCAN_SECURITY_OPEN 0U
+#define WIFI_SCAN_SECURITY_WEP 1U
+#define WIFI_SCAN_SECURITY_WPA 2U
+#define WIFI_SCAN_SECURITY_WPA2 3U
+#define WIFI_SCAN_SECURITY_UNKNOWN 4U
 
 typedef struct {
   int present;
@@ -288,9 +294,27 @@ typedef struct {
   uint32_t scan_ap_channel[WIFI_SCAN_AP_SLOTS];
   uint32_t scan_ap_frame_subtype[WIFI_SCAN_AP_SLOTS];
   uint32_t scan_ap_seen_count[WIFI_SCAN_AP_SLOTS];
+  uint32_t scan_ap_capability[WIFI_SCAN_AP_SLOTS];
+  uint32_t scan_ap_security[WIFI_SCAN_AP_SLOTS];
   uint32_t scan_ap_ssid_len[WIFI_SCAN_AP_SLOTS];
   uint8_t scan_ap_bssid[WIFI_SCAN_AP_SLOTS][6];
   char scan_ap_ssid[WIFI_SCAN_AP_SLOTS][WIFI_SCAN_SSID_MAX + 1U];
+  int connect_ready;
+  int connect_failed;
+  int connect_wpa;
+  int connect_open;
+  unsigned long connect_attempts;
+  uint32_t connect_ap_index;
+  uint32_t connect_channel;
+  uint32_t connect_ssid_len;
+  uint32_t connect_auth_frame_len;
+  uint32_t connect_assoc_frame_len;
+  uint32_t connect_auth_fc;
+  uint32_t connect_assoc_fc;
+  uint32_t connect_frame_checksum;
+  uint8_t connect_bssid[6];
+  uint8_t connect_local_mac[6];
+  char connect_ssid[WIFI_SCAN_SSID_MAX + 1U];
   const char *chipset;
   const char *driver;
   const char *status;

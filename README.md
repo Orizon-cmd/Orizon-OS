@@ -195,11 +195,14 @@ notifications firmware UMAC de debut, iteration et fin de scan pour verifier
 que la carte parcourt bien les canaux, avec un premier tableau `result[...]`
 indiquant canal, bande, statut probe et duree d'ecoute par canal. Le poll RX
 surveille aussi les premieres trames beacon/probe-response pour remplir une
-table `ap[...]` avec SSID, BSSID, canal et source de detection. Si aucun AP ne
-sort encore, `wifi scan poll` affiche maintenant un bloc `mpdu-debug` avec les
-octets bruts et offsets candidats pour corriger le parseur sur vrai materiel.
-Les vraies connexions attendent encore les commandes MAC/PHY, la couche 802.11
-active et WPA.
+table `ap[...]` avec SSID, BSSID, canal, securite detectee et source de
+detection. Si aucun AP ne sort encore, `wifi scan poll` affiche maintenant un
+bloc `mpdu-debug` avec les octets bruts et offsets candidats pour corriger le
+parseur sur vrai materiel.
+`wifi connect <ssid> [password]` peut ensuite selectionner un AP scanne et
+preparer les trames 802.11 open-system authentication + association request,
+avec template RSN WPA2-PSK si un mot de passe est fourni. L'association reelle
+attend encore l'emission Intel `TX_CMD`, le binding MAC/STA et le handshake WPA.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
