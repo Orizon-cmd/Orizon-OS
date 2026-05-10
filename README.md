@@ -33,8 +33,10 @@ le developpement noyau:
   stockage, racines data, reseau, USB/PS2, installation, update et principaux
   peripheriques PCI
 - service `ssh` experimental: listener TCP/22, banniere SSH Orizon, paquet
-  `KEXINIT`, negotiation diagnostique des algorithmes OpenSSH, configuration
-  `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics `ssh status`
+  `KEXINIT`, X25519, signature hote RSA de developpement, `ECDH_REPLY`,
+  `NEWKEYS`, premiere lecture/reponse chiffree `SERVICE_REQUEST` /
+  `SERVICE_ACCEPT`, configuration `/system/ssh.conf`, journal `/logs/ssh.log`
+  et diagnostics `ssh status`
 - inspection stockage avec `disks`, `storage detail` et selection du disque
   actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
@@ -141,12 +143,13 @@ logs ssh
 ```
 
 La commande configure IPv4 si besoin, ouvre TCP/22, ecrit la configuration
-dans `/system/ssh.conf`, envoie la banniere `SSH-2.0-OrizonSSH_0.1`, puis
-participe a la premiere negotiation `KEXINIT`. `ssh algorithms` affiche les
-algorithmes vus/proposes par le client et ceux choisis par Orizon. La couche
-shell chiffree n'est volontairement pas active tant que l'echange de cles,
-l'authentification et la pseudo-console ne sont pas termines; Orizon ne cree
-donc pas d'acces cache non securise.
+dans `/system/ssh.conf`, envoie la banniere `SSH-2.0-OrizonSSH_0.1`, negocie
+`curve25519-sha256` avec `rsa-sha2-256`, signe `ECDH_REPLY`, derive les cles
+AES-128-CTR/HMAC-SHA256, echange `NEWKEYS`, puis repond au premier
+`SERVICE_REQUEST` chiffre par `SERVICE_ACCEPT`. `ssh algorithms` affiche les
+empreintes SHA-256 du materiel de negociation et des cles derivees. Le shell
+distant n'est pas encore active: Orizon ferme volontairement quand OpenSSH
+envoie `USERAUTH_REQUEST`, donc aucun acces cache non securise n'est cree.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

@@ -337,6 +337,28 @@ static void aes_ctr_crypt(const uint8_t key[16], const uint8_t icb[16],
   }
 }
 
+void aes128_ctr_crypt_update(const uint8_t key[16], uint8_t counter[16],
+                             const uint8_t *in, size_t len, uint8_t *out) {
+  uint8_t pad[16];
+  size_t off = 0;
+
+  if (!key || !counter || (!in && len > 0) || !out) {
+    return;
+  }
+  while (off < len) {
+    size_t take = len - off;
+    if (take > 16) {
+      take = 16;
+    }
+    aes128_encrypt_block(key, counter, pad);
+    for (size_t i = 0; i < take; i++) {
+      out[off + i] = in[off + i] ^ pad[i];
+    }
+    off += take;
+    increment_counter(counter);
+  }
+}
+
 int aes128_gcm_encrypt(const uint8_t key[16], const uint8_t nonce[12],
                        const uint8_t *aad, size_t aad_len,
                        const uint8_t *plaintext, size_t plaintext_len,

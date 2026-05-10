@@ -2522,7 +2522,7 @@ static void term_print_net_status(terminal_t *term) {
 
 static void term_run_ssh(terminal_t *term, const char *cmd) {
   const char *args = term_skip_spaces(cmd + 3);
-  char report[1024];
+  char report[3072];
 
   if (*args == '\0' || term_command_is(args, "status")) {
     ssh_format_report(report, sizeof(report));

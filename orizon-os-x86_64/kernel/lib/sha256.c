@@ -157,11 +157,49 @@ void sha256_hex(const uint8_t digest[SHA256_DIGEST_SIZE], char out[SHA256_HEX_SI
   out[SHA256_HEX_SIZE - 1] = '\0';
 }
 
-void sha256_buffer_hex(const void *data, size_t len, char out[SHA256_HEX_SIZE]) {
-  uint8_t digest[SHA256_DIGEST_SIZE];
+void sha256_buffer(const void *data, size_t len,
+                   uint8_t digest[SHA256_DIGEST_SIZE]) {
   sha256_ctx_t ctx;
+
   sha256_init(&ctx);
   sha256_update(&ctx, data, len);
   sha256_final(&ctx, digest);
+}
+
+void sha256_buffer_hex(const void *data, size_t len, char out[SHA256_HEX_SIZE]) {
+  uint8_t digest[SHA256_DIGEST_SIZE];
+
+  sha256_buffer(data, len, digest);
   sha256_hex(digest, out);
+}
+
+void hmac_sha256(const void *key, size_t key_len, const void *data,
+                 size_t data_len, uint8_t digest[SHA256_DIGEST_SIZE]) {
+  uint8_t key_block[64];
+  uint8_t inner_pad[64];
+  uint8_t outer_pad[64];
+  uint8_t inner_digest[SHA256_DIGEST_SIZE];
+  sha256_ctx_t ctx;
+
+  memset(key_block, 0, sizeof(key_block));
+  if (key_len > sizeof(key_block)) {
+    sha256_buffer(key, key_len, key_block);
+  } else if (key && key_len > 0) {
+    memcpy(key_block, key, key_len);
+  }
+
+  for (size_t i = 0; i < sizeof(key_block); i++) {
+    inner_pad[i] = key_block[i] ^ 0x36U;
+    outer_pad[i] = key_block[i] ^ 0x5cU;
+  }
+
+  sha256_init(&ctx);
+  sha256_update(&ctx, inner_pad, sizeof(inner_pad));
+  sha256_update(&ctx, data, data_len);
+  sha256_final(&ctx, inner_digest);
+
+  sha256_init(&ctx);
+  sha256_update(&ctx, outer_pad, sizeof(outer_pad));
+  sha256_update(&ctx, inner_digest, sizeof(inner_digest));
+  sha256_final(&ctx, digest);
 }

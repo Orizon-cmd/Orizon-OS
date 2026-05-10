@@ -12,8 +12,10 @@
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
   `sysinfo`, `hw`, `mounts`, `logs`, `report`, `ps`, and `uptime`.
 - Staged remote-management base: `ssh start/status/algorithms/stop`, TCP/22
-  listener, SSH banner, server/client `KEXINIT` diagnostics, algorithm
-  negotiation report, `/system/ssh.conf`, and `/logs/ssh.log`.
+  listener, SSH banner, server/client `KEXINIT`, X25519, RSA host-key
+  signature, `ECDH_REPLY`, key derivation, `NEWKEYS`, encrypted
+  `SERVICE_REQUEST` parsing, encrypted `SERVICE_ACCEPT`, `/system/ssh.conf`,
+  and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
   Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
@@ -34,8 +36,8 @@
    public manifest/index.
 4. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
    bridge/DHCP failure messages.
-5. Finish SSH transport: key exchange, encrypted packets, authentication,
-   session channel, and Orizon pseudo-console.
+5. Finish SSH remote login: persistent per-install host key, authentication,
+   session channel, PTY requests, and Orizon pseudo-console.
 
 ## Next Hardware Track
 

@@ -21,6 +21,14 @@ typedef struct {
   int server_kexinit_sent;
   int client_kexinit_seen;
   int client_kex_packet_seen;
+  int ecdh_ready;
+  int ecdh_reply_sent;
+  int newkeys_sent;
+  int client_newkeys_seen;
+  int traffic_keys_ready;
+  int encrypted_packet_seen;
+  int service_accept_sent;
+  int userauth_request_seen;
   int kex_seen;
   int disconnect_sent;
   uint8_t last_packet_type;
@@ -44,6 +52,16 @@ typedef struct {
   char compression_s2c[32];
   char client_kex_first[96];
   char client_hostkey_first[96];
+  char client_public_sha256[65];
+  char hostkey_sha256[65];
+  char server_public_sha256[65];
+  char shared_secret_sha256[65];
+  char exchange_hash_sha256[65];
+  char signature_sha256[65];
+  char client_to_server_key_sha256[65];
+  char server_to_client_key_sha256[65];
+  char client_to_server_mac_sha256[65];
+  char server_to_client_mac_sha256[65];
   char status[160];
 } ssh_status_t;
 
