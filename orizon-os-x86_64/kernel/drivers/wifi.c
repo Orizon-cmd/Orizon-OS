@@ -126,6 +126,33 @@ static wifi_status_t wifi_status_state = {
     .txcmd_rate_n_flags = 0,
     .txcmd_sta_id = 0,
     .txcmd_checksum = 0,
+    .bind_ready = 0,
+    .bind_failed = 0,
+    .bind_errors = 0,
+    .bind_plans = 0,
+    .bind_mac_id = 0,
+    .bind_color = 0,
+    .bind_link_id = 0,
+    .bind_sta_id = 0,
+    .bind_action = 0,
+    .bind_mac_cmd_id = 0,
+    .bind_mac_group = 0,
+    .bind_mac_version = 0,
+    .bind_mac_len = 0,
+    .bind_mac_checksum = 0,
+    .bind_link_cmd_id = 0,
+    .bind_link_group = 0,
+    .bind_link_version = 0,
+    .bind_link_len = 0,
+    .bind_link_checksum = 0,
+    .bind_sta_cmd_id = 0,
+    .bind_sta_group = 0,
+    .bind_sta_version = 0,
+    .bind_sta_len = 0,
+    .bind_sta_checksum = 0,
+    .bind_assoc_aid = 0,
+    .bind_security = 0,
+    .bind_channel = 0,
     .context_ready = 0,
     .context_armed = 0,
     .context_failed = 0,
@@ -564,9 +591,16 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_CMD_REPLY_RX_MPDU 0xc1U
 #define WIFI_CMD_GROUP_LONG 0x01U
 #define WIFI_CMD_GROUP_LEGACY 0x00U
+#define WIFI_CMD_GROUP_MAC_CONF 0x03U
 #define WIFI_CMD_GROUP_SCAN 0x06U
 #define WIFI_CMD_GROUP_REGULATORY_NVM 0x0cU
+#define WIFI_CMD_MAC_CONFIG 0x08U
+#define WIFI_CMD_LINK_CONFIG 0x09U
+#define WIFI_CMD_STA_CONFIG 0x0aU
 #define WIFI_CMD_VERSION_TX_API_V10 10U
+#define WIFI_CMD_VERSION_MAC_CONFIG 1U
+#define WIFI_CMD_VERSION_LINK_CONFIG 1U
+#define WIFI_CMD_VERSION_STA_CONFIG 1U
 #define WIFI_CMD_VERSION_TX_QUEUE_CFG 2U
 #define WIFI_CMD_VERSION_NVM_ACCESS 0U
 #define WIFI_CMD_VERSION_NVM_GET_INFO 1U
@@ -636,6 +670,21 @@ static wifi_status_t wifi_status_state = {
 #define WIFI_TX_CMD_OFFLD_MH_SIZE_SHIFT 8U
 #define WIFI_TX_CMD_OFFLD_PAD (1U << 13)
 #define WIFI_TX_CMD_STA_ID_UNBOUND 0xffU
+#define WIFI_BIND_CTXT_ID_POS 0U
+#define WIFI_BIND_CTXT_COLOR_POS 8U
+#define WIFI_BIND_MAC_ID_CLIENT 0U
+#define WIFI_BIND_COLOR_CLIENT 1U
+#define WIFI_BIND_LINK_ID_PRIMARY 0U
+#define WIFI_BIND_PHY_ID_INVALID 0xffffffffU
+#define WIFI_BIND_STA_ID_AP 0U
+#define WIFI_BIND_ACTION_ADD 1U
+#define WIFI_BIND_FW_MAC_TYPE_BSS_STA 5U
+#define WIFI_BIND_STATION_TYPE_PEER 0U
+#define WIFI_BIND_CCK_RATES 0x0000000fU
+#define WIFI_BIND_OFDM_RATES 0x00000ff0U
+#define WIFI_BIND_MAC_FILTER_MGMT (1U << 1)
+#define WIFI_BIND_MAC_FILTER_GROUP (1U << 2)
+#define WIFI_BIND_MAC_FILTER_DECRYPT_OFF (1U << 3)
 #define WIFI_EAPOL_ETHERTYPE 0x888eU
 #define WIFI_EAPOL_TYPE_KEY 3U
 #define WIFI_WPA_KEY_INFO_PAIRWISE 0x0008U
@@ -754,6 +803,116 @@ typedef struct __attribute__((packed)) {
   uint32_t rate_n_flags;
   uint8_t reserved[8];
 } wifi_tx_cmd_v10_t;
+
+typedef struct __attribute__((packed)) {
+  uint16_t cw_min;
+  uint16_t cw_max;
+  uint8_t aifsn;
+  uint8_t fifos_mask;
+  uint16_t edca_txop;
+} wifi_bind_ac_qos_diag_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t is_assoc;
+  uint32_t dtim_time;
+  uint64_t dtim_tsf;
+  uint32_t bi;
+  uint32_t reserved1;
+  uint32_t dtim_interval;
+  uint32_t data_policy;
+  uint32_t listen_interval;
+  uint32_t assoc_id;
+  uint32_t assoc_beacon_arrive_time;
+} wifi_bind_mac_sta_diag_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t id_and_color;
+  uint32_t action;
+  uint32_t mac_type;
+  uint32_t tsf_id;
+  uint8_t node_addr[6];
+  uint16_t reserved_for_node_addr;
+  uint8_t bssid_addr[6];
+  uint16_t reserved_for_bssid_addr;
+  uint32_t cck_rates;
+  uint32_t ofdm_rates;
+  uint32_t protection_flags;
+  uint32_t cck_short_preamble;
+  uint32_t short_slot;
+  uint32_t filter_flags;
+  uint32_t qos_flags;
+  wifi_bind_ac_qos_diag_t ac[5];
+  wifi_bind_mac_sta_diag_t sta;
+} wifi_bind_mac_config_diag_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t action;
+  uint32_t link_id;
+  uint32_t mac_id;
+  uint32_t phy_id;
+  uint8_t local_link_addr[6];
+  uint16_t reserved_for_local_link_addr;
+  uint32_t modify_mask;
+  uint32_t active;
+  uint32_t listen_lmac;
+  uint32_t cck_rates;
+  uint32_t ofdm_rates;
+  uint32_t cck_short_preamble;
+  uint32_t short_slot;
+  uint32_t protection_flags;
+  uint32_t qos_flags;
+  wifi_bind_ac_qos_diag_t ac[5];
+  uint8_t htc_trig_based_pkt_ext;
+  uint8_t rand_alloc_ecwmin;
+  uint8_t rand_alloc_ecwmax;
+  uint8_t ndp_fdbk_buff_th_exp;
+  uint8_t trig_based_txf[24];
+  uint32_t bi;
+  uint32_t dtim_interval;
+  uint16_t puncture_mask;
+  uint16_t frame_time_rts_th;
+  uint32_t flags;
+  uint32_t flags_mask;
+  uint8_t ref_bssid_addr[6];
+  uint16_t reserved_for_ref_bssid_addr;
+  uint8_t bssid_index;
+  uint8_t bss_color;
+  uint8_t spec_link_id;
+  uint8_t ul_mu_data_disable;
+  uint8_t ibss_bssid_addr[6];
+  uint16_t reserved_for_ibss_bssid_addr;
+  uint8_t reserved_tail[32];
+} wifi_bind_link_config_diag_t;
+
+typedef struct __attribute__((packed)) {
+  uint32_t sta_id;
+  uint32_t link_id;
+  uint8_t peer_mld_address[6];
+  uint16_t reserved_for_peer_mld_address;
+  uint8_t peer_link_address[6];
+  uint16_t reserved_for_peer_link_address;
+  uint32_t station_type;
+  uint32_t assoc_id;
+  uint32_t beamform_flags;
+  uint32_t mfp;
+  uint32_t mimo;
+  uint32_t mimo_protection;
+  uint32_t ack_enabled;
+  uint32_t trig_rnd_alloc;
+  uint32_t tx_ampdu_spacing;
+  uint32_t tx_ampdu_max_size;
+  uint32_t sp_length;
+  uint32_t uapsd_acs;
+  uint8_t pkt_ext[12];
+  uint32_t htc_flags;
+  uint8_t use_ldpc_x2_cw;
+  uint8_t use_icf;
+  uint8_t dps_pad_time;
+  uint8_t dps_trans_delay;
+  uint8_t mic_prep_pad_delay;
+  uint8_t mic_compute_pad_delay;
+  uint8_t reserved[2];
+} wifi_bind_sta_config_diag_t;
 
 typedef struct __attribute__((packed)) {
   uint8_t op_code;
@@ -1036,6 +1195,12 @@ static uint8_t wifi_rx_buffers[WIFI_RX_QUEUE_ENTRIES][WIFI_RX_BUFFER_BYTES]
     __attribute__((aligned(4096)));
 static uint8_t wifi_txcmd_plan_buffer[WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(16)));
+static uint8_t wifi_bind_mac_buffer[WIFI_CMD_BUFFER_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_bind_link_buffer[WIFI_CMD_BUFFER_BYTES]
+    __attribute__((aligned(16)));
+static uint8_t wifi_bind_sta_buffer[WIFI_CMD_BUFFER_BYTES]
+    __attribute__((aligned(16)));
 static uint8_t wifi_scan_payload[WIFI_CMD_BUFFER_BYTES]
     __attribute__((aligned(16)));
 static uint8_t wifi_connect_auth_frame[64] __attribute__((aligned(16)));
@@ -1314,6 +1479,39 @@ static void wifi_scan_clear_access_points(void) {
          sizeof(wifi_status_state.scan_ap_ssid));
 }
 
+static void wifi_bind_clear_plan(void) {
+  wifi_status_state.bind_ready = 0;
+  wifi_status_state.bind_failed = 0;
+  wifi_status_state.bind_errors = 0;
+  wifi_status_state.bind_plans = 0;
+  wifi_status_state.bind_mac_id = 0;
+  wifi_status_state.bind_color = 0;
+  wifi_status_state.bind_link_id = 0;
+  wifi_status_state.bind_sta_id = 0;
+  wifi_status_state.bind_action = 0;
+  wifi_status_state.bind_mac_cmd_id = 0;
+  wifi_status_state.bind_mac_group = 0;
+  wifi_status_state.bind_mac_version = 0;
+  wifi_status_state.bind_mac_len = 0;
+  wifi_status_state.bind_mac_checksum = 0;
+  wifi_status_state.bind_link_cmd_id = 0;
+  wifi_status_state.bind_link_group = 0;
+  wifi_status_state.bind_link_version = 0;
+  wifi_status_state.bind_link_len = 0;
+  wifi_status_state.bind_link_checksum = 0;
+  wifi_status_state.bind_sta_cmd_id = 0;
+  wifi_status_state.bind_sta_group = 0;
+  wifi_status_state.bind_sta_version = 0;
+  wifi_status_state.bind_sta_len = 0;
+  wifi_status_state.bind_sta_checksum = 0;
+  wifi_status_state.bind_assoc_aid = 0;
+  wifi_status_state.bind_security = 0;
+  wifi_status_state.bind_channel = 0;
+  memset(wifi_bind_mac_buffer, 0, sizeof(wifi_bind_mac_buffer));
+  memset(wifi_bind_link_buffer, 0, sizeof(wifi_bind_link_buffer));
+  memset(wifi_bind_sta_buffer, 0, sizeof(wifi_bind_sta_buffer));
+}
+
 static void wifi_connect_clear_plan(void) {
   wifi_status_state.connect_ready = 0;
   wifi_status_state.connect_failed = 0;
@@ -1415,6 +1613,7 @@ static void wifi_connect_clear_plan(void) {
   memset(wifi_wpa_eapol_m2, 0, sizeof(wifi_wpa_eapol_m2));
   memset(wifi_wpa_m2_data_frame, 0, sizeof(wifi_wpa_m2_data_frame));
   memset(wifi_txcmd_plan_buffer, 0, sizeof(wifi_txcmd_plan_buffer));
+  wifi_bind_clear_plan();
 }
 
 static void wifi_reset_firmware_parse(void) {
@@ -1527,6 +1726,7 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.txcmd_rate_n_flags = 0;
   wifi_status_state.txcmd_sta_id = 0;
   wifi_status_state.txcmd_checksum = 0;
+  wifi_bind_clear_plan();
   wifi_status_state.context_ready = 0;
   wifi_status_state.context_armed = 0;
   wifi_status_state.context_failed = 0;
@@ -3363,7 +3563,7 @@ void wifi_format_status(char *buf, size_t size) {
            "firmware=%s source=%s size=%lu valid=%s tlvs=%lu sections=%lu "
            "plan=%s dma=%s apm=%s boot=%s alive=%s queues=%s context=%s "
            "scheduler=%s rx=%s command=%s nvm=%s nvm-info=%s scan=%s "
-           "connect=%s txstage=%s txcmd=%s status=%s",
+           "connect=%s bind=%s txstage=%s txcmd=%s status=%s",
            s->driver, s->present ? "yes" : "no",
            s->driver_ready ? "yes" : "no", s->associated ? "yes" : "no",
            s->vendor_id, s->device_id, s->bus, s->device,
@@ -3422,6 +3622,7 @@ void wifi_format_status(char *buf, size_t size) {
                       : (s->connect_ready
                              ? (s->connect_wpa ? "wpa-plan" : "open-plan")
                              : (s->connect_failed ? "failed" : "idle"))),
+           s->bind_ready ? "ready" : (s->bind_failed ? "failed" : "idle"),
            s->tx_stage_ready
                ? wifi_tx_stage_kind_text(s->tx_stage_kind)
                : (s->tx_stage_failed ? "failed" : "idle"),
@@ -7302,6 +7503,290 @@ int wifi_wpa_probe(char *report, size_t report_size) {
   return s->wpa_m2_ready ? 0 : -1;
 }
 
+static uint32_t wifi_bind_id_and_color(uint32_t id, uint32_t color) {
+  return ((id & 0xffU) << WIFI_BIND_CTXT_ID_POS) |
+         ((color & 0xffU) << WIFI_BIND_CTXT_COLOR_POS);
+}
+
+static void wifi_bind_fill_qos(wifi_bind_ac_qos_diag_t *ac, uint32_t count) {
+  uint32_t i;
+
+  if (!ac) {
+    return;
+  }
+
+  for (i = 0; i < count; i++) {
+    ac[i].cw_min = 0x000fU;
+    ac[i].cw_max = 0x03ffU;
+    ac[i].aifsn = 2U;
+    ac[i].fifos_mask = 0U;
+    ac[i].edca_txop = 0U;
+  }
+  if (count > 2U) {
+    ac[2].cw_min = 0x0007U;
+    ac[2].cw_max = 0x000fU;
+  }
+  if (count > 3U) {
+    ac[3].cw_min = 0x0003U;
+    ac[3].cw_max = 0x0007U;
+    ac[3].aifsn = 1U;
+  }
+}
+
+static uint32_t wifi_bind_build_command(uint32_t cmd_id, uint32_t group_id,
+                                        uint32_t version,
+                                        const void *payload,
+                                        uint32_t payload_len,
+                                        uint8_t *buffer,
+                                        uint32_t buffer_size) {
+  wifi_cmd_header_wide_t *cmd;
+  uint32_t command_len;
+
+  if (!payload || !buffer || payload_len == 0 ||
+      payload_len > 0xffffU) {
+    return 0;
+  }
+
+  command_len = (uint32_t)sizeof(wifi_cmd_header_wide_t) + payload_len;
+  if (command_len > buffer_size) {
+    return 0;
+  }
+
+  memset(buffer, 0, buffer_size);
+  cmd = (wifi_cmd_header_wide_t *)buffer;
+  cmd->cmd = (uint8_t)cmd_id;
+  cmd->group_id = (uint8_t)group_id;
+  cmd->sequence = 0;
+  cmd->length = (uint16_t)payload_len;
+  cmd->reserved = 0;
+  cmd->version = (uint8_t)version;
+  memcpy(buffer + sizeof(*cmd), payload, payload_len);
+  return command_len;
+}
+
+static void wifi_bind_mark_failure(const char *status) {
+  wifi_status_state.bind_ready = 0;
+  wifi_status_state.bind_failed = 1;
+  wifi_status_state.bind_errors++;
+  wifi_status_state.status = status;
+}
+
+int wifi_bind_probe(char *report, size_t report_size) {
+  const wifi_status_t *s;
+  wifi_bind_mac_config_diag_t mac_cmd;
+  wifi_bind_link_config_diag_t link_cmd;
+  wifi_bind_sta_config_diag_t sta_cmd;
+  uint32_t mac_id;
+  uint32_t color;
+  uint32_t link_id;
+  uint32_t sta_id;
+  uint32_t assoc_aid;
+  uint32_t security;
+  uint32_t mac_len;
+  uint32_t link_len;
+  uint32_t sta_len;
+  char line[256];
+
+  if (!report || report_size == 0) {
+    return -1;
+  }
+
+  report[0] = '\0';
+  wifi_init();
+  s = &wifi_status_state;
+
+  if (!s->present) {
+    snprintf(report, report_size,
+             "wifi bind: no wireless controller detected\n");
+    return -1;
+  }
+
+  if (!s->connect_ready) {
+    wifi_bind_mark_failure(
+        "wifi: MAC/LINK/STA binding needs a connection plan first");
+    snprintf(report, report_size,
+             "wifi bind: no connection frame plan ready\n"
+             "run: wifi bringup, wifi scan arm, wifi scan poll, "
+             "wifi connect <ssid> [password]\n");
+    return -1;
+  }
+
+  if (s->connect_assoc_response_seen && s->connect_assoc_status) {
+    wifi_bind_mark_failure(
+        "wifi: association response failed, binding stopped");
+    snprintf(report, report_size,
+             "wifi bind: association failed, not building binding plan\n"
+             "assoc-status=%u ssid=\"%s\"\n",
+             s->connect_assoc_status, s->connect_ssid);
+    return -1;
+  }
+
+  mac_id = WIFI_BIND_MAC_ID_CLIENT;
+  color = WIFI_BIND_COLOR_CLIENT +
+          (wifi_status_state.bind_plans % 0x0fU);
+  link_id = WIFI_BIND_LINK_ID_PRIMARY;
+  sta_id = WIFI_BIND_STA_ID_AP;
+  assoc_aid =
+      (s->connect_assoc_response_seen && s->connect_assoc_status == 0)
+          ? s->connect_assoc_aid
+          : 0U;
+  security = s->connect_wpa ? WIFI_SCAN_SECURITY_WPA2
+                            : WIFI_SCAN_SECURITY_OPEN;
+  if (s->connect_ap_index < WIFI_SCAN_AP_SLOTS) {
+    security = s->scan_ap_security[s->connect_ap_index];
+  }
+
+  memset(&mac_cmd, 0, sizeof(mac_cmd));
+  mac_cmd.id_and_color = wifi_bind_id_and_color(mac_id, color);
+  mac_cmd.action = WIFI_BIND_ACTION_ADD;
+  mac_cmd.mac_type = WIFI_BIND_FW_MAC_TYPE_BSS_STA;
+  mac_cmd.tsf_id = 0;
+  wifi_connect_copy_mac(mac_cmd.node_addr, s->connect_local_mac);
+  wifi_connect_copy_mac(mac_cmd.bssid_addr, s->connect_bssid);
+  mac_cmd.cck_rates = WIFI_BIND_CCK_RATES;
+  mac_cmd.ofdm_rates = WIFI_BIND_OFDM_RATES;
+  mac_cmd.filter_flags =
+      WIFI_BIND_MAC_FILTER_MGMT | WIFI_BIND_MAC_FILTER_GROUP |
+      (s->connect_wpa ? WIFI_BIND_MAC_FILTER_DECRYPT_OFF : 0U);
+  wifi_bind_fill_qos(mac_cmd.ac, 5U);
+  mac_cmd.sta.is_assoc = assoc_aid ? 1U : 0U;
+  mac_cmd.sta.bi = 100U;
+  mac_cmd.sta.dtim_interval = 1U;
+  mac_cmd.sta.listen_interval = WIFI_80211_LISTEN_INTERVAL;
+  mac_cmd.sta.assoc_id = assoc_aid;
+
+  memset(&link_cmd, 0, sizeof(link_cmd));
+  link_cmd.action = WIFI_BIND_ACTION_ADD;
+  link_cmd.link_id = link_id;
+  link_cmd.mac_id = mac_id;
+  link_cmd.phy_id = WIFI_BIND_PHY_ID_INVALID;
+  wifi_connect_copy_mac(link_cmd.local_link_addr, s->connect_local_mac);
+  link_cmd.active = assoc_aid ? 1U : 0U;
+  link_cmd.cck_rates = WIFI_BIND_CCK_RATES;
+  link_cmd.ofdm_rates = WIFI_BIND_OFDM_RATES;
+  wifi_bind_fill_qos(link_cmd.ac, 5U);
+  link_cmd.bi = 100U;
+  link_cmd.dtim_interval = 1U;
+  wifi_connect_copy_mac(link_cmd.ref_bssid_addr, s->connect_bssid);
+  link_cmd.spec_link_id = (uint8_t)link_id;
+
+  memset(&sta_cmd, 0, sizeof(sta_cmd));
+  sta_cmd.sta_id = sta_id;
+  sta_cmd.link_id = link_id;
+  wifi_connect_copy_mac(sta_cmd.peer_mld_address, s->connect_bssid);
+  wifi_connect_copy_mac(sta_cmd.peer_link_address, s->connect_bssid);
+  sta_cmd.station_type = WIFI_BIND_STATION_TYPE_PEER;
+  sta_cmd.assoc_id = assoc_aid;
+
+  mac_len = wifi_bind_build_command(
+      WIFI_CMD_MAC_CONFIG, WIFI_CMD_GROUP_MAC_CONF,
+      WIFI_CMD_VERSION_MAC_CONFIG, &mac_cmd, sizeof(mac_cmd),
+      wifi_bind_mac_buffer, sizeof(wifi_bind_mac_buffer));
+  link_len = wifi_bind_build_command(
+      WIFI_CMD_LINK_CONFIG, WIFI_CMD_GROUP_MAC_CONF,
+      WIFI_CMD_VERSION_LINK_CONFIG, &link_cmd, sizeof(link_cmd),
+      wifi_bind_link_buffer, sizeof(wifi_bind_link_buffer));
+  sta_len = wifi_bind_build_command(
+      WIFI_CMD_STA_CONFIG, WIFI_CMD_GROUP_MAC_CONF,
+      WIFI_CMD_VERSION_STA_CONFIG, &sta_cmd, sizeof(sta_cmd),
+      wifi_bind_sta_buffer, sizeof(wifi_bind_sta_buffer));
+
+  if (!mac_len || !link_len || !sta_len) {
+    wifi_bind_mark_failure(
+        "wifi: MAC/LINK/STA diagnostic binding buffer failed");
+    snprintf(report, report_size,
+             "wifi bind: diagnostic buffer build failed\n"
+             "mac-len=%u link-len=%u sta-len=%u\n",
+             mac_len, link_len, sta_len);
+    return -1;
+  }
+
+  wifi_status_state.bind_ready = 1;
+  wifi_status_state.bind_failed = 0;
+  wifi_status_state.bind_plans++;
+  wifi_status_state.bind_mac_id = mac_id;
+  wifi_status_state.bind_color = color;
+  wifi_status_state.bind_link_id = link_id;
+  wifi_status_state.bind_sta_id = sta_id;
+  wifi_status_state.bind_action = WIFI_BIND_ACTION_ADD;
+  wifi_status_state.bind_mac_cmd_id = WIFI_CMD_MAC_CONFIG;
+  wifi_status_state.bind_mac_group = WIFI_CMD_GROUP_MAC_CONF;
+  wifi_status_state.bind_mac_version = WIFI_CMD_VERSION_MAC_CONFIG;
+  wifi_status_state.bind_mac_len = mac_len;
+  wifi_status_state.bind_mac_checksum =
+      wifi_connect_checksum(wifi_bind_mac_buffer, mac_len);
+  wifi_status_state.bind_link_cmd_id = WIFI_CMD_LINK_CONFIG;
+  wifi_status_state.bind_link_group = WIFI_CMD_GROUP_MAC_CONF;
+  wifi_status_state.bind_link_version = WIFI_CMD_VERSION_LINK_CONFIG;
+  wifi_status_state.bind_link_len = link_len;
+  wifi_status_state.bind_link_checksum =
+      wifi_connect_checksum(wifi_bind_link_buffer, link_len);
+  wifi_status_state.bind_sta_cmd_id = WIFI_CMD_STA_CONFIG;
+  wifi_status_state.bind_sta_group = WIFI_CMD_GROUP_MAC_CONF;
+  wifi_status_state.bind_sta_version = WIFI_CMD_VERSION_STA_CONFIG;
+  wifi_status_state.bind_sta_len = sta_len;
+  wifi_status_state.bind_sta_checksum =
+      wifi_connect_checksum(wifi_bind_sta_buffer, sta_len);
+  wifi_status_state.bind_assoc_aid = assoc_aid;
+  wifi_status_state.bind_security = security;
+  wifi_status_state.bind_channel = s->connect_channel;
+  wifi_status_state.status =
+      "wifi: MAC/LINK/STA diagnostic binding plan built; not queued";
+
+  snprintf(line, sizeof(line),
+           "wifi bind: MAC/LINK/STA diagnostic plan ready\n");
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "target: ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
+           "security=%s channel=%u\n",
+           s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
+           s->connect_bssid[2], s->connect_bssid[3],
+           s->connect_bssid[4], s->connect_bssid[5],
+           wifi_scan_security_text(security), s->connect_channel);
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "ids: mac=%u color=%u link=%u sta=%u action=add assoc-aid=%u\n",
+           wifi_status_state.bind_mac_id, wifi_status_state.bind_color,
+           wifi_status_state.bind_link_id, wifi_status_state.bind_sta_id,
+           wifi_status_state.bind_assoc_aid);
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "mac-cmd: id=0x%02x group=0x%02x ver=%u len=%u "
+           "checksum=0x%08x\n",
+           wifi_status_state.bind_mac_cmd_id,
+           wifi_status_state.bind_mac_group,
+           wifi_status_state.bind_mac_version,
+           wifi_status_state.bind_mac_len,
+           wifi_status_state.bind_mac_checksum);
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "link-cmd: id=0x%02x group=0x%02x ver=%u len=%u "
+           "checksum=0x%08x\n",
+           wifi_status_state.bind_link_cmd_id,
+           wifi_status_state.bind_link_group,
+           wifi_status_state.bind_link_version,
+           wifi_status_state.bind_link_len,
+           wifi_status_state.bind_link_checksum);
+  wifi_report_append(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "sta-cmd: id=0x%02x group=0x%02x ver=%u len=%u "
+           "checksum=0x%08x plans=%lu\n",
+           wifi_status_state.bind_sta_cmd_id,
+           wifi_status_state.bind_sta_group,
+           wifi_status_state.bind_sta_version,
+           wifi_status_state.bind_sta_len,
+           wifi_status_state.bind_sta_checksum,
+           wifi_status_state.bind_plans);
+  wifi_report_append(report, report_size, line);
+  wifi_report_append(report, report_size,
+                     "safety: diagnostic buffers only; not copied to "
+                     "command queue and doorbell not armed\n");
+  wifi_report_append(report, report_size,
+                     "next: guard firmware ACKs for these commands, then "
+                     "queue TX_CMD with the bound station context\n");
+  return 0;
+}
+
 static uint32_t wifi_txcmd_header_len(const uint8_t *frame,
                                       uint32_t frame_len) {
   uint16_t fc;
@@ -7373,6 +7858,7 @@ static int wifi_txcmd_build_plan(uint32_t kind, const uint8_t *frame,
   uint32_t payload_len;
   uint32_t command_len;
   uint32_t flags;
+  uint32_t sta_id;
 
   if (!wifi_status_state.connect_ready || !frame ||
       frame_len < WIFI_80211_MGMT_HEADER_BYTES || frame_len > 2342U) {
@@ -7406,6 +7892,8 @@ static int wifi_txcmd_build_plan(uint32_t kind, const uint8_t *frame,
   cmd->version = WIFI_CMD_VERSION_TX_API_V10;
 
   flags = WIFI_TX_CMD_FLAG_HIGH_PRI | WIFI_TX_CMD_FLAG_ENCRYPT_DIS;
+  sta_id = wifi_status_state.bind_ready ? wifi_status_state.bind_sta_id
+                                        : WIFI_TX_CMD_STA_ID_UNBOUND;
   tx->len = (uint16_t)frame_len;
   tx->flags = (uint16_t)flags;
   tx->offload_assist = wifi_txcmd_offload_assist(hdr_len);
@@ -7427,7 +7915,7 @@ static int wifi_txcmd_build_plan(uint32_t kind, const uint8_t *frame,
   wifi_status_state.txcmd_flags = flags;
   wifi_status_state.txcmd_offload_assist = tx->offload_assist;
   wifi_status_state.txcmd_rate_n_flags = tx->rate_n_flags;
-  wifi_status_state.txcmd_sta_id = WIFI_TX_CMD_STA_ID_UNBOUND;
+  wifi_status_state.txcmd_sta_id = sta_id;
   wifi_status_state.txcmd_checksum =
       wifi_connect_checksum(wifi_txcmd_plan_buffer, command_len);
   wifi_status_state.status =
@@ -7483,7 +7971,7 @@ int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
            "target: %s ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
            "cmd: id=0x%02x group=0x%02x api=%u payload-len=%u "
            "command-len=%u plans=%lu checksum=0x%08x\n"
-           "frame: kind=%s len=%u hdr-len=%u sta-id=%u unbound=yes\n"
+           "frame: kind=%s len=%u hdr-len=%u sta-id=%u bound=%s\n"
            "flags: tx=0x%04x offload=0x%08x rate=0x%08x "
            "encrypt-disabled=yes high-priority=yes\n"
            "safety: diagnostic buffer only; not copied to command queue and "
@@ -7497,7 +7985,9 @@ int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
            s->txcmd_api_version, s->txcmd_payload_len,
            s->txcmd_command_len, s->txcmd_plans, s->txcmd_checksum,
            wifi_tx_stage_kind_text(s->txcmd_kind), s->txcmd_frame_len,
-           s->txcmd_header_len, s->txcmd_sta_id, s->txcmd_flags,
+           s->txcmd_header_len, s->txcmd_sta_id,
+           s->txcmd_sta_id != WIFI_TX_CMD_STA_ID_UNBOUND ? "yes" : "no",
+           s->txcmd_flags,
            s->txcmd_offload_assist, s->txcmd_rate_n_flags);
   return rc;
 }

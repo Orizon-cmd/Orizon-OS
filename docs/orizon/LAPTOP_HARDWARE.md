@@ -73,9 +73,13 @@ development target, not a ZimaOS-only assumption.
   PTK material, and prepare an inspectable M2 response through `wifi wpa`.
   `wifi tx m2` only stages that response in DMA; it still does not transmit.
   `wifi txcmd [auth|assoc|m2]` builds a separate Intel `TX_CMD` v10 diagnostic
-  envelope for those frames without copying it to the command queue. Real
-  traffic still requires the next driver milestones: MAC/STA binding, guarded
-  TXCMD queueing, and WPA key installation.
+  envelope for those frames without copying it to the command queue. `wifi bind`
+  now builds diagnostic Intel `MAC_CONFIG`, `LINK_CONFIG`, and `STA_CONFIG`
+  command buffers for the selected AP, records the MAC/link/STA IDs and
+  checksums, and lets later `wifi txcmd` diagnostics report `bound=yes` with
+  the planned AP station ID. Real traffic still requires the next driver
+  milestones: guarded binding/TXCMD queueing, firmware ACK parsing, and WPA key
+  installation.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -106,6 +110,7 @@ wifi scan arm
 wifi scan poll
 wifi connect <ssid> [password]
 wifi wpa
+wifi bind
 wifi tx all
 wifi tx m2
 wifi txcmd assoc
@@ -155,5 +160,6 @@ module.
    pen/finger events, and click zones.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
-6. Grow the Intel Wi-Fi path in order: MAC/STA binding, guarded Intel TXCMD
-   queueing, association response parsing, then WPA2/WPA3.
+6. Grow the Intel Wi-Fi path in order: guarded MAC/LINK/STA command queueing,
+   guarded Intel TXCMD queueing, association response hardening, then WPA2/WPA3
+   key installation.

@@ -207,7 +207,7 @@ verifie les vecteurs SHA-1/PBKDF2 integres. Les passphrases 8-63 caracteres et
 les PSK hexadecimales 64 caracteres sont acceptees. Le chemin RX reconnait deja
 les reponses authentication/association correspondant au plan de connexion et
 stocke leurs status codes. L'association reelle attend encore l'emission Intel
-`TX_CMD`, le binding MAC/STA et le handshake WPA. `wifi tx [auth|assoc|all]`
+`TX_CMD` protegee et le handshake WPA complet. `wifi tx [auth|assoc|all]`
 prepare maintenant les trames de gestion dans les buffers DMA TX et affiche le
 doorbell prevu sans l'ecrire. Le chemin RX detecte aussi les trames
 EAPOL-Key WPA2, capture l'ANonce, derive un PTK de diagnostic, prepare une
@@ -215,6 +215,10 @@ reponse M2 inspectable avec `wifi wpa`, puis `wifi tx m2` peut seulement la
 placer en DMA sans transmission reelle. `wifi txcmd [auth|assoc|m2]` construit
 aussi une enveloppe Intel `TX_CMD` v10 de diagnostic dans un buffer separe:
 elle est mesuree et verifiee, mais pas encore copiee dans la queue commande.
+`wifi bind` prepare maintenant les enveloppes diagnostiques `MAC_CONFIG`,
+`LINK_CONFIG` et `STA_CONFIG` avec un `sta-id` AP local; apres cela,
+`wifi txcmd` indique `bound=yes` dans son rapport, toujours sans armer le
+doorbell firmware.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
