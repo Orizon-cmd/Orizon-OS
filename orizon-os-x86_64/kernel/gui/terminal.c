@@ -2861,11 +2861,24 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   if (term_command_is(args, "txcmd")) {
     const char *txcmd_args = term_skip_spaces(args + 5);
     char target[16];
+    char mode[16];
+    int arm_txcmd = 0;
     target[0] = '\0';
+    mode[0] = '\0';
     if (*txcmd_args) {
-      term_read_token(txcmd_args, target, sizeof(target));
+      const char *rest_txcmd = term_read_token(txcmd_args, target, sizeof(target));
+      if (strcmp(target, "arm") == 0 || strcmp(target, "go") == 0) {
+        arm_txcmd = 1;
+        target[0] = '\0';
+      } else if (rest_txcmd) {
+        rest_txcmd = term_skip_spaces(rest_txcmd);
+        if (*rest_txcmd) {
+          term_read_token(rest_txcmd, mode, sizeof(mode));
+          arm_txcmd = strcmp(mode, "arm") == 0 || strcmp(mode, "go") == 0;
+        }
+      }
     }
-    wifi_txcmd_probe(target, line, sizeof(line));
+    wifi_txcmd_probe(target, arm_txcmd, line, sizeof(line));
     term_puts_t(term, line);
     return;
   }
@@ -2887,7 +2900,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|all]|txcmd [auth|assoc|m2]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|bind [arm]|scan [arm|poll]|connect <ssid> [password]|tx [auth|assoc|m2|all]|txcmd [auth|assoc|m2] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -3497,7 +3510,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term,
                 "  wifi tx [auth|assoc|m2|all] - Stage Wi-Fi TX DMA only\n");
     term_puts_t(term,
-                "  wifi txcmd [auth|assoc|m2] - Build Intel TX_CMD plan only\n");
+                "  wifi txcmd [auth|assoc|m2] [arm] - Build/queue TX_CMD\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");

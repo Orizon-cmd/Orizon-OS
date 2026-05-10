@@ -219,7 +219,9 @@ elle est mesuree et verifiee, mais pas encore copiee dans la queue commande.
 `LINK_CONFIG` et `STA_CONFIG` avec un `sta-id` AP local; apres cela,
 `wifi bind arm` peut les envoyer une par une dans la queue commande avec ACK
 firmware strict avant de passer a la suivante. Quand les trois ACKs sont vus,
-`wifi txcmd` indique `bound=yes` dans son rapport.
+`wifi txcmd` indique `bound=acked` dans son rapport, et `wifi txcmd <cible> arm`
+peut envoyer le `TX_CMD` avec le meme garde-fou: contexte arme, RX pret,
+binding ACKe, puis reponse firmware strictement associee a la sequence TX.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

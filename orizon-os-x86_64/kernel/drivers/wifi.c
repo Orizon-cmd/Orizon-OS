@@ -126,6 +126,21 @@ static wifi_status_t wifi_status_state = {
     .txcmd_rate_n_flags = 0,
     .txcmd_sta_id = 0,
     .txcmd_checksum = 0,
+    .txcmd_armed = 0,
+    .txcmd_sent = 0,
+    .txcmd_response_seen = 0,
+    .txcmd_timeout = 0,
+    .txcmd_arm_attempts = 0,
+    .txcmd_last_sequence = 0,
+    .txcmd_last_index = 0,
+    .txcmd_last_rx_cmd = 0,
+    .txcmd_last_rx_group = 0,
+    .txcmd_last_rx_sequence = 0,
+    .txcmd_last_rx_len = 0,
+    .txcmd_response_word0 = 0,
+    .txcmd_response_word1 = 0,
+    .txcmd_response_word2 = 0,
+    .txcmd_response_word3 = 0,
     .bind_ready = 0,
     .bind_failed = 0,
     .bind_errors = 0,
@@ -1641,6 +1656,21 @@ static void wifi_connect_clear_plan(void) {
   wifi_status_state.txcmd_rate_n_flags = 0;
   wifi_status_state.txcmd_sta_id = 0;
   wifi_status_state.txcmd_checksum = 0;
+  wifi_status_state.txcmd_armed = 0;
+  wifi_status_state.txcmd_sent = 0;
+  wifi_status_state.txcmd_response_seen = 0;
+  wifi_status_state.txcmd_timeout = 0;
+  wifi_status_state.txcmd_arm_attempts = 0;
+  wifi_status_state.txcmd_last_sequence = 0;
+  wifi_status_state.txcmd_last_index = 0;
+  wifi_status_state.txcmd_last_rx_cmd = 0;
+  wifi_status_state.txcmd_last_rx_group = 0;
+  wifi_status_state.txcmd_last_rx_sequence = 0;
+  wifi_status_state.txcmd_last_rx_len = 0;
+  wifi_status_state.txcmd_response_word0 = 0;
+  wifi_status_state.txcmd_response_word1 = 0;
+  wifi_status_state.txcmd_response_word2 = 0;
+  wifi_status_state.txcmd_response_word3 = 0;
   memset(wifi_status_state.connect_bssid, 0,
          sizeof(wifi_status_state.connect_bssid));
   memset(wifi_status_state.connect_local_mac, 0,
@@ -1769,6 +1799,21 @@ static void wifi_reset_firmware_parse(void) {
   wifi_status_state.txcmd_rate_n_flags = 0;
   wifi_status_state.txcmd_sta_id = 0;
   wifi_status_state.txcmd_checksum = 0;
+  wifi_status_state.txcmd_armed = 0;
+  wifi_status_state.txcmd_sent = 0;
+  wifi_status_state.txcmd_response_seen = 0;
+  wifi_status_state.txcmd_timeout = 0;
+  wifi_status_state.txcmd_arm_attempts = 0;
+  wifi_status_state.txcmd_last_sequence = 0;
+  wifi_status_state.txcmd_last_index = 0;
+  wifi_status_state.txcmd_last_rx_cmd = 0;
+  wifi_status_state.txcmd_last_rx_group = 0;
+  wifi_status_state.txcmd_last_rx_sequence = 0;
+  wifi_status_state.txcmd_last_rx_len = 0;
+  wifi_status_state.txcmd_response_word0 = 0;
+  wifi_status_state.txcmd_response_word1 = 0;
+  wifi_status_state.txcmd_response_word2 = 0;
+  wifi_status_state.txcmd_response_word3 = 0;
   wifi_bind_clear_plan();
   wifi_status_state.context_ready = 0;
   wifi_status_state.context_armed = 0;
@@ -3676,7 +3721,10 @@ void wifi_format_status(char *buf, size_t size) {
                ? wifi_tx_stage_kind_text(s->tx_stage_kind)
                : (s->tx_stage_failed ? "failed" : "idle"),
            s->txcmd_ready
-               ? wifi_tx_stage_kind_text(s->txcmd_kind)
+               ? (s->txcmd_response_seen
+                      ? "acked"
+                      : (s->txcmd_sent ? "sent"
+                                       : wifi_tx_stage_kind_text(s->txcmd_kind)))
                : (s->txcmd_failed ? "failed" : "idle"),
            s->status);
 }
@@ -6096,6 +6144,22 @@ static int wifi_rx_parse_one(void) {
     specialized_status = 1;
   }
 
+  if (pkt->header.cmd == WIFI_CMD_TX &&
+      pkt->header.group_id == WIFI_CMD_GROUP_LEGACY) {
+    wifi_status_state.txcmd_response_seen = 1;
+    wifi_status_state.txcmd_timeout = 0;
+    wifi_status_state.txcmd_response_word0 =
+        payload_len >= 4U ? wifi_read_le32(payload) : 0;
+    wifi_status_state.txcmd_response_word1 =
+        payload_len >= 8U ? wifi_read_le32(payload + 4U) : 0;
+    wifi_status_state.txcmd_response_word2 =
+        payload_len >= 12U ? wifi_read_le32(payload + 8U) : 0;
+    wifi_status_state.txcmd_response_word3 =
+        payload_len >= 16U ? wifi_read_le32(payload + 12U) : 0;
+    wifi_status_state.status = "wifi: TX_CMD firmware response observed";
+    specialized_status = 1;
+  }
+
   if (pkt->header.cmd == WIFI_CMD_REPLY_RX_MPDU &&
       wifi_is_scan_notification_group(pkt->header.group_id)) {
     if (wifi_scan_parse_rx_mpdu(payload, payload_len)) {
@@ -8041,7 +8105,7 @@ int wifi_bind_probe(int arm, char *report, size_t report_size) {
            wifi_status_state.bind_sta_id);
   wifi_report_append(report, report_size, line);
   wifi_report_append(report, report_size,
-                     "next: wifi txcmd assoc should now report bound=yes; "
+                     "next: wifi txcmd assoc should now report bound=acked; "
                      "the next milestone is guarded TX_CMD queueing\n");
   return 0;
 }
@@ -8177,16 +8241,164 @@ static int wifi_txcmd_build_plan(uint32_t kind, const uint8_t *frame,
   wifi_status_state.txcmd_sta_id = sta_id;
   wifi_status_state.txcmd_checksum =
       wifi_connect_checksum(wifi_txcmd_plan_buffer, command_len);
+  wifi_status_state.txcmd_armed = 0;
+  wifi_status_state.txcmd_sent = 0;
+  wifi_status_state.txcmd_response_seen = 0;
+  wifi_status_state.txcmd_timeout = 0;
+  wifi_status_state.txcmd_last_sequence = 0;
+  wifi_status_state.txcmd_last_index = 0;
+  wifi_status_state.txcmd_last_rx_cmd = 0;
+  wifi_status_state.txcmd_last_rx_group = 0;
+  wifi_status_state.txcmd_last_rx_sequence = 0;
+  wifi_status_state.txcmd_last_rx_len = 0;
+  wifi_status_state.txcmd_response_word0 = 0;
+  wifi_status_state.txcmd_response_word1 = 0;
+  wifi_status_state.txcmd_response_word2 = 0;
+  wifi_status_state.txcmd_response_word3 = 0;
   wifi_status_state.status =
       "wifi: Intel TX_CMD v10 diagnostic plan built; not queued";
   return 0;
 }
 
-int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
+static const char *wifi_txcmd_bound_text(void) {
+  if (wifi_status_state.txcmd_sta_id == WIFI_TX_CMD_STA_ID_UNBOUND) {
+    return "no";
+  }
+  return wifi_status_state.bind_sta_response_seen ? "acked" : "planned";
+}
+
+static void wifi_txcmd_record_last(void) {
+  wifi_status_state.txcmd_last_sequence =
+      wifi_status_state.scheduler_cmd_sequence;
+  wifi_status_state.txcmd_last_index = wifi_status_state.scheduler_cmd_index;
+  wifi_status_state.txcmd_last_rx_cmd = wifi_status_state.rx_last_cmd;
+  wifi_status_state.txcmd_last_rx_group = wifi_status_state.rx_last_group;
+  wifi_status_state.txcmd_last_rx_sequence =
+      wifi_status_state.rx_last_sequence;
+  wifi_status_state.txcmd_last_rx_len = wifi_status_state.rx_last_len;
+}
+
+static int wifi_txcmd_response_matches(void) {
+  return wifi_status_state.command_response_seen &&
+         !wifi_status_state.command_failed &&
+         wifi_status_state.rx_last_cmd == WIFI_CMD_TX &&
+         wifi_status_state.rx_last_group == WIFI_CMD_GROUP_LEGACY &&
+         wifi_status_state.rx_last_sequence ==
+             wifi_status_state.scheduler_cmd_sequence &&
+         wifi_status_state.rx_last_sequence != 0;
+}
+
+static int wifi_txcmd_arm_plan(char *report, size_t report_size) {
+  const uint8_t *payload;
+  uint32_t payload_len;
+  char scratch[1024];
+  char line[256];
+  int rc;
+
+  if (!wifi_status_state.bind_sta_response_seen) {
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    wifi_status_state.status =
+        "wifi: TX_CMD arm requires ACKed MAC/LINK/STA binding first";
+    wifi_report_append(report, report_size,
+                       "arm: refused, run wifi bind arm until STA ACKs\n");
+    return -1;
+  }
+
+  if (!wifi_status_state.context_armed || !wifi_status_state.rx_path_ready) {
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    wifi_status_state.status =
+        "wifi: TX_CMD arm needs armed context and RX path";
+    snprintf(line, sizeof(line),
+             "arm: refused context=%s rx=%s bind=%s\n",
+             wifi_status_state.context_armed ? "armed" : "not-armed",
+             wifi_status_state.rx_path_ready ? "ready" : "not-ready",
+             wifi_status_state.bind_sta_response_seen ? "acked" : "missing");
+    wifi_report_append(report, report_size, line);
+    return -1;
+  }
+
+  if (!wifi_status_state.txcmd_ready ||
+      wifi_status_state.txcmd_command_len <=
+          (uint32_t)sizeof(wifi_cmd_header_wide_t)) {
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    wifi_status_state.status = "wifi: TX_CMD arm needs a built TX_CMD plan";
+    wifi_report_append(report, report_size,
+                       "arm: refused, TX_CMD diagnostic plan missing\n");
+    return -1;
+  }
+
+  payload = wifi_txcmd_plan_buffer + sizeof(wifi_cmd_header_wide_t);
+  payload_len = wifi_status_state.txcmd_command_len -
+                (uint32_t)sizeof(wifi_cmd_header_wide_t);
+  rc = wifi_stage_command_payload(
+      WIFI_CMD_TX, WIFI_CMD_GROUP_LEGACY, WIFI_CMD_VERSION_TX_API_V10,
+      payload, payload_len,
+      "wifi: TX_CMD staged for guarded firmware queueing");
+  if (rc != 0) {
+    wifi_status_state.txcmd_failed = 1;
+    wifi_status_state.txcmd_errors++;
+    wifi_status_state.status = "wifi: TX_CMD command queue staging failed";
+    snprintf(line, sizeof(line),
+             "arm: stage failed payload=%u errors=%lu\n", payload_len,
+             wifi_status_state.txcmd_errors);
+    wifi_report_append(report, report_size, line);
+    return -1;
+  }
+
+  wifi_status_state.txcmd_armed = 1;
+  wifi_status_state.txcmd_arm_attempts++;
+  wifi_status_state.txcmd_timeout = 0;
+  wifi_txcmd_record_last();
+
+  scratch[0] = '\0';
+  rc = wifi_command_probe(1, scratch, sizeof(scratch));
+  wifi_txcmd_record_last();
+  wifi_status_state.txcmd_sent = wifi_status_state.command_sent;
+  wifi_status_state.txcmd_timeout = wifi_status_state.command_timeout;
+
+  if (wifi_txcmd_response_matches()) {
+    wifi_status_state.txcmd_response_seen = 1;
+    wifi_status_state.txcmd_failed = 0;
+    wifi_status_state.status = "wifi: TX_CMD ACKed by firmware";
+    snprintf(line, sizeof(line),
+             "arm: ack=yes seq=0x%04x index=%u loops=%u "
+             "resp=%08x %08x %08x %08x\n",
+             wifi_status_state.scheduler_cmd_sequence,
+             wifi_status_state.scheduler_cmd_index,
+             wifi_status_state.command_poll_loops,
+             wifi_status_state.txcmd_response_word0,
+             wifi_status_state.txcmd_response_word1,
+             wifi_status_state.txcmd_response_word2,
+             wifi_status_state.txcmd_response_word3);
+    wifi_report_append(report, report_size, line);
+    return 0;
+  }
+
+  wifi_status_state.txcmd_failed = 1;
+  wifi_status_state.txcmd_errors++;
+  wifi_status_state.status = "wifi: TX_CMD ACK mismatch/timeout";
+  snprintf(line, sizeof(line),
+           "arm: ack=no seq=0x%04x rx=0x%02x/0x%02x/0x%04x "
+           "timeout=%s rc=%d errors=%lu\n",
+           wifi_status_state.scheduler_cmd_sequence,
+           wifi_status_state.rx_last_cmd, wifi_status_state.rx_last_group,
+           wifi_status_state.rx_last_sequence,
+           wifi_status_state.txcmd_timeout ? "yes" : "no", rc,
+           wifi_status_state.txcmd_errors);
+  wifi_report_append(report, report_size, line);
+  return -1;
+}
+
+int wifi_txcmd_probe(const char *target, int arm, char *report,
+                     size_t report_size) {
   const wifi_status_t *s;
   const uint8_t *frame = NULL;
   uint32_t frame_len = 0;
   uint32_t kind = 0;
+  char line[256];
   int rc;
 
   if (!report || report_size == 0) {
@@ -8217,7 +8429,7 @@ int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
     wifi_status_state.txcmd_failed = 1;
     wifi_status_state.txcmd_errors++;
     snprintf(report, report_size,
-             "wifi txcmd: usage wifi txcmd [auth|assoc|m2]\n"
+             "wifi txcmd: usage wifi txcmd [auth|assoc|m2] [arm]\n"
              "m2 requires: association response + WPA EAPOL M1 parsed by "
              "wifi rx poll\n");
     return -1;
@@ -8232,10 +8444,7 @@ int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
            "command-len=%u plans=%lu checksum=0x%08x\n"
            "frame: kind=%s len=%u hdr-len=%u sta-id=%u bound=%s\n"
            "flags: tx=0x%04x offload=0x%08x rate=0x%08x "
-           "encrypt-disabled=yes high-priority=yes\n"
-           "safety: diagnostic buffer only; not copied to command queue and "
-           "doorbell not armed\n"
-           "next: bind MAC/STA context, then allow guarded TX_CMD queueing\n",
+           "encrypt-disabled=yes high-priority=yes\n",
            rc == 0 ? "Intel TX_CMD v10 plan ready" : "Intel TX_CMD plan failed",
            (!target || target[0] == '\0') ? "assoc" : target,
            s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
@@ -8244,10 +8453,33 @@ int wifi_txcmd_probe(const char *target, char *report, size_t report_size) {
            s->txcmd_api_version, s->txcmd_payload_len,
            s->txcmd_command_len, s->txcmd_plans, s->txcmd_checksum,
            wifi_tx_stage_kind_text(s->txcmd_kind), s->txcmd_frame_len,
-           s->txcmd_header_len, s->txcmd_sta_id,
-           s->txcmd_sta_id != WIFI_TX_CMD_STA_ID_UNBOUND ? "yes" : "no",
+           s->txcmd_header_len, s->txcmd_sta_id, wifi_txcmd_bound_text(),
            s->txcmd_flags,
            s->txcmd_offload_assist, s->txcmd_rate_n_flags);
+
+  if (rc == 0 && arm) {
+    wifi_report_append(report, report_size,
+                       "arm: strict TX_CMD firmware queueing requested\n");
+    rc = wifi_txcmd_arm_plan(report, report_size);
+    s = &wifi_status_state;
+    snprintf(line, sizeof(line),
+             "state: armed=%s sent=%s response=%s timeout=%s attempts=%lu "
+             "seq=0x%04x rx=0x%02x/0x%02x/0x%04x\n",
+             s->txcmd_armed ? "yes" : "no",
+             s->txcmd_sent ? "yes" : "no",
+             s->txcmd_response_seen ? "yes" : "no",
+             s->txcmd_timeout ? "yes" : "no", s->txcmd_arm_attempts,
+             s->txcmd_last_sequence, s->txcmd_last_rx_cmd,
+             s->txcmd_last_rx_group, s->txcmd_last_rx_sequence);
+    wifi_report_append(report, report_size, line);
+  } else if (rc == 0) {
+    wifi_report_append(report, report_size,
+                       "safety: diagnostic buffer only; not copied to "
+                       "command queue and doorbell not armed\n");
+    wifi_report_append(report, report_size,
+                       "run: wifi bind arm, then wifi txcmd <target> arm "
+                       "for guarded TX_CMD queueing\n");
+  }
   return rc;
 }
 

@@ -129,6 +129,21 @@ typedef struct {
   uint32_t txcmd_rate_n_flags;
   uint32_t txcmd_sta_id;
   uint32_t txcmd_checksum;
+  int txcmd_armed;
+  int txcmd_sent;
+  int txcmd_response_seen;
+  int txcmd_timeout;
+  unsigned long txcmd_arm_attempts;
+  uint32_t txcmd_last_sequence;
+  uint32_t txcmd_last_index;
+  uint32_t txcmd_last_rx_cmd;
+  uint32_t txcmd_last_rx_group;
+  uint32_t txcmd_last_rx_sequence;
+  uint32_t txcmd_last_rx_len;
+  uint32_t txcmd_response_word0;
+  uint32_t txcmd_response_word1;
+  uint32_t txcmd_response_word2;
+  uint32_t txcmd_response_word3;
   int bind_ready;
   int bind_failed;
   unsigned long bind_errors;
@@ -519,7 +534,8 @@ int wifi_scan(int arm, char *report, size_t report_size);
 int wifi_scan_poll(char *report, size_t report_size);
 int wifi_crypto_probe(char *report, size_t report_size);
 int wifi_tx_stage_probe(const char *target, char *report, size_t report_size);
-int wifi_txcmd_probe(const char *target, char *report, size_t report_size);
+int wifi_txcmd_probe(const char *target, int arm, char *report,
+                     size_t report_size);
 int wifi_bind_probe(int arm, char *report, size_t report_size);
 int wifi_wpa_probe(char *report, size_t report_size);
 int wifi_connect(const char *ssid, const char *password, char *report,
