@@ -68,7 +68,9 @@ materiel RSA de bootstrap.
   temporaire configurable dans `/system/ssh.conf` (`max-attempts`,
   `lockout-seconds`).
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
-  un mini-shell de preview avec `help`, `status`, `whoami`, `uname`, `pwd` et
+  un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
+  `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
+  `sync`, `status`, `auth`, `hostkey`, `whoami`, `uname`, `pwd`, `uptime` et
   `exit`, puis ferme proprement avec `exit-status`.
 - Securite: aucun mot de passe par defaut ni backdoor n'est cree; sans
   `ssh password`, l'auth reste desactivee.
@@ -95,6 +97,6 @@ Pour transformer ce listener en acces distant complet, il reste a ajouter:
   installation, generee par Orizon au lieu d'etre derivee du bootstrap compile
 - durcir encore l'authentification: rotation du hash, permissions du fichier
   config et journalisation plus detaillee par IP
-- remplacer le mini-shell SSH par une vraie pseudo-console Orizon partageant
-  les commandes locales
+- brancher le shell SSH sur une vraie pseudo-console Orizon partageant toutes
+  les commandes locales, au lieu du sous-ensemble distant actuel
 - rotation/rechargement propre des cles hote dans `/system/ssh.conf`

@@ -158,10 +158,11 @@ AES-128-CTR/HMAC-SHA256, echange `NEWKEYS`, puis repond au premier
 desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
 console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
-de diagnostic (`help`, `status`, `whoami`, `uname`, `pwd`, `exit`). `ssh auth`
-affiche aussi le verrouillage anti-bruteforce, et `ssh lockout clear` permet de
-debloquer l'acces apres trop de mauvais mots de passe. `ssh hostkey` affiche
-l'identite hote persistante stockee dans `/system/ssh_host_rsa.key`.
+de diagnostic (`help`, `ls`, `cd`, `cat`, `write`, `logs`, `net`, `status`,
+`auth`, `hostkey`, `whoami`, `uname`, `pwd`, `exit`). `ssh auth` affiche aussi
+le verrouillage anti-bruteforce, et `ssh lockout clear` permet de debloquer
+l'acces apres trop de mauvais mots de passe. `ssh hostkey` affiche l'identite
+hote persistante stockee dans `/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 

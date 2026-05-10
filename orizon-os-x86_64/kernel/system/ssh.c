@@ -20,7 +20,7 @@
 #define SSH_BANNER "SSH-2.0-OrizonSSH_0.1\r\n"
 #define SSH_RX_BUF 2048
 #define SSH_PACKET_MAX 4096
-#define SSH_TX_BUF 1024
+#define SSH_TX_BUF 1400
 
 #define SSH_MSG_DISCONNECT 1
 #define SSH_MSG_SERVICE_REQUEST 5
@@ -263,10 +263,12 @@ static uint32_t ssh_client_channel = 0;
 static uint32_t ssh_server_channel = 0;
 static uint32_t ssh_client_window = 0;
 static uint32_t ssh_client_max_packet = 0;
-static char ssh_channel_tx[768];
+static char ssh_channel_tx[900];
 static size_t ssh_channel_tx_len = 0;
 static char ssh_shell_line[256];
 static size_t ssh_shell_line_len = 0;
+static char ssh_shell_cwd[MAX_PATH] = "/home/orizon";
+static int ssh_shell_suppress_prompt = 0;
 
 static int ssh_ensure_hostkey(void);
 static int ssh_load_hostkey_file(void);
@@ -1243,7 +1245,7 @@ static size_t ssh_build_channel_status(uint8_t *out, size_t cap,
 }
 
 static size_t ssh_build_channel_data(uint8_t *out, size_t cap) {
-  uint8_t payload[900];
+  uint8_t payload[1100];
   size_t off = 0;
 
   if (!ssh_channel_data_pending || ssh_channel_tx_len == 0) {
@@ -1383,6 +1385,7 @@ static void ssh_reset_negotiation(void) {
   ssh_client_max_packet = 0;
   ssh_channel_tx_len = 0;
   ssh_shell_line_len = 0;
+  strcpy(ssh_shell_cwd, "/home/orizon");
 }
 
 static int ssh_read_namelist(const uint8_t *payload, size_t payload_len,
@@ -1900,6 +1903,282 @@ static void ssh_process_channel_open(const uint8_t *payload,
 static void ssh_remote_exec_execute(const uint8_t *command,
                                     size_t command_len);
 
+static const char *ssh_shell_skip_spaces(const char *s) {
+  while (s && *s == ' ') {
+    s++;
+  }
+  return s ? s : "";
+}
+
+static int ssh_shell_command_is(const char *cmd, const char *name) {
+  size_t len = strlen(name);
+  return strncmp(cmd, name, len) == 0 &&
+         (cmd[len] == '\0' || cmd[len] == ' ');
+}
+
+static void ssh_shell_path_pop(char *path) {
+  int len = strlen(path);
+
+  if (len <= 1) {
+    strcpy(path, "/");
+    return;
+  }
+  while (len > 1 && path[len - 1] != '/') {
+    len--;
+  }
+  if (len <= 1) {
+    strcpy(path, "/");
+  } else {
+    path[len - 1] = '\0';
+  }
+}
+
+static int ssh_shell_path_append(char *path, size_t size,
+                                 const char *component,
+                                 size_t component_len) {
+  size_t path_len = strlen(path);
+
+  if (component_len == 0 ||
+      (component_len == 1 && component[0] == '.')) {
+    return 0;
+  }
+  if (component_len == 2 && component[0] == '.' && component[1] == '.') {
+    ssh_shell_path_pop(path);
+    return 0;
+  }
+  if (path_len > 1) {
+    if (path_len + 1 >= size) {
+      return -1;
+    }
+    path[path_len++] = '/';
+    path[path_len] = '\0';
+  }
+  if (path_len + component_len >= size) {
+    return -1;
+  }
+  memcpy(path + path_len, component, component_len);
+  path[path_len + component_len] = '\0';
+  return 0;
+}
+
+static int ssh_shell_resolve_path(const char *input, char *out,
+                                  size_t out_size) {
+  char raw[MAX_PATH];
+  char trimmed[MAX_PATH];
+  const char *p;
+  size_t input_len;
+
+  if (!input || out_size < 2) {
+    return -1;
+  }
+  input = ssh_shell_skip_spaces(input);
+  input_len = strlen(input);
+  while (input_len > 0 && input[input_len - 1] == ' ') {
+    input_len--;
+  }
+  if (input_len == 0 || input_len >= sizeof(trimmed)) {
+    return -1;
+  }
+  memcpy(trimmed, input, input_len);
+  trimmed[input_len] = '\0';
+
+  if (trimmed[0] == '/') {
+    snprintf(raw, sizeof(raw), "%s", trimmed);
+  } else if (ssh_shell_cwd[0] && strcmp(ssh_shell_cwd, "/") != 0) {
+    snprintf(raw, sizeof(raw), "%s/%s", ssh_shell_cwd, trimmed);
+  } else {
+    snprintf(raw, sizeof(raw), "/%s", trimmed);
+  }
+
+  out[0] = '/';
+  out[1] = '\0';
+  p = raw;
+  while (*p) {
+    const char *component;
+    size_t component_len = 0;
+
+    while (*p == '/') {
+      p++;
+    }
+    component = p;
+    while (*p && *p != '/') {
+      component_len++;
+      p++;
+    }
+    if (ssh_shell_path_append(out, out_size, component, component_len) < 0) {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+static void ssh_shell_prompt(void) {
+  char prompt[320];
+
+  if (ssh_shell_suppress_prompt) {
+    return;
+  }
+  snprintf(prompt, sizeof(prompt), "orizon:%s$ ", ssh_shell_cwd);
+  ssh_queue_channel_text(prompt);
+}
+
+static void ssh_shell_append(char *out, size_t out_size, size_t *used,
+                             const char *text) {
+  size_t len;
+
+  if (!out || !used || !text || *used >= out_size) {
+    return;
+  }
+  len = strlen(text);
+  if (*used + len >= out_size) {
+    len = out_size - *used - 1;
+  }
+  memcpy(out + *used, text, len);
+  *used += len;
+  out[*used] = '\0';
+}
+
+static void ssh_shell_append_file_text(char *out, size_t out_size,
+                                       size_t *used, const char *data,
+                                       size_t len) {
+  for (size_t i = 0; i < len && *used + 2 < out_size; i++) {
+    if (data[i] == '\n') {
+      ssh_shell_append(out, out_size, used, "\r\n");
+    } else if (data[i] >= 32 || data[i] == '\t') {
+      out[(*used)++] = data[i];
+      out[*used] = '\0';
+    }
+  }
+}
+
+static int ssh_shell_split_path_text(const char *args, char *path,
+                                     size_t path_size, const char **text) {
+  const char *p = ssh_shell_skip_spaces(args);
+  size_t len = 0;
+
+  if (!path || !text || path_size == 0 || !p || *p == '\0') {
+    return -1;
+  }
+  while (p[len] && p[len] != ' ') {
+    len++;
+  }
+  if (len == 0 || len >= path_size) {
+    return -1;
+  }
+  memcpy(path, p, len);
+  path[len] = '\0';
+  p = ssh_shell_skip_spaces(p + len);
+  if (*p == '\0') {
+    return -1;
+  }
+  *text = p;
+  return 0;
+}
+
+static void ssh_shell_print_ls(const char *arg) {
+  char path[MAX_PATH];
+  char out[880];
+  size_t used = 0;
+  dirent_t entries[32];
+  int count;
+  int is_dir = 0;
+  size_t size = 0;
+
+  if (!arg || *ssh_shell_skip_spaces(arg) == '\0') {
+    snprintf(path, sizeof(path), "%s", ssh_shell_cwd);
+  } else if (ssh_shell_resolve_path(arg, path, sizeof(path)) < 0) {
+    ssh_queue_channel_text("ls: invalid path\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+
+  if (vfs_stat(path, &size, &is_dir) < 0) {
+    ssh_queue_channel_text("ls: not found\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (!is_dir) {
+    snprintf(out, sizeof(out), "%s  %lu bytes\r\n", path,
+             (unsigned long)size);
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  count = vfs_readdir(path, entries, 32);
+  if (count < 0) {
+    ssh_queue_channel_text("ls: cannot read directory\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  for (int i = 0; i < count; i++) {
+    ssh_shell_append(out, sizeof(out), &used,
+                     entries[i].type ? "[d] " : "    ");
+    ssh_shell_append(out, sizeof(out), &used, entries[i].name);
+    ssh_shell_append(out, sizeof(out), &used, "\r\n");
+  }
+  if (count == 0) {
+    ssh_shell_append(out, sizeof(out), &used, "(empty)\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_file(const char *arg, size_t max_bytes) {
+  char path[MAX_PATH];
+  char out[880];
+  char buf[640];
+  size_t used = 0;
+  ssize_t n;
+  file_t *f;
+
+  if (ssh_shell_resolve_path(arg, path, sizeof(path)) < 0) {
+    ssh_queue_channel_text("cat: invalid path\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    ssh_queue_channel_text("cat: not found\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (max_bytes > sizeof(buf)) {
+    max_bytes = sizeof(buf);
+  }
+  n = vfs_read(f, buf, max_bytes);
+  vfs_close(f);
+  if (n < 0) {
+    ssh_queue_channel_text("cat: read failed\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  ssh_shell_append_file_text(out, sizeof(out), &used, buf, (size_t)n);
+  if ((size_t)n == max_bytes || (size_t)n == sizeof(buf)) {
+    ssh_shell_append(out, sizeof(out), &used, "\r\n[truncated]\r\n");
+  } else if (used == 0 || out[used - 1] != '\n') {
+    ssh_shell_append(out, sizeof(out), &used, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_log(const char *which) {
+  if (ssh_shell_command_is(which, "ssh")) {
+    ssh_shell_print_file(ORIZON_SSH_LOG_PATH, 560);
+  } else if (ssh_shell_command_is(which, "boot")) {
+    ssh_shell_print_file(KLOG_BOOT_PATH, 560);
+  } else {
+    char out[880];
+    size_t n = klog_snapshot(out, sizeof(out) - 3);
+    out[n] = '\0';
+    if (n > 0 && out[n - 1] != '\n') {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out[0] ? out : "logs: empty\r\n");
+    ssh_shell_prompt();
+  }
+}
+
 static void ssh_process_channel_request(const uint8_t *payload,
                                         size_t payload_len) {
   const uint8_t *request = NULL;
@@ -1941,8 +2220,8 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell preview\r\n"
-        "Commands: help, status, auth, hostkey, whoami, uname, pwd, exit\r\n"
-        "orizon$ ");
+        "Commands: help, ls, cd, cat, write, logs, net, status, auth, hostkey, exit\r\n");
+    ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
   }
@@ -1970,60 +2249,242 @@ static void ssh_process_channel_request(const uint8_t *payload,
 }
 
 static void ssh_remote_shell_execute(const char *line) {
-  char out[768];
+  char out[880];
+  const char *args;
 
   if (!line || line[0] == '\0') {
-    ssh_queue_channel_text("orizon$ ");
+    ssh_shell_prompt();
     return;
   }
   if (strcmp(line, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote preview commands:\r\n"
-        "  help    show this help\r\n"
-        "  status  show SSH stage\r\n"
-        "  auth    show SSH auth policy\r\n"
-        "  hostkey show SSH host identity\r\n"
-        "  whoami  show current user\r\n"
-        "  uname   show OS name\r\n"
-        "  pwd     show remote cwd\r\n"
-        "  exit    close channel\r\n"
-        "orizon$ ");
+        "Remote Orizon commands:\r\n"
+        "  help                 show this help\r\n"
+        "  status               show SSH transport state\r\n"
+        "  auth                 show SSH auth policy\r\n"
+        "  hostkey              show SSH host identity\r\n"
+        "  ls [path]            list files\r\n"
+        "  cd <path>            change directory\r\n"
+        "  pwd                  show remote cwd\r\n"
+        "  cat <file>           print a file preview\r\n"
+        "  head <file>          print a shorter file preview\r\n"
+        "  touch|mkdir|rm       edit VFS entries\r\n"
+        "  write|append f text  write text to a file\r\n"
+        "  logs [ssh|boot]      show logs\r\n"
+        "  net|route|dns        show network diagnostics\r\n"
+        "  sync                 persist Orizon data roots\r\n"
+        "  whoami|uname|uptime  basic system info\r\n"
+        "  exit                 close channel\r\n");
+    ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "status") == 0) {
+  if (strcmp(line, "status") == 0 || strcmp(line, "ssh status") == 0) {
     ssh_format_status(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
-      strcat(out, "\r\norizon$ ");
+      strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+    ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "auth") == 0) {
+  if (strcmp(line, "auth") == 0 || strcmp(line, "ssh auth") == 0) {
     ssh_format_auth(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
-      strcat(out, "\r\norizon$ ");
+      strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+    ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "hostkey") == 0) {
+  if (strcmp(line, "hostkey") == 0 || strcmp(line, "ssh hostkey") == 0) {
     ssh_format_hostkey(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
-      strcat(out, "\r\norizon$ ");
+      strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+    ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "whoami") == 0) {
-    ssh_queue_channel_text("orizon\r\norizon$ ");
+  if (strcmp(line, "ssh hostkey reload") == 0) {
+    ssh_reload_hostkey(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "uname") == 0 || strcmp(line, "uname -a") == 0) {
-    ssh_queue_channel_text("Orizon OS x86_64 OrizonSSH_0.1\r\norizon$ ");
+  if (strcmp(line, "ssh hostkey reset") == 0) {
+    ssh_reset_hostkey(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "ls")) {
+    ssh_shell_print_ls(ssh_shell_skip_spaces(line + 2));
+    return;
+  }
+  if (ssh_shell_command_is(line, "cd")) {
+    char path[MAX_PATH];
+    int is_dir = 0;
+    args = ssh_shell_skip_spaces(line + 2);
+    if (*args == '\0') {
+      strcpy(ssh_shell_cwd, "/home/orizon");
+      ssh_shell_prompt();
+      return;
+    }
+    if (ssh_shell_resolve_path(args, path, sizeof(path)) < 0 ||
+        vfs_stat(path, NULL, &is_dir) < 0 || !is_dir) {
+      ssh_queue_channel_text("cd: not a directory\r\n");
+      ssh_shell_prompt();
+      return;
+    }
+    strncpy(ssh_shell_cwd, path, sizeof(ssh_shell_cwd) - 1);
+    ssh_shell_cwd[sizeof(ssh_shell_cwd) - 1] = '\0';
+    ssh_shell_prompt();
     return;
   }
   if (strcmp(line, "pwd") == 0) {
-    ssh_queue_channel_text("/home/orizon\r\norizon$ ");
+    snprintf(out, sizeof(out), "%s\r\n", ssh_shell_cwd);
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "cat")) {
+    ssh_shell_print_file(ssh_shell_skip_spaces(line + 3), 1400);
+    return;
+  }
+  if (ssh_shell_command_is(line, "head")) {
+    ssh_shell_print_file(ssh_shell_skip_spaces(line + 4), 700);
+    return;
+  }
+  if (ssh_shell_command_is(line, "touch")) {
+    char path[MAX_PATH];
+    if (ssh_shell_resolve_path(line + 5, path, sizeof(path)) < 0 ||
+        vfs_create(path) < 0) {
+      ssh_queue_channel_text("touch: failed\r\n");
+    } else {
+      ssh_queue_channel_text("touch: ok\r\n");
+    }
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "mkdir")) {
+    char path[MAX_PATH];
+    if (ssh_shell_resolve_path(line + 5, path, sizeof(path)) < 0 ||
+        vfs_mkdir(path) < 0) {
+      ssh_queue_channel_text("mkdir: failed\r\n");
+    } else {
+      ssh_queue_channel_text("mkdir: ok\r\n");
+    }
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "rm")) {
+    char path[MAX_PATH];
+    if (ssh_shell_resolve_path(line + 2, path, sizeof(path)) < 0 ||
+        vfs_delete(path) < 0) {
+      ssh_queue_channel_text("rm: failed\r\n");
+    } else {
+      ssh_queue_channel_text("rm: ok\r\n");
+    }
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "write") ||
+      ssh_shell_command_is(line, "append")) {
+    char file_arg[MAX_PATH];
+    char path[MAX_PATH];
+    const char *text = NULL;
+    int append = ssh_shell_command_is(line, "append");
+    file_t *f;
+
+    args = line + (append ? 6 : 5);
+    if (ssh_shell_split_path_text(args, file_arg, sizeof(file_arg), &text) < 0 ||
+        ssh_shell_resolve_path(file_arg, path, sizeof(path)) < 0) {
+      ssh_queue_channel_text(append ? "usage: append <file> <text>\r\n"
+                                    : "usage: write <file> <text>\r\n");
+      ssh_shell_prompt();
+      return;
+    }
+    f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
+    if (!f) {
+      ssh_queue_channel_text(append ? "append: failed\r\n" : "write: failed\r\n");
+      ssh_shell_prompt();
+      return;
+    }
+    if (vfs_write(f, text, strlen(text)) < 0 ||
+        vfs_write(f, "\n", 1) < 0) {
+      ssh_queue_channel_text(append ? "append: write error\r\n"
+                                    : "write: write error\r\n");
+      vfs_close(f);
+      ssh_shell_prompt();
+      return;
+    }
+    vfs_close(f);
+    ssh_queue_channel_text(append ? "append: ok\r\n" : "write: ok\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "logs")) {
+    ssh_shell_print_log(ssh_shell_skip_spaces(line + 4));
+    return;
+  }
+  if (strcmp(line, "net") == 0 || strcmp(line, "network-status") == 0) {
+    netstack_format_status(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "route") == 0) {
+    netstack_format_route(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "dns") == 0) {
+    netstack_format_dns(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "sync") == 0) {
+    ssh_queue_channel_text(vfs_persist_save() == 0
+                               ? "sync: ok\r\n"
+                               : "sync: persistence unavailable\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "uptime") == 0) {
+    snprintf(out, sizeof(out), "uptime=%lus ticks=%lu hz=%lu\r\n",
+             (unsigned long)timer_uptime_seconds(),
+             (unsigned long)timer_ticks(), (unsigned long)timer_hz());
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "neofetch") == 0 || strcmp(line, "sysinfo") == 0) {
+    snprintf(out, sizeof(out),
+             "Orizon OS\r\nkernel=core-x86_64 shell=ssh cwd=%s uptime=%lus\r\n",
+             ssh_shell_cwd, (unsigned long)timer_uptime_seconds());
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "whoami") == 0 || strcmp(line, "id") == 0) {
+    ssh_queue_channel_text("orizon\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "uname") == 0 || strcmp(line, "uname -a") == 0) {
+    ssh_queue_channel_text("Orizon OS x86_64 OrizonSSH_0.1\r\n");
+    ssh_shell_prompt();
     return;
   }
   if (strcmp(line, "exit") == 0 || strcmp(line, "logout") == 0) {
@@ -2032,8 +2493,9 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_channel_close_pending = 1;
     return;
   }
-  snprintf(out, sizeof(out), "%s: command not found\r\norizon$ ", line);
+  snprintf(out, sizeof(out), "%s: command not found\r\n", line);
   ssh_queue_channel_text(out);
+  ssh_shell_prompt();
 }
 
 static void ssh_remote_exec_execute(const uint8_t *command,
@@ -2048,9 +2510,18 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   memcpy(cmd, command, copy);
   cmd[copy] = '\0';
 
+  ssh_shell_suppress_prompt = 1;
   if (strstr(cmd, "help")) {
     ssh_queue_channel_text(
-        "Remote preview commands: help, status, auth, hostkey, whoami, uname, pwd, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, write, logs, net, status, auth, hostkey, exit\r\n");
+  } else if (ssh_shell_command_is(cmd, "ls")) {
+    ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
+  } else if (ssh_shell_command_is(cmd, "cat")) {
+    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), 1400);
+  } else if (ssh_shell_command_is(cmd, "head")) {
+    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 700);
+  } else if (ssh_shell_command_is(cmd, "logs")) {
+    ssh_shell_print_log(ssh_shell_skip_spaces(cmd + 4));
   } else if (strstr(cmd, "status")) {
     ssh_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
@@ -2069,6 +2540,29 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "net") == 0 || strcmp(cmd, "network-status") == 0) {
+    netstack_format_status(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "route") == 0) {
+    netstack_format_route(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "dns") == 0) {
+    netstack_format_dns(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "uptime") == 0) {
+    snprintf(out, sizeof(out), "uptime=%lus ticks=%lu hz=%lu\r\n",
+             (unsigned long)timer_uptime_seconds(),
+             (unsigned long)timer_ticks(), (unsigned long)timer_hz());
+    ssh_queue_channel_text(out);
   } else if (strstr(cmd, "whoami")) {
     ssh_queue_channel_text("orizon\r\n");
   } else if (strstr(cmd, "uname")) {
@@ -2079,6 +2573,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     snprintf(out, sizeof(out), "%s: command not found\r\n", cmd);
     ssh_queue_channel_text(out);
   }
+  ssh_shell_suppress_prompt = 0;
   ssh_channel_exit_status_pending = 1;
   ssh_channel_close_pending = 1;
 }
