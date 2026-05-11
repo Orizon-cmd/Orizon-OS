@@ -29,6 +29,8 @@
 #define UPDATE_LAST_SUCCESS_PATH "/workspace/.orizon/last-update"
 #define UPDATE_ROLLBACK_STATE_PATH "/workspace/.orizon/rollback-state"
 #define UPDATE_ROLLBACK_INFO_PATH "/workspace/.orizon/rollback-info"
+#define UPDATE_BOOT_GUARD_PATH "/workspace/.orizon/boot-guard"
+#define UPDATE_BOOT_GUARD_STATUS_PATH "/system/boot-guard"
 #define SYSTEM_STATE_PATH "/system/update-state"
 #define SYSTEM_SOURCE_PATH "/system/update-source"
 #define SYSTEM_MANIFEST_PATH "/system/update-manifest"
@@ -67,6 +69,8 @@ typedef struct {
 typedef struct {
   char version[64];
   char commit[64];
+  char channel[32];
+  char source[96];
   char kernel_path[160];
   char kernel_sha256[SHA256_HEX_SIZE];
   size_t kernel_size;
@@ -297,6 +301,10 @@ static int update_installed_marker_present(void) {
   return vfs_exists("/workspace/.orizon/installed");
 }
 
+static int sha256_text_valid(const char *text);
+static int manifest_copy_value(const char *manifest, const char *key, char *out,
+                               size_t out_size);
+
 static int append_limine_rollback_entry(char *conf, size_t cap) {
   size_t used;
   if (!conf || cap == 0) {
@@ -328,6 +336,239 @@ static int hex_equal(const char *a, const char *b) {
     }
   }
   return 1;
+}
+
+static void update_boot_guard_write(const char *text) {
+  update_write_blob(UPDATE_BOOT_GUARD_PATH, text, strlen(text));
+  update_write_blob(UPDATE_BOOT_GUARD_STATUS_PATH, text, strlen(text));
+}
+
+static void update_boot_guard_arm(const update_manifest_t *manifest,
+                                  const char *rollback_hash) {
+  char guard[768];
+
+  if (!manifest || !rollback_hash || !sha256_text_valid(rollback_hash)) {
+    return;
+  }
+  snprintf(guard, sizeof(guard),
+           "boot-guard-version 1\n"
+           "state pending\n"
+           "source %s\n"
+           "channel %s\n"
+           "updated-version %s\n"
+           "updated-commit %s\n"
+           "expected-kernel-sha256 %s\n"
+           "rollback-kernel-sha256 %s\n"
+           "action reboot-and-auto-validate\n",
+           UPDATE_SOURCE, UPDATE_CHANNEL, manifest->version, manifest->commit,
+           manifest->kernel_sha256, rollback_hash);
+  update_boot_guard_write(guard);
+  update_write_line(UPDATE_ROLLBACK_STATE_PATH,
+                    "rollback available: update pending boot validation");
+  update_append_log("boot-guard: armed pending updated boot validation");
+}
+
+static void update_boot_guard_mark_current(const update_manifest_t *manifest) {
+  char guard[512];
+
+  if (!manifest) {
+    return;
+  }
+  snprintf(guard, sizeof(guard),
+           "boot-guard-version 1\n"
+           "state current\n"
+           "source %s\n"
+           "channel %s\n"
+           "updated-version %s\n"
+           "updated-commit %s\n"
+           "expected-kernel-sha256 %s\n"
+           "action none\n",
+           UPDATE_SOURCE, UPDATE_CHANNEL, manifest->version, manifest->commit,
+           manifest->kernel_sha256);
+  update_boot_guard_write(guard);
+}
+
+static void boot_guard_append(char *out, size_t out_size, const char *line) {
+  size_t used;
+  if (!out || out_size == 0 || !line) {
+    return;
+  }
+  used = strlen(out);
+  if (used + 1 >= out_size) {
+    return;
+  }
+  snprintf(out + used, out_size - used, "%s\n", line);
+}
+
+static void update_boot_guard_write_state(const char *state,
+                                          const char *detail,
+                                          const char *current_hash,
+                                          const char *expected_hash,
+                                          const char *rollback_hash) {
+  char guard[900];
+
+  snprintf(guard, sizeof(guard),
+           "boot-guard-version 1\n"
+           "state %s\n"
+           "detail %s\n"
+           "current-kernel-sha256 %s\n"
+           "expected-kernel-sha256 %s\n"
+           "rollback-kernel-sha256 %s\n",
+           state ? state : "unknown", detail ? detail : "none",
+           current_hash ? current_hash : "unknown",
+           expected_hash ? expected_hash : "unknown",
+           rollback_hash ? rollback_hash : "unknown");
+  update_boot_guard_write(guard);
+  update_append_log(detail ? detail : "boot-guard: state updated");
+}
+
+void orizon_update_boot_guard_check(void) {
+  char guard[1024];
+  char state[32];
+  char expected_hash[SHA256_HEX_SIZE];
+  char rollback_hash[SHA256_HEX_SIZE];
+  char current_hash[SHA256_HEX_SIZE];
+  static char rollback_report[4096];
+
+  if (!update_installed_marker_present() ||
+      update_read_file(UPDATE_BOOT_GUARD_PATH, guard, sizeof(guard), NULL) < 0 ||
+      manifest_copy_value(guard, "state", state, sizeof(state)) < 0 ||
+      strcmp(state, "pending") != 0) {
+    return;
+  }
+
+  if (manifest_copy_value(guard, "expected-kernel-sha256", expected_hash,
+                          sizeof(expected_hash)) < 0 ||
+      manifest_copy_value(guard, "rollback-kernel-sha256", rollback_hash,
+                          sizeof(rollback_hash)) < 0 ||
+      !sha256_text_valid(expected_hash) ||
+      !sha256_text_valid(rollback_hash)) {
+    update_boot_guard_write_state(
+        "blocked", "boot-guard: pending metadata is invalid", "unknown",
+        "unknown", "unknown");
+    vfs_persist_save();
+    return;
+  }
+
+  if (!boot_payloads_ready()) {
+    update_boot_guard_write_state(
+        "pending", "boot-guard: boot payload capture unavailable", "unknown",
+        expected_hash, rollback_hash);
+    vfs_persist_save();
+    return;
+  }
+
+  sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
+                    current_hash);
+
+  if (boot_cmdline_has("rollback")) {
+    update_boot_guard_write_state(
+        "rollback-booted",
+        "boot-guard: rollback entry booted; restoring main boot slot",
+        current_hash, expected_hash, rollback_hash);
+    rollback_report[0] = '\0';
+    if (orizon_update_rollback(rollback_report, sizeof(rollback_report)) == 0) {
+      update_boot_guard_write_state(
+          "auto-restored",
+          "boot-guard: rollback payload restored as main boot slot",
+          current_hash, expected_hash, rollback_hash);
+    } else {
+      update_boot_guard_write_state(
+          "restore-failed",
+          "boot-guard: rollback booted but automatic restore failed",
+          current_hash, expected_hash, rollback_hash);
+    }
+    vfs_persist_save();
+    return;
+  }
+
+  if (hex_equal(current_hash, expected_hash)) {
+    update_boot_guard_write_state(
+        "validated",
+        "boot-guard: updated kernel reached the Orizon shell",
+        current_hash, expected_hash, rollback_hash);
+    update_write_line(
+        UPDATE_ROLLBACK_STATE_PATH,
+        "rollback available: updated boot validated; run rollback if needed");
+    vfs_persist_save();
+    return;
+  }
+
+  if (hex_equal(current_hash, rollback_hash)) {
+    update_boot_guard_write_state(
+        "rollback-running",
+        "boot-guard: rollback kernel is running; run rollback to restore main",
+        current_hash, expected_hash, rollback_hash);
+    vfs_persist_save();
+    return;
+  }
+
+  update_boot_guard_write_state(
+      "unexpected-payload",
+      "boot-guard: booted kernel does not match update or rollback hash",
+      current_hash, expected_hash, rollback_hash);
+  vfs_persist_save();
+}
+
+void orizon_update_boot_guard_status(char *out, size_t out_size) {
+  char buf[1024];
+  char current_hash[SHA256_HEX_SIZE];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  boot_guard_append(out, out_size, "Orizon boot guard");
+  if (update_read_file(UPDATE_BOOT_GUARD_PATH, buf, sizeof(buf), NULL) == 0) {
+    boot_guard_append(out, out_size, buf);
+  } else {
+    boot_guard_append(out, out_size, "state none");
+  }
+  if (boot_payloads_ready()) {
+    sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
+                      current_hash);
+    snprintf(buf, sizeof(buf), "running-kernel-sha256 %s", current_hash);
+    boot_guard_append(out, out_size, buf);
+  } else {
+    boot_guard_append(out, out_size, "running-kernel-sha256 unavailable");
+  }
+  if (update_read_file(UPDATE_ROLLBACK_STATE_PATH, buf, sizeof(buf), NULL) ==
+      0) {
+    boot_guard_append(out, out_size, "rollback-state:");
+    boot_guard_append(out, out_size, buf);
+  }
+}
+
+int orizon_update_boot_guard_confirm(char *report, size_t report_size) {
+  char current_hash[SHA256_HEX_SIZE];
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  if (!update_installed_marker_present()) {
+    append_report(report, report_size,
+                  "bootguard: unavailable in live boot. Install Orizon OS first.");
+    return -1;
+  }
+  if (!boot_payloads_ready()) {
+    append_report(report, report_size,
+                  "bootguard: boot payload capture unavailable");
+    return -2;
+  }
+  sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
+                    current_hash);
+  update_boot_guard_write_state(
+      "validated-manual",
+      "boot-guard: current boot manually confirmed by operator",
+      current_hash, current_hash, "unchanged");
+  update_write_line(
+      UPDATE_ROLLBACK_STATE_PATH,
+      "rollback available: current boot manually confirmed; run rollback if needed");
+  append_report(report, report_size,
+                "bootguard: current boot marked valid");
+  append_report(report, report_size, current_hash);
+  vfs_persist_save();
+  return 0;
 }
 
 static int parse_size_value(const char *text, size_t *out) {
@@ -386,6 +627,65 @@ static int manifest_size_value(const char *manifest, const char *key,
   return parse_size_value(value, out);
 }
 
+static int sha256_text_valid(const char *text) {
+  if (!text || strlen(text) != SHA256_HEX_SIZE - 1) {
+    return 0;
+  }
+  for (size_t i = 0; i < SHA256_HEX_SIZE - 1; i++) {
+    char c = text[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
+          (c >= 'A' && c <= 'F'))) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static int update_token_safe(const char *text) {
+  int seen = 0;
+  if (!text) {
+    return 0;
+  }
+  while (*text) {
+    char c = *text++;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
+        c == ':') {
+      seen = 1;
+      continue;
+    }
+    return 0;
+  }
+  return seen;
+}
+
+static int update_path_safe(const char *path, const char *prefix,
+                            const char *suffix) {
+  size_t suffix_len;
+  size_t path_len;
+
+  if (!path || !prefix || !suffix || path[0] == '/' ||
+      strncmp(path, prefix, strlen(prefix)) != 0) {
+    return 0;
+  }
+  path_len = strlen(path);
+  suffix_len = strlen(suffix);
+  if (path_len <= suffix_len ||
+      strcmp(path + path_len - suffix_len, suffix) != 0) {
+    return 0;
+  }
+  while (*path) {
+    char c = *path++;
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      return 0;
+    }
+    if (c == '.' && path[0] == '.') {
+      return 0;
+    }
+  }
+  return 1;
+}
+
 static int parse_update_manifest(const char *text, update_manifest_t *manifest) {
   if (!text || !manifest || !strstr(text, "manifest-version 1") ||
       !strstr(text, "os Orizon OS")) {
@@ -396,6 +696,10 @@ static int parse_update_manifest(const char *text, update_manifest_t *manifest) 
                           sizeof(manifest->version)) < 0 ||
       manifest_copy_value(text, "commit", manifest->commit,
                           sizeof(manifest->commit)) < 0 ||
+      manifest_copy_value(text, "channel", manifest->channel,
+                          sizeof(manifest->channel)) < 0 ||
+      manifest_copy_value(text, "source", manifest->source,
+                          sizeof(manifest->source)) < 0 ||
       manifest_copy_value(text, "kernel-path", manifest->kernel_path,
                           sizeof(manifest->kernel_path)) < 0 ||
       manifest_copy_value(text, "kernel-sha256", manifest->kernel_sha256,
@@ -416,6 +720,19 @@ static int parse_update_manifest(const char *text, update_manifest_t *manifest) 
   if (manifest->kernel_size == 0 || manifest->kernel_size > UPDATE_KERNEL_MAX ||
       manifest->efi_size == 0 || manifest->efi_size > UPDATE_EFI_MAX ||
       manifest->limine_size == 0 || manifest->limine_size >= UPDATE_CONF_MAX) {
+    return -1;
+  }
+  if (!update_token_safe(manifest->version) ||
+      !update_token_safe(manifest->commit) ||
+      strcmp(manifest->channel, UPDATE_CHANNEL) != 0 ||
+      !(strcmp(manifest->source, UPDATE_SOURCE) == 0 ||
+        strcmp(manifest->source, UPDATE_SOURCE ".git") == 0) ||
+      !update_path_safe(manifest->kernel_path, "updates/x86_64/", ".elf") ||
+      !update_path_safe(manifest->efi_path, "updates/x86_64/", ".EFI") ||
+      !update_path_safe(manifest->limine_path, "updates/x86_64/", ".conf") ||
+      !sha256_text_valid(manifest->kernel_sha256) ||
+      !sha256_text_valid(manifest->efi_sha256) ||
+      !sha256_text_valid(manifest->limine_sha256)) {
     return -1;
   }
   return 0;
@@ -440,20 +757,6 @@ static const char *copy_token(const char *p, char *out, size_t out_size) {
   memcpy(out, p, len);
   out[len] = '\0';
   return p + len;
-}
-
-static int sha256_text_valid(const char *text) {
-  if (!text || strlen(text) != SHA256_HEX_SIZE - 1) {
-    return 0;
-  }
-  for (size_t i = 0; i < SHA256_HEX_SIZE - 1; i++) {
-    char c = text[i];
-    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') ||
-          (c >= 'A' && c <= 'F'))) {
-      return 0;
-    }
-  }
-  return 1;
 }
 
 static int package_name_safe(const char *name) {
@@ -978,6 +1281,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
              (unsigned long)update_elapsed_ms(total_started_ticks));
     update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text,
                       strlen(update_text));
+    update_boot_guard_mark_current(&manifest);
     update_set_state("update: complete");
     append_report(report, report_size,
                   "[7/8] Installed ESP already matches GitHub");
@@ -1069,8 +1373,9 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_write_blob(UPDATE_LAST_SUCCESS_PATH, update_text, strlen(update_text));
   update_write_blob(UPDATE_ROLLBACK_INFO_PATH, rollback_text,
                     strlen(rollback_text));
+  update_boot_guard_arm(&manifest, rollback_hash);
   update_write_line(UPDATE_ROLLBACK_STATE_PATH,
-                    "rollback available: choose Orizon OS Rollback at boot or run rollback");
+                    "rollback available: update pending boot validation; choose Orizon OS Rollback at boot or run rollback if needed");
   update_set_state("update: complete");
   append_report(report, report_size,
                 "[8/8] Update complete. Reboot to start the refreshed system.");

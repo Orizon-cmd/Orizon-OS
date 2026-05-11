@@ -683,7 +683,7 @@ static void term_reprint_input_after_output(terminal_t *term) {
 static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
-      "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
+      "about", "append", "boot-check", "bootguard", "cat", "cd", "clear", "cp", "date",
       "disks", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
       "free", "grep", "head", "help", "history", "hostname", "hw", "id",
       "install", "install-status",
@@ -699,7 +699,8 @@ static void term_complete_command(terminal_t *term, const char *prefix,
     if (!term_install_already_complete() &&
         (strcmp(commands[i], "update") == 0 ||
          strcmp(commands[i], "rollback") == 0 ||
-         strcmp(commands[i], "rollback-status") == 0)) {
+         strcmp(commands[i], "rollback-status") == 0 ||
+         strcmp(commands[i], "bootguard") == 0)) {
       continue;
     }
     if (term_install_already_complete() && strcmp(commands[i], "install") == 0) {
@@ -2393,6 +2394,27 @@ static void term_run_rollback(terminal_t *term) {
   term_puts_t(term, report);
 }
 
+static void term_run_bootguard(terminal_t *term, const char *cmd) {
+  static char report[4096];
+  const char *args = term_skip_spaces(cmd + 9);
+
+  if (!term_install_already_complete()) {
+    term_puts_t(term,
+                "bootguard: unavailable in live boot. Install Orizon OS first.\n");
+    return;
+  }
+  if (term_command_is(args, "confirm") ||
+      term_command_is(args, "validate")) {
+    orizon_update_boot_guard_confirm(report, sizeof(report));
+  } else {
+    orizon_update_boot_guard_status(report, sizeof(report));
+  }
+  term_puts_t(term, report);
+  if (report[0] && report[strlen(report) - 1] != '\n') {
+    term_puts_t(term, "\n");
+  }
+}
+
 static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "\033[1;36mOrizon packages\033[0m\n");
   term_puts_t(term, "  pkg list          - List installed packages\n");
@@ -3964,6 +3986,7 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
       term_puts_t(term, "  rollback  - Restore the booted rollback slot\n");
       term_puts_t(term, "  rollback-status - Show rollback metadata\n");
+      term_puts_t(term, "  bootguard [confirm] - Show/confirm update boot validation\n");
     }
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
@@ -4494,6 +4517,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_run_update(term);
   } else if (term_command_is(cmd, "rollback")) {
     term_run_rollback(term);
+  } else if (term_command_is(cmd, "bootguard")) {
+    term_run_bootguard(term, cmd);
   } else if (term_command_is(cmd, "rollback-status")) {
     char buf[1024];
     int n = term_read_regular_file(term, "rollback-info",

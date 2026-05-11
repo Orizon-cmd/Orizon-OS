@@ -20,6 +20,7 @@
 #include "../include/string.h"
 #include "../include/terminal.h"
 #include "../include/timer.h"
+#include "../include/update.h"
 #include "../include/usb.h"
 #include "../include/vfs.h"
 #include "../include/wifi.h"
@@ -398,6 +399,8 @@ static void gui_run_deferred_core_services(void) {
     orizon_pkg_init();
     input_load_keyboard_layout_from_vfs();
     klog_persist_boot_if_installed();
+    gui_show_boot_stage("Validating pending update boot state...");
+    orizon_update_boot_guard_check();
     gui_show_boot_stage("Initializing Ethernet drivers...");
     net_init();
     net_ready = 1;

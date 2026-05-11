@@ -101,6 +101,24 @@ Orizon side-by-side directory:
 /EFI/Orizon/BOOTX64.ROL
 ```
 
+After a boot-payload update, Orizon writes a boot guard marker:
+
+```text
+/workspace/.orizon/boot-guard
+/system/boot-guard
+```
+
+The next installed boot auto-validates the updated kernel once it reaches the
+console. If the rollback Limine entry is selected while an update is pending,
+Orizon treats that as a recovery boot and attempts to restore the rollback
+payload as the main boot slot. Inspect it with:
+
+```text
+bootguard
+bootguard confirm
+rollback-status
+```
+
 Verify the side-by-side ESP files with:
 
 ```text

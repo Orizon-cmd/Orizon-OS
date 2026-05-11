@@ -15,6 +15,10 @@
 - In-kernel GitHub update path with SHA-256 verification, boot rollback slot,
   streamed progress, rough elapsed timings, full-disk ESP rewrite, and
   side-by-side `/EFI/Orizon` refresh for dual-boot data installs.
+- Post-update boot guard: pending update markers, automatic validation once
+  the refreshed kernel reaches the shell, `bootguard` diagnostics, and
+  automatic main-slot restore when the rollback boot entry is selected during
+  a pending update.
 - Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
   `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
@@ -44,8 +48,8 @@
 
 ## Next Stability Track
 
-1. Add a boot-count guard so a failed updated boot can automatically select or
-   restore the rollback slot.
+1. Add bootloader/NVRAM boot-count integration so firmware can automatically
+   select rollback even when the refreshed kernel never reaches Orizon.
 2. Add package rollback metadata before package updates overwrite files.
 3. Make the package repository signed, not only SHA-256 verified through the
    public manifest/index.

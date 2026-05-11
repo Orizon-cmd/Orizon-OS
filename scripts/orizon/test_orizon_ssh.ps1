@@ -25,6 +25,7 @@ $commands = @(
   "pkg status",
   "storage",
   "timer",
+  "bootguard",
   "write /workspace/ssh-regression.txt alpha",
   "append /workspace/ssh-regression.txt beta",
   "cat /workspace/ssh-regression.txt",
@@ -77,6 +78,9 @@ run_cmd() {
       ;;
     "audit")
       grep -q "ssh audit:" "`$OUT" && grep -q "recent:" "`$OUT" || { echo "missing audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "bootguard")
+      grep -q "Orizon boot guard" "`$OUT" || { echo "missing bootguard output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "logs ssh")
       grep -q "audit:" "`$OUT" || { echo "missing ssh log audit lines"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

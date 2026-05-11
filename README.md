@@ -25,6 +25,9 @@ le developpement noyau:
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
   soit l'ESP Orizon complet, soit uniquement `/EFI/Orizon` en dual boot data
+- garde de boot post-update: Orizon arme un etat `pending`, valide
+  automatiquement le nouveau kernel quand il atteint le shell, et expose
+  `bootguard` pour voir ou confirmer l'etat de validation
 - mini gestionnaire de paquets `pkg` avec format texte `.opkg`, SHA-256 du
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
@@ -110,6 +113,15 @@ Pour verifier les fichiers side-by-side du mode dual boot:
 
 ```text
 dualboot-check
+```
+
+Apres une mise a jour qui remplace le kernel, la commande suivante montre si
+le nouveau boot a ete valide ou si un rollback reste en attente:
+
+```text
+bootguard
+bootguard confirm
+rollback-status
 ```
 
 Si le disque a deja une installation Orizon mais que l'ESP est abimee, la

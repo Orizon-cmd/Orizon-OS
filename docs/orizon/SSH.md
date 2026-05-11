@@ -26,6 +26,7 @@ ssh password off
 ssh poll
 ssh stop
 logs ssh
+bootguard
 ```
 
 `ssh password <mot-de-passe>` active l'authentification explicite pour
@@ -76,8 +77,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
-  `ps`, `pkg`, `storage`, `free`, `timer`, `audit`, `sync`, `status`, `auth`,
-  `hostkey`, `whoami`, `uname`, `pwd`, `uptime` et `exit`, puis ferme
+  `ps`, `pkg`, `storage`, `free`, `timer`, `bootguard`, `audit`, `sync`,
+  `status`, `auth`, `hostkey`, `whoami`, `uname`, `pwd`, `uptime` et `exit`, puis ferme
   proprement avec `exit-status`.
 - Audit: `audit` affiche le cumul des sessions, auth reussies/echouees,
   commandes `exec`, commandes shell, fermetures de canal, recoveries listener,

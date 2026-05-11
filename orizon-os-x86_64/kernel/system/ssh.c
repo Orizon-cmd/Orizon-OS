@@ -18,6 +18,7 @@
 #include "../include/storage.h"
 #include "../include/string.h"
 #include "../include/timer.h"
+#include "../include/update.h"
 #include "../include/vfs.h"
 #include "../include/x25519.h"
 
@@ -2607,7 +2608,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell preview\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, ps, pkg, storage, free, audit, status, auth, hostkey, exit\r\n");
+        "Commands: help, ls, cd, cat, write, logs, net, ps, pkg, storage, free, bootguard, audit, status, auth, hostkey, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -2662,6 +2663,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  logs [ssh|boot]      show logs\r\n"
         "  net|route|dns        show network diagnostics\r\n"
         "  ps|pkg|storage|free  show system state\r\n"
+        "  bootguard            show update boot validation state\r\n"
         "  audit                show SSH session counters\r\n"
         "  ssh password <pass>  change remote SSH password\r\n"
         "  ssh auth ...         change auth policy\r\n"
@@ -2673,6 +2675,15 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (strcmp(line, "status") == 0 || strcmp(line, "ssh status") == 0) {
     ssh_format_status(out, sizeof(out));
+    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "bootguard") == 0) {
+    orizon_update_boot_guard_status(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
       strcat(out, "\r\n");
     }
@@ -2917,7 +2928,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_shell_suppress_prompt = 1;
   if (strstr(cmd, "help")) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ps, pkg, storage, free, timer, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ps, pkg, storage, free, timer, bootguard, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -2952,6 +2963,12 @@ static void ssh_remote_exec_execute(const uint8_t *command,
                                : "sync: save failed or not installed\r\n");
   } else if (strcmp(cmd, "timer") == 0) {
     timer_format_status(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "bootguard") == 0) {
+    orizon_update_boot_guard_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
