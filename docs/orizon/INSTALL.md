@@ -5,17 +5,19 @@ disk installation path:
 
 1. boot the live ISO,
 2. run `install`,
-3. collect language, keyboard, target disk, disk strategy, and hostname,
+3. collect language, keyboard, target disk, disk strategy, optional data
+   partition, and hostname,
 4. write an installation plan under `/workspace/.orizon/`,
-5. choose either a non-destructive dual-boot ESP preparation or a full-disk
-   Orizon installation,
-6. in dual-boot mode, add side-by-side files under `/EFI/Orizon` on the
-   existing ESP and leave every partition intact,
-7. in full-disk mode, write a GPT disk with a FAT32 ESP and Orizon data
+5. choose `dual-boot-data`, `dual-boot-esp`, or `guided-full-disk`,
+6. in `dual-boot-data`, add side-by-side files under `/EFI/Orizon` on the
+   existing ESP and claim only the selected prepared partition as Orizon Data,
+7. in `dual-boot-esp`, add side-by-side boot files only and leave every
+   partition intact,
+8. in full-disk mode, write a GPT disk with a FAT32 ESP and Orizon data
    partition,
-8. copy the UEFI loader, kernel, and Limine config,
-9. verify the installed or prepared UEFI boot files,
-10. mark the system as installed only for the full-disk path.
+9. copy the UEFI loader, kernel, and Limine config,
+10. verify the installed or prepared UEFI boot files,
+11. mark the system as installed only when an Orizon data partition exists.
 
 ## Current In-OS Command
 
@@ -30,15 +32,20 @@ The guided flow currently asks for:
 - language: `fr_FR` or `en_US`
 - keyboard: `fr-azerty` or `us-qwerty`
 - target disk: detected as `disk0`, `disk1`, etc. with driver, size and model
-- disk mode: `dual-boot-esp`, `guided-full-disk`, or `manual-later`
+- disk mode: `dual-boot-data`, `dual-boot-esp`, `guided-full-disk`, or
+  `manual-later`
+- data partition: required only for `dual-boot-data`; this must be an
+  empty/prepared partition that Orizon may overwrite
 - hostname, defaulting to `orizon-os`
-- explicit confirmation: `DUALBOOT disk0` for side-by-side ESP, or
-  `ERASE disk0` for full-disk installation
+- explicit confirmation: `DUALDATA disk0 partN` for installed dual boot,
+  `DUALBOOT disk0` for side-by-side ESP only, or `ERASE disk0` for full-disk
+  installation
 
 Storage can also be inspected outside the installer:
 
 ```text
 disks
+partitions
 storage detail
 storage select 1
 ```
@@ -55,9 +62,19 @@ It writes runtime/staging state:
 /system/keyboard
 ```
 
-In `dual-boot-esp` mode, Orizon does not repartition and does not overwrite the
-UEFI fallback path used by other operating systems. It scans the existing GPT,
-mounts the existing FAT32 ESP, and writes:
+In `dual-boot-data` mode, Orizon does not repartition the disk and does not
+overwrite the UEFI fallback path used by other operating systems. It scans the
+existing GPT, mounts the existing FAT32 ESP, writes Orizon under `/EFI/Orizon`,
+then changes only the selected partition type/name to `Orizon Data`.
+
+This mode enables installed persistence and internet updates. `/workspace`,
+`/home`, `/system`, `/packages`, and `/logs` are written to the selected data
+partition, so anything created during the live boot in those roots is kept.
+The selected partition is Orizon-owned after confirmation and its previous
+filesystem/data should be considered overwritten.
+
+In `dual-boot-esp` mode, Orizon performs only the safe boot-file preparation.
+It scans the existing GPT, mounts the existing FAT32 ESP, and writes:
 
 ```text
 /EFI/Orizon/BOOTX64.EFI
@@ -72,6 +89,17 @@ manual firmware boot entry, Windows BCD, or a Linux boot manager entry pointing
 at `/EFI/Orizon/BOOTX64.EFI`. It also does not create an Orizon data partition,
 so `/workspace` persistence, `update`, and package install/remove are not
 enabled by this mode.
+
+For `dual-boot-data`, `update` preserves the shared ESP and rewrites only the
+Orizon side-by-side directory:
+
+```text
+/EFI/Orizon/BOOTX64.EFI
+/EFI/Orizon/kernel.elf
+/EFI/Orizon/limine.conf
+/EFI/Orizon/KROLLBK.ELF
+/EFI/Orizon/BOOTX64.ROL
+```
 
 Verify the side-by-side ESP files with:
 
@@ -138,16 +166,17 @@ fallbacks until the console grows Unicode text support.
 ## Safety Boundary
 
 The installer can now partition and install to AHCI/SATA disks or NVMe
-namespaces with 512-byte LBAs. It can also prepare a side-by-side UEFI ESP
-entry for dual boot without repartitioning. It is still intentionally narrow:
-no automatic NVRAM/BCD entry creation, no automatic shrink/create of an Orizon
-data partition beside Windows/Linux yet, and no automatic boot-count recovery
-yet.
+namespaces with 512-byte LBAs. It can also create an installed dual-boot flow
+when a prepared partition already exists beside Windows/Linux. It is still
+intentionally narrow: no automatic NVRAM/BCD entry creation, no automatic
+shrink/create of an Orizon data partition yet, and no automatic boot-count
+recovery yet.
 
 ## Next Kernel Layers
 
 - Add automatic UEFI NVRAM or Windows BCD entry creation for dual boot.
-- Add a safe data-partition workflow for dual boot.
+- Add an in-OS partition create/resize assistant after the manual/prepared
+  partition path is battle-tested.
 - Add rollback-safe A/B system slots for full system images.
 - Add full Unicode keyboard/text rendering for accented keys.
 - Replace emulator poweroff fallback with full ACPI shutdown parsing.

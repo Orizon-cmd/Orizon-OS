@@ -33,10 +33,12 @@ static int vfs_initialized = 0;
 static int persist_ready = 0;
 static int persist_loading = 0;
 static const char *persist_status = "Orizon data persistence not loaded";
+static uint64_t persist_lba = ORIZON_PERSIST_LBA;
 static uint8_t persist_buf[PERSIST_BYTES] __attribute__((aligned(4096)));
 static uint8_t persist_sector[ORIZON_SECTOR_SIZE] __attribute__((aligned(4096)));
 
 static int create_inode(const char *path, int type);
+static void persist_set_status(const char *status);
 
 /* String helpers */
 static int str_eq(const char *a, const char *b) {
@@ -139,8 +141,8 @@ static uint64_t persist_get_u64(const uint8_t *p) {
 
 static int persist_orizon_data_partition_present(void) {
   static const uint8_t data_type[16] = {
-      0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84, 0x72, 0x47,
-      0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4};
+      0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54, 0x41, 0x00,
+      0x9a, 0x3d, 0x20, 0x26, 0x05, 0x11, 0x00, 0x01};
   uint64_t entries_lba;
   uint32_t entry_count;
   uint32_t entry_size;
@@ -171,13 +173,31 @@ static int persist_orizon_data_partition_present(void) {
       return 0;
     }
     entry = persist_sector + off;
-    if (memcmp(entry, data_type, sizeof(data_type)) == 0 &&
-        persist_get_u64(entry + 32) == ORIZON_PERSIST_LBA &&
-        persist_get_u64(entry + 40) >= ORIZON_PERSIST_LBA + PERSIST_SECTORS) {
-      return 1;
+    if (memcmp(entry, data_type, sizeof(data_type)) == 0) {
+      uint64_t first_lba = persist_get_u64(entry + 32);
+      uint64_t last_lba = persist_get_u64(entry + 40);
+      if (first_lba >= 34 && last_lba >= first_lba + PERSIST_SECTORS) {
+        persist_lba = first_lba;
+        return 1;
+      }
     }
   }
   return 0;
+}
+
+static void persist_format_status_active(void) {
+  static char status[96];
+  snprintf(status, sizeof(status), "Orizon data persistence active at LBA %lu",
+           (unsigned long)persist_lba);
+  persist_set_status(status);
+}
+
+static void persist_format_status_initialized(void) {
+  static char status[104];
+  snprintf(status, sizeof(status),
+           "Orizon data persistence initialized at LBA %lu",
+           (unsigned long)persist_lba);
+  persist_set_status(status);
 }
 
 static int append_path_component(char *path, size_t size, const char *component,
@@ -589,12 +609,12 @@ int vfs_persist_save(void) {
   if (sectors == 0) {
     sectors = 1;
   }
-  if (persist_storage_write(ORIZON_PERSIST_LBA, persist_buf, sectors) < 0) {
+  if (persist_storage_write(persist_lba, persist_buf, sectors) < 0) {
     persist_set_status("Orizon data persistence write failed");
     return -EIO;
   }
 
-  persist_set_status("Orizon data persistence active");
+  persist_format_status_active();
   return 0;
 }
 
@@ -614,7 +634,7 @@ void vfs_persist_load(void) {
     return;
   }
 
-  if (persist_storage_read(ORIZON_PERSIST_LBA, persist_buf, PERSIST_SECTORS) < 0) {
+  if (persist_storage_read(persist_lba, persist_buf, PERSIST_SECTORS) < 0) {
     persist_ready = 0;
     persist_set_status("Orizon data persistence read failed");
     return;
@@ -626,7 +646,7 @@ void vfs_persist_load(void) {
   if (memcmp(persist_buf, PERSIST_MAGIC, 7) != 0 ||
       get_u32(persist_buf + 8) != PERSIST_VERSION) {
     persist_loading = 0;
-    persist_set_status("Orizon data persistence initialized");
+    persist_format_status_initialized();
     vfs_persist_save();
     return;
   }
@@ -709,7 +729,7 @@ void vfs_persist_load(void) {
                          "Persistent boot, install and update logs.\n");
 
   persist_loading = 0;
-  persist_set_status("Orizon data persistence active");
+  persist_format_status_active();
 }
 
 int vfs_persist_enable_installed(void) {
@@ -728,7 +748,7 @@ int vfs_persist_enable_installed(void) {
   }
   persist_loading = 0;
   persist_ready = 1;
-  persist_set_status("Orizon data persistence initialized");
+  persist_format_status_initialized();
   return 0;
 }
 

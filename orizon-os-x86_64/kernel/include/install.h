@@ -14,8 +14,22 @@ typedef struct {
   const char *hostname;
   int disk_index;
   const char *disk_name;
+  int data_partition_index;
 } orizon_install_config_t;
 
+typedef struct {
+  int index;
+  int usable_for_data;
+  uint64_t first_lba;
+  uint64_t last_lba;
+  uint64_t sectors;
+  char type[32];
+  char name[64];
+} orizon_install_partition_info_t;
+
+int orizon_install_get_partition(int partition_index,
+                                 orizon_install_partition_info_t *out);
+int orizon_install_format_partitions(char *report, size_t report_size);
 int orizon_install_run(const orizon_install_config_t *config, char *report,
                        size_t report_size);
 int orizon_install_boot_check(char *report, size_t report_size);

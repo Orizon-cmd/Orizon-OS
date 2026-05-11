@@ -15,15 +15,16 @@ le developpement noyau:
 - racines data persistantes `/workspace`, `/home`, `/system`, `/packages` et
   `/logs` quand une zone donnees Orizon est disponible
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
-  dual-boot ESP non destructif, verification du boot UEFI, selection explicite
-  du disque cible et reparation de l'ESP
+  dual-boot data sur partition choisie, mode ESP seul non destructif,
+  verification du boot UEFI, selection explicite du disque/partition cible et
+  reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
   Ethernet Intel e1000/e1000e, Realtek RTL8139, VirtIO-net pour Proxmox/QEMU,
   et detection stage-0 du Wi-Fi Intel CNVi
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
-  les fichiers de boot installes
+  soit l'ESP Orizon complet, soit uniquement `/EFI/Orizon` en dual boot data
 - mini gestionnaire de paquets `pkg` avec format texte `.opkg`, SHA-256 du
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
@@ -40,8 +41,8 @@ le developpement noyau:
   `session`, `pty-req`, `shell`, `exec`, mini-shell distant de diagnostic,
   configuration `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics
   `ssh status`
-- inspection stockage avec `disks`, `storage detail` et selection du disque
-  actif via `storage select <n>`
+- inspection stockage avec `disks`, `partitions`, `storage detail` et
+  selection du disque actif via `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
   rapport compact `report`; apres installation, le boot log est conserve dans
   `/logs/boot.log`
@@ -55,7 +56,7 @@ Ce qui est volontairement absent du profil actif:
 - gestionnaire de fichiers integre
 - bureau de demonstration
 - jeux et applications integrees non essentielles
-- flux de mise a jour externe
+- flux de mise a jour amont non-Orizon
 
 ## Installation Disque
 
@@ -70,8 +71,15 @@ peut preparer Orizon OS sur le disque cible. Le flux affiche les disques
 detectes (`disk0`, `disk1`, etc.) avec type, taille et modele.
 
 Le mode recommande pour une machine qui contient deja Windows/Linux est
-`dual-boot-esp`: il detecte la GPT existante, trouve l'ESP FAT32, puis ecrit
-uniquement `/EFI/Orizon/BOOTX64.EFI`, `/EFI/Orizon/kernel.elf`,
+`dual-boot-data`: il detecte la GPT existante, trouve l'ESP FAT32, affiche les
+partitions avec `partitions`, puis te demande quelle partition vide/prete peut
+devenir `Orizon Data`. La confirmation est `DUALDATA disk0 partN`. Orizon ecrit
+les fichiers de boot dans `/EFI/Orizon`, marque uniquement la partition choisie
+comme data Orizon, sauvegarde `/workspace`, `/home`, `/system`, `/packages` et
+`/logs`, puis autorise `update`.
+
+Le mode `dual-boot-esp` reste disponible pour tester sans installation data:
+il ecrit uniquement `/EFI/Orizon/BOOTX64.EFI`, `/EFI/Orizon/kernel.elf`,
 `/EFI/Orizon/limine.conf` et `/EFI/Orizon/INSTALL.TXT`. La confirmation est
 `DUALBOOT disk0`. Aucune partition existante n'est reformatee et Orizon ne se
 marque pas comme installe complet, donc `update` et `pkg install/remove`
@@ -198,9 +206,11 @@ Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA. Le mode dual boot
-actuel est un prepareur ESP non destructif; il faudra encore ajouter une entree
-UEFI NVRAM/BCD automatique et une partition data Orizon dediee pour obtenir un
-dual boot installe avec mises a jour completes.
+installe fonctionne maintenant si une partition vide/prete existe deja: Orizon
+utilise l'ESP existante en side-by-side et reserve seulement la partition
+selectionnee pour ses donnees et ses mises a jour. Il faudra encore ajouter une
+entree UEFI NVRAM/BCD automatique et un outil de creation/redimensionnement de
+partition depuis Orizon.
 
 Pour revoir le plan:
 
@@ -218,6 +228,7 @@ Pour inspecter ou changer le disque actif avant diagnostic/reparation:
 
 ```text
 disks
+partitions
 storage detail
 storage select 1
 ```

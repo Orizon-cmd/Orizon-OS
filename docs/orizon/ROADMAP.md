@@ -5,11 +5,16 @@
 - Installed-disk boot flow with live ISO guardrails.
 - Non-destructive dual-boot ESP preparation: existing GPT/FAT32 ESP detection,
   side-by-side `/EFI/Orizon` boot files, and `dualboot-check` verification.
+- Installed dual-boot data path: the installer can reuse an existing prepared
+  partition as `Orizon Data`, preserve the shared ESP, keep live-created data,
+  and enable `update` without requiring a new ISO.
 - Persistent Orizon data roots: `/workspace`, `/home`, `/system`,
   `/packages`, `/logs`, and `/tmp`, now guarded so persistence writes only
-  activate when an Orizon data partition is actually present.
+  activate when an Orizon data partition is actually present, including
+  non-fixed LBAs on dual-boot disks.
 - In-kernel GitHub update path with SHA-256 verification, boot rollback slot,
-  streamed progress, and rough elapsed timings.
+  streamed progress, rough elapsed timings, full-disk ESP rewrite, and
+  side-by-side `/EFI/Orizon` refresh for dual-boot data installs.
 - Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
   `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
@@ -49,8 +54,9 @@
 5. Finish SSH remote login hardening: generated per-install host-key material,
    full PTY integration with the local Orizon terminal, safer config
    permissions, key rotation, and longer multi-client soak tests.
-6. Finish dual boot: automatic UEFI NVRAM/BCD entry creation and a safe Orizon
-   data partition workflow beside existing operating systems.
+6. Finish dual boot: automatic UEFI NVRAM/BCD entry creation, boot-count
+   recovery, and eventually an in-OS partition create/resize workflow beside
+   existing operating systems.
 
 ## Next Hardware Track
 

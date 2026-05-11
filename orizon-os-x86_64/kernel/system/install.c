@@ -61,6 +61,7 @@ static uint8_t gpt_entries[INSTALL_GPT_ENTRY_SECTORS * ORIZON_SECTOR_SIZE]
     __attribute__((aligned(4096)));
 static uint8_t install_fat[INSTALL_FAT_SECTORS_MAX * ORIZON_SECTOR_SIZE]
     __attribute__((aligned(4096)));
+static char dualboot_limine_rewrite_buf[8192];
 
 static const char install_limine_conf[] =
     "# Limine Configuration File\n"
@@ -125,6 +126,56 @@ static const char dualboot_limine_conf[] =
     "    protocol: limine\n"
     "    kernel_path: boot():/EFI/Orizon/kernel.elf\n"
     "    cmdline: orizon.safe=1 orizon.native=1 orizon.dualboot=1\n";
+
+static int dualboot_limine_rewrite_paths(const char *src, size_t src_size,
+                                         const char **out,
+                                         size_t *out_size) {
+  static const char *from[] = {
+      "boot():/boot/KROLLBK.ELF",
+      "boot():/boot/kernel.elf",
+      "boot():/EFI/BOOT/BOOTX64.ROL",
+  };
+  static const char *to[] = {
+      "boot():/EFI/Orizon/KROLLBK.ELF",
+      "boot():/EFI/Orizon/kernel.elf",
+      "boot():/EFI/Orizon/BOOTX64.ROL",
+  };
+  size_t in = 0;
+  size_t pos = 0;
+
+  if (!src || !out || !out_size || src_size == 0) {
+    return -1;
+  }
+  while (in < src_size && src[in] != '\0') {
+    int replaced = 0;
+    for (size_t i = 0; i < sizeof(from) / sizeof(from[0]); i++) {
+      size_t from_len = strlen(from[i]);
+      size_t to_len = strlen(to[i]);
+      if (in + from_len <= src_size &&
+          strncmp(src + in, from[i], from_len) == 0) {
+        if (pos + to_len + 1 >= sizeof(dualboot_limine_rewrite_buf)) {
+          return -1;
+        }
+        memcpy(dualboot_limine_rewrite_buf + pos, to[i], to_len);
+        pos += to_len;
+        in += from_len;
+        replaced = 1;
+        break;
+      }
+    }
+    if (replaced) {
+      continue;
+    }
+    if (pos + 2 >= sizeof(dualboot_limine_rewrite_buf)) {
+      return -1;
+    }
+    dualboot_limine_rewrite_buf[pos++] = src[in++];
+  }
+  dualboot_limine_rewrite_buf[pos] = '\0';
+  *out = dualboot_limine_rewrite_buf;
+  *out_size = pos;
+  return 0;
+}
 
 static void append_report(char *report, size_t report_size, const char *line) {
   size_t used;
@@ -242,9 +293,9 @@ static int install_write_gpt(uint64_t sectors) {
   static const uint8_t esp_type[16] = {0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8,
                                       0xd2, 0x11, 0xba, 0x4b, 0x00, 0xa0,
                                       0xc9, 0x3e, 0xc9, 0x3b};
-  static const uint8_t data_type[16] = {0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84,
-                                       0x72, 0x47, 0x8e, 0x79, 0x3d, 0x69,
-                                       0xd8, 0x47, 0x7d, 0xe4};
+  static const uint8_t data_type[16] = {0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54,
+                                       0x41, 0x00, 0x9a, 0x3d, 0x20, 0x26,
+                                       0x05, 0x11, 0x00, 0x01};
   static const uint8_t esp_guid[16] = {0x4f, 0x53, 0x45, 0x53, 0x50, 0x00,
                                       0x00, 0x00, 0x9a, 0x3d, 0x20, 0x26,
                                       0x05, 0x08, 0x00, 0x01};
@@ -811,14 +862,335 @@ static int gpt_find_esp(gpt_partition_t *out, char *report,
   return -1;
 }
 
+static int guid_is_zero(const uint8_t guid[16]) {
+  for (int i = 0; i < 16; i++) {
+    if (guid[i] != 0) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void gpt_decode_name(const uint8_t *entry, char *out, size_t out_size) {
+  size_t pos = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  for (size_t i = 0; i < 36 && pos + 1 < out_size; i++) {
+    uint16_t ch = get16(entry + 56 + i * 2);
+    if (ch == 0) {
+      break;
+    }
+    out[pos++] = (ch >= 32 && ch < 127) ? (char)ch : '?';
+  }
+  out[pos] = '\0';
+}
+
+static const char *gpt_type_name(const uint8_t *type_guid,
+                                 int *usable_for_data) {
+  static const uint8_t esp_type[16] = {
+      0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8, 0xd2, 0x11,
+      0xba, 0x4b, 0x00, 0xa0, 0xc9, 0x3e, 0xc9, 0x3b};
+  static const uint8_t data_type[16] = {
+      0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54, 0x41, 0x00,
+      0x9a, 0x3d, 0x20, 0x26, 0x05, 0x11, 0x00, 0x01};
+  static const uint8_t ms_basic_type[16] = {
+      0xa2, 0xa0, 0xd0, 0xeb, 0xe5, 0xb9, 0x33, 0x44,
+      0x87, 0xc0, 0x68, 0xb6, 0xb7, 0x26, 0x99, 0xc7};
+  static const uint8_t linux_fs_type[16] = {
+      0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84, 0x72, 0x47,
+      0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4};
+
+  if (usable_for_data) {
+    *usable_for_data = 0;
+  }
+  if (!type_guid || guid_is_zero(type_guid)) {
+    return "empty";
+  }
+  if (memcmp(type_guid, esp_type, 16) == 0) {
+    return "EFI System";
+  }
+  if (memcmp(type_guid, data_type, 16) == 0) {
+    if (usable_for_data) {
+      *usable_for_data = 1;
+    }
+    return "Orizon Data";
+  }
+  if (memcmp(type_guid, ms_basic_type, 16) == 0) {
+    if (usable_for_data) {
+      *usable_for_data = 1;
+    }
+    return "Microsoft basic";
+  }
+  if (memcmp(type_guid, linux_fs_type, 16) == 0) {
+    if (usable_for_data) {
+      *usable_for_data = 1;
+    }
+    return "Linux filesystem";
+  }
+  if (usable_for_data) {
+    *usable_for_data = 1;
+  }
+  return "GPT partition";
+}
+
+static int gpt_read_primary_header(uint8_t *header) {
+  if (!storage_available() || !header ||
+      storage_read(1, header, 1) < 0 ||
+      memcmp(header, "EFI PART", 8) != 0 ||
+      get32(header + 84) != INSTALL_GPT_ENTRY_SIZE ||
+      get32(header + 80) == 0 ||
+      get32(header + 80) > INSTALL_GPT_ENTRY_COUNT) {
+    return -1;
+  }
+  return 0;
+}
+
+static int gpt_read_entry(int partition_index, uint8_t *entry_out) {
+  uint64_t entries_lba;
+  uint32_t entry_count;
+  uint32_t entry_size;
+  uint64_t entry_byte;
+  uint64_t lba;
+  uint32_t off;
+
+  if (!entry_out || partition_index <= 0 ||
+      gpt_read_primary_header(sector_buf) < 0) {
+    return -1;
+  }
+  entries_lba = get64(sector_buf + 72);
+  entry_count = get32(sector_buf + 80);
+  entry_size = get32(sector_buf + 84);
+  if ((uint32_t)partition_index > entry_count || entries_lba == 0) {
+    return -1;
+  }
+  entry_byte = (uint64_t)(partition_index - 1) * entry_size;
+  lba = entries_lba + entry_byte / ORIZON_SECTOR_SIZE;
+  off = (uint32_t)(entry_byte % ORIZON_SECTOR_SIZE);
+  if (read_sector(lba, sector_buf) < 0) {
+    return -1;
+  }
+  memcpy(entry_out, sector_buf + off, INSTALL_GPT_ENTRY_SIZE);
+  return guid_is_zero(entry_out) ? -1 : 0;
+}
+
+int orizon_install_get_partition(int partition_index,
+                                 orizon_install_partition_info_t *out) {
+  uint8_t entry[INSTALL_GPT_ENTRY_SIZE];
+  int usable = 0;
+  const char *type_name;
+
+  if (!out || gpt_read_entry(partition_index, entry) < 0) {
+    return -1;
+  }
+  memset(out, 0, sizeof(*out));
+  out->index = partition_index;
+  out->first_lba = get64(entry + 32);
+  out->last_lba = get64(entry + 40);
+  if (out->last_lba >= out->first_lba) {
+    out->sectors = out->last_lba - out->first_lba + 1;
+  }
+  type_name = gpt_type_name(entry, &usable);
+  out->usable_for_data =
+      usable && out->sectors >= 65536 &&
+      out->first_lba >= 34 && out->last_lba < storage_sector_count();
+  snprintf(out->type, sizeof(out->type), "%s", type_name);
+  gpt_decode_name(entry, out->name, sizeof(out->name));
+  if (out->name[0] == '\0') {
+    snprintf(out->name, sizeof(out->name), "part%d", partition_index);
+  }
+  return 0;
+}
+
+int orizon_install_format_partitions(char *report, size_t report_size) {
+  char line[224];
+  char size_text[64];
+  uint32_t entry_count;
+  int found = 0;
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  append_report(report, report_size, "\033[1;36mGPT partitions\033[0m");
+  if (gpt_read_primary_header(sector_buf) < 0) {
+    append_report(report, report_size, "No readable GPT partition table.");
+    return -1;
+  }
+  entry_count = get32(sector_buf + 80);
+  if (entry_count > INSTALL_GPT_ENTRY_COUNT) {
+    entry_count = INSTALL_GPT_ENTRY_COUNT;
+  }
+  for (int i = 1; i <= (int)entry_count; i++) {
+    orizon_install_partition_info_t part;
+    if (orizon_install_get_partition(i, &part) < 0) {
+      continue;
+    }
+    storage_format_size(part.sectors, size_text, sizeof(size_text));
+    snprintf(line, sizeof(line), "  part%d  %s  %s  %s%s",
+             part.index, size_text, part.type, part.name,
+             part.usable_for_data ? "  [data-candidate]" : "");
+    append_report(report, report_size, line);
+    found++;
+  }
+  if (!found) {
+    append_report(report, report_size, "No non-empty GPT partitions found.");
+    return -1;
+  }
+  return found;
+}
+
+static int gpt_find_orizon_data(gpt_partition_t *out, char *report,
+                                size_t report_size) {
+  static const uint8_t data_type[16] = {
+      0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54, 0x41, 0x00,
+      0x9a, 0x3d, 0x20, 0x26, 0x05, 0x11, 0x00, 0x01};
+  uint8_t entry[INSTALL_GPT_ENTRY_SIZE];
+  uint32_t entry_count;
+  char line[192];
+
+  if (!out) {
+    return -1;
+  }
+  memset(out, 0, sizeof(*out));
+  if (gpt_read_primary_header(sector_buf) < 0) {
+    append_check_line(report, report_size, "existing GPT disk", 0);
+    return -1;
+  }
+  entry_count = get32(sector_buf + 80);
+  if (entry_count > INSTALL_GPT_ENTRY_COUNT) {
+    entry_count = INSTALL_GPT_ENTRY_COUNT;
+  }
+  for (int i = 1; i <= (int)entry_count; i++) {
+    if (gpt_read_entry(i, entry) < 0 ||
+        memcmp(entry, data_type, sizeof(data_type)) != 0) {
+      continue;
+    }
+    out->index = (uint32_t)i;
+    out->first_lba = get64(entry + 32);
+    out->last_lba = get64(entry + 40);
+    out->sectors = out->last_lba - out->first_lba + 1;
+    snprintf(line, sizeof(line), "Orizon data partition found: part%lu LBA %lu..%lu",
+             (unsigned long)out->index, (unsigned long)out->first_lba,
+             (unsigned long)out->last_lba);
+    append_check_line(report, report_size, line, 1);
+    return 0;
+  }
+  append_check_line(report, report_size, "Orizon data partition found", 0);
+  return -1;
+}
+
+static void gpt_refresh_header_crc(uint8_t *header, uint32_t entries_crc) {
+  uint32_t header_size;
+  uint32_t header_crc;
+
+  if (!header) {
+    return;
+  }
+  header_size = get32(header + 12);
+  if (header_size < 92 || header_size > ORIZON_SECTOR_SIZE) {
+    header_size = 92;
+    put32(header + 12, header_size);
+  }
+  put32(header + 88, entries_crc);
+  put32(header + 16, 0);
+  header_crc = crc32_update(0, header, header_size);
+  put32(header + 16, header_crc);
+}
+
+static int gpt_mark_partition_orizon_data(int partition_index, char *report,
+                                          size_t report_size) {
+  static const uint8_t data_type[16] = {
+      0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54, 0x41, 0x00,
+      0x9a, 0x3d, 0x20, 0x26, 0x05, 0x11, 0x00, 0x01};
+  static const uint8_t esp_type[16] = {
+      0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8, 0xd2, 0x11,
+      0xba, 0x4b, 0x00, 0xa0, 0xc9, 0x3e, 0xc9, 0x3b};
+  uint8_t primary_header[ORIZON_SECTOR_SIZE];
+  uint8_t backup_header[ORIZON_SECTOR_SIZE];
+  uint64_t entries_lba;
+  uint64_t backup_lba;
+  uint64_t backup_entries_lba;
+  uint32_t entry_count;
+  uint32_t entry_size;
+  uint32_t entry_sectors;
+  uint32_t entries_crc;
+  uint8_t *entry;
+  char line[192];
+
+  if (partition_index <= 0 ||
+      gpt_read_primary_header(primary_header) < 0) {
+    append_report(report, report_size, "dualboot-data: GPT header not readable");
+    return -1;
+  }
+  entries_lba = get64(primary_header + 72);
+  backup_lba = get64(primary_header + 32);
+  entry_count = get32(primary_header + 80);
+  entry_size = get32(primary_header + 84);
+  entry_sectors = (entry_count * entry_size + ORIZON_SECTOR_SIZE - 1) /
+                  ORIZON_SECTOR_SIZE;
+  if ((uint32_t)partition_index > entry_count ||
+      entry_count > INSTALL_GPT_ENTRY_COUNT ||
+      entry_size != INSTALL_GPT_ENTRY_SIZE ||
+      entry_sectors > INSTALL_GPT_ENTRY_SECTORS ||
+      entries_lba == 0 || backup_lba == 0) {
+    append_report(report, report_size, "dualboot-data: invalid GPT entry table");
+    return -1;
+  }
+  if (storage_read(entries_lba, gpt_entries, entry_sectors) < 0) {
+    append_report(report, report_size, "dualboot-data: cannot read GPT entries");
+    return -1;
+  }
+  entry = gpt_entries + (uint32_t)(partition_index - 1) * entry_size;
+  if (guid_is_zero(entry) || memcmp(entry, esp_type, sizeof(esp_type)) == 0 ||
+      get64(entry + 40) < get64(entry + 32) + 65536) {
+    append_report(report, report_size,
+                  "dualboot-data: selected partition is not a safe data target");
+    return -1;
+  }
+
+  memcpy(entry, data_type, sizeof(data_type));
+  put64(entry + 48, 0);
+  write_gpt_name(entry, "Orizon Data");
+  entries_crc = crc32_update(0, gpt_entries, entry_count * entry_size);
+
+  if (storage_read(backup_lba, backup_header, 1) < 0 ||
+      memcmp(backup_header, "EFI PART", 8) != 0) {
+    backup_entries_lba = backup_lba - entry_sectors;
+    memcpy(backup_header, primary_header, ORIZON_SECTOR_SIZE);
+    put64(backup_header + 24, backup_lba);
+    put64(backup_header + 32, 1);
+    put64(backup_header + 72, backup_entries_lba);
+  } else {
+    backup_entries_lba = get64(backup_header + 72);
+  }
+
+  gpt_refresh_header_crc(primary_header, entries_crc);
+  gpt_refresh_header_crc(backup_header, entries_crc);
+  if (storage_write(entries_lba, gpt_entries, entry_sectors) < 0 ||
+      storage_write(backup_entries_lba, gpt_entries, entry_sectors) < 0 ||
+      write_sector(1, primary_header) < 0 ||
+      write_sector(backup_lba, backup_header) < 0) {
+    append_report(report, report_size,
+                  "dualboot-data: failed to write GPT Orizon data marker");
+    return -1;
+  }
+
+  snprintf(line, sizeof(line),
+           "dualboot-data: part%d marked as Orizon Data", partition_index);
+  append_report(report, report_size, line);
+  return 0;
+}
+
 static int installed_gpt_layout_valid(char *report, size_t report_size,
                                       int verbose) {
   static const uint8_t esp_type[16] = {0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8,
                                       0xd2, 0x11, 0xba, 0x4b, 0x00, 0xa0,
                                       0xc9, 0x3e, 0xc9, 0x3b};
-  static const uint8_t data_type[16] = {0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84,
-                                       0x72, 0x47, 0x8e, 0x79, 0x3d, 0x69,
-                                       0xd8, 0x47, 0x7d, 0xe4};
+  static const uint8_t data_type[16] = {0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54,
+                                       0x41, 0x00, 0x9a, 0x3d, 0x20, 0x26,
+                                       0x05, 0x11, 0x00, 0x01};
   uint64_t sectors = storage_sector_count();
   uint64_t esp_last = INSTALL_DATA_START_LBA - 1;
   uint64_t data_last =
@@ -1334,18 +1706,31 @@ static int dualboot_write_side_by_side_esp(
                                         ' ', 'E', 'F', 'I'};
   static const char kernel_short[11] = {'K', 'E', 'R', 'N', 'E', 'L', ' ',
                                        ' ', 'E', 'L', 'F'};
+  static const char rollback_kernel_short[11] = {'K', 'R', 'O', 'L', 'L', 'B',
+                                                'K', ' ', 'E', 'L', 'F'};
+  static const char rollback_efi_short[11] = {'B', 'O', 'O', 'T', 'X', '6',
+                                             '4', ' ', 'R', 'O', 'L'};
   static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
                                        '~', '1', 'C', 'O', 'N'};
   static const char install_short[11] = {'I', 'N', 'S', 'T', 'A', 'L', 'L',
                                         ' ', 'T', 'X', 'T'};
   uint32_t efi_dir = 0;
   uint32_t orizon_dir = 0;
+  int has_rollback =
+      payload && payload->rollback_kernel && payload->rollback_efi &&
+      payload->rollback_kernel_size > 0 && payload->rollback_efi_size > 0;
 
   if (!vol || !payload || !payload->kernel || payload->kernel_size == 0 ||
       !payload->efi || payload->efi_size == 0 || !payload->limine_conf ||
       payload->limine_conf_size == 0 || !payload->install_text ||
       payload->install_text_size == 0) {
     append_report(report, report_size, "dualboot: invalid boot payload");
+    return -1;
+  }
+  if ((payload->rollback_kernel || payload->rollback_efi ||
+       payload->rollback_kernel_size || payload->rollback_efi_size) &&
+      !has_rollback) {
+    append_report(report, report_size, "dualboot: invalid rollback payload");
     return -1;
   }
   if (fat32_load_fat(vol) < 0) {
@@ -1372,6 +1757,17 @@ static int dualboot_write_side_by_side_esp(
                                    payload->install_text_size) < 0) {
     append_report(report, report_size,
                   "dualboot: cannot write Orizon files to ESP");
+    return -1;
+  }
+  if (has_rollback &&
+      (fat_write_regular_file_short(vol, orizon_dir, rollback_efi_short, NULL,
+                                    payload->rollback_efi,
+                                    payload->rollback_efi_size) < 0 ||
+       fat_write_regular_file_short(vol, orizon_dir, rollback_kernel_short,
+                                    NULL, payload->rollback_kernel,
+                                    payload->rollback_kernel_size) < 0)) {
+    append_report(report, report_size,
+                  "dualboot: cannot write Orizon rollback files to ESP");
     return -1;
   }
 
@@ -1690,6 +2086,105 @@ static int orizon_install_dualboot_prepare(
   return 0;
 }
 
+static int orizon_install_dualboot_data_prepare(
+    const orizon_install_config_t *config, char *report, size_t report_size) {
+  gpt_partition_t esp;
+  gpt_partition_t data;
+  fat32_volume_t vol;
+  install_boot_payload_t payload;
+  orizon_install_partition_info_t part;
+  char install_text[640];
+  char line[224];
+
+  append_report(report, report_size,
+                "\033[1;36mOrizon dual boot data install\033[0m");
+  append_report(report, report_size,
+                "Mode: preserves the disk layout and existing ESP.");
+  append_report(report, report_size,
+                "Scope: writes /EFI/Orizon and claims the selected partition as Orizon Data.");
+
+  if (!config || config->data_partition_index <= 0 ||
+      orizon_install_get_partition(config->data_partition_index, &part) < 0 ||
+      !part.usable_for_data) {
+    append_report(report, report_size,
+                  "dualboot-data: choose a valid [data-candidate] partition");
+    return -1;
+  }
+  snprintf(line, sizeof(line),
+           "Data target: part%d %s %s", part.index, part.type, part.name);
+  append_report(report, report_size, line);
+
+  if (!boot_payloads_ready()) {
+    snprintf(line, sizeof(line), "dualboot-data: %s", boot_payload_status());
+    append_report(report, report_size, line);
+    return -2;
+  }
+  snprintf(line, sizeof(line), "Payloads: kernel=%lu bytes, BOOTX64.EFI=%lu bytes",
+           (unsigned long)boot_kernel_image_size(),
+           (unsigned long)boot_efi_image_size());
+  append_report(report, report_size, line);
+
+  if (gpt_find_esp(&esp, report, report_size) < 0 ||
+      fat32_mount_existing_esp(&vol, &esp, report, report_size) < 0) {
+    append_report(report, report_size,
+                  "dualboot-data: no compatible existing FAT32 ESP found");
+    return -3;
+  }
+
+  snprintf(install_text, sizeof(install_text),
+           "Orizon OS dual boot install\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
+           "mode=dual-boot-data\n"
+           "boot-file=/EFI/Orizon/BOOTX64.EFI\n"
+           "data-partition=part%d\n"
+           "update=enabled-after-first-data-save\n"
+           "next=firmware-boot-file-or-boot-entry\n",
+           config->language, config->keyboard, config->hostname,
+           config->data_partition_index);
+  payload.kernel = boot_kernel_image();
+  payload.kernel_size = boot_kernel_image_size();
+  payload.efi = boot_efi_image();
+  payload.efi_size = boot_efi_image_size();
+  payload.limine_conf = dualboot_limine_conf;
+  payload.limine_conf_size = sizeof(dualboot_limine_conf) - 1;
+  payload.install_text = install_text;
+  payload.install_text_size = strlen(install_text);
+  payload.rollback_kernel = NULL;
+  payload.rollback_kernel_size = 0;
+  payload.rollback_efi = NULL;
+  payload.rollback_efi_size = 0;
+
+  append_report(report, report_size, "[1/5] Writing side-by-side ESP files");
+  if (dualboot_write_side_by_side_esp(&vol, &payload, report, report_size) < 0) {
+    return -4;
+  }
+
+  append_report(report, report_size,
+                "[2/5] Marking selected partition as Orizon Data");
+  if (gpt_mark_partition_orizon_data(config->data_partition_index, report,
+                                     report_size) < 0) {
+    append_report(report, report_size,
+                  "dualboot-data: ESP files were written, but data partition was not claimed");
+    return -5;
+  }
+
+  append_report(report, report_size, "[3/5] Verifying side-by-side boot files");
+  if (dualboot_check_impl(report, report_size, 0) < 0) {
+    append_report(report, report_size, "dualboot-data: boot verification failed");
+    return -6;
+  }
+  append_report(report, report_size, "[4/5] Verifying Orizon data partition");
+  if (gpt_find_orizon_data(&data, report, report_size) < 0) {
+    append_report(report, report_size,
+                  "dualboot-data: Orizon data partition marker was not found");
+    return -7;
+  }
+  append_report(report, report_size,
+                "[5/5] Ready for installed persistence and GitHub updates");
+  append_report(report, report_size,
+                "Dual boot data install complete. Boot file: /EFI/Orizon/BOOTX64.EFI");
+  return 0;
+}
+
 int orizon_install_run(const orizon_install_config_t *config, char *report,
                        size_t report_size) {
   uint64_t sectors;
@@ -1722,6 +2217,9 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
            config->disk_name ? config->disk_name : storage_status(), capacity);
   append_report(report, report_size, line);
 
+  if (strcmp(config->disk_mode, "dual-boot-data") == 0) {
+    return orizon_install_dualboot_data_prepare(config, report, report_size);
+  }
   if (strcmp(config->disk_mode, "dual-boot-esp") == 0) {
     return orizon_install_dualboot_prepare(config, report, report_size);
   }
@@ -1779,6 +2277,9 @@ static int orizon_install_update_esp_payload(
   uint32_t esp_sectors =
       (uint32_t)(INSTALL_DATA_START_LBA - INSTALL_ESP_START_LBA);
   install_boot_payload_t payload;
+  gpt_partition_t esp;
+  gpt_partition_t data;
+  fat32_volume_t vol;
   char line[160];
   int has_rollback =
       rollback_kernel && rollback_efi && rollback_kernel_size > 0 &&
@@ -1800,16 +2301,10 @@ static int orizon_install_update_esp_payload(
     append_report(report, report_size, "update: no writable AHCI/NVMe disk");
     return -2;
   }
-  sectors = storage_sector_count();
-  if (sectors < INSTALL_DATA_START_LBA + 65536) {
-    append_report(report, report_size, "update: disk is too small");
-    return -3;
-  }
 
   snprintf(line, sizeof(line), "Payloads: kernel=%lu bytes, BOOTX64.EFI=%lu bytes",
            (unsigned long)kernel_size, (unsigned long)efi_size);
   append_report(report, report_size, line);
-  append_report(report, report_size, "[1/4] Formatting installed ESP");
 
   payload.kernel = kernel;
   payload.kernel_size = kernel_size;
@@ -1824,6 +2319,61 @@ static int orizon_install_update_esp_payload(
   payload.rollback_efi = rollback_efi;
   payload.rollback_efi_size = rollback_efi_size;
 
+  if (!installed_gpt_layout_valid(report, report_size, 0) &&
+      gpt_find_orizon_data(&data, report, report_size) == 0) {
+    const char *dual_conf = NULL;
+    size_t dual_conf_size = 0;
+
+    if (gpt_find_esp(&esp, report, report_size) < 0 ||
+        fat32_mount_existing_esp(&vol, &esp, report, report_size) < 0) {
+      append_report(report, report_size,
+                    "update: dual boot data install has no writable FAT32 ESP");
+      return -4;
+    }
+    if (dualboot_limine_rewrite_paths(limine_conf, limine_conf_size,
+                                      &dual_conf, &dual_conf_size) < 0) {
+      append_report(report, report_size,
+                    "update: cannot adapt Limine config for dual boot ESP");
+      return -4;
+    }
+    payload.limine_conf = dual_conf;
+    payload.limine_conf_size = dual_conf_size;
+
+    append_report(report, report_size,
+                  "[1/4] Updating existing ESP side-by-side");
+    if (dualboot_write_side_by_side_esp(&vol, &payload, report,
+                                        report_size) < 0) {
+      append_report(report, report_size, "update: ESP side-by-side write failed");
+      return -4;
+    }
+    append_report(report, report_size, "[2/4] Installed updated boot files");
+    if (has_rollback) {
+      append_report(report, report_size,
+                    "Rollback slot: /EFI/Orizon/KROLLBK.ELF and /EFI/Orizon/BOOTX64.ROL");
+    }
+    append_report(report, report_size,
+                  "[3/4] Verifying dual boot side-by-side files");
+    if (dualboot_check_impl(report, report_size, 0) < 0) {
+      append_report(report, report_size, "update: dual boot verification failed");
+      return -5;
+    }
+    append_report(report, report_size,
+                  "[4/4] Preserved existing partitions and Orizon data");
+    return 0;
+  }
+
+  if (!installed_gpt_layout_valid(report, report_size, 0)) {
+    append_report(report, report_size,
+                  "update: installed Orizon disk layout not recognized");
+    return -3;
+  }
+  sectors = storage_sector_count();
+  if (sectors < INSTALL_DATA_START_LBA + 65536) {
+    append_report(report, report_size, "update: disk is too small");
+    return -3;
+  }
+
+  append_report(report, report_size, "[1/4] Formatting installed ESP");
   if (fat32_format_esp_payload(INSTALL_ESP_START_LBA, esp_sectors,
                                &payload) < 0) {
     append_report(report, report_size, "update: ESP/FAT32 write failed");
