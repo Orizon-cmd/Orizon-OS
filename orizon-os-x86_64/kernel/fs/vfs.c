@@ -34,6 +34,7 @@ static int persist_ready = 0;
 static int persist_loading = 0;
 static const char *persist_status = "Orizon data persistence not loaded";
 static uint8_t persist_buf[PERSIST_BYTES] __attribute__((aligned(4096)));
+static uint8_t persist_sector[ORIZON_SECTOR_SIZE] __attribute__((aligned(4096)));
 
 static int create_inode(const char *path, int type);
 
@@ -124,6 +125,59 @@ static int path_is_persistent_root(const char *path) {
   return path && (str_eq(path, "/workspace") || str_eq(path, "/home") ||
                   str_eq(path, "/system") || str_eq(path, "/packages") ||
                   str_eq(path, "/logs"));
+}
+
+static uint32_t persist_get_u32(const uint8_t *p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint64_t persist_get_u64(const uint8_t *p) {
+  return (uint64_t)persist_get_u32(p) |
+         ((uint64_t)persist_get_u32(p + 4) << 32);
+}
+
+static int persist_orizon_data_partition_present(void) {
+  static const uint8_t data_type[16] = {
+      0xaf, 0x3d, 0xc6, 0x0f, 0x83, 0x84, 0x72, 0x47,
+      0x8e, 0x79, 0x3d, 0x69, 0xd8, 0x47, 0x7d, 0xe4};
+  uint64_t entries_lba;
+  uint32_t entry_count;
+  uint32_t entry_size;
+  uint32_t scan_count;
+
+  if (!storage_available()) {
+    return 0;
+  }
+  if (storage_read(1, persist_sector, 1) < 0 ||
+      memcmp(persist_sector, "EFI PART", 8) != 0) {
+    return 0;
+  }
+
+  entries_lba = persist_get_u64(persist_sector + 72);
+  entry_count = persist_get_u32(persist_sector + 80);
+  entry_size = persist_get_u32(persist_sector + 84);
+  if (entries_lba == 0 || entry_size != 128 || entry_count == 0) {
+    return 0;
+  }
+
+  scan_count = entry_count < 128 ? entry_count : 128;
+  for (uint32_t i = 0; i < scan_count; i++) {
+    uint64_t lba = entries_lba + ((uint64_t)i * entry_size) / ORIZON_SECTOR_SIZE;
+    uint32_t off = (uint32_t)(((uint64_t)i * entry_size) % ORIZON_SECTOR_SIZE);
+    uint8_t *entry;
+
+    if (storage_read(lba, persist_sector, 1) < 0) {
+      return 0;
+    }
+    entry = persist_sector + off;
+    if (memcmp(entry, data_type, sizeof(data_type)) == 0 &&
+        persist_get_u64(entry + 32) == ORIZON_PERSIST_LBA &&
+        persist_get_u64(entry + 40) >= ORIZON_PERSIST_LBA + PERSIST_SECTORS) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 static int append_path_component(char *path, size_t size, const char *component,
@@ -492,6 +546,11 @@ int vfs_persist_save(void) {
     persist_set_status("Orizon data persistence unavailable");
     return -EIO;
   }
+  if (!persist_orizon_data_partition_present()) {
+    persist_ready = 0;
+    persist_set_status("Orizon data persistence disabled: no Orizon data partition");
+    return -EIO;
+  }
 
   memset(persist_buf, 0, sizeof(persist_buf));
   memcpy(persist_buf, PERSIST_MAGIC, 7);
@@ -547,6 +606,11 @@ void vfs_persist_load(void) {
   if (!storage_available()) {
     persist_ready = 0;
     persist_set_status("Orizon data persistence unavailable");
+    return;
+  }
+  if (!persist_orizon_data_partition_present()) {
+    persist_ready = 0;
+    persist_set_status("Orizon data persistence disabled: no Orizon data partition");
     return;
   }
 
@@ -646,6 +710,26 @@ void vfs_persist_load(void) {
 
   persist_loading = 0;
   persist_set_status("Orizon data persistence active");
+}
+
+int vfs_persist_enable_installed(void) {
+  if (!vfs_initialized) {
+    vfs_init();
+  }
+  if (!storage_available()) {
+    persist_ready = 0;
+    persist_set_status("Orizon data persistence unavailable");
+    return -EIO;
+  }
+  if (!persist_orizon_data_partition_present()) {
+    persist_ready = 0;
+    persist_set_status("Orizon data persistence disabled: no Orizon data partition");
+    return -EIO;
+  }
+  persist_loading = 0;
+  persist_ready = 1;
+  persist_set_status("Orizon data persistence initialized");
+  return 0;
 }
 
 int vfs_persist_available(void) {

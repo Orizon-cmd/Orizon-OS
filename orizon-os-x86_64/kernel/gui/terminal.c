@@ -681,8 +681,9 @@ static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
       "about", "append", "boot-check", "cat", "cd", "clear", "cp", "date",
-      "disks", "dmesg", "dns", "edit", "echo", "find", "free", "grep", "head", "help",
-      "history", "hostname", "hw", "id", "install", "install-status",
+      "disks", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
+      "free", "grep", "head", "help", "history", "hostname", "hw", "id",
+      "install", "install-status",
       "input", "keyboard", "ls", "mkdir", "mounts", "mv",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "sync",
@@ -3280,7 +3281,7 @@ static int term_install_capture_disk(int choice, terminal_t *term) {
            info.name);
   snprintf(term->install_disk_summary, sizeof(term->install_disk_summary),
            "%s %s %s %s", info.name, info.driver, capacity, info.model);
-  strcpy(term->install_disk_mode, "guided-full-disk");
+  strcpy(term->install_disk_mode, "dual-boot-esp");
   return 0;
 }
 
@@ -3290,31 +3291,39 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, "\033[1;36mOrizon OS Installer\033[0m\n");
     term_puts_t(term, "This guided installer can install Orizon OS to disk.\n");
     term_puts_t(term,
-                "guided-full-disk rewrites the target disk layout.\n\n");
-    term_puts_t(term, "[1/5] Language\n");
+                "dual-boot-esp preserves existing partitions; guided-full-disk rewrites the target disk layout.\n\n");
+    term_puts_t(term, "[1/6] Language\n");
     term_puts_t(term, "  1. Francais\n");
     term_puts_t(term, "  2. English\n");
     term_puts_t(term, "Choice: ");
     break;
   case 1:
-    term_puts_t(term, "[2/5] Keyboard layout\n");
+    term_puts_t(term, "[2/6] Keyboard layout\n");
     term_puts_t(term, "  1. fr-azerty\n");
     term_puts_t(term, "  2. us-qwerty\n");
     term_puts_t(term, "Choice: ");
     break;
   case 2:
-    term_puts_t(term, "[3/5] Target disk\n");
+    term_puts_t(term, "[3/6] Target disk\n");
     term_print_disks(term);
     term_puts_t(term, "  m. manual-later (do not write disk)\n");
     term_puts_t(term, "Choose target disk number, or m: ");
     break;
   case 3:
-    term_puts_t(term, "[4/5] Hostname\n");
+    term_puts_t(term, "[4/6] Disk strategy\n");
+    term_puts_t(term,
+                "  1. dual-boot-esp (preserve disk, write /EFI/Orizon only)\n");
+    term_puts_t(term,
+                "  2. guided-full-disk (ERASE target disk, full Orizon install)\n");
+    term_puts_t(term, "Choice [1]: ");
+    break;
+  case 4:
+    term_puts_t(term, "[5/6] Hostname\n");
     term_puts_t(term, "Hostname [orizon-os]: ");
     break;
-  case 4: {
+  case 5: {
     char line[160];
-    term_puts_t(term, "[5/5] Summary\n");
+    term_puts_t(term, "[6/6] Summary\n");
     snprintf(line, sizeof(line), "  Language: %s\n", term->install_language);
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Keyboard: %s\n", term->install_keyboard);
@@ -3326,8 +3335,15 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Hostname: %s\n", term->install_hostname);
     term_puts_t(term, line);
+    snprintf(line, sizeof(line), "  Mode:     %s\n", term->install_disk_mode);
+    term_puts_t(term, line);
     if (strcmp(term->install_disk_mode, "manual-later") == 0) {
       term_puts_t(term, "Type SAVE to store the plan, or cancel to abort: ");
+    } else if (strcmp(term->install_disk_mode, "dual-boot-esp") == 0) {
+      snprintf(line, sizeof(line),
+               "Type DUALBOOT %s to write /EFI/Orizon only, or cancel to abort: ",
+               term->install_disk_name);
+      term_puts_t(term, line);
     } else {
       snprintf(line, sizeof(line),
                "Type ERASE %s to write this disk, or cancel to abort: ",
@@ -3383,16 +3399,21 @@ static void term_install_write_plan(terminal_t *term) {
            "disk-name %s\n"
            "disk-summary %s\n"
            "disk-status %s\n"
-           "boot-strategy uefi-fallback-esp\n"
+           "boot-strategy %s\n"
            "write-mode %s\n"
            "next reboot-installed-disk\n",
            term->install_language, term->install_keyboard,
            term->install_hostname, term->install_disk_mode,
            term->install_disk_index, disk_name, disk_summary,
            storage_available() ? storage_status() : "unavailable",
+           strcmp(term->install_disk_mode, "dual-boot-esp") == 0
+               ? "side-by-side-existing-esp"
+               : "uefi-fallback-esp",
            strcmp(term->install_disk_mode, "manual-later") == 0
                ? "plan-only-no-disk-write"
-               : "destructive-full-disk");
+               : (strcmp(term->install_disk_mode, "dual-boot-esp") == 0
+                      ? "non-destructive-existing-esp"
+                      : "destructive-full-disk"));
 
   snprintf(state, sizeof(state),
            "install configured: language=%s keyboard=%s disk=%s hostname=%s\n",
@@ -3424,12 +3445,14 @@ static void term_install_write_plan(terminal_t *term) {
     return;
   }
 
-  term_puts_t(term, "\nSaving /workspace before disk write...\n");
-  if (vfs_persist_save() < 0) {
-    term_puts_t(term,
-                "install: cannot save /workspace, aborting to avoid data loss\n");
-    term_install_finish(term, 0);
-    return;
+  if (strcmp(term->install_disk_mode, "guided-full-disk") == 0) {
+    term_puts_t(term, "\nPreparing /workspace for disk install...\n");
+    if (vfs_persist_save() < 0) {
+      term_puts_t(term,
+                  "install: persistence not active yet; will save after layout creation\n");
+    }
+  } else {
+    term_puts_t(term, "\nPreparing non-destructive ESP write...\n");
   }
 
   config.language = term->install_language;
@@ -3442,6 +3465,24 @@ static void term_install_write_plan(terminal_t *term) {
   if (orizon_install_run(&config, install_report, sizeof(install_report)) == 0) {
     term_puts_t(term, install_report);
     term_write_text_file("/workspace/.orizon/install-log", install_report);
+    if (strcmp(term->install_disk_mode, "dual-boot-esp") == 0) {
+      term_write_text_file("/workspace/.orizon/dualboot-prepared",
+                           "dual boot ESP prepared\n"
+                           "boot-file /EFI/Orizon/BOOTX64.EFI\n"
+                           "data not-installed\n");
+      term_write_text_file("/workspace/.orizon/install-state",
+                           "dual boot ESP prepared\n");
+      term_install_finish(term, 1);
+      term_puts_t(term,
+                  "Dual boot files are ready on the existing ESP.\n"
+                  "Reboot, keep your main OS intact, then choose /EFI/Orizon/BOOTX64.EFI from firmware boot-file selection or add a firmware/BCD entry.\n"
+                  "No Orizon data partition was created, so update/pkg remain disabled for safety.\n");
+      return;
+    }
+    if (vfs_persist_enable_installed() < 0) {
+      term_puts_t(term,
+                  "install: warning, Orizon data partition was not enabled\n");
+    }
     snprintf(marker, sizeof(marker),
              "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
              "next=shutdown-remove-installer\n",
@@ -3519,6 +3560,9 @@ static void term_install_submit(terminal_t *term, const char *line) {
       term->install_disk_index = -1;
       strcpy(term->install_disk_name, "none");
       strcpy(term->install_disk_summary, "manual-later");
+      term->install_step = 4;
+      term_install_prompt(term);
+      return;
     } else {
       int choice = 0;
       if (term_parse_uint(value, &choice) < 0 ||
@@ -3535,6 +3579,21 @@ static void term_install_submit(terminal_t *term, const char *line) {
     term_install_prompt(term);
     return;
   case 3:
+    if (*value == '\0' || term_install_value_is(value, "1", "dual", "dualboot") ||
+        strcmp(value, "dual-boot-esp") == 0) {
+      strcpy(term->install_disk_mode, "dual-boot-esp");
+    } else if (term_install_value_is(value, "2", "full", "erase") ||
+               strcmp(value, "guided-full-disk") == 0) {
+      strcpy(term->install_disk_mode, "guided-full-disk");
+    } else {
+      term_puts_t(term, "Choose 1 for dual-boot or 2 for full erase install.\n");
+      term_install_prompt(term);
+      return;
+    }
+    term->install_step++;
+    term_install_prompt(term);
+    return;
+  case 4:
     if (*value == '\0') {
       strcpy(term->install_hostname, "orizon-os");
     } else {
@@ -3545,10 +3604,24 @@ static void term_install_submit(terminal_t *term, const char *line) {
     term->install_step++;
     term_install_prompt(term);
     return;
-  case 4:
+  case 5:
     if (strcmp(term->install_disk_mode, "manual-later") == 0 &&
         (strcmp(value, "SAVE") == 0 || strcmp(value, "save") == 0)) {
       term_install_write_plan(term);
+    } else if (strcmp(term->install_disk_mode, "dual-boot-esp") == 0) {
+      char expected[72];
+      char expected_lower[72];
+      snprintf(expected, sizeof(expected), "DUALBOOT %s",
+               term->install_disk_name);
+      snprintf(expected_lower, sizeof(expected_lower), "dualboot %s",
+               term->install_disk_name);
+      if (strcmp(value, expected) == 0 || strcmp(value, expected_lower) == 0) {
+        term_install_write_plan(term);
+      } else {
+        term_puts_t(term,
+                    "Confirmation refused. Type the exact DUALBOOT command.\n");
+        term_install_prompt(term);
+      }
     } else if (strcmp(term->install_disk_mode, "guided-full-disk") == 0) {
       char expected[64];
       char expected_lower[64];
@@ -3748,6 +3821,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  install   - Start guided disk installer\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
+    term_puts_t(term, "  dualboot-check - Verify /EFI/Orizon side-by-side boot files\n");
     term_puts_t(term, "  repair-boot - Rewrite installed boot files\n");
     term_puts_t(term, "  keyboard [fr|us] - Show or change keyboard layout\n");
     term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
@@ -4264,6 +4338,10 @@ void term_execute(terminal_t *term, const char *cmd) {
     static char boot_report[8192];
     orizon_install_boot_check(boot_report, sizeof(boot_report));
     term_puts_t(term, boot_report);
+  } else if (term_command_is(cmd, "dualboot-check")) {
+    static char dual_report[8192];
+    orizon_install_dualboot_check(dual_report, sizeof(dual_report));
+    term_puts_t(term, dual_report);
   } else if (term_command_is(cmd, "repair-boot")) {
     static char repair_report[8192];
     orizon_install_repair_boot(repair_report, sizeof(repair_report));

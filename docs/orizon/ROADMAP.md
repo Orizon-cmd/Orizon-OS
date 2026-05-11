@@ -3,8 +3,11 @@
 ## Current Foundation
 
 - Installed-disk boot flow with live ISO guardrails.
+- Non-destructive dual-boot ESP preparation: existing GPT/FAT32 ESP detection,
+  side-by-side `/EFI/Orizon` boot files, and `dualboot-check` verification.
 - Persistent Orizon data roots: `/workspace`, `/home`, `/system`,
-  `/packages`, `/logs`, and `/tmp`.
+  `/packages`, `/logs`, and `/tmp`, now guarded so persistence writes only
+  activate when an Orizon data partition is actually present.
 - In-kernel GitHub update path with SHA-256 verification, boot rollback slot,
   streamed progress, and rough elapsed timings.
 - Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
@@ -46,6 +49,8 @@
 5. Finish SSH remote login hardening: generated per-install host-key material,
    full PTY integration with the local Orizon terminal, safer config
    permissions, key rotation, and longer multi-client soak tests.
+6. Finish dual boot: automatic UEFI NVRAM/BCD entry creation and a safe Orizon
+   data partition workflow beside existing operating systems.
 
 ## Next Hardware Track
 

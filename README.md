@@ -14,8 +14,9 @@ le developpement noyau:
 - une seule console centrale avec historique persistant et autocompletion simple
 - racines data persistantes `/workspace`, `/home`, `/system`, `/packages` et
   `/logs` quand une zone donnees Orizon est disponible
-- installateur disque guide avec langue, clavier, GPT, ESP FAT32, verification
-  du boot UEFI, selection explicite du disque cible et reparation de l'ESP
+- installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
+  dual-boot ESP non destructif, verification du boot UEFI, selection explicite
+  du disque cible et reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
   Ethernet Intel e1000/e1000e, Realtek RTL8139, VirtIO-net pour Proxmox/QEMU,
@@ -65,12 +66,22 @@ install
 ```
 
 L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
-peut installer Orizon OS sur le disque cible. Le flux affiche les disques
-detectes (`disk0`, `disk1`, etc.) avec type, taille et modele, puis demande une
-confirmation destructive sous la forme `ERASE disk0`. Le mode
-`guided-full-disk` ecrit une GPT, formate une ESP FAT32, copie `BOOTX64.EFI`, `kernel.elf` et
-`limine.conf`, puis conserve une partition data Orizon pour `/workspace` et
-les racines `/home`, `/system`, `/packages` et `/logs`.
+peut preparer Orizon OS sur le disque cible. Le flux affiche les disques
+detectes (`disk0`, `disk1`, etc.) avec type, taille et modele.
+
+Le mode recommande pour une machine qui contient deja Windows/Linux est
+`dual-boot-esp`: il detecte la GPT existante, trouve l'ESP FAT32, puis ecrit
+uniquement `/EFI/Orizon/BOOTX64.EFI`, `/EFI/Orizon/kernel.elf`,
+`/EFI/Orizon/limine.conf` et `/EFI/Orizon/INSTALL.TXT`. La confirmation est
+`DUALBOOT disk0`. Aucune partition existante n'est reformatee et Orizon ne se
+marque pas comme installe complet, donc `update` et `pkg install/remove`
+restent bloques tant qu'il n'y a pas de vraie partition data Orizon.
+
+Le mode `guided-full-disk` reste le mode complet et destructif. Il demande une
+confirmation sous la forme `ERASE disk0`, ecrit une GPT, formate une ESP FAT32,
+copie `BOOTX64.EFI`, `kernel.elf` et `limine.conf`, puis conserve une partition
+data Orizon pour `/workspace` et les racines `/home`, `/system`, `/packages`
+et `/logs`.
 Avant l'ecriture disque, `/workspace` est synchronise pour garder les dossiers
 et fichiers crees pendant le live boot.
 
@@ -85,6 +96,12 @@ comme pret: MBR protecteur, GPT, ESP FAT32, label, `EFI/BOOT/BOOTX64.EFI`,
 
 ```text
 boot-check
+```
+
+Pour verifier les fichiers side-by-side du mode dual boot:
+
+```text
+dualboot-check
 ```
 
 Si le disque a deja une installation Orizon mais que l'ESP est abimee, la
@@ -180,9 +197,10 @@ dans `/system/ssh_host_rsa.key`.
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 
 La premiere version cible le cas le plus utile pour le labo et les machines
-UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA, une ESP de 1 MiB a
-512 MiB, et une partition data Orizon a partir de 512 MiB. Les installations
-multi-disques, dual-boot et boot-count automatique arriveront ensuite.
+UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA. Le mode dual boot
+actuel est un prepareur ESP non destructif; il faudra encore ajouter une entree
+UEFI NVRAM/BCD automatique et une partition data Orizon dediee pour obtenir un
+dual boot installe avec mises a jour completes.
 
 Pour revoir le plan:
 

@@ -69,6 +69,7 @@ void vfs_seed_content(void);
 
 /* Persistent workspace backend */
 void vfs_persist_load(void);
+int vfs_persist_enable_installed(void);
 int vfs_persist_save(void);
 int vfs_persist_available(void);
 const char *vfs_persist_status(void);

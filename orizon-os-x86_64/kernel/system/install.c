@@ -48,6 +48,13 @@ typedef struct {
   size_t rollback_efi_size;
 } install_boot_payload_t;
 
+typedef struct {
+  uint32_t index;
+  uint64_t first_lba;
+  uint64_t last_lba;
+  uint64_t sectors;
+} gpt_partition_t;
+
 static uint8_t sector_buf[ORIZON_SECTOR_SIZE] __attribute__((aligned(4096)));
 static uint8_t cluster_buf[INSTALL_CLUSTER_BYTES] __attribute__((aligned(4096)));
 static uint8_t gpt_entries[INSTALL_GPT_ENTRY_SECTORS * ORIZON_SECTOR_SIZE]
@@ -86,6 +93,38 @@ static const char install_limine_conf[] =
     "    protocol: limine\n"
     "    kernel_path: boot():/boot/kernel.elf\n"
     "    cmdline: orizon.safe=1 orizon.native=1\n";
+
+static const char dualboot_limine_conf[] =
+    "# Limine Configuration File\n"
+    "# Orizon OS x86_64 dual boot side-by-side ESP\n"
+    "\n"
+    "timeout: 5\n"
+    "interface_resolution: 1024x768\n"
+    "interface_branding: Orizon OS\n"
+    "default_entry: 1\n"
+    "\n"
+    "/Orizon OS\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/EFI/Orizon/kernel.elf\n"
+    "    cmdline: orizon.safe=1 orizon.dualboot=1\n"
+    "    resolution: 1024x768x32\n"
+    "\n"
+    "/Orizon OS - Minimal display debug\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/EFI/Orizon/kernel.elf\n"
+    "    cmdline: orizon.minimal=1 orizon.notimer=1 orizon.nohw=1 orizon.noinput=1 orizon.dualboot=1\n"
+    "    resolution: 1024x768x32\n"
+    "\n"
+    "/Orizon OS - Lenovo hardware probe\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/EFI/Orizon/kernel.elf\n"
+    "    cmdline: orizon.safe=1 orizon.i2chid=1 orizon.dualboot=1\n"
+    "    resolution: 1024x768x32\n"
+    "\n"
+    "/Orizon OS - Native display\n"
+    "    protocol: limine\n"
+    "    kernel_path: boot():/EFI/Orizon/kernel.elf\n"
+    "    cmdline: orizon.safe=1 orizon.native=1 orizon.dualboot=1\n";
 
 static void append_report(char *report, size_t report_size, const char *line) {
   size_t used;
@@ -696,6 +735,82 @@ static void append_check_line(char *report, size_t report_size,
   append_report(report, report_size, line);
 }
 
+static int gpt_find_esp(gpt_partition_t *out, char *report,
+                        size_t report_size) {
+  static const uint8_t esp_type[16] = {
+      0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8, 0xd2, 0x11,
+      0xba, 0x4b, 0x00, 0xa0, 0xc9, 0x3e, 0xc9, 0x3b};
+  uint64_t entries_lba;
+  uint32_t entry_count;
+  uint32_t entry_size;
+  uint32_t scan_count;
+  char line[192];
+
+  if (!out) {
+    return -1;
+  }
+  memset(out, 0, sizeof(*out));
+  if (!storage_available()) {
+    append_check_line(report, report_size, "writable AHCI/NVMe disk", 0);
+    return -1;
+  }
+  if (read_sector(1, sector_buf) < 0 ||
+      memcmp(sector_buf, "EFI PART", 8) != 0) {
+    append_check_line(report, report_size, "existing GPT disk", 0);
+    return -1;
+  }
+  append_check_line(report, report_size, "existing GPT disk", 1);
+
+  entries_lba = get64(sector_buf + 72);
+  entry_count = get32(sector_buf + 80);
+  entry_size = get32(sector_buf + 84);
+  if (entries_lba == 0 || entry_count == 0 ||
+      entry_size != INSTALL_GPT_ENTRY_SIZE) {
+    append_check_line(report, report_size, "GPT partition entries", 0);
+    return -1;
+  }
+  append_check_line(report, report_size, "GPT partition entries", 1);
+
+  scan_count = entry_count < INSTALL_GPT_ENTRY_COUNT
+                   ? entry_count
+                   : INSTALL_GPT_ENTRY_COUNT;
+  for (uint32_t i = 0; i < scan_count; i++) {
+    uint64_t lba =
+        entries_lba + ((uint64_t)i * entry_size) / ORIZON_SECTOR_SIZE;
+    uint32_t off =
+        (uint32_t)(((uint64_t)i * entry_size) % ORIZON_SECTOR_SIZE);
+    uint8_t *entry;
+    uint64_t first;
+    uint64_t last;
+
+    if (read_sector(lba, sector_buf) < 0) {
+      append_check_line(report, report_size, "read GPT entry", 0);
+      return -1;
+    }
+    entry = sector_buf + off;
+    if (memcmp(entry, esp_type, sizeof(esp_type)) != 0) {
+      continue;
+    }
+    first = get64(entry + 32);
+    last = get64(entry + 40);
+    if (last <= first || first < 34 || last >= storage_sector_count()) {
+      continue;
+    }
+    out->index = i + 1;
+    out->first_lba = first;
+    out->last_lba = last;
+    out->sectors = last - first + 1;
+    snprintf(line, sizeof(line), "ESP partition found: GPT #%lu LBA %lu..%lu",
+             (unsigned long)out->index, (unsigned long)out->first_lba,
+             (unsigned long)out->last_lba);
+    append_check_line(report, report_size, line, 1);
+    return 0;
+  }
+
+  append_check_line(report, report_size, "EFI System Partition found", 0);
+  return -1;
+}
+
 static int installed_gpt_layout_valid(char *report, size_t report_size,
                                       int verbose) {
   static const uint8_t esp_type[16] = {0x28, 0x73, 0x2a, 0xc1, 0x1f, 0xf8,
@@ -818,6 +933,59 @@ static int fat32_mount_installed_esp(fat32_volume_t *vol, char *report,
   return 0;
 }
 
+static int fat32_mount_existing_esp(fat32_volume_t *vol,
+                                    const gpt_partition_t *part,
+                                    char *report, size_t report_size) {
+  uint32_t total;
+  uint32_t data_sectors;
+  uint32_t cluster_bytes;
+
+  if (!vol || !part || part->sectors == 0 ||
+      read_sector(part->first_lba, sector_buf) < 0) {
+    append_check_line(report, report_size, "existing FAT32 ESP boot sector", 0);
+    return -1;
+  }
+
+  memset(vol, 0, sizeof(*vol));
+  vol->start_lba = part->first_lba;
+  vol->sectors_per_cluster = sector_buf[13];
+  vol->reserved_sectors = get16(sector_buf + 14);
+  vol->fat_count = sector_buf[16];
+  total = get16(sector_buf + 19);
+  if (total == 0) {
+    total = get32(sector_buf + 32);
+  }
+  if (total == 0 || total > part->sectors) {
+    total = (uint32_t)part->sectors;
+  }
+  vol->total_sectors = total;
+  vol->sectors_per_fat = get32(sector_buf + 36);
+  vol->root_cluster = get32(sector_buf + 44);
+  vol->data_start_sector =
+      vol->reserved_sectors + vol->fat_count * vol->sectors_per_fat;
+  data_sectors = vol->data_start_sector < vol->total_sectors
+                     ? vol->total_sectors - vol->data_start_sector
+                     : 0;
+  vol->cluster_count =
+      vol->sectors_per_cluster ? data_sectors / vol->sectors_per_cluster : 0;
+  cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+
+  if (get16(sector_buf + 11) != ORIZON_SECTOR_SIZE ||
+      sector_buf[510] != 0x55 || sector_buf[511] != 0xAA ||
+      memcmp(sector_buf + 82, "FAT32", 5) != 0 ||
+      vol->sectors_per_cluster == 0 || cluster_bytes > INSTALL_CLUSTER_BYTES ||
+      vol->reserved_sectors == 0 || vol->fat_count == 0 ||
+      vol->fat_count > 2 || vol->sectors_per_fat == 0 ||
+      vol->sectors_per_fat > INSTALL_FAT_SECTORS_MAX ||
+      vol->root_cluster < 2 || vol->cluster_count < 128) {
+    append_check_line(report, report_size, "existing FAT32 ESP boot sector", 0);
+    return -1;
+  }
+
+  append_check_line(report, report_size, "existing FAT32 ESP boot sector", 1);
+  return 0;
+}
+
 static int fat_read_cluster(const fat32_volume_t *vol, uint32_t cluster,
                             uint8_t *out) {
   if (!vol || !out || cluster < 2 ||
@@ -868,6 +1036,259 @@ static int fat_find_entry_short(const fat32_volume_t *vol, uint32_t dir_cluster,
   return -1;
 }
 
+static uint32_t fat_get(uint32_t cluster) {
+  return get32(install_fat + cluster * 4) & 0x0FFFFFFFU;
+}
+
+static void fat_free_chain(const fat32_volume_t *vol, uint32_t cluster) {
+  uint32_t limit = vol ? vol->cluster_count + 2 : 0;
+
+  while (cluster >= 2 && cluster < limit) {
+    uint32_t next = fat_get(cluster);
+    fat_set(cluster, 0);
+    if (next >= 0x0FFFFFF8U || next == cluster) {
+      break;
+    }
+    cluster = next;
+  }
+}
+
+static int fat32_load_fat(const fat32_volume_t *vol) {
+  if (!vol || vol->sectors_per_fat == 0 ||
+      vol->sectors_per_fat > INSTALL_FAT_SECTORS_MAX) {
+    return -1;
+  }
+  memset(install_fat, 0, sizeof(install_fat));
+  return storage_read(vol->start_lba + vol->reserved_sectors, install_fat,
+                      vol->sectors_per_fat);
+}
+
+static uint32_t fat_alloc_chain_scan(fat32_volume_t *vol, size_t bytes) {
+  uint32_t cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+  uint32_t count = (uint32_t)((bytes + cluster_bytes - 1) / cluster_bytes);
+  uint32_t limit;
+
+  if (!vol || cluster_bytes == 0 || vol->cluster_count < 4) {
+    return 0;
+  }
+  if (count == 0) {
+    count = 1;
+  }
+  limit = vol->cluster_count + 2;
+  for (uint32_t first = 2; first + count < limit; first++) {
+    int free_run = 1;
+    for (uint32_t i = 0; i < count; i++) {
+      if (fat_get(first + i) != 0) {
+        free_run = 0;
+        first += i;
+        break;
+      }
+    }
+    if (!free_run) {
+      continue;
+    }
+    for (uint32_t i = 0; i < count; i++) {
+      fat_set(first + i, i + 1 == count ? 0x0FFFFFFFU : first + i + 1);
+    }
+    return first;
+  }
+  return 0;
+}
+
+static int fat_dir_find_short_offset(const fat32_volume_t *vol,
+                                     uint32_t dir_cluster,
+                                     const char short_name[11],
+                                     uint8_t *attr, uint32_t *cluster,
+                                     uint32_t *size, uint32_t *entry_off) {
+  uint32_t cluster_bytes;
+
+  if (fat_read_cluster(vol, dir_cluster, cluster_buf) < 0) {
+    return -1;
+  }
+  cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+  for (uint32_t off = 0; off + 32 <= cluster_bytes; off += 32) {
+    uint8_t *entry = cluster_buf + off;
+    uint8_t entry_attr;
+    if (entry[0] == 0x00) {
+      break;
+    }
+    if (entry[0] == 0xE5) {
+      continue;
+    }
+    entry_attr = entry[11];
+    if (entry_attr == 0x0F || memcmp(entry, short_name, 11) != 0) {
+      continue;
+    }
+    if (attr) {
+      *attr = entry_attr;
+    }
+    if (cluster) {
+      *cluster = ((uint32_t)get16(entry + 20) << 16) | get16(entry + 26);
+    }
+    if (size) {
+      *size = get32(entry + 28);
+    }
+    if (entry_off) {
+      *entry_off = off;
+    }
+    return 0;
+  }
+  return -1;
+}
+
+static int fat_dir_find_free_slots(const fat32_volume_t *vol,
+                                   uint32_t dir_cluster, uint32_t slots,
+                                   uint32_t *entry_off) {
+  uint32_t cluster_bytes;
+  uint32_t run = 0;
+  uint32_t start = 0;
+
+  if (!entry_off || slots == 0 ||
+      fat_read_cluster(vol, dir_cluster, cluster_buf) < 0) {
+    return -1;
+  }
+  cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+  for (uint32_t off = 0; off + 32 <= cluster_bytes; off += 32) {
+    uint8_t first = cluster_buf[off];
+    if (first == 0x00 || first == 0xE5) {
+      if (run == 0) {
+        start = off;
+      }
+      run++;
+      if (run >= slots) {
+        *entry_off = start;
+        return 0;
+      }
+    } else {
+      run = 0;
+    }
+  }
+  return -1;
+}
+
+static int fat_dir_write_slots(const fat32_volume_t *vol, uint32_t dir_cluster,
+                               uint32_t entry_off, const uint8_t *entries,
+                               uint32_t slots) {
+  uint32_t cluster_bytes;
+
+  if (!entries || slots == 0 ||
+      fat_read_cluster(vol, dir_cluster, cluster_buf) < 0) {
+    return -1;
+  }
+  cluster_bytes = vol->sectors_per_cluster * ORIZON_SECTOR_SIZE;
+  if (entry_off + slots * 32 > cluster_bytes) {
+    return -1;
+  }
+  memcpy(cluster_buf + entry_off, entries, slots * 32);
+  return fat_write_cluster(vol, dir_cluster, cluster_buf);
+}
+
+static int fat_dir_delete_short(const fat32_volume_t *vol, uint32_t dir_cluster,
+                                const char short_name[11]) {
+  uint8_t attr = 0;
+  uint32_t cluster = 0;
+  uint32_t entry_off = 0;
+
+  if (fat_dir_find_short_offset(vol, dir_cluster, short_name, &attr, &cluster,
+                                NULL, &entry_off) < 0) {
+    return 0;
+  }
+  if (fat_read_cluster(vol, dir_cluster, cluster_buf) < 0) {
+    return -1;
+  }
+  if ((attr & 0x10) == 0 && cluster >= 2) {
+    fat_free_chain(vol, cluster);
+  }
+  cluster_buf[entry_off] = 0xE5;
+  while (entry_off >= 32 && cluster_buf[entry_off - 32 + 11] == 0x0F) {
+    entry_off -= 32;
+    cluster_buf[entry_off] = 0xE5;
+  }
+  return fat_write_cluster(vol, dir_cluster, cluster_buf);
+}
+
+static int fat_dir_add_short_entry(const fat32_volume_t *vol,
+                                   uint32_t dir_cluster,
+                                   const char short_name[11],
+                                   const char *long_name, uint8_t attr,
+                                   uint32_t first_cluster,
+                                   uint32_t file_size) {
+  uint8_t entries[64];
+  uint32_t slots = long_name && long_name[0] ? 2 : 1;
+  uint32_t entry_off = 0;
+  size_t off = 0;
+
+  if (fat_dir_find_free_slots(vol, dir_cluster, slots, &entry_off) < 0) {
+    return -1;
+  }
+  memset(entries, 0, sizeof(entries));
+  if (long_name && long_name[0]) {
+    fat_dir_add_lfn(entries, &off, long_name, short_name);
+  }
+  fat_dir_add_entry(entries, &off, short_name, attr, first_cluster, file_size);
+  return fat_dir_write_slots(vol, dir_cluster, entry_off, entries, slots);
+}
+
+static int fat_ensure_dir_short(fat32_volume_t *vol, uint32_t parent_cluster,
+                                const char short_name[11],
+                                uint32_t *out_cluster) {
+  uint8_t attr = 0;
+  uint32_t cluster = 0;
+
+  if (!vol || !out_cluster) {
+    return -1;
+  }
+  if (fat_dir_find_short_offset(vol, parent_cluster, short_name, &attr,
+                                &cluster, NULL, NULL) == 0) {
+    if ((attr & 0x10) == 0 || cluster < 2) {
+      return -1;
+    }
+    *out_cluster = cluster;
+    return 0;
+  }
+
+  cluster = fat_alloc_chain_scan(vol, INSTALL_CLUSTER_BYTES);
+  if (!cluster) {
+    return -1;
+  }
+  memset(cluster_buf, 0, sizeof(cluster_buf));
+  size_t off = 0;
+  fat_dir_add_dot(vol, cluster_buf, &off, cluster, parent_cluster);
+  if (fat_write_cluster(vol, cluster, cluster_buf) < 0) {
+    return -1;
+  }
+  if (fat_dir_add_short_entry(vol, parent_cluster, short_name, NULL, 0x10,
+                              cluster, 0) < 0) {
+    return -1;
+  }
+  *out_cluster = cluster;
+  return 0;
+}
+
+static int fat_write_regular_file_short(fat32_volume_t *vol,
+                                        uint32_t dir_cluster,
+                                        const char short_name[11],
+                                        const char *long_name,
+                                        const void *data, size_t size) {
+  uint32_t cluster;
+
+  if (!vol || !data || size == 0) {
+    return -1;
+  }
+  if (fat_dir_delete_short(vol, dir_cluster, short_name) < 0) {
+    return -1;
+  }
+  cluster = fat_alloc_chain_scan(vol, size);
+  if (!cluster) {
+    return -1;
+  }
+  if (fat_write_file_data(vol, cluster, data, size) < 0) {
+    return -1;
+  }
+  return fat_dir_add_short_entry(vol, dir_cluster, short_name, long_name, 0x20,
+                                 cluster, (uint32_t)size);
+}
+
 static int boot_check_append_entry(char *report, size_t report_size,
                                    const fat32_volume_t *vol,
                                    uint32_t dir_cluster,
@@ -900,6 +1321,147 @@ static int boot_check_append_entry(char *report, size_t report_size,
     append_check_line(report, report_size, label, ok);
   }
   return ok ? 0 : -1;
+}
+
+static int dualboot_write_side_by_side_esp(
+    fat32_volume_t *vol, const install_boot_payload_t *payload, char *report,
+    size_t report_size) {
+  static const char efi_short[11] = {'E', 'F', 'I', ' ', ' ', ' ', ' ',
+                                    ' ', ' ', ' ', ' '};
+  static const char orizon_short[11] = {'O', 'R', 'I', 'Z', 'O', 'N', ' ',
+                                       ' ', ' ', ' ', ' '};
+  static const char bootx64_short[11] = {'B', 'O', 'O', 'T', 'X', '6', '4',
+                                        ' ', 'E', 'F', 'I'};
+  static const char kernel_short[11] = {'K', 'E', 'R', 'N', 'E', 'L', ' ',
+                                       ' ', 'E', 'L', 'F'};
+  static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
+                                       '~', '1', 'C', 'O', 'N'};
+  static const char install_short[11] = {'I', 'N', 'S', 'T', 'A', 'L', 'L',
+                                        ' ', 'T', 'X', 'T'};
+  uint32_t efi_dir = 0;
+  uint32_t orizon_dir = 0;
+
+  if (!vol || !payload || !payload->kernel || payload->kernel_size == 0 ||
+      !payload->efi || payload->efi_size == 0 || !payload->limine_conf ||
+      payload->limine_conf_size == 0 || !payload->install_text ||
+      payload->install_text_size == 0) {
+    append_report(report, report_size, "dualboot: invalid boot payload");
+    return -1;
+  }
+  if (fat32_load_fat(vol) < 0) {
+    append_report(report, report_size, "dualboot: cannot read ESP FAT");
+    return -1;
+  }
+
+  if (fat_ensure_dir_short(vol, vol->root_cluster, efi_short, &efi_dir) < 0 ||
+      fat_ensure_dir_short(vol, efi_dir, orizon_short, &orizon_dir) < 0) {
+    append_report(report, report_size,
+                  "dualboot: cannot create /EFI/Orizon directory");
+    return -1;
+  }
+
+  if (fat_write_regular_file_short(vol, orizon_dir, bootx64_short, NULL,
+                                   payload->efi, payload->efi_size) < 0 ||
+      fat_write_regular_file_short(vol, orizon_dir, kernel_short, NULL,
+                                   payload->kernel, payload->kernel_size) < 0 ||
+      fat_write_regular_file_short(vol, orizon_dir, limine_short,
+                                   "limine.conf", payload->limine_conf,
+                                   payload->limine_conf_size) < 0 ||
+      fat_write_regular_file_short(vol, orizon_dir, install_short, NULL,
+                                   payload->install_text,
+                                   payload->install_text_size) < 0) {
+    append_report(report, report_size,
+                  "dualboot: cannot write Orizon files to ESP");
+    return -1;
+  }
+
+  if (fat_write_fats(vol) < 0) {
+    append_report(report, report_size, "dualboot: cannot update ESP FAT");
+    return -1;
+  }
+
+  append_report(report, report_size,
+                "dualboot: wrote /EFI/Orizon without rewriting partitions");
+  return 0;
+}
+
+static int dualboot_check_impl(char *report, size_t report_size,
+                               int reset_report) {
+  static const char efi_short[11] = {'E', 'F', 'I', ' ', ' ', ' ', ' ',
+                                    ' ', ' ', ' ', ' '};
+  static const char orizon_short[11] = {'O', 'R', 'I', 'Z', 'O', 'N', ' ',
+                                       ' ', ' ', ' ', ' '};
+  static const char bootx64_short[11] = {'B', 'O', 'O', 'T', 'X', '6', '4',
+                                        ' ', 'E', 'F', 'I'};
+  static const char kernel_short[11] = {'K', 'E', 'R', 'N', 'E', 'L', ' ',
+                                       ' ', 'E', 'L', 'F'};
+  static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
+                                       '~', '1', 'C', 'O', 'N'};
+  static const char install_short[11] = {'I', 'N', 'S', 'T', 'A', 'L', 'L',
+                                        ' ', 'T', 'X', 'T'};
+  gpt_partition_t esp;
+  fat32_volume_t vol;
+  uint32_t efi_dir = 0;
+  uint32_t orizon_dir = 0;
+  int failures = 0;
+
+  if (reset_report && report && report_size > 0) {
+    report[0] = '\0';
+  }
+  append_report(report, report_size, "\033[1;36mOrizon dual boot check\033[0m");
+  if (gpt_find_esp(&esp, report, report_size) < 0 ||
+      fat32_mount_existing_esp(&vol, &esp, report, report_size) < 0) {
+    append_report(report, report_size,
+                  "Dual boot check: FAILED. No writable existing FAT32 ESP.");
+    return -1;
+  }
+  if (boot_check_append_entry(report, report_size, &vol, vol.root_cluster,
+                              efi_short, "/EFI directory", 0x10, 0,
+                              &efi_dir) < 0) {
+    failures++;
+  }
+  if (efi_dir &&
+      boot_check_append_entry(report, report_size, &vol, efi_dir,
+                              orizon_short, "/EFI/Orizon directory", 0x10, 0,
+                              &orizon_dir) < 0) {
+    failures++;
+  } else if (!efi_dir) {
+    failures++;
+  }
+  if (orizon_dir) {
+    if (boot_check_append_entry(report, report_size, &vol, orizon_dir,
+                                bootx64_short,
+                                "/EFI/Orizon/BOOTX64.EFI", 0x20, 8192,
+                                NULL) < 0) {
+      failures++;
+    }
+    if (boot_check_append_entry(report, report_size, &vol, orizon_dir,
+                                kernel_short, "/EFI/Orizon/KERNEL.ELF", 0x20,
+                                65536, NULL) < 0) {
+      failures++;
+    }
+    if (boot_check_append_entry(report, report_size, &vol, orizon_dir,
+                                limine_short, "/EFI/Orizon/limine.conf", 0x20,
+                                32, NULL) < 0) {
+      failures++;
+    }
+    if (boot_check_append_entry(report, report_size, &vol, orizon_dir,
+                                install_short, "/EFI/Orizon/INSTALL.TXT",
+                                0x20, 8, NULL) < 0) {
+      failures++;
+    }
+  } else {
+    failures++;
+  }
+
+  if (failures == 0) {
+    append_report(report, report_size,
+                  "Dual boot check: OK. Boot file is /EFI/Orizon/BOOTX64.EFI.");
+    return 0;
+  }
+  append_report(report, report_size,
+                "Dual boot check: FAILED. Run install dual-boot mode again.");
+  return -2;
 }
 
 static int boot_check_impl(char *report, size_t report_size, int reset_report) {
@@ -1003,6 +1565,10 @@ int orizon_install_boot_check(char *report, size_t report_size) {
   return boot_check_impl(report, report_size, 1);
 }
 
+int orizon_install_dualboot_check(char *report, size_t report_size) {
+  return dualboot_check_impl(report, report_size, 1);
+}
+
 int orizon_install_repair_boot(char *report, size_t report_size) {
   uint32_t esp_sectors =
       (uint32_t)(INSTALL_DATA_START_LBA - INSTALL_ESP_START_LBA);
@@ -1055,6 +1621,75 @@ int orizon_install_repair_boot(char *report, size_t report_size) {
   return boot_check_impl(report, report_size, 0);
 }
 
+static int orizon_install_dualboot_prepare(
+    const orizon_install_config_t *config, char *report, size_t report_size) {
+  gpt_partition_t esp;
+  fat32_volume_t vol;
+  install_boot_payload_t payload;
+  char install_text[512];
+  char line[192];
+
+  append_report(report, report_size,
+                "\033[1;36mOrizon dual boot ESP prepare\033[0m");
+  append_report(report, report_size,
+                "Mode: non-destructive; existing partitions are preserved.");
+  append_report(report, report_size,
+                "Scope: writes only /EFI/Orizon on the existing ESP.");
+
+  if (!boot_payloads_ready()) {
+    snprintf(line, sizeof(line), "dualboot: %s", boot_payload_status());
+    append_report(report, report_size, line);
+    return -1;
+  }
+  snprintf(line, sizeof(line), "Payloads: kernel=%lu bytes, BOOTX64.EFI=%lu bytes",
+           (unsigned long)boot_kernel_image_size(),
+           (unsigned long)boot_efi_image_size());
+  append_report(report, report_size, line);
+
+  if (gpt_find_esp(&esp, report, report_size) < 0 ||
+      fat32_mount_existing_esp(&vol, &esp, report, report_size) < 0) {
+    append_report(report, report_size,
+                  "dualboot: no compatible existing FAT32 ESP found");
+    return -2;
+  }
+
+  snprintf(install_text, sizeof(install_text),
+           "Orizon OS dual boot files\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
+           "mode=dual-boot-esp\n"
+           "boot-file=/EFI/Orizon/BOOTX64.EFI\n"
+           "data=not-installed\n"
+           "next=firmware-boot-file-or-boot-entry\n",
+           config->language, config->keyboard, config->hostname);
+  payload.kernel = boot_kernel_image();
+  payload.kernel_size = boot_kernel_image_size();
+  payload.efi = boot_efi_image();
+  payload.efi_size = boot_efi_image_size();
+  payload.limine_conf = dualboot_limine_conf;
+  payload.limine_conf_size = sizeof(dualboot_limine_conf) - 1;
+  payload.install_text = install_text;
+  payload.install_text_size = strlen(install_text);
+  payload.rollback_kernel = NULL;
+  payload.rollback_kernel_size = 0;
+  payload.rollback_efi = NULL;
+  payload.rollback_efi_size = 0;
+
+  append_report(report, report_size, "[1/3] Writing side-by-side ESP files");
+  if (dualboot_write_side_by_side_esp(&vol, &payload, report, report_size) < 0) {
+    return -3;
+  }
+  append_report(report, report_size, "[2/3] Preserved existing partitions");
+  append_report(report, report_size, "[3/3] Verifying side-by-side boot files");
+  if (dualboot_check_impl(report, report_size, 0) < 0) {
+    append_report(report, report_size, "dualboot: verification failed");
+    return -4;
+  }
+  append_report(report, report_size,
+                "Dual boot prepare complete. Boot file: /EFI/Orizon/BOOTX64.EFI");
+  append_report(report, report_size,
+                "No Orizon data partition was created; update/pkg stay disabled.");
+  return 0;
+}
+
 int orizon_install_run(const orizon_install_config_t *config, char *report,
                        size_t report_size) {
   uint64_t sectors;
@@ -1086,6 +1721,10 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
   snprintf(line, sizeof(line), "Target disk: %s, %s",
            config->disk_name ? config->disk_name : storage_status(), capacity);
   append_report(report, report_size, line);
+
+  if (strcmp(config->disk_mode, "dual-boot-esp") == 0) {
+    return orizon_install_dualboot_prepare(config, report, report_size);
+  }
 
   if (!boot_payloads_ready()) {
     snprintf(line, sizeof(line), "install: %s", boot_payload_status());

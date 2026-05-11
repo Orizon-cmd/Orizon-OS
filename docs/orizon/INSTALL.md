@@ -5,14 +5,17 @@ disk installation path:
 
 1. boot the live ISO,
 2. run `install`,
-3. collect language, keyboard, target disk, hostname, and disk strategy,
+3. collect language, keyboard, target disk, disk strategy, and hostname,
 4. write an installation plan under `/workspace/.orizon/`,
-5. save `/workspace` before touching the disk,
-6. write a GPT disk with a FAT32 ESP,
-7. copy the UEFI fallback loader, kernel, and Limine config,
-8. verify the installed UEFI boot files,
-9. preserve the Orizon data partition used by `/workspace`,
-10. mark the system as installed and shut down so installer media can be removed.
+5. choose either a non-destructive dual-boot ESP preparation or a full-disk
+   Orizon installation,
+6. in dual-boot mode, add side-by-side files under `/EFI/Orizon` on the
+   existing ESP and leave every partition intact,
+7. in full-disk mode, write a GPT disk with a FAT32 ESP and Orizon data
+   partition,
+8. copy the UEFI loader, kernel, and Limine config,
+9. verify the installed or prepared UEFI boot files,
+10. mark the system as installed only for the full-disk path.
 
 ## Current In-OS Command
 
@@ -27,9 +30,10 @@ The guided flow currently asks for:
 - language: `fr_FR` or `en_US`
 - keyboard: `fr-azerty` or `us-qwerty`
 - target disk: detected as `disk0`, `disk1`, etc. with driver, size and model
-- disk mode: selected disk as `guided-full-disk`, or `manual-later`
+- disk mode: `dual-boot-esp`, `guided-full-disk`, or `manual-later`
 - hostname, defaulting to `orizon-os`
-- explicit destructive confirmation such as `ERASE disk0`
+- explicit confirmation: `DUALBOOT disk0` for side-by-side ESP, or
+  `ERASE disk0` for full-disk installation
 
 Storage can also be inspected outside the installer:
 
@@ -51,7 +55,31 @@ It writes runtime/staging state:
 /system/keyboard
 ```
 
-It also writes a bootable disk layout in `guided-full-disk` mode:
+In `dual-boot-esp` mode, Orizon does not repartition and does not overwrite the
+UEFI fallback path used by other operating systems. It scans the existing GPT,
+mounts the existing FAT32 ESP, and writes:
+
+```text
+/EFI/Orizon/BOOTX64.EFI
+/EFI/Orizon/kernel.elf
+/EFI/Orizon/limine.conf
+/EFI/Orizon/INSTALL.TXT
+```
+
+This is intentionally a safe preparation step. It does not create an automatic
+UEFI NVRAM entry yet, so booting may require firmware "boot from file", a
+manual firmware boot entry, Windows BCD, or a Linux boot manager entry pointing
+at `/EFI/Orizon/BOOTX64.EFI`. It also does not create an Orizon data partition,
+so `/workspace` persistence, `update`, and package install/remove are not
+enabled by this mode.
+
+Verify the side-by-side ESP files with:
+
+```text
+dualboot-check
+```
+
+The full-disk `guided-full-disk` mode writes a bootable disk layout:
 
 - protective MBR plus primary/backup GPT
 - partition 1: FAT32 ESP from 1 MiB to 512 MiB
@@ -72,7 +100,8 @@ The Orizon data partition persists the first real data roots:
 ```
 
 Files and directories created during the live boot in those roots are saved
-before the ESP/GPT writer runs, so they survive the install path.
+after the Orizon GPT/data layout exists, so they survive the full-disk install
+path without touching unrelated dual-boot partitions.
 
 Before the disk is marked installed, the installer runs the same boot validator
 exposed as:
@@ -108,15 +137,17 @@ fallbacks until the console grows Unicode text support.
 
 ## Safety Boundary
 
-The installer can now partition and install to the first AHCI/SATA disk or the
-first NVMe namespace with 512-byte LBAs. It is still intentionally narrow: UEFI
-fallback boot only, no multi-disk picker yet, no dual-boot preservation, and no
-automatic boot-count recovery yet.
+The installer can now partition and install to AHCI/SATA disks or NVMe
+namespaces with 512-byte LBAs. It can also prepare a side-by-side UEFI ESP
+entry for dual boot without repartitioning. It is still intentionally narrow:
+no automatic NVRAM/BCD entry creation, no automatic shrink/create of an Orizon
+data partition beside Windows/Linux yet, and no automatic boot-count recovery
+yet.
 
 ## Next Kernel Layers
 
-- Add an explicit multi-disk selector.
+- Add automatic UEFI NVRAM or Windows BCD entry creation for dual boot.
+- Add a safe data-partition workflow for dual boot.
 - Add rollback-safe A/B system slots for full system images.
-- Add optional dual-boot/manual partitioning.
 - Add full Unicode keyboard/text rendering for accented keys.
 - Replace emulator poweroff fallback with full ACPI shutdown parsing.
