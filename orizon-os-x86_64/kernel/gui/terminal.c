@@ -1609,6 +1609,28 @@ static void term_print_input_status(terminal_t *term) {
   term_puts_t(term, "Note: ACPI child HID names are not enumerated by Orizon yet.\n");
 }
 
+static void term_print_usb_status(terminal_t *term) {
+  char line[512];
+
+  term_puts_t(term, "\033[1;36mUSB diagnostics\033[0m\n");
+  usb_format_status(line, sizeof(line));
+  term_puts_t(term, "USB core: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  usb_format_net_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  if (usb_net_present()) {
+    term_puts_t(term,
+                "Note: USB Ethernet is detected, but packet TX/RX for USB NICs "
+                "is not wired into DHCP yet.\n");
+  } else {
+    term_puts_t(term,
+                "Tip: plug a USB Ethernet adapter, reboot if needed, then run "
+                "'usb' again to capture VID/PID.\n");
+  }
+}
+
 static void term_print_sysinfo(terminal_t *term) {
   char line[256];
   char uptime[40];
@@ -2534,11 +2556,14 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 }
 
 static void term_print_net_status(terminal_t *term) {
-  char line[256];
+  char line[512];
   net_format_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
   wifi_format_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  usb_format_net_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
   netstack_format_status(line, sizeof(line));
@@ -2710,7 +2735,7 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
 
 static void term_run_net(terminal_t *term, const char *cmd) {
   const char *args = term_skip_spaces(cmd + 3);
-  char line[256];
+  char line[512];
 
   if (term_command_is(args, "dhcp")) {
     term_puts_t(term, "net: configuring IPv4 with DHCP...\n");
@@ -2719,6 +2744,14 @@ static void term_run_net(terminal_t *term, const char *cmd) {
       term_puts_t(term, "net: DHCP configured\n");
     } else {
       term_puts_t(term, "net: DHCP failed\n");
+      if (usb_net_present()) {
+        usb_format_net_status(line, sizeof(line));
+        term_puts_t(term, line);
+        term_puts_t(term, "\n");
+        term_puts_t(term,
+                    "net: this adapter is USB Ethernet; Orizon can detect it, "
+                    "but the USB NIC packet driver is still pending.\n");
+      }
     }
     netstack_format_status(line, sizeof(line));
     term_puts_t(term, line);
@@ -3926,6 +3959,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
+    term_puts_t(term, "  usb       - Show USB/HID/USB-Ethernet diagnostics\n");
     term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
     term_puts_t(term, "  logs [name] - Read recent boot/network/update/install logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
@@ -4023,6 +4057,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_print_hw(term);
   } else if (term_command_is(cmd, "pci")) {
     term_print_pci(term, cmd);
+  } else if (term_command_is(cmd, "usb")) {
+    term_print_usb_status(term);
   } else if (term_command_is(cmd, "input")) {
     term_print_input_status(term);
   } else if (term_command_is(cmd, "logs")) {

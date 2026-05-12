@@ -11,6 +11,7 @@
 #include "../include/mmio.h"
 #include "../include/pci.h"
 #include "../include/string.h"
+#include "../include/usb.h"
 
 #define NET_RX_DESC_COUNT 16
 #define NET_TX_DESC_COUNT 8
@@ -1203,6 +1204,17 @@ int net_init(void) {
 
   count = pci_scan_class(0x02, 0x00, 0xFF, devs, 8);
   if (count <= 0) {
+    usb_net_info_t usb_info;
+    if (usb_get_net_info(&usb_info) == 0) {
+      net_status_state.present = 1;
+      net_status_state.vendor_id = usb_info.vendor_id;
+      net_status_state.device_id = usb_info.product_id;
+      net_status_state.driver = "usb-ethernet-pending";
+      net_status_state.initialized = 0;
+      net_status_state.link_up = 0;
+      net_set_status("network: USB Ethernet detected, class driver pending");
+      return -1;
+    }
     net_set_status("network: no ethernet controller");
     return -1;
   }

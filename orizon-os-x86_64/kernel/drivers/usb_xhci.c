@@ -587,6 +587,7 @@ static int xhci_setup_keyboard(uint32_t port) {
   if (xhci_fetch_descriptor(2, 0, cfg, total) != 0) {
     return -1;
   }
+  usb_note_device("xhci", (uint8_t)(port + 1), dev_desc, cfg, total);
 
   if (xhci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval, &interface_num, &config_value) != 0) {
     return -1;

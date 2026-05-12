@@ -19,6 +19,7 @@
 #include "../include/string.h"
 #include "../include/timer.h"
 #include "../include/update.h"
+#include "../include/usb.h"
 #include "../include/vfs.h"
 #include "../include/x25519.h"
 
@@ -2446,6 +2447,26 @@ static void ssh_shell_print_free(void) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_usb(void) {
+  char out[880];
+  size_t used = 0;
+
+  usb_format_status(out, sizeof(out));
+  used = strlen(out);
+  if (used + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+    used += 2;
+  }
+  if (used < sizeof(out)) {
+    usb_format_net_status(out + used, sizeof(out) - used);
+  }
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_mutate_path(const char *arg, const char *op) {
   static char path[MAX_PATH];
   int rc = -1;
@@ -2661,7 +2682,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
         "  logs [ssh|boot]      show logs\r\n"
-        "  net|route|dns        show network diagnostics\r\n"
+        "  net|route|dns|usb    show network/USB diagnostics\r\n"
         "  ps|pkg|storage|free  show system state\r\n"
         "  bootguard            show update boot validation state\r\n"
         "  audit                show SSH session counters\r\n"
@@ -2849,6 +2870,10 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
+  if (strcmp(line, "usb") == 0) {
+    ssh_shell_print_usb();
+    return;
+  }
   if (strcmp(line, "route") == 0) {
     netstack_format_route(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
@@ -2928,7 +2953,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_shell_suppress_prompt = 1;
   if (strstr(cmd, "help")) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ps, pkg, storage, free, timer, bootguard, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, usb, ps, pkg, storage, free, timer, bootguard, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -3025,6 +3050,8 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "usb") == 0) {
+    ssh_shell_print_usb();
   } else if (strcmp(cmd, "route") == 0) {
     netstack_format_route(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {

@@ -353,6 +353,8 @@ static int ehci_setup_keyboard(uint32_t port) {
   if (ehci_control_transfer(device_addr, 0x80, 6, 0x0200, 0, cfg, total) != 0) {
     return -1;
   }
+  usb_note_device("ehci", (uint8_t)(port + 1), dev_desc, cfg, total);
+
   if (ehci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval, &interface_num, &config_value) != 0) {
     return -1;
   }

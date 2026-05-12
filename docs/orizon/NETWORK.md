@@ -10,6 +10,29 @@ diagnostics and VM testing.
 - VirtIO-net modern and legacy/transitional, used by QEMU and Proxmox bridge
   setups
 
+## USB Ethernet Adapters
+
+USB-to-Ethernet adapters are not PCI Ethernet cards, so they do not use the
+same driver path as `e1000`, `RTL8139`, or VirtIO-net. Orizon now records USB
+network descriptors during xHCI/EHCI enumeration and exposes them through:
+
+```text
+usb
+net status
+hw
+report
+```
+
+Known diagnostic families include Realtek `RTL8152/RTL8153/RTL8156`, ASIX
+`AX88xxx`, SMSC/LAN95xx, CDC-ECM, CDC-NCM, and RNDIS-style adapters. If one is
+detected, Orizon prints the controller, port, VID/PID, USB class, bulk
+endpoints, and a `driver=...` hint.
+
+Important: this is detection only for now. `net dhcp` still needs a USB NIC
+packet driver before it can transmit DHCP frames through that adapter. When the
+Lenovo has no built-in Ethernet port, run `usb` and capture the VID/PID; that
+tells us which class driver should be implemented first.
+
 Orizon configures IPv4 with DHCP first, then falls back to a persistent static
 configuration from `/system/network.conf` if DHCP is not available. NAT and
 bridge are both valid. A bridge without DHCP can still reach GitHub if static

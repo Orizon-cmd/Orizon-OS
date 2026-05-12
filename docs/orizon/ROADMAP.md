@@ -35,8 +35,9 @@
   anti-bruteforce lockout, config reload, persistent
   host-key file management in `/system/ssh_host_rsa.key`, `/system/ssh.conf`,
   and `/logs/ssh.log`.
-- Hardware base: PS/2 and USB HID keyboard input, AHCI/NVMe storage probes,
-  Intel e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
+- Hardware base: PS/2 and USB HID keyboard input, USB Ethernet descriptor
+  diagnostics for common dongle families, AHCI/NVMe storage probes, Intel
+  e1000/e1000e, RTL8139, VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
   upload staging, alive polling diagnostics, and host-side command/RX/TX queue
   memory staging. The Intel Wi-Fi WPA2 path can now derive PMK/PTK, prepare
@@ -74,9 +75,12 @@
 5. Build Intel CNVi Wi-Fi properly: validate WPA2 M3/M4 and GTK/group-key
    handling on the Lenovo, test DHCP over the new CCMP L2 bridge, then harden
    protected RX/retry diagnostics against real AP behaviour.
-6. Harden NVMe and AHCI writes with more error reporting and timeout handling.
-7. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
-8. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
+6. Implement the first USB Ethernet packet driver from real Lenovo diagnostics:
+   prefer CDC-ECM/NCM when the adapter supports it, otherwise Realtek RTL815x
+   or ASIX AX88xxx based on the detected VID/PID.
+7. Harden NVMe and AHCI writes with more error reporting and timeout handling.
+8. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
+9. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
    at least one non-ZimaOS host.
 
 ## Next Userland Track
