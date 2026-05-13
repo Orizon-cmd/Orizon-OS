@@ -63,6 +63,11 @@ static uint8_t interface_num = 0;
 static uint8_t config_value = 1;
 static uint8_t device_addr = 1;
 static uint16_t ctrl_mps = 8;
+static unsigned long ehci_scan_count = 0;
+static unsigned long ehci_scan_attempts = 0;
+static uint32_t ehci_last_portsc = 0;
+static uint8_t ehci_connected_ports = 0;
+static int8_t ehci_last_result = 0;
 
 static uint8_t ctrl_setup_pkt[8];
 
@@ -381,6 +386,38 @@ static int ehci_setup_keyboard(uint32_t port) {
   return 0;
 }
 
+void usb_ehci_rescan(void) {
+  if (!ehci_present || ehci_ports == 0) {
+    return;
+  }
+  ehci_scan_count++;
+  ehci_connected_ports = 0;
+  for (uint32_t port = 0; port < ehci_ports; port++) {
+    uint32_t portsc = ehci_read32(ehci_op_base + 0x44 + (port * 4));
+    if (portsc & 0x1) {
+      ehci_connected_ports++;
+      ehci_last_portsc = portsc;
+      ehci_scan_attempts++;
+      ehci_last_result = (int8_t)ehci_setup_keyboard(port);
+    }
+  }
+}
+
+void usb_ehci_format_ports(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  if (!ehci_present) {
+    snprintf(buf, size, "ehci-ports present=no");
+    return;
+  }
+  snprintf(buf, size,
+           "ehci-ports present=yes ports=%u scans=%lu attempts=%lu "
+           "connected=%u last-portsc=0x%08x rc=%d",
+           ehci_ports, ehci_scan_count, ehci_scan_attempts,
+           ehci_connected_ports, ehci_last_portsc, ehci_last_result);
+}
+
 void usb_ehci_init(void) {
   pci_device_info_t devs[4];
   int count = pci_scan_class(0x0C, 0x03, 0x20, devs, 4);
@@ -471,13 +508,7 @@ void usb_ehci_init(void) {
   ehci_write32(ehci_op_base + 0x40, 1);
   ehci_write32(ehci_op_base + 0x00, (1U << 0) | (1U << 4) | (1U << 5));
 
-  if (ehci_ports > 0) {
-    for (uint32_t port = 0; port < ehci_ports; port++) {
-      if (ehci_setup_keyboard(port) == 0) {
-        break;
-      }
-    }
-  }
+  usb_ehci_rescan();
 }
 
 int usb_ehci_ready(void) {

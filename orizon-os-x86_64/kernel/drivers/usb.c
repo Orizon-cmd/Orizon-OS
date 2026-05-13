@@ -30,6 +30,8 @@ static int report_tail = 0;
 static unsigned long report_seen = 0;
 static unsigned long key_seen = 0;
 static unsigned long report_dropped = 0;
+static unsigned long usb_seen_devices = 0;
+static usb_device_info_t usb_last_device;
 static usb_net_info_t usb_net;
 
 static uint16_t usb_le16(const uint8_t *p) {
@@ -97,6 +99,28 @@ static const char *usb_net_hint_for(uint16_t vid, uint16_t pid,
   return "usb-net";
 }
 
+static const char *usb_device_hint_for(uint8_t dev_cls, uint8_t if_cls,
+                                       uint16_t vid, uint16_t pid) {
+  if (usb_id_is_realtek_lan(vid, pid) || usb_id_is_asix_lan(vid, pid) ||
+      usb_id_is_smsc_lan(vid) || usb_class_is_net(dev_cls, 0, 0) ||
+      usb_class_is_net(if_cls, 0, 0)) {
+    return "usb-ethernet-candidate";
+  }
+  if (dev_cls == 0x09 || if_cls == 0x09) {
+    return "usb-hub";
+  }
+  if (dev_cls == 0x03 || if_cls == 0x03) {
+    return "usb-hid";
+  }
+  if (dev_cls == 0xef) {
+    return "usb-composite";
+  }
+  if (dev_cls == 0xff || if_cls == 0xff) {
+    return "vendor-specific";
+  }
+  return "usb-device";
+}
+
 void usb_set_keyboard_callback(usb_keyboard_callback_t cb) {
   keyboard_cb = cb;
 }
@@ -137,6 +161,7 @@ void usb_note_device(const char *controller, uint8_t port,
                      const uint8_t *dev_desc, const uint8_t *cfg,
                      uint16_t cfg_len) {
   usb_net_info_t candidate;
+  usb_device_info_t dev;
   uint16_t off = 0;
   int matched = 0;
   int vendor_match;
@@ -150,14 +175,25 @@ void usb_note_device(const char *controller, uint8_t port,
     return;
   }
 
+  memset(&dev, 0, sizeof(dev));
+  dev.present = 1;
+  dev.port = port;
+  dev.vendor_id = usb_le16(dev_desc + 8);
+  dev.product_id = usb_le16(dev_desc + 10);
+  dev.device_class = dev_desc[4];
+  dev.device_subclass = dev_desc[5];
+  dev.device_protocol = dev_desc[6];
+  snprintf(dev.controller, sizeof(dev.controller), "%s",
+           controller ? controller : "usb");
+
   memset(&candidate, 0, sizeof(candidate));
   candidate.present = 1;
   candidate.port = port;
-  candidate.vendor_id = usb_le16(dev_desc + 8);
-  candidate.product_id = usb_le16(dev_desc + 10);
-  candidate.device_class = dev_desc[4];
-  candidate.device_subclass = dev_desc[5];
-  candidate.device_protocol = dev_desc[6];
+  candidate.vendor_id = dev.vendor_id;
+  candidate.product_id = dev.product_id;
+  candidate.device_class = dev.device_class;
+  candidate.device_subclass = dev.device_subclass;
+  candidate.device_protocol = dev.device_protocol;
   candidate.control_interface = 0xff;
   candidate.data_interface = 0xff;
   snprintf(candidate.controller, sizeof(candidate.controller), "%s",
@@ -184,11 +220,17 @@ void usb_note_device(const char *controller, uint8_t port,
 
     if (type == 2 && len >= 9) {
       candidate.config_value = cfg[off + 5];
+      dev.config_value = cfg[off + 5];
     } else if (type == 4 && len >= 9) {
       cur_iface = cfg[off + 2];
       cur_cls = cfg[off + 5];
       cur_sub = cfg[off + 6];
       cur_proto = cfg[off + 7];
+      if (dev.interface_class == 0) {
+        dev.interface_class = cur_cls;
+        dev.interface_subclass = cur_sub;
+        dev.interface_protocol = cur_proto;
+      }
       current_net_iface = vendor_match ||
                           usb_class_is_net(cur_cls, cur_sub, cur_proto);
       if (usb_class_is_net(cur_cls, cur_sub, cur_proto)) {
@@ -220,6 +262,16 @@ void usb_note_device(const char *controller, uint8_t port,
 
     off = (uint16_t)(off + len);
   }
+
+  snprintf(dev.hint, sizeof(dev.hint), "%s",
+           usb_device_hint_for(dev.device_class, dev.interface_class,
+                               dev.vendor_id, dev.product_id));
+  snprintf(dev.status, sizeof(dev.status), "%s",
+           (dev.device_class == 0x09 || dev.interface_class == 0x09)
+               ? "USB hub detected; downstream hub driver pending"
+               : "USB device descriptor captured");
+  usb_last_device = dev;
+  usb_seen_devices++;
 
   if (!matched && !vendor_match) {
     return;
@@ -256,10 +308,32 @@ void usb_format_status(char *buf, size_t size) {
   }
   snprintf(buf, size,
            "xhci=%s ehci=%s hid_reports=%lu hid_keys=%lu queue_drops=%lu "
-           "usb_net=%s",
+           "devices=%lu usb_net=%s",
            usb_xhci_ready() ? "ready" : "no",
            usb_ehci_ready() ? "ready" : "no", report_seen, key_seen,
-           report_dropped, usb_net.present ? usb_net.driver_hint : "none");
+           report_dropped, usb_seen_devices,
+           usb_net.present ? usb_net.driver_hint : "none");
+}
+
+void usb_format_device_status(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  if (!usb_last_device.present) {
+    snprintf(buf, size, "usb-device count=0 status=no descriptor captured");
+    return;
+  }
+  snprintf(buf, size,
+           "usb-device count=%lu last=%s port=%u vid=%04x pid=%04x "
+           "dev-class=%02x/%02x/%02x iface=%02x/%02x/%02x cfg=%u "
+           "hint=%s status=%s",
+           usb_seen_devices, usb_last_device.controller, usb_last_device.port,
+           usb_last_device.vendor_id, usb_last_device.product_id,
+           usb_last_device.device_class, usb_last_device.device_subclass,
+           usb_last_device.device_protocol, usb_last_device.interface_class,
+           usb_last_device.interface_subclass, usb_last_device.interface_protocol,
+           usb_last_device.config_value, usb_last_device.hint,
+           usb_last_device.status);
 }
 
 void usb_format_net_status(char *buf, size_t size) {
@@ -289,12 +363,40 @@ int usb_net_present(void) {
   return usb_net.present;
 }
 
+unsigned long usb_device_count(void) {
+  return usb_seen_devices;
+}
+
 int usb_get_net_info(usb_net_info_t *out) {
   if (!out || !usb_net.present) {
     return -1;
   }
   *out = usb_net;
   return 0;
+}
+
+void usb_format_port_status(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  if (usb_xhci_ready()) {
+    usb_xhci_format_ports(buf, size);
+    return;
+  }
+  if (usb_ehci_ready()) {
+    usb_ehci_format_ports(buf, size);
+    return;
+  }
+  snprintf(buf, size, "usb-ports xhci=no ehci=no");
+}
+
+void usb_rescan(void) {
+  if (usb_xhci_ready()) {
+    usb_xhci_rescan();
+  }
+  if (usb_ehci_ready()) {
+    usb_ehci_rescan();
+  }
 }
 
 void usb_init(void) {

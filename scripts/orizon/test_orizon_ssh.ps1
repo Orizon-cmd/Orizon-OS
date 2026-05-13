@@ -25,6 +25,8 @@ $commands = @(
   "pkg status",
   "storage",
   "timer",
+  "usb",
+  "usb rescan",
   "bootguard",
   "write /workspace/ssh-regression.txt alpha",
   "append /workspace/ssh-regression.txt beta",

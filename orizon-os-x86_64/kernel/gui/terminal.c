@@ -1609,12 +1609,24 @@ static void term_print_input_status(terminal_t *term) {
   term_puts_t(term, "Note: ACPI child HID names are not enumerated by Orizon yet.\n");
 }
 
-static void term_print_usb_status(terminal_t *term) {
+static void term_print_usb_status(terminal_t *term, const char *cmd) {
   char line[512];
+  const char *args = term_skip_spaces(cmd + 3);
+
+  if (term_command_is(args, "rescan") || term_command_is(args, "scan")) {
+    term_puts_t(term, "usb: rescanning root ports...\n");
+    usb_rescan();
+  }
 
   term_puts_t(term, "\033[1;36mUSB diagnostics\033[0m\n");
   usb_format_status(line, sizeof(line));
   term_puts_t(term, "USB core: ");
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  usb_format_port_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  usb_format_device_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
   usb_format_net_status(line, sizeof(line));
@@ -1626,8 +1638,8 @@ static void term_print_usb_status(terminal_t *term) {
                 "is not wired into DHCP yet.\n");
   } else {
     term_puts_t(term,
-                "Tip: plug a USB Ethernet adapter, reboot if needed, then run "
-                "'usb' again to capture VID/PID.\n");
+                "Tip: plug the adapter, run 'usb rescan', and check whether a "
+                "root port or hub appears.\n");
   }
 }
 
@@ -3959,7 +3971,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
-    term_puts_t(term, "  usb       - Show USB/HID/USB-Ethernet diagnostics\n");
+    term_puts_t(term, "  usb [rescan] - Show USB/HID/USB-Ethernet diagnostics\n");
     term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
     term_puts_t(term, "  logs [name] - Read recent boot/network/update/install logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
@@ -4058,7 +4070,7 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "pci")) {
     term_print_pci(term, cmd);
   } else if (term_command_is(cmd, "usb")) {
-    term_print_usb_status(term);
+    term_print_usb_status(term, cmd);
   } else if (term_command_is(cmd, "input")) {
     term_print_input_status(term);
   } else if (term_command_is(cmd, "logs")) {

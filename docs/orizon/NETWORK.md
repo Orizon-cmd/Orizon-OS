@@ -18,6 +18,7 @@ network descriptors during xHCI/EHCI enumeration and exposes them through:
 
 ```text
 usb
+usb rescan
 net status
 hw
 report
@@ -28,10 +29,21 @@ Known diagnostic families include Realtek `RTL8152/RTL8153/RTL8156`, ASIX
 detected, Orizon prints the controller, port, VID/PID, USB class, bulk
 endpoints, and a `driver=...` hint.
 
+`usb` also prints xHCI/EHCI root-port diagnostics. If an adapter was plugged in
+after boot, run `usb rescan` first. The useful cases are:
+
+- `usb-net present=yes`: the adapter was identified; implement the matching
+  packet driver next.
+- `usb-device ... hint=usb-hub`: the adapter is probably behind a USB hub or
+  USB-C dock; Orizon needs hub downstream enumeration first.
+- `xhci-ports ... conn ... usb-device count=0`: the root port sees something,
+  but descriptor fetch still fails; capture the port line for driver work.
+
 Important: this is detection only for now. `net dhcp` still needs a USB NIC
 packet driver before it can transmit DHCP frames through that adapter. When the
-Lenovo has no built-in Ethernet port, run `usb` and capture the VID/PID; that
-tells us which class driver should be implemented first.
+Lenovo has no built-in Ethernet port, run `usb rescan`, then `usb`, and capture
+the VID/PID or root-port line; that tells us which class driver should be
+implemented first.
 
 Orizon configures IPv4 with DHCP first, then falls back to a persistent static
 configuration from `/system/network.conf` if DHCP is not available. NAT and

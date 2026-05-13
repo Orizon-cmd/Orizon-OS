@@ -33,6 +33,7 @@
 #define XHCI_PORTSC_PR (1U << 4)
 #define XHCI_PORTSC_CSC (1U << 17)
 #define XHCI_PORTSC_PRC (1U << 21)
+#define XHCI_MAX_TRACKED_PORTS 64
 
 typedef struct {
   uint32_t dword0;
@@ -57,6 +58,14 @@ static uint32_t xhci_rt_base = 0;
 static uint32_t xhci_db_base = 0;
 static int xhci_context_size = 32;
 static uint32_t xhci_ports = 0;
+static uint32_t xhci_max_slots = 1;
+static unsigned long xhci_scan_count = 0;
+static unsigned long xhci_scan_attempts = 0;
+static uint8_t xhci_keyboard_ready = 0;
+static uint8_t xhci_port_attempted[XHCI_MAX_TRACKED_PORTS];
+static uint8_t xhci_port_connected[XHCI_MAX_TRACKED_PORTS];
+static int8_t xhci_port_result[XHCI_MAX_TRACKED_PORTS];
+static uint32_t xhci_portsc_snapshot[XHCI_MAX_TRACKED_PORTS];
 
 static xhci_trb_t *cmd_ring = NULL;
 static uint32_t cmd_ring_idx = 0;
@@ -88,6 +97,10 @@ static uint8_t device_slot = 0;
 static uint8_t device_address = 0;
 static uint8_t interface_num = 0;
 static uint8_t config_value = 1;
+
+static uint32_t xhci_tracked_ports(void) {
+  return xhci_ports < XHCI_MAX_TRACKED_PORTS ? xhci_ports : XHCI_MAX_TRACKED_PORTS;
+}
 
 static void usb_xhci_irq_handler(interrupt_frame_t *frame) {
   UNUSED(frame);
@@ -488,6 +501,13 @@ static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
 }
 
 static int xhci_setup_keyboard(uint32_t port) {
+  uint8_t saved_device_slot = device_slot;
+  xhci_trb_t *saved_ep0_ring = ep0_ring;
+  uint8_t saved_ep0_cycle = ep0_cycle;
+  uint32_t saved_ep0_idx = ep0_idx;
+  void *saved_dev_ctx = dev_ctx;
+  void *enum_dev_ctx = NULL;
+
   serial_puts("[xHCI] Setup keyboard on port ");
   serial_puthex(port);
   serial_puts("\n");
@@ -535,24 +555,42 @@ static int xhci_setup_keyboard(uint32_t port) {
 
   xhci_setup_ep_ctx(input, 2, 4, (uint64_t)(uintptr_t)ep0_ring, 8, 0);
 
-  if (!dev_ctx) {
-    dev_ctx = xhci_alloc_aligned((size_t)xhci_context_size * 4, 64);
-    if (!dev_ctx) {
-      return -1;
-    }
-    memset(dev_ctx, 0, (size_t)xhci_context_size * 4);
+  enum_dev_ctx = xhci_alloc_aligned((size_t)xhci_context_size * 4, 64);
+  if (!enum_dev_ctx) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
+    return -1;
   }
-  dcbaa[device_slot] = xhci_phys_addr(dev_ctx);
+  memset(enum_dev_ctx, 0, (size_t)xhci_context_size * 4);
+  dcbaa[device_slot] = xhci_phys_addr(enum_dev_ctx);
 
   if (xhci_cmd_address_device(device_slot, input) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
 
   uint8_t *dev_desc = (uint8_t *)kzalloc(18);
   if (!dev_desc) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   if (xhci_fetch_descriptor(1, 0, dev_desc, 8) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   uint8_t mps = dev_desc[7];
@@ -562,39 +600,93 @@ static int xhci_setup_keyboard(uint32_t port) {
   xhci_input_set_flags(input, 0x2, 0);
   xhci_setup_ep_ctx(input, 2, 4, (uint64_t)(uintptr_t)ep0_ring, mps, 0);
   if (xhci_cmd_evaluate_ctx(device_slot, input) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
 
   if (xhci_fetch_descriptor(1, 0, dev_desc, 18) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
 
   uint8_t *cfg_hdr = (uint8_t *)kzalloc(9);
   if (!cfg_hdr) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   if (xhci_fetch_descriptor(2, 0, cfg_hdr, 9) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   uint16_t total = (uint16_t)(cfg_hdr[2] | (cfg_hdr[3] << 8));
   if (total < 9 || total > 512) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   uint8_t *cfg = (uint8_t *)kzalloc(total);
   if (!cfg) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   if (xhci_fetch_descriptor(2, 0, cfg, total) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   usb_note_device("xhci", (uint8_t)(port + 1), dev_desc, cfg, total);
 
   if (xhci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval, &interface_num, &config_value) != 0) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
+  }
+
+  if (xhci_keyboard_ready) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
+    return 0;
   }
 
   if (xhci_ctrl_transfer(0x00, 9, config_value, 0, NULL, 0) != 0) {
     serial_puts("[xHCI] Set Configuration failed\n");
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   
@@ -609,6 +701,11 @@ static int xhci_setup_keyboard(uint32_t port) {
 
   intr_ring = (xhci_trb_t *)xhci_alloc_aligned(sizeof(xhci_trb_t) * 256, 64);
   if (!intr_ring) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
   memset(intr_ring, 0, sizeof(xhci_trb_t) * 256);
@@ -616,6 +713,11 @@ static int xhci_setup_keyboard(uint32_t port) {
   intr_cycle = 1; /* Producer cycle starts at 1 */
   intr_buf = (uint8_t *)kzalloc(intr_mps);
   if (!intr_buf) {
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
 
@@ -634,9 +736,16 @@ static int xhci_setup_keyboard(uint32_t port) {
   ep[4] = (uint32_t)intr_mps; /* Average TRB Length */
   if (xhci_cmd_configure_ep(device_slot, input) != 0) {
     serial_puts("[xHCI] Configure EP failed\n");
+    device_slot = saved_device_slot;
+    ep0_ring = saved_ep0_ring;
+    ep0_cycle = saved_ep0_cycle;
+    ep0_idx = saved_ep0_idx;
+    dev_ctx = saved_dev_ctx;
     return -1;
   }
 
+  dev_ctx = enum_dev_ctx;
+  xhci_keyboard_ready = 1;
   serial_puts("[xHCI] Keyboard setup complete!\n");
   return 0;
 }
@@ -682,6 +791,165 @@ static void xhci_queue_interrupt_in(void) {
   serial_puts(" ep=");
   serial_puthex(db_target);
   serial_puts("\n");
+}
+
+static uint32_t xhci_port_change_bits(void) {
+  return XHCI_PORTSC_CSC | XHCI_PORTSC_PRC | (1U << 18) | (1U << 20) |
+         (1U << 22);
+}
+
+static void xhci_prepare_port(uint32_t port) {
+  uint32_t portsc_off = xhci_op_base + 0x400 + (port * 0x10);
+  uint32_t portsc = xhci_read32(portsc_off);
+  uint32_t change_bits = xhci_port_change_bits();
+
+  xhci_portsc_snapshot[port] = portsc;
+  xhci_port_connected[port] = (portsc & XHCI_PORTSC_CCS) ? 1 : 0;
+
+  if (portsc & change_bits) {
+    xhci_write32(portsc_off, (portsc & 0x0E01C3E0U) | change_bits);
+    xhci_delay(5000);
+    portsc = xhci_read32(portsc_off);
+  }
+
+  if ((portsc & (1U << 9)) == 0) {
+    xhci_write32(portsc_off, (portsc & 0x0E01C3E0U) | (1U << 9));
+    xhci_delay(20000);
+    portsc = xhci_read32(portsc_off);
+  }
+
+  xhci_portsc_snapshot[port] = portsc;
+  xhci_port_connected[port] = (portsc & XHCI_PORTSC_CCS) ? 1 : 0;
+  if ((portsc & XHCI_PORTSC_CCS) == 0) {
+    xhci_port_attempted[port] = 0;
+    xhci_port_result[port] = 0;
+  }
+}
+
+static void xhci_scan_ports_internal(int force) {
+  uint32_t tracked;
+
+  if (!xhci_present || xhci_ports == 0) {
+    return;
+  }
+
+  tracked = xhci_tracked_ports();
+  xhci_scan_count++;
+  if (force) {
+    for (uint32_t port = 0; port < tracked; port++) {
+      xhci_port_attempted[port] = 0;
+      xhci_port_result[port] = 0;
+    }
+  }
+
+  for (uint32_t port = 0; port < tracked; port++) {
+    xhci_prepare_port(port);
+  }
+
+  for (uint32_t port = 0; port < tracked; port++) {
+    if (!xhci_port_connected[port] || xhci_port_attempted[port]) {
+      continue;
+    }
+    xhci_scan_attempts++;
+    xhci_port_attempted[port] = 1;
+    xhci_port_result[port] = (int8_t)xhci_setup_keyboard(port);
+    xhci_portsc_snapshot[port] =
+        xhci_read32(xhci_op_base + 0x400 + (port * 0x10));
+    if (xhci_port_result[port] == 0 && xhci_keyboard_ready) {
+      for (int y = 0; y < 100; y++) {
+        for (int x = 0; x < 100; x++) {
+          debug_rect(x, 200 + y, 1, 1, 0xFF00FF00);
+        }
+      }
+      xhci_queue_interrupt_in();
+    } else {
+      for (int y = 0; y < 100; y++) {
+        for (int x = 0; x < 100; x++) {
+          debug_rect(x, 200 + y, 1, 1, 0xFFFF0000);
+        }
+      }
+    }
+  }
+}
+
+void usb_xhci_rescan(void) {
+  xhci_scan_ports_internal(1);
+}
+
+void usb_xhci_format_ports(char *buf, size_t size) {
+  uint32_t tracked;
+  uint32_t connected = 0;
+  int shown = 0;
+  int used;
+
+  if (!buf || size == 0) {
+    return;
+  }
+  if (!xhci_present) {
+    snprintf(buf, size, "xhci-ports present=no");
+    return;
+  }
+
+  tracked = xhci_tracked_ports();
+  for (uint32_t port = 0; port < tracked; port++) {
+    if (xhci_port_connected[port]) {
+      connected++;
+    }
+  }
+
+  used = snprintf(buf, size,
+                  "xhci-ports present=yes ports=%u tracked=%u slots=%u "
+                  "scans=%lu attempts=%lu connected=%u keyboard=%s",
+                  xhci_ports, tracked, xhci_max_slots, xhci_scan_count,
+                  xhci_scan_attempts, connected,
+                  xhci_keyboard_ready ? "yes" : "no");
+  if (used < 0 || (size_t)used >= size) {
+    return;
+  }
+
+  for (uint32_t port = 0; port < tracked && shown < 8; port++) {
+    if (!xhci_port_connected[port] && !xhci_port_attempted[port]) {
+      continue;
+    }
+    int n = snprintf(buf + used, size - (size_t)used,
+                     " p%u=0x%08x/%s/try=%u/rc=%d", port + 1,
+                     xhci_portsc_snapshot[port],
+                     xhci_port_connected[port] ? "conn" : "empty",
+                     xhci_port_attempted[port], xhci_port_result[port]);
+    if (n < 0 || (size_t)n >= size - (size_t)used) {
+      return;
+    }
+    used += n;
+    shown++;
+  }
+  if (shown == 0 && (size_t)used < size) {
+    snprintf(buf + used, size - (size_t)used, " no-active-root-ports");
+  }
+}
+
+static void xhci_maybe_rescan_ports(void) {
+  static unsigned int poll_divider = 0;
+  uint32_t tracked;
+  uint32_t change_bits;
+
+  if (!xhci_present || xhci_ports == 0) {
+    return;
+  }
+  poll_divider++;
+  if ((poll_divider & 0x3F) != 0) {
+    return;
+  }
+
+  tracked = xhci_tracked_ports();
+  change_bits = xhci_port_change_bits();
+  for (uint32_t port = 0; port < tracked; port++) {
+    uint32_t portsc = xhci_read32(xhci_op_base + 0x400 + (port * 0x10));
+    if ((portsc & change_bits) ||
+        ((portsc & XHCI_PORTSC_CCS) && !xhci_port_attempted[port])) {
+      xhci_scan_ports_internal(0);
+      return;
+    }
+  }
 }
 
 static void xhci_handle_event(xhci_trb_t *evt) {
@@ -829,6 +1097,10 @@ void usb_xhci_init(void) {
   uint8_t caplength = (uint8_t)(cap & 0xFF);
   xhci_op_base = caplength;
   uint32_t hcs1 = xhci_read32(0x04);
+  xhci_max_slots = hcs1 & 0xFF;
+  if (xhci_max_slots == 0) {
+    xhci_max_slots = 1;
+  }
   xhci_ports = (hcs1 >> 24) & 0xFF;
 
   uint32_t hcs2 = xhci_read32(0x08);
@@ -914,8 +1186,12 @@ void usb_xhci_init(void) {
   xhci_write64(xhci_rt_base + 0x38, xhci_phys_addr(event_ring));
 
   uint32_t config = xhci_read32(xhci_op_base + 0x38);
+  uint32_t enabled_slots = xhci_max_slots;
+  if (enabled_slots > 32) {
+    enabled_slots = 32;
+  }
   config &= ~0xFF;
-  config |= 1;
+  config |= enabled_slots;
   xhci_write32(xhci_op_base + 0x38, config);
 
   usbcmd = xhci_read32(xhci_op_base + 0x00);
@@ -923,52 +1199,7 @@ void usb_xhci_init(void) {
   xhci_write32(xhci_op_base + 0x00, usbcmd);
   xhci_wait_usbsts(1U << 0, 0, 20000); /* Wait for HCHalted cleared */
 
-  if (xhci_ports > 0) {
-    for (uint32_t port = 0; port < xhci_ports; port++) {
-      uint32_t portsc_off = xhci_op_base + 0x400 + (port * 0x10);
-      uint32_t portsc = xhci_read32(portsc_off);
-      
-      /* Clear all change bits (write-1-to-clear) */
-      uint32_t change_bits = XHCI_PORTSC_CSC | XHCI_PORTSC_PRC | (1U << 18) | (1U << 20) | (1U << 22);
-      if (portsc & change_bits) {
-        xhci_write32(portsc_off, (portsc & 0x0E01C3E0U) | change_bits);
-        xhci_delay(5000);
-        portsc = xhci_read32(portsc_off);
-      }
-      
-      /* Ensure port power is on (PP bit 9) */
-      if ((portsc & (1U << 9)) == 0) {
-        xhci_write32(portsc_off, (portsc & 0x0E01C3E0U) | (1U << 9));
-        xhci_delay(20000);
-        portsc = xhci_read32(portsc_off);
-      }
-    }
-
-    for (uint32_t port = 0; port < xhci_ports; port++) {
-      uint32_t portsc_off = xhci_op_base + 0x400 + (port * 0x10);
-      uint32_t portsc = xhci_read32(portsc_off);
-      
-      if (portsc & XHCI_PORTSC_CCS) {
-        if (xhci_setup_keyboard(port) == 0) {
-          /* [3] GREEN BLOCK - keyboard enumerated */
-          for (int y = 0; y < 100; y++) {
-            for (int x = 0; x < 100; x++) {
-              debug_rect(x, 200 + y, 1, 1, 0xFF00FF00);
-            }
-          }
-          xhci_queue_interrupt_in();
-          break;
-        } else {
-          /* Failed: RED BLOCK - enumeration failed */
-          for (int y = 0; y < 100; y++) {
-            for (int x = 0; x < 100; x++) {
-              debug_rect(x, 200 + y, 1, 1, 0xFFFF0000);
-            }
-          }
-        }
-      }
-    }
-  }
+  usb_xhci_rescan();
 }
 
 int usb_xhci_ready(void) {
@@ -999,4 +1230,5 @@ void usb_xhci_poll(void) {
   if (xhci_irq_seen) {
     xhci_irq_seen = 0;
   }
+  xhci_maybe_rescan_ports();
 }
