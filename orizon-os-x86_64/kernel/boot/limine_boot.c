@@ -492,14 +492,8 @@ void _start(void) {
   serial_puts("Starting direct framebuffer test...\n");
   direct_screen_test(fb->address, fb->width, fb->height, fb->pitch, fb->bpp);
 
-  /* Visual checkpoint: RED = starting fb_init */
-  direct_boot_stage(2, 0xFFFF4040);
-  {
-    volatile uint32_t *row = (volatile uint32_t *)((uint8_t *)fb->address + 10 * fb->pitch);
-    if (fb->bpp == 32) {
-      for (int i = 0; i < 50; i++) row[10 + i] = 0xFFFF0000;
-    }
-  }
+  /* Neutral visual checkpoint before the buffered renderer takes over. */
+  direct_boot_stage(2, 0xFF2B8CFF);
 
   serial_puts("Initializing framebuffer...\n");
   fb_init(fb->address, fb->width, fb->height, fb->pitch);
