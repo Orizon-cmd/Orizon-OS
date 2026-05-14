@@ -129,6 +129,7 @@ typedef enum {
   NET_DRIVER_E1000,
   NET_DRIVER_RTL8139,
   NET_DRIVER_VIRTIO,
+  NET_DRIVER_USB,
 } net_driver_kind_t;
 
 typedef struct {
@@ -256,6 +257,8 @@ static uint16_t virtio_rx_count = 0;
 static uint16_t virtio_tx_count = 0;
 static uint16_t virtio_tx_next = 0;
 static uint16_t virtio_net_hdr_size = VIRTIO_NET_HDR_LEGACY_SIZE;
+static uint8_t usb_tx_frame[NET_MAX_FRAME] __attribute__((aligned(16)));
+static uint8_t usb_rx_frame[NET_MAX_FRAME] __attribute__((aligned(16)));
 
 static uint64_t net_phys_addr(const void *ptr) {
   uint64_t v = (uint64_t)(uintptr_t)ptr;
@@ -767,6 +770,10 @@ static void virtio_net_refresh_link(void) {
   net_status_state.link_up = 1;
 }
 
+static void usb_net_refresh_link(void) {
+  net_status_state.link_up = usb_net_link_up();
+}
+
 static void virtio_net_read_mac(void) {
   if (virtio_guest_features & VIRTIO_NET_F_MAC) {
     for (int i = 0; i < 6; i++) {
@@ -1196,6 +1203,8 @@ int net_init(void) {
       rtl8139_refresh_link();
     } else if (net_driver_kind == NET_DRIVER_VIRTIO) {
       virtio_net_refresh_link();
+    } else if (net_driver_kind == NET_DRIVER_USB) {
+      usb_net_refresh_link();
     } else {
       e1000_refresh_link();
     }
@@ -1209,10 +1218,21 @@ int net_init(void) {
       net_status_state.present = 1;
       net_status_state.vendor_id = usb_info.vendor_id;
       net_status_state.device_id = usb_info.product_id;
+      if (usb_net_ready()) {
+        net_driver_kind = NET_DRIVER_USB;
+        net_status_state.driver = usb_info.driver_hint;
+        net_status_state.initialized = 1;
+        net_status_state.link_up = usb_info.link_up;
+        memcpy(net_status_state.mac, usb_info.mac, sizeof(net_status_state.mac));
+        net_set_status(net_status_state.link_up
+                           ? "network: USB Ethernet link up"
+                           : "network: USB Ethernet ready, link down");
+        return net_status_state.link_up ? 0 : -1;
+      }
       net_status_state.driver = "usb-ethernet-pending";
       net_status_state.initialized = 0;
       net_status_state.link_up = 0;
-      net_set_status("network: USB Ethernet detected, class driver pending");
+      net_set_status("network: USB Ethernet detected, driver pending");
       return -1;
     }
     net_set_status("network: no ethernet controller");
@@ -1302,6 +1322,8 @@ void net_poll(void) {
       rtl8139_refresh_link();
     } else if (net_driver_kind == NET_DRIVER_VIRTIO) {
       virtio_net_refresh_link();
+    } else if (net_driver_kind == NET_DRIVER_USB) {
+      usb_net_refresh_link();
     } else {
       e1000_refresh_link();
     }
@@ -1315,6 +1337,8 @@ int net_link_up(void) {
     rtl8139_refresh_link();
   } else if (net_driver_kind == NET_DRIVER_VIRTIO) {
     virtio_net_refresh_link();
+  } else if (net_driver_kind == NET_DRIVER_USB) {
+    usb_net_refresh_link();
   } else {
     e1000_refresh_link();
   }
@@ -1328,6 +1352,8 @@ const net_device_status_t *net_get_status(void) {
     rtl8139_refresh_link();
   } else if (net_driver_kind == NET_DRIVER_VIRTIO) {
     virtio_net_refresh_link();
+  } else if (net_driver_kind == NET_DRIVER_USB) {
+    usb_net_refresh_link();
   } else {
     e1000_refresh_link();
   }
@@ -1361,6 +1387,22 @@ int net_send_ethernet(const uint8_t dst_mac[6], uint16_t ether_type,
 
   if (net_driver_kind == NET_DRIVER_VIRTIO) {
     return virtio_net_send_ethernet(dst_mac, ether_type, payload, payload_len);
+  }
+
+  if (net_driver_kind == NET_DRIVER_USB) {
+    memcpy(usb_tx_frame, dst_mac, 6);
+    memcpy(usb_tx_frame + 6, net_status_state.mac, 6);
+    usb_tx_frame[12] = (uint8_t)(ether_type >> 8);
+    usb_tx_frame[13] = (uint8_t)(ether_type & 0xFF);
+    if (payload_len > 0) {
+      memcpy(usb_tx_frame + 14, payload, payload_len);
+    }
+    size_t frame_len = payload_len + 14;
+    if (frame_len < 60) {
+      memset(usb_tx_frame + frame_len, 0, 60 - frame_len);
+      frame_len = 60;
+    }
+    return usb_net_send_frame(usb_tx_frame, frame_len);
   }
 
   if (net_driver_kind == NET_DRIVER_RTL8139) {
@@ -1428,6 +1470,27 @@ int net_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
 
   if (net_driver_kind == NET_DRIVER_VIRTIO) {
     return virtio_net_recv_ethernet(src_mac, ether_type, payload, payload_cap);
+  }
+
+  if (net_driver_kind == NET_DRIVER_USB) {
+    int frame_len = usb_net_recv_frame(usb_rx_frame, sizeof(usb_rx_frame));
+    if (frame_len <= 0) {
+      return frame_len;
+    }
+    if (frame_len < 14) {
+      return -1;
+    }
+    if (src_mac) {
+      memcpy(src_mac, usb_rx_frame + 6, 6);
+    }
+    *ether_type = (uint16_t)(((uint16_t)usb_rx_frame[12] << 8) |
+                             usb_rx_frame[13]);
+    size_t payload_len = (size_t)frame_len - 14;
+    if (payload_len > payload_cap) {
+      payload_len = payload_cap;
+    }
+    memcpy(payload, usb_rx_frame + 14, payload_len);
+    return (int)payload_len;
   }
 
   if (net_driver_kind == NET_DRIVER_RTL8139) {

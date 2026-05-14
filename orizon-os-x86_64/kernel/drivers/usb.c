@@ -72,6 +72,28 @@ static int usb_class_is_net(uint8_t cls, uint8_t sub, uint8_t proto) {
   return 0;
 }
 
+static int usb_net_is_raw_ethernet(const usb_net_info_t *info) {
+  if (!info) {
+    return 0;
+  }
+  if (info->interface_class == 0x02 && info->interface_subclass == 0x06) {
+    return 1; /* CDC ECM uses raw Ethernet frames on its bulk data pipes. */
+  }
+  return 0;
+}
+
+static void usb_net_make_mac(usb_net_info_t *info) {
+  if (!info) {
+    return;
+  }
+  info->mac[0] = 0x02; /* Locally administered, unicast. */
+  info->mac[1] = 0x4f;
+  info->mac[2] = 0x52;
+  info->mac[3] = (uint8_t)(info->vendor_id & 0xff);
+  info->mac[4] = (uint8_t)(info->product_id & 0xff);
+  info->mac[5] = info->port ? info->port : 1;
+}
+
 static const char *usb_net_hint_for(uint16_t vid, uint16_t pid,
                                     uint8_t cls, uint8_t sub,
                                     uint8_t proto) {
@@ -196,6 +218,7 @@ void usb_note_device(const char *controller, uint8_t port,
   candidate.device_protocol = dev.device_protocol;
   candidate.control_interface = 0xff;
   candidate.data_interface = 0xff;
+  usb_net_make_mac(&candidate);
   snprintf(candidate.controller, sizeof(candidate.controller), "%s",
            controller ? controller : "usb");
 
@@ -289,8 +312,11 @@ void usb_note_device(const char *controller, uint8_t port,
                             candidate.interface_class,
                             candidate.interface_subclass,
                             candidate.interface_protocol));
+  candidate.raw_ethernet = usb_net_is_raw_ethernet(&candidate);
   snprintf(candidate.status, sizeof(candidate.status),
-           "USB Ethernet detected; class driver pending, DHCP unavailable");
+           candidate.raw_ethernet
+               ? "USB CDC Ethernet detected; awaiting xHCI bulk binding"
+               : "USB Ethernet detected; vendor/class driver pending");
 
   if (!usb_net.present ||
       (!usb_net.bulk_in_ep && candidate.bulk_in_ep) ||
@@ -348,6 +374,7 @@ void usb_format_net_status(char *buf, size_t size) {
            "usb-net present=yes controller=%s port=%u vid=%04x pid=%04x "
            "dev-class=%02x/%02x/%02x iface=%02x/%02x/%02x cfg=%u "
            "ctrl-if=%u data-if=%u bulk-in=%02x/%u bulk-out=%02x/%u "
+           "mac=%02x:%02x:%02x:%02x:%02x:%02x ready=%s raw=%s link=%s "
            "driver=%s status=%s",
            usb_net.controller, usb_net.port, usb_net.vendor_id,
            usb_net.product_id, usb_net.device_class, usb_net.device_subclass,
@@ -355,12 +382,24 @@ void usb_format_net_status(char *buf, size_t size) {
            usb_net.interface_subclass, usb_net.interface_protocol,
            usb_net.config_value, usb_net.control_interface,
            usb_net.data_interface, usb_net.bulk_in_ep, usb_net.bulk_in_mps,
-           usb_net.bulk_out_ep, usb_net.bulk_out_mps, usb_net.driver_hint,
+           usb_net.bulk_out_ep, usb_net.bulk_out_mps, usb_net.mac[0],
+           usb_net.mac[1], usb_net.mac[2], usb_net.mac[3], usb_net.mac[4],
+           usb_net.mac[5], usb_net.ready ? "yes" : "no",
+           usb_net.raw_ethernet ? "yes" : "no",
+           usb_net.link_up ? "up" : "down", usb_net.driver_hint,
            usb_net.status);
 }
 
 int usb_net_present(void) {
   return usb_net.present;
+}
+
+int usb_net_ready(void) {
+  return usb_net.present && usb_net.ready && usb_net.raw_ethernet;
+}
+
+int usb_net_link_up(void) {
+  return usb_net_ready() && usb_net.link_up;
 }
 
 unsigned long usb_device_count(void) {
@@ -373,6 +412,42 @@ int usb_get_net_info(usb_net_info_t *out) {
   }
   *out = usb_net;
   return 0;
+}
+
+void usb_net_mark_ready(const char *transport, int raw_ethernet) {
+  if (!usb_net.present) {
+    return;
+  }
+  usb_net.ready = 1;
+  usb_net.raw_ethernet = raw_ethernet ? 1 : usb_net.raw_ethernet;
+  usb_net.link_up = usb_net.raw_ethernet ? 1 : 0;
+  if (transport && transport[0]) {
+    snprintf(usb_net.driver_hint, sizeof(usb_net.driver_hint), "%s", transport);
+  }
+  snprintf(usb_net.status, sizeof(usb_net.status),
+           usb_net.raw_ethernet
+               ? "USB Ethernet ready; raw frames enabled for DHCP"
+               : "USB Ethernet configured; packet format unsupported");
+}
+
+int usb_net_send_frame(const void *frame, size_t len) {
+  if (!usb_net_ready() || !frame || len == 0) {
+    return -1;
+  }
+  if (strcmp(usb_net.controller, "xhci") == 0) {
+    return usb_xhci_net_send_frame(frame, len);
+  }
+  return -1;
+}
+
+int usb_net_recv_frame(void *frame, size_t cap) {
+  if (!usb_net_ready() || !frame || cap == 0) {
+    return -1;
+  }
+  if (strcmp(usb_net.controller, "xhci") == 0) {
+    return usb_xhci_net_recv_frame(frame, cap);
+  }
+  return -1;
 }
 
 void usb_format_port_status(char *buf, size_t size) {

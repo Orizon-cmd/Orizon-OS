@@ -1632,10 +1632,13 @@ static void term_print_usb_status(terminal_t *term, const char *cmd) {
   usb_format_net_status(line, sizeof(line));
   term_puts_t(term, line);
   term_puts_t(term, "\n");
-  if (usb_net_present()) {
+  if (usb_net_ready()) {
     term_puts_t(term,
-                "Note: USB Ethernet is detected, but packet TX/RX for USB NICs "
-                "is not wired into DHCP yet.\n");
+                "Note: USB Ethernet raw packet path is ready; run 'net dhcp'.\n");
+  } else if (usb_net_present()) {
+    term_puts_t(term,
+                "Note: USB Ethernet is detected, but this adapter still needs "
+                "a matching packet driver.\n");
   } else {
     term_puts_t(term,
                 "Tip: plug the adapter, run 'usb rescan', and check whether a "
@@ -2760,9 +2763,15 @@ static void term_run_net(terminal_t *term, const char *cmd) {
         usb_format_net_status(line, sizeof(line));
         term_puts_t(term, line);
         term_puts_t(term, "\n");
-        term_puts_t(term,
-                    "net: this adapter is USB Ethernet; Orizon can detect it, "
-                    "but the USB NIC packet driver is still pending.\n");
+        if (usb_net_ready()) {
+          term_puts_t(term,
+                      "net: USB Ethernet packet driver is active; check cable, "
+                      "DHCP server, or adapter link.\n");
+        } else {
+          term_puts_t(term,
+                      "net: USB Ethernet detected, but this adapter still needs "
+                      "a matching packet driver.\n");
+        }
       }
     }
     netstack_format_status(line, sizeof(line));

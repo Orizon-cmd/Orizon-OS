@@ -28,6 +28,10 @@ typedef struct {
   uint8_t bulk_out_ep;
   uint16_t bulk_in_mps;
   uint16_t bulk_out_mps;
+  int ready;
+  int raw_ethernet;
+  int link_up;
+  uint8_t mac[6];
   char driver_hint[32];
   char status[128];
 } usb_net_info_t;
@@ -65,7 +69,12 @@ void usb_format_net_status(char *buf, size_t size);
 void usb_format_port_status(char *buf, size_t size);
 unsigned long usb_device_count(void);
 int usb_net_present(void);
+int usb_net_ready(void);
+int usb_net_link_up(void);
 int usb_get_net_info(usb_net_info_t *out);
+void usb_net_mark_ready(const char *transport, int raw_ethernet);
+int usb_net_send_frame(const void *frame, size_t len);
+int usb_net_recv_frame(void *frame, size_t cap);
 
 /* Expose controller init for staged debugging */
 void usb_xhci_init(void);
@@ -76,5 +85,7 @@ void usb_xhci_rescan(void);
 void usb_ehci_rescan(void);
 void usb_xhci_format_ports(char *buf, size_t size);
 void usb_ehci_format_ports(char *buf, size_t size);
+int usb_xhci_net_send_frame(const void *frame, size_t len);
+int usb_xhci_net_recv_frame(void *frame, size_t cap);
 
 #endif /* _USB_H */
