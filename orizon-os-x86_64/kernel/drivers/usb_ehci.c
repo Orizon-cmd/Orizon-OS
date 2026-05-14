@@ -159,8 +159,6 @@ static void ehci_legacy_handoff(uint8_t bus, uint8_t device, uint8_t function) {
       /* Disable ALL legacy SMI sources */
       pci_write32(bus, device, function, eecp + 4, 0);
       
-      /* Draw debug marker: ownership taken */
-      debug_rect(120, 0, 10, 10, 0xFFFFFF00);
       return;
     }
     

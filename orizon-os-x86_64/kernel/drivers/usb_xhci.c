@@ -256,12 +256,6 @@ static void xhci_legacy_handoff(void) {
       /* Aggressively disable ALL legacy SMI/IRQ */
       xhci_write32(xecp_offset + 0x04, 0); /* USBLEGCTLSTS = 0 */
       
-      /* [2] YELLOW BLOCK - ownership taken */
-      for (int y = 0; y < 100; y++) {
-        for (int x = 0; x < 100; x++) {
-          debug_rect(x, 100 + y, 1, 1, 0xFFFFFF00);
-        }
-      }
       return;
     }
     
@@ -917,18 +911,7 @@ static void xhci_scan_ports_internal(int force) {
     xhci_portsc_snapshot[port] =
         xhci_read32(xhci_op_base + 0x400 + (port * 0x10));
     if (xhci_port_result[port] == 0 && xhci_keyboard_ready) {
-      for (int y = 0; y < 100; y++) {
-        for (int x = 0; x < 100; x++) {
-          debug_rect(x, 200 + y, 1, 1, 0xFF00FF00);
-        }
-      }
       xhci_queue_interrupt_in();
-    } else {
-      for (int y = 0; y < 100; y++) {
-        for (int x = 0; x < 100; x++) {
-          debug_rect(x, 200 + y, 1, 1, 0xFFFF0000);
-        }
-      }
     }
   }
 }
@@ -1052,13 +1035,6 @@ static void xhci_handle_event(xhci_trb_t *evt) {
     serial_puthex(evt->dword3);
     serial_puts("\n");
     first_event = 0;
-    
-    /* [4] CYAN BLOCK - first event received */
-    for (int y = 0; y < 100; y++) {
-      for (int x = 0; x < 100; x++) {
-        debug_rect(x, 300 + y, 1, 1, 0xFF00FFFF);
-      }
-    }
   }
   
   if (type == XHCI_TRB_TYPE_TRANSFER_EVENT) {
@@ -1215,13 +1191,6 @@ void usb_xhci_init(void) {
   }
   
   xhci_present = 1;
-
-  /* [1] WHITE BLOCK - xHCI found (left edge, top) */
-  for (int y = 0; y < 100; y++) {
-    for (int x = 0; x < 100; x++) {
-      debug_rect(x, y, 1, 1, 0xFFFFFFFF);
-    }
-  }
   serial_puts("[xHCI] Controller present\n");
 
   uint32_t irq_reg = pci_read32(devs[selected].bus, devs[selected].device,
@@ -1349,20 +1318,12 @@ void usb_xhci_poll(void) {
     return;
   }
 
-  static int event_count = 0;
-  
   while (1) {
     xhci_trb_t evt;
     if (xhci_pop_event(&evt) != 0) {
       break;
     }
-    event_count++;
     xhci_handle_event(&evt);
-    
-    /* Show event count visually - small white dots */
-    if (event_count <= 10) {
-      debug_rect(210 + (event_count - 1) * 5, 0, 4, 4, 0xFFFFFFFF);
-    }
   }
 
   if (xhci_irq_seen) {
