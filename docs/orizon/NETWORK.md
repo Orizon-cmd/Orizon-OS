@@ -32,6 +32,8 @@ endpoints, and a `driver=...` hint.
 `usb` also prints xHCI/EHCI root-port diagnostics. If an adapter was plugged in
 after boot, run `usb rescan` first. The useful cases are:
 
+- `controllers=... selected=... cand0=...`: Orizon found multiple xHCI
+  controllers and selected the best candidate by connected/root-port count.
 - `usb-net present=yes`: the adapter was identified; implement the matching
   packet driver next.
 - `usb-device ... hint=usb-hub`: the adapter is probably behind a USB hub or

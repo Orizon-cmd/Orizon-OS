@@ -59,6 +59,21 @@ static uint32_t xhci_db_base = 0;
 static int xhci_context_size = 32;
 static uint32_t xhci_ports = 0;
 static uint32_t xhci_max_slots = 1;
+static uint32_t xhci_controller_count = 0;
+static uint32_t xhci_controller_index = 0;
+static uint8_t xhci_pci_bus = 0;
+static uint8_t xhci_pci_device = 0;
+static uint8_t xhci_pci_function = 0;
+static uint16_t xhci_pci_vendor_id = 0;
+static uint16_t xhci_pci_device_id = 0;
+static uint32_t xhci_selected_preinit_connected = 0;
+static uint8_t xhci_candidate_bus[8];
+static uint8_t xhci_candidate_device[8];
+static uint8_t xhci_candidate_function[8];
+static uint16_t xhci_candidate_vendor_id[8];
+static uint16_t xhci_candidate_device_id[8];
+static uint32_t xhci_candidate_ports[8];
+static uint32_t xhci_candidate_connected[8];
 static unsigned long xhci_scan_count = 0;
 static unsigned long xhci_scan_attempts = 0;
 static uint8_t xhci_keyboard_ready = 0;
@@ -117,6 +132,11 @@ static inline uint32_t xhci_read32(uint32_t off) {
   return *reg;
 }
 
+static inline uint32_t xhci_read32_from(uint64_t base, uint32_t off) {
+  volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(base + off);
+  return *reg;
+}
+
 static inline void xhci_write64(uint32_t off, uint64_t val) {
   /* Some controllers require low dword then high dword writes */
   xhci_write32(off + 0, (uint32_t)(val & 0xFFFFFFFFULL));
@@ -160,6 +180,47 @@ static inline uint64_t xhci_phys_addr(const void *ptr) {
     return v - hhdm_offset;
   }
   return v;
+}
+
+static uint64_t xhci_bar_phys(const pci_device_info_t *dev) {
+  uint32_t bar0;
+  uint64_t phys;
+
+  if (!dev) {
+    return 0;
+  }
+  bar0 = dev->bar[0];
+  if ((bar0 & 0x01) != 0 || bar0 == 0 || bar0 == 0xFFFFFFFF) {
+    return 0;
+  }
+
+  phys = (uint64_t)(bar0 & ~0x0FULL);
+  if ((bar0 & 0x06) == 0x04) {
+    uint32_t bar1 = dev->bar[1];
+    if (bar1 != 0xFFFFFFFF) {
+      phys |= ((uint64_t)bar1) << 32;
+    }
+  }
+  if (phys == 0 || phys > 0x100000000000ULL) {
+    return 0;
+  }
+  return phys;
+}
+
+static uint32_t xhci_probe_connected_ports(uint64_t mmio_base,
+                                           uint32_t ports,
+                                           uint8_t caplength) {
+  uint32_t connected = 0;
+  uint32_t tracked = ports < XHCI_MAX_TRACKED_PORTS ? ports : XHCI_MAX_TRACKED_PORTS;
+
+  for (uint32_t port = 0; port < tracked; port++) {
+    uint32_t portsc = xhci_read32_from(mmio_base,
+                                       (uint32_t)caplength + 0x400 + (port * 0x10));
+    if (portsc & XHCI_PORTSC_CCS) {
+      connected++;
+    }
+  }
+  return connected;
 }
 
 /* Request BIOS->OS ownership if legacy support is enabled */
@@ -898,10 +959,15 @@ void usb_xhci_format_ports(char *buf, size_t size) {
   }
 
   used = snprintf(buf, size,
-                  "xhci-ports present=yes ports=%u tracked=%u slots=%u "
-                  "scans=%lu attempts=%lu connected=%u keyboard=%s",
-                  xhci_ports, tracked, xhci_max_slots, xhci_scan_count,
-                  xhci_scan_attempts, connected,
+                  "xhci-ports present=yes controllers=%u selected=%u "
+                  "pci=%02x:%02x.%u id=%04x:%04x ports=%u tracked=%u "
+                  "slots=%u preinit-connected=%u scans=%lu attempts=%lu "
+                  "connected=%u keyboard=%s",
+                  xhci_controller_count, xhci_controller_index,
+                  xhci_pci_bus, xhci_pci_device, xhci_pci_function,
+                  xhci_pci_vendor_id, xhci_pci_device_id, xhci_ports,
+                  tracked, xhci_max_slots, xhci_selected_preinit_connected,
+                  xhci_scan_count, xhci_scan_attempts, connected,
                   xhci_keyboard_ready ? "yes" : "no");
   if (used < 0 || (size_t)used >= size) {
     return;
@@ -923,7 +989,28 @@ void usb_xhci_format_ports(char *buf, size_t size) {
     shown++;
   }
   if (shown == 0 && (size_t)used < size) {
-    snprintf(buf + used, size - (size_t)used, " no-active-root-ports");
+    int n = snprintf(buf + used, size - (size_t)used, " no-active-root-ports");
+    if (n < 0 || (size_t)n >= size - (size_t)used) {
+      return;
+    }
+    used += n;
+  }
+
+  for (uint32_t i = 0; i < xhci_controller_count && i < 4; i++) {
+    int n;
+    if (xhci_candidate_vendor_id[i] == 0) {
+      continue;
+    }
+    n = snprintf(buf + used, size - (size_t)used,
+                 " cand%u=%02x:%02x.%u/%04x:%04x/p%u/c%u", i,
+                 xhci_candidate_bus[i], xhci_candidate_device[i],
+                 xhci_candidate_function[i], xhci_candidate_vendor_id[i],
+                 xhci_candidate_device_id[i], xhci_candidate_ports[i],
+                 xhci_candidate_connected[i]);
+    if (n < 0 || (size_t)n >= size - (size_t)used) {
+      return;
+    }
+    used += n;
   }
 }
 
@@ -1007,60 +1094,110 @@ static void xhci_handle_event(xhci_trb_t *evt) {
 
 void usb_xhci_init(void) {
   serial_puts("\n[xHCI] Starting init...\n");
-  pci_device_info_t devs[4];
-  int count = pci_scan_class(0x0C, 0x03, 0x30, devs, 4);
+  pci_device_info_t devs[8];
+  int count = pci_scan_class(0x0C, 0x03, 0x30, devs, 8);
+  int selected = -1;
+  uint64_t selected_phys = 0;
+  uint64_t selected_mmio = 0;
+  uint32_t selected_ports = 0;
+  uint32_t best_score = 0;
   serial_puts("[xHCI] Found ");
   serial_puthex(count);
   serial_puts(" controller(s)\n");
   if (count <= 0) {
     return;
   }
+  xhci_controller_count = (uint32_t)count;
 
-  /* Get BAR0 - this is a physical address */
-  uint32_t bar0 = devs[0].bar[0];
-  if ((bar0 & 0x01) != 0) {
-    return; /* I/O space, not supported */
-  }
-  
-  /* Check for invalid BAR */
-  if (bar0 == 0 || bar0 == 0xFFFFFFFF) {
-    return; /* No device or disabled */
-  }
-  
-  /* Convert physical BAR to virtual address using HHDM */
-  uint64_t phys_addr = (uint64_t)(bar0 & ~0x0F);
-  /* Check for 64-bit BAR */
-  if ((bar0 & 0x06) == 0x04) {
-    uint32_t bar1 = devs[0].bar[1];
-    if (bar1 != 0xFFFFFFFF) {
-      phys_addr |= ((uint64_t)bar1) << 32;
+  for (int i = 0; i < count; i++) {
+    uint64_t phys = xhci_bar_phys(&devs[i]);
+    uint64_t mmio;
+    uint32_t cap;
+    uint32_t hcs1;
+    uint32_t ports;
+    uint8_t caplength;
+    uint32_t connected;
+    uint32_t score;
+
+    if (!phys) {
+      continue;
+    }
+    if (i < 8) {
+      xhci_candidate_bus[i] = devs[i].bus;
+      xhci_candidate_device[i] = devs[i].device;
+      xhci_candidate_function[i] = devs[i].function;
+      xhci_candidate_vendor_id[i] = devs[i].vendor_id;
+      xhci_candidate_device_id[i] = devs[i].device_id;
+    }
+    mmio = mmio_map_range(phys, 0x20000);
+    if (!mmio) {
+      continue;
+    }
+    cap = xhci_read32_from(mmio, 0x00);
+    if (cap == 0 || cap == 0xFFFFFFFF) {
+      continue;
+    }
+    caplength = (uint8_t)(cap & 0xFF);
+    hcs1 = xhci_read32_from(mmio, 0x04);
+    ports = (hcs1 >> 24) & 0xFF;
+    connected = xhci_probe_connected_ports(mmio, ports, caplength);
+    if (i < 8) {
+      xhci_candidate_ports[i] = ports;
+      xhci_candidate_connected[i] = connected;
+    }
+    score = (connected * 1024U) + ports;
+
+    serial_puts("[xHCI] Candidate ");
+    serial_puthex((uint32_t)i);
+    serial_puts(" pci=");
+    serial_puthex(devs[i].bus);
+    serial_puts(":");
+    serial_puthex(devs[i].device);
+    serial_puts(".");
+    serial_puthex(devs[i].function);
+    serial_puts(" ports=");
+    serial_puthex(ports);
+    serial_puts(" connected=");
+    serial_puthex(connected);
+    serial_puts("\n");
+
+    if (selected < 0 || score > best_score) {
+      selected = i;
+      selected_phys = phys;
+      selected_mmio = mmio;
+      selected_ports = ports;
+      xhci_selected_preinit_connected = connected;
+      best_score = score;
     }
   }
-  
-  /* Sanity check physical address */
-  if (phys_addr == 0 || phys_addr > 0x100000000000ULL) {
-    return; /* Invalid or too high address */
-  }
-  
-  serial_puts("[xHCI] BAR phys: ");
-  serial_puthex(phys_addr);
-  serial_puts("\n");
-  
-  /* Map MMIO region into virtual space */
-  uint64_t mmio_base = mmio_map_range(phys_addr, 0x20000);
-  if (!mmio_base) {
-    serial_puts("[xHCI] MMIO mapping failed\n");
+
+  if (selected < 0 || selected_mmio == 0) {
     return;
   }
-  xhci_mmio = mmio_base;
+  xhci_controller_index = (uint32_t)selected;
+  xhci_pci_bus = devs[selected].bus;
+  xhci_pci_device = devs[selected].device;
+  xhci_pci_function = devs[selected].function;
+  xhci_pci_vendor_id = devs[selected].vendor_id;
+  xhci_pci_device_id = devs[selected].device_id;
+  
+  serial_puts("[xHCI] BAR phys: ");
+  serial_puthex(selected_phys);
+  serial_puts("\n");
+  
+  xhci_mmio = selected_mmio;
   serial_puts("[xHCI] MMIO mapped to: ");
-  serial_puthex(mmio_base);
+  serial_puthex(selected_mmio);
+  serial_puts(" selected-ports=");
+  serial_puthex(selected_ports);
   serial_puts("\n");
   
   /* Enable bus mastering and memory space before MMIO access */
-  uint32_t cmd = pci_read32(devs[0].bus, devs[0].device, devs[0].function, 0x04);
+  uint32_t cmd = pci_read32(devs[selected].bus, devs[selected].device,
+                            devs[selected].function, 0x04);
   cmd |= (1U << 2) | (1U << 1);
-  pci_write32(devs[0].bus, devs[0].device, devs[0].function, 0x04, cmd);
+  pci_write32(devs[selected].bus, devs[selected].device,
+              devs[selected].function, 0x04, cmd);
 
   /* Legacy BIOS handoff (if enabled) */
   serial_puts("[xHCI] Attempting legacy handoff...\n");
@@ -1087,7 +1224,8 @@ void usb_xhci_init(void) {
   }
   serial_puts("[xHCI] Controller present\n");
 
-  uint32_t irq_reg = pci_read32(devs[0].bus, devs[0].device, devs[0].function, 0x3C);
+  uint32_t irq_reg = pci_read32(devs[selected].bus, devs[selected].device,
+                                devs[selected].function, 0x3C);
   xhci_irq = (uint8_t)(irq_reg & 0xFF);
   if (xhci_irq < 16) {
     idt_register_handler((uint8_t)(0x20 + xhci_irq), usb_xhci_irq_handler);
