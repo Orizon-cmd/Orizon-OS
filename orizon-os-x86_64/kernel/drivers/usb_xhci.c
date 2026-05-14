@@ -48,6 +48,21 @@
 #define XHCI_RING_LINK_INDEX 255
 #define XHCI_USB_NET_FRAME_CAP 2048
 
+#define XHCI_USBCMD_RS (1U << 0)
+#define XHCI_USBCMD_HCRST (1U << 1)
+#define XHCI_USBCMD_INTE (1U << 2)
+#define XHCI_USBSTS_HCH (1U << 0)
+#define XHCI_USBSTS_HSE (1U << 2)
+#define XHCI_USBSTS_EINT (1U << 3)
+#define XHCI_USBSTS_PCD (1U << 4)
+#define XHCI_USBSTS_CNR (1U << 11)
+#define XHCI_DBOFF_MASK (~0x3U)
+#define XHCI_RTSOFF_MASK (~0x1FU)
+#define XHCI_CRCR_PTR_MASK (~0x3FULL)
+#define XHCI_RING_PTR_MASK (~0xFULL)
+#define XHCI_ERSTBA_MASK (~0x3FULL)
+#define XHCI_ERDP_EHB (1ULL << 3)
+
 typedef struct {
   uint32_t dword0;
   uint32_t dword1;
@@ -62,6 +77,7 @@ typedef struct {
 } xhci_erst_entry_t;
 
 static void xhci_handle_event(xhci_trb_t *evt);
+static void xhci_delay(int loops);
 
 static int xhci_present = 0;
 static uint64_t xhci_mmio = 0;
@@ -102,6 +118,17 @@ static uint32_t xhci_portsc_snapshot[XHCI_MAX_TRACKED_PORTS];
 static uint32_t xhci_active_port = XHCI_MAX_TRACKED_PORTS;
 static uint8_t xhci_last_cmd_cc = 0;
 static uint8_t xhci_last_xfer_cc = 0;
+static uint8_t xhci_last_cmd_type = 0;
+static unsigned long xhci_cmd_timeouts = 0;
+static uint32_t xhci_diag_usbcmd = 0;
+static uint32_t xhci_diag_usbsts = 0;
+static uint32_t xhci_diag_crcr_lo = 0;
+static uint32_t xhci_diag_crcr_hi = 0;
+static uint32_t xhci_diag_erdp_lo = 0;
+static uint32_t xhci_diag_erdp_hi = 0;
+static uint32_t xhci_diag_iman = 0;
+static uint32_t xhci_diag_db_base = 0;
+static uint32_t xhci_diag_rt_base = 0;
 
 static xhci_trb_t *cmd_ring = NULL;
 static uint32_t cmd_ring_idx = 0;
@@ -244,6 +271,38 @@ static inline void xhci_write64(uint32_t off, uint64_t val) {
   xhci_write32(off + 4, (uint32_t)(val >> 32));
 }
 
+static void xhci_order_writes(void) {
+  __asm__ volatile("mfence" ::: "memory");
+}
+
+static void xhci_capture_diag(void) {
+  if (!xhci_mmio || !xhci_op_base) {
+    return;
+  }
+  xhci_diag_usbcmd = xhci_read32(xhci_op_base + 0x00);
+  xhci_diag_usbsts = xhci_read32(xhci_op_base + 0x04);
+  xhci_diag_crcr_lo = xhci_read32(xhci_op_base + 0x18);
+  xhci_diag_crcr_hi = xhci_read32(xhci_op_base + 0x1C);
+  xhci_diag_db_base = xhci_db_base;
+  xhci_diag_rt_base = xhci_rt_base;
+  if (xhci_rt_base) {
+    xhci_diag_iman = xhci_read32(xhci_rt_base + 0x20);
+    xhci_diag_erdp_lo = xhci_read32(xhci_rt_base + 0x38);
+    xhci_diag_erdp_hi = xhci_read32(xhci_rt_base + 0x3C);
+  }
+}
+
+static int xhci_wait_cmd_bit_clear(uint32_t bit, int loops) {
+  while (loops-- > 0) {
+    uint32_t cmd = xhci_read32(xhci_op_base + 0x00);
+    if ((cmd & bit) == 0) {
+      return 0;
+    }
+    xhci_delay(2000);
+  }
+  return -1;
+}
+
 static void *xhci_alloc_aligned(size_t size, size_t align) {
   size_t total = size + align;
   uint8_t *raw = (uint8_t *)kzalloc(total);
@@ -369,7 +428,10 @@ static void xhci_legacy_handoff(void) {
 
 static void xhci_ring_doorbell(uint8_t slot, uint8_t target) {
   volatile uint32_t *db = (volatile uint32_t *)(uintptr_t)(xhci_mmio + xhci_db_base + (slot * 4));
+  xhci_order_writes();
   *db = target;
+  (void)*db;
+  xhci_order_writes();
 }
 
 static void xhci_set_trb(xhci_trb_t *trb, uint64_t param, uint32_t status, uint32_t ctrl) {
@@ -384,7 +446,7 @@ static void xhci_init_ring(xhci_trb_t *ring, uint8_t cycle) {
     return;
   }
   memset(ring, 0, sizeof(xhci_trb_t) * XHCI_RING_TRBS);
-  uint64_t ring_phys = xhci_phys_addr(ring);
+  uint64_t ring_phys = xhci_phys_addr(ring) & XHCI_RING_PTR_MASK;
   xhci_set_trb(&ring[XHCI_RING_LINK_INDEX], ring_phys, 0,
                (XHCI_TRB_TYPE_LINK << 10) | cycle | (1U << 1));
 }
@@ -398,7 +460,7 @@ static void xhci_enqueue_transfer_trb(xhci_trb_t *ring, uint32_t *idx,
   xhci_set_trb(&ring[*idx], param, status, ctrl | *cycle);
   (*idx)++;
   if (*idx >= XHCI_RING_LINK_INDEX) {
-    uint64_t ring_phys = xhci_phys_addr(ring);
+    uint64_t ring_phys = xhci_phys_addr(ring) & XHCI_RING_PTR_MASK;
     xhci_set_trb(&ring[XHCI_RING_LINK_INDEX], ring_phys, 0,
                  (XHCI_TRB_TYPE_LINK << 10) | *cycle | (1U << 1));
     *idx = 0;
@@ -448,9 +510,10 @@ static void xhci_cmd_enqueue(uint64_t param, uint32_t status,
   ctrl |= cmd_cycle;
   ctrl |= ((uint32_t)slot_id << 24);
   xhci_set_trb(&cmd_ring[cmd_ring_idx], param, status, ctrl);
+  xhci_last_cmd_type = (uint8_t)ctrl_type;
   cmd_ring_idx++;
-  if (cmd_ring_idx >= 255) {
-    uint64_t ring_phys = xhci_phys_addr(cmd_ring);
+  if (cmd_ring_idx >= XHCI_RING_LINK_INDEX) {
+    uint64_t ring_phys = xhci_phys_addr(cmd_ring) & XHCI_RING_PTR_MASK;
     xhci_set_trb(&cmd_ring[cmd_ring_idx], ring_phys, 0,
                  (XHCI_TRB_TYPE_LINK << 10) | cmd_cycle | (1U << 1));
     cmd_ring_idx = 0;
@@ -473,8 +536,8 @@ static int xhci_pop_event(xhci_trb_t *out_evt) {
     event_ring_idx = 0;
     event_cycle ^= 1;
   }
-  uint64_t erdp = xhci_phys_addr(&event_ring[event_ring_idx]);
-  xhci_write64(xhci_rt_base + 0x38, erdp | 0x1);
+  uint64_t erdp = xhci_phys_addr(&event_ring[event_ring_idx]) & XHCI_RING_PTR_MASK;
+  xhci_write64(xhci_rt_base + 0x38, erdp | XHCI_ERDP_EHB);
   return 0;
 }
 
@@ -494,6 +557,8 @@ static int xhci_wait_for_cmd(xhci_trb_t *out_evt, int timeout) {
     }
     xhci_delay(2000);
   }
+  xhci_cmd_timeouts++;
+  xhci_capture_diag();
   return -1;
 }
 
@@ -1309,6 +1374,7 @@ void usb_xhci_format_ports(char *buf, size_t size) {
     snprintf(buf, size, "xhci-ports present=no");
     return;
   }
+  xhci_capture_diag();
 
   tracked = xhci_tracked_ports();
   for (uint32_t port = 0; port < tracked; port++) {
@@ -1321,14 +1387,18 @@ void usb_xhci_format_ports(char *buf, size_t size) {
                   "xhci-ports present=yes controllers=%u selected=%u "
                   "pci=%02x:%02x.%u id=%04x:%04x ports=%u tracked=%u "
                   "slots=%u preinit-connected=%u scans=%lu attempts=%lu "
-                  "connected=%u keyboard=%s usbnet=%s",
+                  "connected=%u keyboard=%s usbnet=%s cmd=%u cmdto=%lu "
+                  "sts=0x%08x cr=0x%08x:%08x iman=0x%08x rt=0x%08x db=0x%08x",
                   xhci_controller_count, xhci_controller_index,
                   xhci_pci_bus, xhci_pci_device, xhci_pci_function,
                   xhci_pci_vendor_id, xhci_pci_device_id, xhci_ports,
                   tracked, xhci_max_slots, xhci_selected_preinit_connected,
                   xhci_scan_count, xhci_scan_attempts, connected,
                   xhci_keyboard_ready ? "yes" : "no",
-                  usbnet_ready ? "yes" : "no");
+                  usbnet_ready ? "yes" : "no", xhci_last_cmd_type,
+                  xhci_cmd_timeouts, xhci_diag_usbsts, xhci_diag_crcr_hi,
+                  xhci_diag_crcr_lo, xhci_diag_iman, xhci_diag_rt_base,
+                  xhci_diag_db_base);
   if (used < 0 || (size_t)used >= size) {
     return;
   }
@@ -1599,20 +1669,23 @@ void usb_xhci_init(void) {
   uint32_t hcc = xhci_read32(0x10);
   xhci_context_size = ((hcc >> 2) & 0x1) ? 64 : 32;
 
-  xhci_db_base = xhci_read32(0x14);
-  xhci_rt_base = xhci_read32(0x18);
+  xhci_db_base = xhci_read32(0x14) & XHCI_DBOFF_MASK;
+  xhci_rt_base = xhci_read32(0x18) & XHCI_RTSOFF_MASK;
 
   uint32_t usbcmd = xhci_read32(xhci_op_base + 0x00);
-  usbcmd &= ~1U;
+  usbcmd &= ~XHCI_USBCMD_RS;
   xhci_write32(xhci_op_base + 0x00, usbcmd);
-  xhci_wait_usbsts(1U << 0, 1U << 0, 20000); /* HCHalted */
+  xhci_wait_usbsts(XHCI_USBSTS_HCH, XHCI_USBSTS_HCH, 20000);
 
   /* Host controller reset (USBCMD bit 1) */
   usbcmd = xhci_read32(xhci_op_base + 0x00);
-  usbcmd |= (1U << 1);
+  usbcmd |= XHCI_USBCMD_HCRST;
   xhci_write32(xhci_op_base + 0x00, usbcmd);
-  xhci_wait_usbsts(1U << 11, 0, 50000); /* CNR cleared */
-  xhci_wait_usbsts(1U << 0, 1U << 0, 20000); /* HCHalted */
+  xhci_wait_cmd_bit_clear(XHCI_USBCMD_HCRST, 50000);
+  xhci_wait_usbsts(XHCI_USBSTS_CNR, 0, 50000);
+  xhci_wait_usbsts(XHCI_USBSTS_HCH, XHCI_USBSTS_HCH, 20000);
+  xhci_write32(xhci_op_base + 0x04,
+               XHCI_USBSTS_HSE | XHCI_USBSTS_EINT | XHCI_USBSTS_PCD);
 
   /* Set page size to 4K */
   xhci_write32(xhci_op_base + 0x08, 1);
@@ -1640,20 +1713,20 @@ void usb_xhci_init(void) {
   }
   xhci_write64(xhci_op_base + 0x30, xhci_phys_addr(dcbaa));
 
-  cmd_ring = (xhci_trb_t *)xhci_alloc_aligned(sizeof(xhci_trb_t) * 256, 16);
+  cmd_ring = (xhci_trb_t *)xhci_alloc_aligned(sizeof(xhci_trb_t) * 256, 64);
   if (!cmd_ring) {
     return;
   }
   memset(cmd_ring, 0, sizeof(xhci_trb_t) * 256);
   cmd_ring_idx = 0;
   cmd_cycle = 1;
-  uint64_t cmd_ring_phys = xhci_phys_addr(cmd_ring);
-  xhci_set_trb(&cmd_ring[255], cmd_ring_phys, 0,
+  uint64_t cmd_ring_phys = xhci_phys_addr(cmd_ring) & XHCI_CRCR_PTR_MASK;
+  xhci_set_trb(&cmd_ring[255], cmd_ring_phys & XHCI_RING_PTR_MASK, 0,
                (XHCI_TRB_TYPE_LINK << 10) | cmd_cycle | (1U << 1));
 
   xhci_write64(xhci_op_base + 0x18, cmd_ring_phys | cmd_cycle);
 
-  event_ring = (xhci_trb_t *)xhci_alloc_aligned(sizeof(xhci_trb_t) * 256, 16);
+  event_ring = (xhci_trb_t *)xhci_alloc_aligned(sizeof(xhci_trb_t) * 256, 64);
   if (!event_ring) {
     return;
   }
@@ -1665,15 +1738,17 @@ void usb_xhci_init(void) {
   if (!erst) {
     return;
   }
-  erst[0].ring_base = xhci_phys_addr(event_ring);
+  erst[0].ring_base = xhci_phys_addr(event_ring) & XHCI_RING_PTR_MASK;
   erst[0].ring_size = 256;
   erst[0].rsvd = 0;
   /* Enable interrupter 0 */
   xhci_write32(xhci_rt_base + 0x20, (1U << 1) | (1U << 0));
   xhci_write32(xhci_rt_base + 0x24, 0);
   xhci_write32(xhci_rt_base + 0x28, 1);
-  xhci_write64(xhci_rt_base + 0x30, xhci_phys_addr(erst));
-  xhci_write64(xhci_rt_base + 0x38, xhci_phys_addr(event_ring));
+  xhci_write64(xhci_rt_base + 0x30, xhci_phys_addr(erst) & XHCI_ERSTBA_MASK);
+  xhci_write64(xhci_rt_base + 0x38,
+               (xhci_phys_addr(event_ring) & XHCI_RING_PTR_MASK) |
+                   XHCI_ERDP_EHB);
 
   uint32_t config = xhci_read32(xhci_op_base + 0x38);
   uint32_t enabled_slots = xhci_max_slots;
@@ -1685,9 +1760,10 @@ void usb_xhci_init(void) {
   xhci_write32(xhci_op_base + 0x38, config);
 
   usbcmd = xhci_read32(xhci_op_base + 0x00);
-  usbcmd |= 1U | (1U << 2); /* Run + Interrupter Enable */
+  usbcmd |= XHCI_USBCMD_RS | XHCI_USBCMD_INTE;
   xhci_write32(xhci_op_base + 0x00, usbcmd);
-  xhci_wait_usbsts(1U << 0, 0, 20000); /* Wait for HCHalted cleared */
+  xhci_wait_usbsts(XHCI_USBSTS_HCH, 0, 20000);
+  xhci_capture_diag();
 
   usb_xhci_rescan();
 }
