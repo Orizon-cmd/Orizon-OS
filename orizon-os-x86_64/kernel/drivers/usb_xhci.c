@@ -200,18 +200,23 @@ static uint8_t usbnet_in_dci = 0;
 static uint8_t usbnet_out_dci = 0;
 static xhci_trb_t *usbnet_in_ring = NULL;
 static xhci_trb_t *usbnet_out_ring = NULL;
+static xhci_trb_t *usbnet_intr_ring = NULL;
 static uint8_t *usbnet_rx_buf = NULL;
 static uint32_t usbnet_in_idx = 0;
 static uint32_t usbnet_out_idx = 0;
+static uint32_t usbnet_intr_idx = 0;
 static uint8_t usbnet_in_cycle = 1;
 static uint8_t usbnet_out_cycle = 1;
+static uint8_t usbnet_intr_cycle = 1;
 static uint16_t usbnet_in_mps = 512;
 static uint16_t usbnet_out_mps = 512;
+static uint16_t usbnet_intr_mps = 16;
 static int usbnet_rx_pending = 0;
 static int usbnet_rx_ready = 0;
 static uint32_t usbnet_rx_request_len = XHCI_USB_NET_FRAME_CAP;
 static uint32_t usbnet_rx_ready_len = 0;
 static uint8_t usbnet_rtl815x = 0;
+static uint8_t usbnet_intr_dci = 0;
 static uint8_t *usbnet_tx_buf = NULL;
 static uint16_t rtl815x_hw_version = 0;
 static uint16_t rtl815x_last_phy_status = 0;
@@ -984,6 +989,17 @@ static int xhci_rtl815x_prepare(const usb_net_info_t *info) {
   return 0;
 }
 
+static int xhci_setup_usb_net_fail(const usb_net_info_t *info,
+                                   const char *status) {
+  usb_net_mark_setup_failed(
+      xhci_usbnet_is_rtl815x(info) ? "xhci-realtek-rtl815x" : "xhci-cdc-ecm",
+      status);
+  serial_puts("[xHCI] USB net setup failed: ");
+  serial_puts(status ? status : "unknown");
+  serial_puts("\n");
+  return -1;
+}
+
 static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t *out_mps,
                           uint8_t *out_interval, uint8_t *out_iface, uint8_t *out_cfg) {
   uint16_t i = 0;
@@ -1033,7 +1049,9 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   uint8_t out_ep;
   uint32_t in_dci;
   uint32_t out_dci;
+  uint32_t intr_dci = 0;
   uint32_t max_dci;
+  uint8_t intr_ep = 0;
   int rtl815x;
 
   rtl815x = xhci_usbnet_is_rtl815x(info);
@@ -1044,50 +1062,55 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
 
   in_ep = (uint8_t)(info->bulk_in_ep & 0x0F);
   out_ep = (uint8_t)(info->bulk_out_ep & 0x0F);
+  intr_ep = (uint8_t)(info->intr_in_ep & 0x0F);
   if (in_ep == 0 || out_ep == 0) {
-    return -1;
+    return xhci_setup_usb_net_fail(info, "USB Ethernet bulk endpoints missing");
   }
   in_dci = (uint32_t)((in_ep * 2U) + 1U);
   out_dci = (uint32_t)(out_ep * 2U);
   max_dci = in_dci > out_dci ? in_dci : out_dci;
-  if (max_dci >= 32) {
-    return -1;
+  if (intr_ep != 0) {
+    intr_dci = (uint32_t)((intr_ep * 2U) + 1U);
+    if (intr_dci > max_dci) {
+      max_dci = intr_dci;
+    }
   }
-
-  xhci_set_phase(XHCI_PHASE_SET_CONFIG);
-  if (xhci_ctrl_transfer(0x00, 9, info->config_value ? info->config_value : 1,
-                         0, NULL, 0) != 0) {
-    serial_puts("[xHCI] USB net Set Configuration failed\n");
-    return -1;
+  if (max_dci >= 32) {
+    return xhci_setup_usb_net_fail(info, "USB Ethernet endpoint DCI invalid");
   }
 
   if (rtl815x) {
     if (xhci_rtl815x_prepare(info) != 0) {
-      serial_puts("[xHCI] RTL815x vendor init failed\n");
-      return -1;
+      return xhci_setup_usb_net_fail(info, "RTL815x vendor init failed");
     }
-  } else if (info->control_interface != 0xff) {
-    (void)xhci_ctrl_transfer(0x21, 0x43, 0x000F, info->control_interface,
-                             NULL, 0);
   }
 
   usbnet_in_ring = (xhci_trb_t *)xhci_alloc_aligned(
       sizeof(xhci_trb_t) * XHCI_RING_TRBS, 64);
   usbnet_out_ring = (xhci_trb_t *)xhci_alloc_aligned(
       sizeof(xhci_trb_t) * XHCI_RING_TRBS, 64);
+  if (intr_ep != 0) {
+    usbnet_intr_ring = (xhci_trb_t *)xhci_alloc_aligned(
+        sizeof(xhci_trb_t) * XHCI_RING_TRBS, 64);
+  }
   usbnet_rx_buf = (uint8_t *)xhci_alloc_aligned(XHCI_USB_NET_FRAME_CAP, 64);
   usbnet_tx_buf = (uint8_t *)xhci_alloc_aligned(XHCI_USB_NET_FRAME_CAP, 64);
   if (!usbnet_in_ring || !usbnet_out_ring || !usbnet_rx_buf ||
-      !usbnet_tx_buf) {
-    return -1;
+      !usbnet_tx_buf || (intr_ep != 0 && !usbnet_intr_ring)) {
+    return xhci_setup_usb_net_fail(info, "USB Ethernet ring allocation failed");
   }
 
   usbnet_in_idx = 0;
   usbnet_out_idx = 0;
+  usbnet_intr_idx = 0;
   usbnet_in_cycle = 1;
   usbnet_out_cycle = 1;
+  usbnet_intr_cycle = 1;
   xhci_init_ring(usbnet_in_ring, usbnet_in_cycle);
   xhci_init_ring(usbnet_out_ring, usbnet_out_cycle);
+  if (usbnet_intr_ring) {
+    xhci_init_ring(usbnet_intr_ring, usbnet_intr_cycle);
+  }
   memset(usbnet_rx_buf, 0, XHCI_USB_NET_FRAME_CAP);
 
   usbnet_in_mps = info->bulk_in_mps ? info->bulk_in_mps : 512;
@@ -1095,24 +1118,51 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   usbnet_slot = device_slot;
   usbnet_in_dci = (uint8_t)in_dci;
   usbnet_out_dci = (uint8_t)out_dci;
+  usbnet_intr_dci = (uint8_t)intr_dci;
+  usbnet_intr_mps = info->intr_in_mps ? info->intr_in_mps : 16;
   usbnet_rx_pending = 0;
   usbnet_rx_ready = 0;
   usbnet_rx_ready_len = 0;
   usbnet_rtl815x = rtl815x ? 1 : 0;
 
   memset(input, 0, xhci_context_bytes());
-  xhci_input_set_flags(input, (1U << 0) | (1U << in_dci) | (1U << out_dci),
-                       0);
+  uint32_t add_flags = (1U << 0) | (1U << in_dci) | (1U << out_dci);
+  if (intr_dci != 0) {
+    add_flags |= (1U << intr_dci);
+  }
+  xhci_input_set_flags(input, add_flags, 0);
   xhci_setup_slot_ctx(input, portsc, (uint8_t)(port + 1), max_dci);
   xhci_setup_ep_ctx(input, out_dci, 2, (uint64_t)(uintptr_t)usbnet_out_ring,
                     usbnet_out_mps, 0);
   xhci_setup_ep_ctx(input, in_dci, 6, (uint64_t)(uintptr_t)usbnet_in_ring,
                     usbnet_in_mps, 0);
+  if (intr_dci != 0) {
+    xhci_setup_ep_ctx(input, intr_dci, 7,
+                      (uint64_t)(uintptr_t)usbnet_intr_ring,
+                      usbnet_intr_mps, info->intr_interval);
+  }
 
   xhci_set_phase(XHCI_PHASE_CONFIGURE_EP);
   if (xhci_cmd_configure_ep(device_slot, input) != 0) {
-    serial_puts("[xHCI] USB net Configure EP failed\n");
-    return -1;
+    return xhci_setup_usb_net_fail(info,
+                                   "USB Ethernet Configure Endpoint failed");
+  }
+
+  xhci_set_phase(XHCI_PHASE_SET_CONFIG);
+  if (xhci_ctrl_transfer(0x00, 9, info->config_value ? info->config_value : 1,
+                         0, NULL, 0) != 0) {
+    return xhci_setup_usb_net_fail(info,
+                                   "USB Ethernet Set Configuration failed");
+  }
+
+  if (rtl815x) {
+    (void)xhci_rtl815x_write_u8(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_CR,
+                                RTL815X_CR_RE | RTL815X_CR_TE);
+    (void)xhci_rtl815x_read_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_PHYSTATUS,
+                                &rtl815x_last_phy_status);
+  } else if (info->control_interface != 0xff) {
+    (void)xhci_ctrl_transfer(0x21, 0x43, 0x000F, info->control_interface,
+                             NULL, 0);
   }
 
   dev_ctx = enum_dev_ctx;

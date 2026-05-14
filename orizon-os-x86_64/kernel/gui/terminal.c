@@ -1637,8 +1637,8 @@ static void term_print_usb_status(terminal_t *term, const char *cmd) {
                 "Note: USB Ethernet raw packet path is ready; run 'net dhcp'.\n");
   } else if (usb_net_present()) {
     term_puts_t(term,
-                "Note: USB Ethernet is detected, but this adapter still needs "
-                "a matching packet driver.\n");
+                "Note: USB Ethernet is detected; check the status field above "
+                "for the blocked driver stage.\n");
   } else {
     term_puts_t(term,
                 "Tip: plug the adapter, run 'usb rescan', and check whether a "
@@ -2769,8 +2769,8 @@ static void term_run_net(terminal_t *term, const char *cmd) {
                       "DHCP server, or adapter link.\n");
         } else {
           term_puts_t(term,
-                      "net: USB Ethernet detected, but this adapter still needs "
-                      "a matching packet driver.\n");
+                      "net: USB Ethernet detected, but the packet path is not "
+                      "ready yet; check the usb status field.\n");
         }
       }
     }

@@ -280,6 +280,10 @@ void usb_note_device(const char *controller, uint8_t port,
           candidate.bulk_out_ep = addr;
           candidate.bulk_out_mps = mps;
         }
+      } else if (attr == 3 && (addr & 0x80) && candidate.intr_in_ep == 0) {
+        candidate.intr_in_ep = addr;
+        candidate.intr_in_mps = mps;
+        candidate.intr_interval = cfg[off + 6];
       }
     }
 
@@ -374,6 +378,7 @@ void usb_format_net_status(char *buf, size_t size) {
            "usb-net present=yes controller=%s port=%u vid=%04x pid=%04x "
            "dev-class=%02x/%02x/%02x iface=%02x/%02x/%02x cfg=%u "
            "ctrl-if=%u data-if=%u bulk-in=%02x/%u bulk-out=%02x/%u "
+           "intr-in=%02x/%u/%u "
            "mac=%02x:%02x:%02x:%02x:%02x:%02x ready=%s raw=%s link=%s "
            "driver=%s status=%s",
            usb_net.controller, usb_net.port, usb_net.vendor_id,
@@ -382,7 +387,8 @@ void usb_format_net_status(char *buf, size_t size) {
            usb_net.interface_subclass, usb_net.interface_protocol,
            usb_net.config_value, usb_net.control_interface,
            usb_net.data_interface, usb_net.bulk_in_ep, usb_net.bulk_in_mps,
-           usb_net.bulk_out_ep, usb_net.bulk_out_mps, usb_net.mac[0],
+           usb_net.bulk_out_ep, usb_net.bulk_out_mps, usb_net.intr_in_ep,
+           usb_net.intr_in_mps, usb_net.intr_interval, usb_net.mac[0],
            usb_net.mac[1], usb_net.mac[2], usb_net.mac[3], usb_net.mac[4],
            usb_net.mac[5], usb_net.ready ? "yes" : "no",
            usb_net.raw_ethernet ? "yes" : "no",
@@ -428,6 +434,20 @@ void usb_net_mark_ready(const char *transport, int raw_ethernet) {
            usb_net.raw_ethernet
                ? "USB Ethernet ready; raw frames enabled for DHCP"
                : "USB Ethernet configured; packet format unsupported");
+}
+
+void usb_net_mark_setup_failed(const char *transport, const char *status) {
+  if (!usb_net.present) {
+    return;
+  }
+  usb_net.ready = 0;
+  usb_net.raw_ethernet = 0;
+  usb_net.link_up = 0;
+  if (transport && transport[0]) {
+    snprintf(usb_net.driver_hint, sizeof(usb_net.driver_hint), "%s", transport);
+  }
+  snprintf(usb_net.status, sizeof(usb_net.status), "%s",
+           status && status[0] ? status : "USB Ethernet setup failed");
 }
 
 void usb_net_set_mac(const uint8_t mac[6]) {
