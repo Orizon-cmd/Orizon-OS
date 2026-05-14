@@ -1079,6 +1079,13 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
     return xhci_setup_usb_net_fail(info, "USB Ethernet endpoint DCI invalid");
   }
 
+  xhci_set_phase(XHCI_PHASE_SET_CONFIG);
+  if (xhci_ctrl_transfer(0x00, 9, info->config_value ? info->config_value : 1,
+                         0, NULL, 0) != 0) {
+    return xhci_setup_usb_net_fail(info,
+                                   "USB Ethernet Set Configuration failed");
+  }
+
   if (rtl815x) {
     if (xhci_rtl815x_prepare(info) != 0) {
       return xhci_setup_usb_net_fail(info, "RTL815x vendor init failed");
@@ -1146,13 +1153,6 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   if (xhci_cmd_configure_ep(device_slot, input) != 0) {
     return xhci_setup_usb_net_fail(info,
                                    "USB Ethernet Configure Endpoint failed");
-  }
-
-  xhci_set_phase(XHCI_PHASE_SET_CONFIG);
-  if (xhci_ctrl_transfer(0x00, 9, info->config_value ? info->config_value : 1,
-                         0, NULL, 0) != 0) {
-    return xhci_setup_usb_net_fail(info,
-                                   "USB Ethernet Set Configuration failed");
   }
 
   if (rtl815x) {
