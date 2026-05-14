@@ -430,6 +430,23 @@ void usb_net_mark_ready(const char *transport, int raw_ethernet) {
                : "USB Ethernet configured; packet format unsupported");
 }
 
+void usb_net_set_mac(const uint8_t mac[6]) {
+  int nonzero = 0;
+  if (!usb_net.present || !mac) {
+    return;
+  }
+  for (int i = 0; i < 6; i++) {
+    if (mac[i] != 0) {
+      nonzero = 1;
+      break;
+    }
+  }
+  if (!nonzero || (mac[0] & 1)) {
+    return;
+  }
+  memcpy(usb_net.mac, mac, sizeof(usb_net.mac));
+}
+
 int usb_net_send_frame(const void *frame, size_t len) {
   if (!usb_net_ready() || !frame || len == 0) {
     return -1;

@@ -73,6 +73,7 @@ int usb_net_ready(void);
 int usb_net_link_up(void);
 int usb_get_net_info(usb_net_info_t *out);
 void usb_net_mark_ready(const char *transport, int raw_ethernet);
+void usb_net_set_mac(const uint8_t mac[6]);
 int usb_net_send_frame(const void *frame, size_t len);
 int usb_net_recv_frame(void *frame, size_t cap);
 

@@ -48,6 +48,39 @@
 #define XHCI_RING_LINK_INDEX 255
 #define XHCI_USB_NET_FRAME_CAP 2048
 
+#define RTL815X_REQ_GET_REGS 0x05
+#define RTL815X_REQ_SET_REGS 0x05
+#define RTL815X_REQT_READ 0xC0
+#define RTL815X_REQT_WRITE 0x40
+#define RTL815X_BYTE_EN_DWORD 0xFF
+#define RTL815X_BYTE_EN_WORD 0x33
+#define RTL815X_BYTE_EN_BYTE 0x11
+#define RTL815X_MCU_TYPE_PLA 0x0100
+#define RTL815X_MCU_TYPE_USB 0x0000
+#define RTL815X_PLA_IDR 0xC000
+#define RTL815X_PLA_RCR 0xC010
+#define RTL815X_PLA_RMS 0xC016
+#define RTL815X_PLA_FMC 0xC0B4
+#define RTL815X_PLA_BOOT_CTRL 0xE004
+#define RTL815X_PLA_TCR0 0xE610
+#define RTL815X_PLA_CR 0xE813
+#define RTL815X_PLA_PHYSTATUS 0xE908
+#define RTL815X_USB_USB_CTRL 0xD406
+#define RTL815X_RCR_APM 0x0002
+#define RTL815X_RCR_AM 0x0004
+#define RTL815X_RCR_AB 0x0008
+#define RTL815X_FMC_FCR_MCU_EN 0x0001
+#define RTL815X_AUTOLOAD_DONE 0x0002
+#define RTL815X_CR_RE 0x08
+#define RTL815X_CR_TE 0x04
+#define RTL815X_LINK_STATUS 0x0002
+#define RTL815X_RX_AGG_DISABLE 0x0010
+#define RTL815X_TX_DESC_SIZE 8
+#define RTL815X_RX_DESC_SIZE 24
+#define RTL815X_RX_LEN_MASK 0x7FFF
+#define RTL815X_TX_FS (1U << 31)
+#define RTL815X_TX_LS (1U << 30)
+
 #define XHCI_USBCMD_RS (1U << 0)
 #define XHCI_USBCMD_HCRST (1U << 1)
 #define XHCI_USBCMD_INTE (1U << 2)
@@ -178,6 +211,10 @@ static int usbnet_rx_pending = 0;
 static int usbnet_rx_ready = 0;
 static uint32_t usbnet_rx_request_len = XHCI_USB_NET_FRAME_CAP;
 static uint32_t usbnet_rx_ready_len = 0;
+static uint8_t usbnet_rtl815x = 0;
+static uint8_t *usbnet_tx_buf = NULL;
+static uint16_t rtl815x_hw_version = 0;
+static uint16_t rtl815x_last_phy_status = 0;
 
 enum {
   XHCI_PHASE_IDLE = 0,
@@ -775,6 +812,178 @@ static int xhci_fetch_descriptor(uint8_t type, uint8_t index, void *buf, uint16_
   return xhci_ctrl_transfer(0x80, 6, (uint16_t)((type << 8) | index), 0, buf, len);
 }
 
+static uint32_t xhci_le32_at(const uint8_t *buf) {
+  return (uint32_t)buf[0] | ((uint32_t)buf[1] << 8) |
+         ((uint32_t)buf[2] << 16) | ((uint32_t)buf[3] << 24);
+}
+
+static void xhci_put_le32(uint8_t *buf, uint32_t value) {
+  buf[0] = (uint8_t)(value & 0xFF);
+  buf[1] = (uint8_t)((value >> 8) & 0xFF);
+  buf[2] = (uint8_t)((value >> 16) & 0xFF);
+  buf[3] = (uint8_t)((value >> 24) & 0xFF);
+}
+
+static int xhci_usbnet_is_rtl815x(const usb_net_info_t *info) {
+  if (!info || info->vendor_id != 0x0BDA) {
+    return 0;
+  }
+  return info->product_id == 0x8152 || info->product_id == 0x8153 ||
+         info->product_id == 0x8155 || info->product_id == 0x8156 ||
+         info->product_id == 0x8053;
+}
+
+static int xhci_rtl815x_ctrl(uint8_t req_type, uint16_t value,
+                             uint16_t index, void *data, uint16_t len) {
+  return xhci_ctrl_transfer(req_type,
+                            (req_type & 0x80) ? RTL815X_REQ_GET_REGS
+                                               : RTL815X_REQ_SET_REGS,
+                            value, index, data, len);
+}
+
+static int xhci_rtl815x_read_block(uint16_t type, uint16_t index,
+                                   void *data, uint16_t len) {
+  if (!data || len == 0) {
+    return -1;
+  }
+  return xhci_rtl815x_ctrl(RTL815X_REQT_READ, index, type, data, len);
+}
+
+static int xhci_rtl815x_read_u32(uint16_t type, uint16_t index,
+                                 uint32_t *out) {
+  uint8_t tmp[4] __attribute__((aligned(4)));
+  if (!out) {
+    return -1;
+  }
+  memset(tmp, 0, sizeof(tmp));
+  if (xhci_rtl815x_read_block(type, index, tmp, sizeof(tmp)) != 0) {
+    return -1;
+  }
+  *out = xhci_le32_at(tmp);
+  return 0;
+}
+
+static int xhci_rtl815x_read_u16(uint16_t type, uint16_t index,
+                                 uint16_t *out) {
+  uint8_t tmp[4] __attribute__((aligned(4)));
+  uint16_t aligned;
+  uint16_t byte_en;
+  uint8_t shift;
+  if (!out) {
+    return -1;
+  }
+  aligned = (uint16_t)(index & ~3U);
+  shift = (uint8_t)(index & 2U);
+  byte_en = (uint16_t)(RTL815X_BYTE_EN_WORD << shift);
+  memset(tmp, 0, sizeof(tmp));
+  if (xhci_rtl815x_ctrl(RTL815X_REQT_READ, aligned, type | byte_en, tmp,
+                        sizeof(tmp)) != 0) {
+    return -1;
+  }
+  *out = (uint16_t)((xhci_le32_at(tmp) >> (shift * 8U)) & 0xFFFFU);
+  return 0;
+}
+
+static int xhci_rtl815x_write_u16(uint16_t type, uint16_t index,
+                                  uint16_t value) {
+  uint8_t tmp[4] __attribute__((aligned(4)));
+  uint16_t aligned = (uint16_t)(index & ~3U);
+  uint8_t shift = (uint8_t)(index & 2U);
+  uint16_t byte_en = (uint16_t)(RTL815X_BYTE_EN_WORD << shift);
+  uint32_t shifted = (uint32_t)value << (shift * 8U);
+  xhci_put_le32(tmp, shifted);
+  return xhci_rtl815x_ctrl(RTL815X_REQT_WRITE, aligned, type | byte_en, tmp,
+                           sizeof(tmp));
+}
+
+static int xhci_rtl815x_write_u8(uint16_t type, uint16_t index,
+                                 uint8_t value) {
+  uint8_t tmp[4] __attribute__((aligned(4)));
+  uint16_t aligned = (uint16_t)(index & ~3U);
+  uint8_t shift = (uint8_t)(index & 3U);
+  uint16_t byte_en = (uint16_t)(RTL815X_BYTE_EN_BYTE << shift);
+  uint32_t shifted = (uint32_t)value << (shift * 8U);
+  xhci_put_le32(tmp, shifted);
+  return xhci_rtl815x_ctrl(RTL815X_REQT_WRITE, aligned, type | byte_en, tmp,
+                           sizeof(tmp));
+}
+
+static void xhci_rtl815x_set_u16(uint16_t type, uint16_t index,
+                                 uint16_t bits) {
+  uint16_t value = 0;
+  if (xhci_rtl815x_read_u16(type, index, &value) == 0) {
+    (void)xhci_rtl815x_write_u16(type, index, (uint16_t)(value | bits));
+  }
+}
+
+static void xhci_rtl815x_clear_u16(uint16_t type, uint16_t index,
+                                   uint16_t bits) {
+  uint16_t value = 0;
+  if (xhci_rtl815x_read_u16(type, index, &value) == 0) {
+    (void)xhci_rtl815x_write_u16(type, index, (uint16_t)(value & ~bits));
+  }
+}
+
+static int xhci_rtl815x_read_mac(uint8_t mac[6]) {
+  uint8_t tmp[8] __attribute__((aligned(4)));
+  if (!mac) {
+    return -1;
+  }
+  memset(tmp, 0, sizeof(tmp));
+  if (xhci_rtl815x_read_block(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_IDR, tmp,
+                              sizeof(tmp)) != 0) {
+    return -1;
+  }
+  memcpy(mac, tmp, 6);
+  return 0;
+}
+
+static int xhci_rtl815x_prepare(const usb_net_info_t *info) {
+  uint32_t tcr0 = 0;
+  uint16_t boot = 0;
+  uint8_t mac[6];
+
+  if (!xhci_usbnet_is_rtl815x(info)) {
+    return -1;
+  }
+
+  rtl815x_hw_version = 0;
+  rtl815x_last_phy_status = 0;
+  if (xhci_rtl815x_read_u32(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_TCR0,
+                            &tcr0) == 0) {
+    rtl815x_hw_version = (uint16_t)((tcr0 >> 16) & 0x7CF0U);
+  }
+
+  for (int i = 0; i < 200; i++) {
+    if (xhci_rtl815x_read_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_BOOT_CTRL,
+                              &boot) != 0 ||
+        (boot & RTL815X_AUTOLOAD_DONE)) {
+      break;
+    }
+    xhci_delay(20000);
+  }
+
+  if (xhci_rtl815x_read_mac(mac) == 0) {
+    usb_net_set_mac(mac);
+  }
+
+  (void)xhci_rtl815x_write_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_RMS, 1522);
+  xhci_rtl815x_set_u16(RTL815X_MCU_TYPE_USB, RTL815X_USB_USB_CTRL,
+                       RTL815X_RX_AGG_DISABLE);
+
+  xhci_rtl815x_clear_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_FMC,
+                         RTL815X_FMC_FCR_MCU_EN);
+  xhci_rtl815x_set_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_FMC,
+                       RTL815X_FMC_FCR_MCU_EN);
+  xhci_rtl815x_set_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_RCR,
+                       RTL815X_RCR_APM | RTL815X_RCR_AM | RTL815X_RCR_AB);
+  (void)xhci_rtl815x_write_u8(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_CR,
+                              RTL815X_CR_RE | RTL815X_CR_TE);
+  (void)xhci_rtl815x_read_u16(RTL815X_MCU_TYPE_PLA, RTL815X_PLA_PHYSTATUS,
+                              &rtl815x_last_phy_status);
+  return 0;
+}
+
 static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t *out_mps,
                           uint8_t *out_interval, uint8_t *out_iface, uint8_t *out_cfg) {
   uint16_t i = 0;
@@ -825,8 +1034,10 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   uint32_t in_dci;
   uint32_t out_dci;
   uint32_t max_dci;
+  int rtl815x;
 
-  if (!input || !enum_dev_ctx || !info || !info->raw_ethernet ||
+  rtl815x = xhci_usbnet_is_rtl815x(info);
+  if (!input || !enum_dev_ctx || !info || (!info->raw_ethernet && !rtl815x) ||
       !info->bulk_in_ep || !info->bulk_out_ep) {
     return -1;
   }
@@ -850,7 +1061,12 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
     return -1;
   }
 
-  if (info->control_interface != 0xff) {
+  if (rtl815x) {
+    if (xhci_rtl815x_prepare(info) != 0) {
+      serial_puts("[xHCI] RTL815x vendor init failed\n");
+      return -1;
+    }
+  } else if (info->control_interface != 0xff) {
     (void)xhci_ctrl_transfer(0x21, 0x43, 0x000F, info->control_interface,
                              NULL, 0);
   }
@@ -860,7 +1076,9 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   usbnet_out_ring = (xhci_trb_t *)xhci_alloc_aligned(
       sizeof(xhci_trb_t) * XHCI_RING_TRBS, 64);
   usbnet_rx_buf = (uint8_t *)xhci_alloc_aligned(XHCI_USB_NET_FRAME_CAP, 64);
-  if (!usbnet_in_ring || !usbnet_out_ring || !usbnet_rx_buf) {
+  usbnet_tx_buf = (uint8_t *)xhci_alloc_aligned(XHCI_USB_NET_FRAME_CAP, 64);
+  if (!usbnet_in_ring || !usbnet_out_ring || !usbnet_rx_buf ||
+      !usbnet_tx_buf) {
     return -1;
   }
 
@@ -880,6 +1098,7 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   usbnet_rx_pending = 0;
   usbnet_rx_ready = 0;
   usbnet_rx_ready_len = 0;
+  usbnet_rtl815x = rtl815x ? 1 : 0;
 
   memset(input, 0, xhci_context_bytes());
   xhci_input_set_flags(input, (1U << 0) | (1U << in_dci) | (1U << out_dci),
@@ -898,9 +1117,10 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
 
   dev_ctx = enum_dev_ctx;
   usbnet_ready = 1;
-  usb_net_mark_ready("xhci-cdc-ecm", 1);
+  usb_net_mark_ready(rtl815x ? "xhci-realtek-rtl815x" : "xhci-cdc-ecm", 1);
   xhci_set_phase(XHCI_PHASE_READY);
-  serial_puts("[xHCI] USB CDC Ethernet setup complete\n");
+  serial_puts(rtl815x ? "[xHCI] USB RTL815x Ethernet setup complete\n"
+                      : "[xHCI] USB CDC Ethernet setup complete\n");
   return 0;
 }
 
@@ -1238,10 +1458,26 @@ int usb_xhci_net_send_frame(const void *frame, size_t len) {
     return -1;
   }
 
-  uint64_t param = xhci_phys_addr(frame);
+  const void *tx_frame = frame;
+  size_t tx_len = len;
+  if (usbnet_rtl815x) {
+    if (!usbnet_tx_buf || len + RTL815X_TX_DESC_SIZE > XHCI_USB_NET_FRAME_CAP ||
+        len > 0x3FFFFU) {
+      return -1;
+    }
+    memset(usbnet_tx_buf, 0, RTL815X_TX_DESC_SIZE);
+    xhci_put_le32(usbnet_tx_buf,
+                  (uint32_t)len | RTL815X_TX_FS | RTL815X_TX_LS);
+    xhci_put_le32(usbnet_tx_buf + 4, 0);
+    memcpy(usbnet_tx_buf + RTL815X_TX_DESC_SIZE, frame, len);
+    tx_frame = usbnet_tx_buf;
+    tx_len = len + RTL815X_TX_DESC_SIZE;
+  }
+
+  uint64_t param = xhci_phys_addr(tx_frame);
   uint32_t ctrl = (XHCI_TRB_TYPE_NORMAL << 10) | XHCI_TRB_IOC;
   xhci_enqueue_transfer_trb(usbnet_out_ring, &usbnet_out_idx,
-                            &usbnet_out_cycle, param, (uint32_t)len, ctrl);
+                            &usbnet_out_cycle, param, (uint32_t)tx_len, ctrl);
   xhci_ring_doorbell(usbnet_slot, usbnet_out_dci);
   if (xhci_wait_for_transfer(usbnet_out_dci, 20000) != 0) {
     return -1;
@@ -1269,11 +1505,34 @@ int usb_xhci_net_recv_frame(void *frame, size_t cap) {
     return 0;
   }
 
+  const uint8_t *src = usbnet_rx_buf;
   size_t copy_len = usbnet_rx_ready_len;
+  if (usbnet_rtl815x) {
+    if (usbnet_rx_ready_len <= RTL815X_RX_DESC_SIZE) {
+      usbnet_rx_ready = 0;
+      usbnet_rx_ready_len = 0;
+      xhci_usbnet_arm_rx();
+      return 0;
+    }
+    uint32_t opts1 = xhci_le32_at(usbnet_rx_buf);
+    uint32_t packet_len = opts1 & RTL815X_RX_LEN_MASK;
+    if (packet_len < 18 ||
+        packet_len + RTL815X_RX_DESC_SIZE > usbnet_rx_ready_len) {
+      usbnet_rx_ready = 0;
+      usbnet_rx_ready_len = 0;
+      xhci_usbnet_arm_rx();
+      return 0;
+    }
+    src = usbnet_rx_buf + RTL815X_RX_DESC_SIZE;
+    copy_len = packet_len;
+    if (copy_len >= 4) {
+      copy_len -= 4; /* Realtek RX length includes the Ethernet FCS. */
+    }
+  }
   if (copy_len > cap) {
     copy_len = cap;
   }
-  memcpy(frame, usbnet_rx_buf, copy_len);
+  memcpy(frame, src, copy_len);
   usbnet_rx_ready = 0;
   usbnet_rx_ready_len = 0;
   xhci_usbnet_arm_rx();
@@ -1388,7 +1647,8 @@ void usb_xhci_format_ports(char *buf, size_t size) {
                   "pci=%02x:%02x.%u id=%04x:%04x ports=%u tracked=%u "
                   "slots=%u preinit-connected=%u scans=%lu attempts=%lu "
                   "connected=%u keyboard=%s usbnet=%s cmd=%u cmdto=%lu "
-                  "sts=0x%08x cr=0x%08x:%08x iman=0x%08x rt=0x%08x db=0x%08x",
+                  "sts=0x%08x cr=0x%08x:%08x iman=0x%08x rt=0x%08x db=0x%08x "
+                  "rtlver=0x%04x phy=0x%04x",
                   xhci_controller_count, xhci_controller_index,
                   xhci_pci_bus, xhci_pci_device, xhci_pci_function,
                   xhci_pci_vendor_id, xhci_pci_device_id, xhci_ports,
@@ -1398,7 +1658,8 @@ void usb_xhci_format_ports(char *buf, size_t size) {
                   usbnet_ready ? "yes" : "no", xhci_last_cmd_type,
                   xhci_cmd_timeouts, xhci_diag_usbsts, xhci_diag_crcr_hi,
                   xhci_diag_crcr_lo, xhci_diag_iman, xhci_diag_rt_base,
-                  xhci_diag_db_base);
+                  xhci_diag_db_base, rtl815x_hw_version,
+                  rtl815x_last_phy_status);
   if (used < 0 || (size_t)used >= size) {
     return;
   }
