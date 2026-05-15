@@ -1063,6 +1063,16 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   in_ep = (uint8_t)(info->bulk_in_ep & 0x0F);
   out_ep = (uint8_t)(info->bulk_out_ep & 0x0F);
   intr_ep = (uint8_t)(info->intr_in_ep & 0x0F);
+  /*
+   * RTL815x exposes an interrupt endpoint for link notifications, but basic
+   * DHCP only needs the two bulk pipes. Some laptop xHCI controllers reject
+   * the initial Configure Endpoint command when that periodic endpoint is
+   * added before the Realtek link path is fully up, so bring the NIC up
+   * bulk-only first and keep interrupt notifications for a later pass.
+   */
+  if (rtl815x) {
+    intr_ep = 0;
+  }
   if (in_ep == 0 || out_ep == 0) {
     return xhci_setup_usb_net_fail(info, "USB Ethernet bulk endpoints missing");
   }
@@ -1151,8 +1161,11 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
 
   xhci_set_phase(XHCI_PHASE_CONFIGURE_EP);
   if (xhci_cmd_configure_ep(device_slot, input) != 0) {
-    return xhci_setup_usb_net_fail(info,
-                                   "USB Ethernet Configure Endpoint failed");
+    char status[96];
+    snprintf(status, sizeof(status),
+             "USB Ethernet Configure Endpoint failed cc=%u",
+             xhci_last_cmd_cc);
+    return xhci_setup_usb_net_fail(info, status);
   }
 
   if (rtl815x) {
