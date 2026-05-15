@@ -534,6 +534,23 @@ static void xhci_setup_slot_ctx(void *input, uint32_t portsc, uint8_t port, uint
   slot[1] = (uint32_t)port << 16;
 }
 
+static uint32_t xhci_input_ep_ctx_index(uint32_t dci) {
+  return dci + 1U; /* Input contexts include the Input Control Context first. */
+}
+
+static void xhci_setup_slot_ctx_from_device(void *input, uint32_t portsc,
+                                            uint8_t port, void *device_ctx,
+                                            uint32_t ctx_entries) {
+  uint32_t *slot = xhci_ctx_ptr(input, 1);
+  if (device_ctx) {
+    memcpy(slot, xhci_ctx_ptr(device_ctx, 0), (size_t)xhci_context_size);
+  } else {
+    xhci_setup_slot_ctx(input, portsc, port, ctx_entries);
+    return;
+  }
+  slot[0] = (slot[0] & ~(0x1FU << 27)) | ((ctx_entries & 0x1FU) << 27);
+}
+
 static void xhci_setup_ep_ctx_ex(void *input, uint32_t index, uint8_t ep_type,
                                  uint64_t ring, uint16_t mps,
                                  uint8_t interval, uint8_t max_burst,
@@ -1157,17 +1174,18 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
     add_flags |= (1U << intr_dci);
   }
   xhci_input_set_flags(input, add_flags, 0);
-  xhci_setup_slot_ctx(input, portsc, (uint8_t)(port + 1), max_dci);
-  xhci_setup_ep_ctx_ex(input, out_dci, 2,
+  xhci_setup_slot_ctx_from_device(input, portsc, (uint8_t)(port + 1),
+                                  enum_dev_ctx, max_dci);
+  xhci_setup_ep_ctx_ex(input, xhci_input_ep_ctx_index(out_dci), 2,
                        (uint64_t)(uintptr_t)usbnet_out_ring,
                        usbnet_out_mps, 0, info->bulk_out_burst, 0, 0);
-  xhci_setup_ep_ctx_ex(input, in_dci, 6,
+  xhci_setup_ep_ctx_ex(input, xhci_input_ep_ctx_index(in_dci), 6,
                        (uint64_t)(uintptr_t)usbnet_in_ring,
                        usbnet_in_mps, 0, info->bulk_in_burst, 0, 0);
   if (intr_dci != 0) {
     uint32_t intr_esit =
         (uint32_t)usbnet_intr_mps * ((uint32_t)info->intr_in_burst + 1U);
-    xhci_setup_ep_ctx_ex(input, intr_dci, 7,
+    xhci_setup_ep_ctx_ex(input, xhci_input_ep_ctx_index(intr_dci), 7,
                          (uint64_t)(uintptr_t)usbnet_intr_ring,
                          usbnet_intr_mps, info->intr_interval,
                          info->intr_in_burst, 0, intr_esit);
@@ -1441,11 +1459,13 @@ static int xhci_setup_keyboard(uint32_t port) {
 
   uint32_t intr_ep_id = (uint32_t)((intr_ep * 2) + 1);
   xhci_input_set_flags(input, (1U << 0) | (1U << intr_ep_id), 0);
-  xhci_setup_slot_ctx(input, portsc, (uint8_t)(port + 1), intr_ep_id);
+  xhci_setup_slot_ctx_from_device(input, portsc, (uint8_t)(port + 1),
+                                  enum_dev_ctx, intr_ep_id);
   
   /* Setup endpoint with DCS=1, Error Count=3, Max Burst=0 */
-  uint32_t *ep = xhci_ctx_ptr(input, intr_ep_id);
-  xhci_ctx_zero(input, intr_ep_id);
+  uint32_t intr_ctx_index = xhci_input_ep_ctx_index(intr_ep_id);
+  uint32_t *ep = xhci_ctx_ptr(input, intr_ctx_index);
+  xhci_ctx_zero(input, intr_ctx_index);
   ep[0] = ((uint32_t)intr_interval << 16) | (3U << 8); /* Interval + Mult=0 + MaxBurst=0 */
   ep[1] = (7U << 3) | (3U << 1) | ((uint32_t)intr_mps << 16); /* EP Type=7 (Intr IN) + CErr=3 + MaxPacketSize */
   uint64_t ring_phys = xhci_phys_addr(intr_ring);
