@@ -155,11 +155,11 @@ static void draw_shell_frame(void) {
                COLOR_PANEL_EDGE);
 
   draw_circle(shell_x + 18, shell_y + (PANEL_TITLE_HEIGHT / 2), 5,
-              COLOR_RED);
+              COLOR_PANEL_EDGE);
   draw_circle(shell_x + 38, shell_y + (PANEL_TITLE_HEIGHT / 2), 5,
-              COLOR_YELLOW);
+              COLOR_TEXT_MUTED);
   draw_circle(shell_x + 58, shell_y + (PANEL_TITLE_HEIGHT / 2), 5,
-              COLOR_GREEN);
+              COLOR_PANEL_ACCENT);
 
   font_draw_string(shell_x + 86, title_y, "Orizon OS Console",
                    COLOR_TEXT_PRIMARY);
