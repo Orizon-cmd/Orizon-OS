@@ -30,6 +30,9 @@ typedef struct {
   uint16_t bulk_in_mps;
   uint16_t bulk_out_mps;
   uint16_t intr_in_mps;
+  uint8_t bulk_in_burst;
+  uint8_t bulk_out_burst;
+  uint8_t intr_in_burst;
   uint8_t intr_interval;
   int ready;
   int raw_ethernet;

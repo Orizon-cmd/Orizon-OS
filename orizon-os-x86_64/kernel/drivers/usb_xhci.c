@@ -534,16 +534,25 @@ static void xhci_setup_slot_ctx(void *input, uint32_t portsc, uint8_t port, uint
   slot[1] = (uint32_t)port << 16;
 }
 
-static void xhci_setup_ep_ctx(void *input, uint32_t index, uint8_t ep_type,
-                              uint64_t ring, uint16_t mps, uint8_t interval) {
+static void xhci_setup_ep_ctx_ex(void *input, uint32_t index, uint8_t ep_type,
+                                 uint64_t ring, uint16_t mps,
+                                 uint8_t interval, uint8_t max_burst,
+                                 uint8_t mult, uint32_t max_esit_payload) {
   uint32_t *ep = xhci_ctx_ptr(input, index);
   xhci_ctx_zero(input, index);
-  ep[0] = ((uint32_t)interval << 16);
-  ep[1] = ((uint32_t)ep_type << 3) | (3U << 1) | ((uint32_t)mps << 16);
+  ep[0] = (((uint32_t)mult & 0x3U) << 8) | ((uint32_t)interval << 16) |
+          (((uint32_t)(max_esit_payload >> 16) & 0xFFU) << 24);
+  ep[1] = ((uint32_t)ep_type << 3) | (3U << 1) |
+          ((uint32_t)max_burst << 8) | ((uint32_t)mps << 16);
   uint64_t ring_phys = xhci_phys_addr((void *)(uintptr_t)ring);
   ep[2] = (uint32_t)((ring_phys & ~0xF) | 1U);
   ep[3] = (uint32_t)(ring_phys >> 32);
-  ep[4] = mps;
+  ep[4] = (uint32_t)mps | ((max_esit_payload & 0xFFFFU) << 16);
+}
+
+static void xhci_setup_ep_ctx(void *input, uint32_t index, uint8_t ep_type,
+                              uint64_t ring, uint16_t mps, uint8_t interval) {
+  xhci_setup_ep_ctx_ex(input, index, ep_type, ring, mps, interval, 0, 0, 0);
 }
 
 static void xhci_cmd_enqueue(uint64_t param, uint32_t status,
@@ -1149,14 +1158,19 @@ static int xhci_setup_usb_net(uint32_t port, uint32_t portsc, void *input,
   }
   xhci_input_set_flags(input, add_flags, 0);
   xhci_setup_slot_ctx(input, portsc, (uint8_t)(port + 1), max_dci);
-  xhci_setup_ep_ctx(input, out_dci, 2, (uint64_t)(uintptr_t)usbnet_out_ring,
-                    usbnet_out_mps, 0);
-  xhci_setup_ep_ctx(input, in_dci, 6, (uint64_t)(uintptr_t)usbnet_in_ring,
-                    usbnet_in_mps, 0);
+  xhci_setup_ep_ctx_ex(input, out_dci, 2,
+                       (uint64_t)(uintptr_t)usbnet_out_ring,
+                       usbnet_out_mps, 0, info->bulk_out_burst, 0, 0);
+  xhci_setup_ep_ctx_ex(input, in_dci, 6,
+                       (uint64_t)(uintptr_t)usbnet_in_ring,
+                       usbnet_in_mps, 0, info->bulk_in_burst, 0, 0);
   if (intr_dci != 0) {
-    xhci_setup_ep_ctx(input, intr_dci, 7,
-                      (uint64_t)(uintptr_t)usbnet_intr_ring,
-                      usbnet_intr_mps, info->intr_interval);
+    uint32_t intr_esit =
+        (uint32_t)usbnet_intr_mps * ((uint32_t)info->intr_in_burst + 1U);
+    xhci_setup_ep_ctx_ex(input, intr_dci, 7,
+                         (uint64_t)(uintptr_t)usbnet_intr_ring,
+                         usbnet_intr_mps, info->intr_interval,
+                         info->intr_in_burst, 0, intr_esit);
   }
 
   xhci_set_phase(XHCI_PHASE_CONFIGURE_EP);

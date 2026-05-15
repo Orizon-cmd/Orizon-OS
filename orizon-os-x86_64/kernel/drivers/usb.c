@@ -192,6 +192,7 @@ void usb_note_device(const char *controller, uint8_t port,
   uint8_t cur_cls = 0;
   uint8_t cur_sub = 0;
   uint8_t cur_proto = 0;
+  uint8_t last_ep_kind = 0;
 
   if (!dev_desc || !cfg || cfg_len < 9) {
     return;
@@ -249,6 +250,7 @@ void usb_note_device(const char *controller, uint8_t port,
       cur_cls = cfg[off + 5];
       cur_sub = cfg[off + 6];
       cur_proto = cfg[off + 7];
+      last_ep_kind = 0;
       if (dev.interface_class == 0) {
         dev.interface_class = cur_cls;
         dev.interface_subclass = cur_sub;
@@ -272,18 +274,31 @@ void usb_note_device(const char *controller, uint8_t port,
       uint8_t addr = cfg[off + 2];
       uint8_t attr = cfg[off + 3] & 0x03;
       uint16_t mps = usb_le16(cfg + off + 4);
+      last_ep_kind = 0;
       if (attr == 2) {
         if ((addr & 0x80) && candidate.bulk_in_ep == 0) {
           candidate.bulk_in_ep = addr;
           candidate.bulk_in_mps = mps;
+          last_ep_kind = 1;
         } else if (!(addr & 0x80) && candidate.bulk_out_ep == 0) {
           candidate.bulk_out_ep = addr;
           candidate.bulk_out_mps = mps;
+          last_ep_kind = 2;
         }
       } else if (attr == 3 && (addr & 0x80) && candidate.intr_in_ep == 0) {
         candidate.intr_in_ep = addr;
         candidate.intr_in_mps = mps;
         candidate.intr_interval = cfg[off + 6];
+        last_ep_kind = 3;
+      }
+    } else if (type == 48 && len >= 6 && current_net_iface) {
+      uint8_t max_burst = cfg[off + 2];
+      if (last_ep_kind == 1) {
+        candidate.bulk_in_burst = max_burst;
+      } else if (last_ep_kind == 2) {
+        candidate.bulk_out_burst = max_burst;
+      } else if (last_ep_kind == 3) {
+        candidate.intr_in_burst = max_burst;
       }
     }
 
@@ -378,7 +393,7 @@ void usb_format_net_status(char *buf, size_t size) {
            "usb-net present=yes controller=%s port=%u vid=%04x pid=%04x "
            "dev-class=%02x/%02x/%02x iface=%02x/%02x/%02x cfg=%u "
            "ctrl-if=%u data-if=%u bulk-in=%02x/%u bulk-out=%02x/%u "
-           "intr-in=%02x/%u/%u "
+           "intr-in=%02x/%u/%u burst=%u/%u/%u "
            "mac=%02x:%02x:%02x:%02x:%02x:%02x ready=%s raw=%s link=%s "
            "driver=%s status=%s",
            usb_net.controller, usb_net.port, usb_net.vendor_id,
@@ -388,7 +403,8 @@ void usb_format_net_status(char *buf, size_t size) {
            usb_net.config_value, usb_net.control_interface,
            usb_net.data_interface, usb_net.bulk_in_ep, usb_net.bulk_in_mps,
            usb_net.bulk_out_ep, usb_net.bulk_out_mps, usb_net.intr_in_ep,
-           usb_net.intr_in_mps, usb_net.intr_interval, usb_net.mac[0],
+           usb_net.intr_in_mps, usb_net.intr_interval, usb_net.bulk_in_burst,
+           usb_net.bulk_out_burst, usb_net.intr_in_burst, usb_net.mac[0],
            usb_net.mac[1], usb_net.mac[2], usb_net.mac[3], usb_net.mac[4],
            usb_net.mac[5], usb_net.ready ? "yes" : "no",
            usb_net.raw_ethernet ? "yes" : "no",
