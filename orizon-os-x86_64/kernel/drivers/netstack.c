@@ -40,6 +40,8 @@
 #define NETWORK_CONFIG_PATH "/system/network.conf"
 #define NETWORK_LOG_PATH "/logs/network.log"
 #define DEFAULT_STATIC_SUBNET 0xffffff00U
+#define NETSTACK_FALLBACK_WAITS_PER_MS 16ULL
+#define NETSTACK_SHORT_PAUSE_LOOPS 2048
 
 static netstack_status_t stack_status = {
     .ipv4_ready = 0,
@@ -92,6 +94,9 @@ static char tls_last_http_status[80];
 static uint8_t tls_last_http_first_record_type = 0;
 static size_t tls_last_http_first_record_len = 0;
 static size_t tls_last_http_decrypt_failures = 0;
+static uint64_t net_deadline_last_tick = 0;
+static uint64_t net_deadline_fallback_budget = 0;
+static uint64_t net_deadline_fallback_used = 0;
 
 static int l2_link_up(void) {
   if (net_link_up()) {
@@ -185,18 +190,37 @@ static void put_be64(uint8_t *p, uint64_t v) {
 
 static uint64_t deadline_from_ms(uint64_t ms) {
   uint64_t ticks = (ms * TIMER_HZ + 999ULL) / 1000ULL;
+  uint64_t now = timer_ticks();
   if (ticks == 0) {
     ticks = 1;
   }
-  return timer_ticks() + ticks;
+  net_deadline_last_tick = now;
+  net_deadline_fallback_used = 0;
+  net_deadline_fallback_budget =
+      (ms * NETSTACK_FALLBACK_WAITS_PER_MS) + 512ULL;
+  return now + ticks;
 }
 
 static int before_deadline(uint64_t deadline) {
-  return timer_ticks() <= deadline;
+  uint64_t now = timer_ticks();
+  if (now > deadline) {
+    return 0;
+  }
+  if (now != net_deadline_last_tick) {
+    net_deadline_last_tick = now;
+    net_deadline_fallback_used = 0;
+    return 1;
+  }
+  if (net_deadline_fallback_used++ >= net_deadline_fallback_budget) {
+    return 0;
+  }
+  return 1;
 }
 
 static void short_wait(void) {
-  __asm__ volatile("hlt");
+  for (volatile int i = 0; i < NETSTACK_SHORT_PAUSE_LOOPS; i++) {
+    __asm__ volatile("pause");
+  }
 }
 
 const char *netstack_config_path(void) {
@@ -955,21 +979,33 @@ int netstack_configure_ipv4_dhcp(void) {
   }
 
   set_status("ipv4: dhcp discover");
+  network_log_line("ipv4: dhcp discover");
   len = build_dhcp_packet(dhcp, 1, xid, 0, 0);
-  send_udp_raw(mac_broadcast, 0, 0xffffffffU, DHCP_CLIENT_PORT,
-               DHCP_SERVER_PORT, dhcp, len);
+  if (send_udp_raw(mac_broadcast, 0, 0xffffffffU, DHCP_CLIENT_PORT,
+                   DHCP_SERVER_PORT, dhcp, len) < 0) {
+    set_status("ipv4: dhcp discover tx failed");
+    network_log_line("ipv4: dhcp discover tx failed");
+    return -1;
+  }
   if (wait_dhcp(xid, 2, &offered_ip, &server_id, &subnet, &router, &dns) != 0 ||
       offered_ip == 0) {
     set_status("ipv4: dhcp offer timeout");
+    network_log_line("ipv4: dhcp offer timeout");
     return -1;
   }
 
   set_status("ipv4: dhcp request");
+  network_log_line("ipv4: dhcp request");
   len = build_dhcp_packet(dhcp, 3, xid, offered_ip, server_id);
-  send_udp_raw(mac_broadcast, 0, 0xffffffffU, DHCP_CLIENT_PORT,
-               DHCP_SERVER_PORT, dhcp, len);
+  if (send_udp_raw(mac_broadcast, 0, 0xffffffffU, DHCP_CLIENT_PORT,
+                   DHCP_SERVER_PORT, dhcp, len) < 0) {
+    set_status("ipv4: dhcp request tx failed");
+    network_log_line("ipv4: dhcp request tx failed");
+    return -1;
+  }
   if (wait_dhcp(xid, 5, &offered_ip, &server_id, &subnet, &router, &dns) != 0) {
     set_status("ipv4: dhcp ack timeout");
+    network_log_line("ipv4: dhcp ack timeout");
     return -1;
   }
 
@@ -981,6 +1017,7 @@ int netstack_configure_ipv4_dhcp(void) {
   stack_status.static_config_loaded = 0;
   arp_cached_ip = 0;
   set_status("ipv4: configured by dhcp");
+  network_log_line("ipv4: configured by dhcp");
   return 0;
 }
 
