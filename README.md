@@ -222,7 +222,7 @@ AES-128-CTR/HMAC-SHA256, echange `NEWKEYS`, puis repond au premier
 desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
 console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
-de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `touch`, `mkdir`, `rm`,
+de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `tail`, `touch`, `mkdir`, `rm`,
 `write`, `append`, `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
 `disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
@@ -237,8 +237,10 @@ derniers evenements et fermetures de canal. `report save` ecrit
 Les longues sorties SSH sont segmentees en plusieurs paquets pour eviter les
 coupures sur `report show`, `cat /workspace/hardware-report.txt` ou `logs`;
 un meme transport SSH peut aussi rouvrir un canal `exec` apres une commande.
-Les commandes `logs ssh` et `logs boot` montrent la fin du journal quand il
-devient long. `ssh hostkey` affiche l'identite hote RSA generee pour
+Les commandes `tail`, `logs ssh` et `logs boot` montrent la fin des fichiers ou
+journaux quand ils deviennent longs. Les commandes `exec` inconnues renvoient
+maintenant un `exit-status` non nul pour mieux fonctionner avec les scripts.
+`ssh hostkey` affiche l'identite hote RSA generee pour
 l'installation et stockee dans `/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).

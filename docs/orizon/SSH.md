@@ -79,7 +79,7 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   temporaire configurable dans `/system/ssh.conf` (`max-attempts`,
   `lockout-seconds`).
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
-  un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
+  un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
   `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `logs storage`, `logs pci`, `disk identify`,
@@ -101,9 +101,10 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Rapport materiel: `report save` ecrit `/workspace/hardware-report.txt` depuis
   SSH pour capturer storage, PCI BARs, USB, Wi-Fi, reseau, bootguard, update,
   selftest et les queues de logs avant une validation Lenovo. `cat
-  /workspace/hardware-report.txt` et `report show` utilisent maintenant un
-  tampon de sortie plus large pour lire un rapport complet depuis un vrai client
-  SSH, sans passer par l'ecran framebuffer.
+  /workspace/hardware-report.txt`, `tail /workspace/hardware-report.txt` et
+  `report show` utilisent maintenant un tampon de sortie plus large ou une vue
+  de fin de fichier pour lire un rapport complet depuis un vrai client SSH,
+  sans passer par l'ecran framebuffer.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
@@ -114,8 +115,9 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   puis planifient le redemarrage ou l'extinction.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros
   paquets, segmente les longues sorties `CHANNEL_DATA` en plusieurs paquets,
-  garde le transport reutilisable apres une commande `exec`, et remet l'ecoute
-  TCP/22 en etat apres une vraie deconnexion ou une session idle. Le `snprintf`
+  garde le transport reutilisable apres une commande `exec`, renvoie `127` sur
+  une commande distante inconnue, et remet l'ecoute TCP/22 en etat apres une
+  vraie deconnexion ou une session idle. Le `snprintf`
   kernel supporte maintenant l'alignement a gauche
   (`%-Ns`), ce qui evite les corruptions d'arguments dans les sorties comme
   `ps`.

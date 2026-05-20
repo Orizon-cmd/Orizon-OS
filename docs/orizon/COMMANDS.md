@@ -87,13 +87,17 @@ ssh hostkey reset
 ssh algorithms
 logs ssh
 report save
+cat /workspace/hardware-report.txt
+head /workspace/hardware-report.txt
+tail /workspace/hardware-report.txt
 selftest ssh
 reboot
 shutdown
 ```
 
 Use SSH for ZimaOS/VM diagnostics and remote admin commands. Keep long soak and
-multi-client tests separate from quick build checks.
+multi-client tests separate from quick build checks. Unknown remote `exec`
+commands return a non-zero status so automation can fail fast.
 
 ## USB Ethernet
 

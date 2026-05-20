@@ -43,6 +43,7 @@ $commands = @(
   "pci bars",
   "report save",
   "head /workspace/hardware-report.txt",
+  "tail /workspace/hardware-report.txt",
   "timer",
   "usb",
   "usb rescan",
@@ -161,6 +162,9 @@ run_cmd() {
     "head /workspace/hardware-report.txt")
       grep -q "Orizon hardware report" "`$OUT" || { echo "missing saved hardware report"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "tail /workspace/hardware-report.txt")
+      grep -q "\\[tail\\]" "`$OUT" && grep -q "ssh: CHANNEL" "`$OUT" || { echo "missing hardware report tail"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "rollback-status")
       ! grep -q "command not found" "`$OUT" || { echo "rollback-status is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -186,6 +190,25 @@ while IFS= read -r cmd; do
 done <<'EOC'
 $commandBlock
 EOC
+
+echo "--- exec command-not-found status ---"
+DISPLAY=none SSH_ASKPASS="`$ASKPASS" SSH_ASKPASS_REQUIRE=force timeout ${TimeoutSeconds}s setsid ssh -n \
+  -oNumberOfPasswordPrompts=1 \
+  -oPreferredAuthentications=password \
+  -oPubkeyAuthentication=no \
+  -oStrictHostKeyChecking=no \
+  -oUserKnownHostsFile="`$KNOWN" \
+  -oConnectTimeout=5 \
+  orizon@$VmIp "definitely-not-a-command" > "`$OUT" 2>&1
+rc=`$?
+cat "`$OUT"
+echo "rc=`$rc"
+if [ "`$rc" -eq 0 ]; then
+  echo "unknown command returned success"
+  rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"
+  exit 1
+fi
+grep -q "command not found" "`$OUT" || { echo "missing command-not-found output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
 
 echo "--- shell pty multi-command ---"
 printf 'status\rnet status\rwifi status\rexit\r' | DISPLAY=none SSH_ASKPASS="`$ASKPASS" SSH_ASKPASS_REQUIRE=force timeout ${TimeoutSeconds}s setsid ssh -tt \

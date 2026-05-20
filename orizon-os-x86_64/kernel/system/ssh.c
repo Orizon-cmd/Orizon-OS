@@ -278,6 +278,7 @@ static int ssh_channel_success_pending = 0;
 static int ssh_channel_failure_pending = 0;
 static int ssh_channel_data_pending = 0;
 static int ssh_channel_exit_status_pending = 0;
+static uint32_t ssh_channel_exit_code = 0;
 static int ssh_channel_close_pending = 0;
 static int ssh_channel_close_sent = 0;
 static uint8_t ssh_encrypted_rx[SSH_PACKET_MAX + SHA256_DIGEST_SIZE];
@@ -1576,7 +1577,7 @@ static size_t ssh_build_channel_exit_status(uint8_t *out, size_t cap) {
     return 0;
   }
   payload[off++] = 0; /* want_reply */
-  ssh_put_u32(payload + off, 0);
+  ssh_put_u32(payload + off, ssh_channel_exit_code);
   off += 4;
   return ssh_build_encrypted_packet(out, cap, payload, off);
 }
@@ -1719,6 +1720,7 @@ static void ssh_reset_negotiation(void) {
   ssh_channel_failure_pending = 0;
   ssh_channel_data_pending = 0;
   ssh_channel_exit_status_pending = 0;
+  ssh_channel_exit_code = 0;
   ssh_channel_close_pending = 0;
   ssh_channel_close_sent = 0;
   ssh_encrypted_rx_used = 0;
@@ -2246,6 +2248,7 @@ static void ssh_process_channel_open(const uint8_t *payload,
     ssh_channel_failure_pending = 0;
     ssh_channel_data_pending = 0;
     ssh_channel_exit_status_pending = 0;
+    ssh_channel_exit_code = 0;
     ssh_channel_close_pending = 0;
     ssh_channel_close_sent = 0;
     ssh_channel_tx_len = 0;
@@ -3316,7 +3319,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3366,6 +3369,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  pwd                  show remote cwd\r\n"
         "  cat <file>           print a file preview\r\n"
         "  head <file>          print a shorter file preview\r\n"
+        "  tail <file>          print the end of a file preview\r\n"
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
         "  logs [name]          show boot/storage/pci/network/usb/wifi/ssh/update logs\r\n"
@@ -3520,6 +3524,10 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (ssh_shell_command_is(line, "head")) {
     ssh_shell_print_file(ssh_shell_skip_spaces(line + 4), 700, 0);
+    return;
+  }
+  if (ssh_shell_command_is(line, "tail")) {
+    ssh_shell_print_file(ssh_shell_skip_spaces(line + 4), 4096, 1);
     return;
   }
   if (ssh_shell_command_is(line, "touch")) {
@@ -3710,15 +3718,18 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_record_command("exec", cmd);
 
   ssh_shell_suppress_prompt = 1;
+  ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
     ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), SSH_FILE_READ_MAX, 0);
   } else if (ssh_shell_command_is(cmd, "head")) {
     ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 700, 0);
+  } else if (ssh_shell_command_is(cmd, "tail")) {
+    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 4096, 1);
   } else if (ssh_shell_command_is(cmd, "touch")) {
     ssh_shell_mutate_path(cmd + 5, "touch");
   } else if (ssh_shell_command_is(cmd, "mkdir")) {
@@ -3864,9 +3875,12 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_queue_channel_text("Orizon OS x86_64 OrizonSSH_0.1\r\n");
   } else if (strcmp(cmd, "pwd") == 0) {
     ssh_queue_channel_text("/home/orizon\r\n");
+  } else if (strcmp(cmd, "exit") == 0 || strcmp(cmd, "logout") == 0) {
+    /* No output: exec exit only reports a successful exit-status. */
   } else {
     snprintf(out, sizeof(out), "%s: command not found\r\n", cmd);
     ssh_queue_channel_text(out);
+    ssh_channel_exit_code = 127;
   }
   ssh_shell_suppress_prompt = 0;
   ssh_channel_exit_status_pending = 1;
