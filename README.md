@@ -586,6 +586,9 @@ La premiere commande reconstruit `orizon-os-x86_64`, deploie le resultat sur
 ## Arborescence Utile
 
 - `orizon-os-x86_64/` : noyau et image de demarrage `x86_64`
+- `docs/orizon/START_HERE.md` : page de reprise avec etat courant, limites et
+  prochaine validation
+- `docs/orizon/COMMANDS.md` : aide-memoire des commandes terminal utiles
 - `docs/orizon/` : notes de projet et labo ZimaOS
 - `scripts/orizon/` : update portable, build, deploiement VM, acces VNC et SSH
 - `config/hosts/*.local.*` : secrets locaux ignores par Git

@@ -33,6 +33,9 @@
   `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
   `sysinfo`, `hw`, `mounts`, `logs`, `report`, `ps`, and `uptime`.
+- Documentation cleanup: `START_HERE.md` now summarizes the current state,
+  guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
+  operator command checklist separate from the long-form subsystem notes.
 - Staged remote-management base: `ssh start/status/algorithms/stop`, TCP/22
   listener, SSH banner, server/client `KEXINIT`, X25519, RSA host-key
   signature, `ECDH_REPLY`, key derivation, `NEWKEYS`, encrypted

@@ -1,27 +1,81 @@
 # Orizon OS Start Here
 
-## What is already prepared
+This is the short operator page for resuming work without re-reading every
+design note.
 
-- The repository is organized as a standalone Orizon OS project.
-- SSH key access to the ZimaOS lab server is configured and reusable.
-- Local server settings and reusable scripts are in place.
-- The ZimaOS VM storage area has been identified and a dedicated `orizon-dev` VM exists.
-- A remote Docker-based `x86_64` build path is working on ZimaOS.
-- VM updates can be applied in place without reinstalling the OS each time.
+## Current State
 
-## Files to open first
+- Installed updates are active: the in-OS `update` command downloads the signed
+  GitHub manifest, verifies boot payload SHA-256 values, refreshes the installed
+  ESP, and writes rollback metadata.
+- Rollback is boot-count style through Limine today. It restores the normal
+  Limine default after a successful shell boot, but true UEFI Runtime Services
+  `BootNext` writing is still future work.
+- Release packaging is guarded: `Orizon-OS.iso`, `updates/x86_64/kernel.elf`,
+  `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig`, and
+  `release.txt` are generated and cross-checked by
+  `scripts/orizon/orizon_update.py`.
+- Wired VM networking supports e1000/e1000e, RTL8139, and VirtIO-net. The
+  ZimaOS NAT smoke cases for those NICs have passed before; do not rerun the
+  full matrix unless that is the explicit task.
+- USB Ethernet has xHCI CDC-ECM and Realtek RTL815x packet paths, plus
+  `/logs/usb.log` family/support diagnostics for CDC-NCM, ASIX, SMSC/LAN95xx,
+  RNDIS, hub, and endpoint-blocker investigation.
+- Intel AX201/CNVi Wi-Fi is staged up through guarded WPA2/CCMP validation.
+  `wifi validate`, `wifi online`, and `wifi update` persist AP/WPA2/DHCP/DNS/TLS
+  evidence, but the Lenovo real-AP path has not been validated yet.
 
-- `README.md`
-- `docs/orizon/ROADMAP.md`
-- `docs/orizon/ZIMAOS_LAB.md`
-- `scripts/orizon/build_x86_64_on_zimaos.py`
-- `scripts/orizon/open_orizon_vnc.ps1`
-- `scripts/orizon/setup_zimaos_access.py`
-- `scripts/orizon/test_zimaos.ps1`
+## Day-To-Day Loop
 
-## First recommended moves
+Use the release helper for builds so the ISO and update payloads stay in sync:
 
-1. Run `python scripts/orizon/build_x86_64_on_zimaos.py --deploy-vm`.
-2. Open the VM display with `powershell -File scripts/orizon/open_orizon_vnc.ps1`.
-3. Use the running `orizon-dev` VM as the default loop for `x86_64` testing.
-4. When needed, extend the same update flow to full disk images with `deploy_orizon_vm_update.py`.
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-iso
+```
+
+For the fast VM development loop:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-vm
+powershell -File scripts/orizon/open_orizon_vnc.ps1
+```
+
+Quick checks before a commit:
+
+```powershell
+git diff --check
+python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py
+```
+
+## What To Capture Next
+
+- ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `pkg status`,
+  `update status`, and `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT first.
+- USB Ethernet hardware: `usb rescan`, `usb`, `logs usb`, `net status`.
+- Lenovo Wi-Fi AP validation, only on the user's real hardware: `wifi validate
+  <ssid> [password]`, then `logs wifi`, `net status`, `wifi wpa`, and
+  `wifi data`.
+- Rollback hardening: inspect `bootguard`, `rollback-status`, the Limine
+  fallback config, and the captured EFI system table handoff before attempting
+  future NVRAM/BootNext work.
+
+## Files To Open First
+
+- [README.md](../../README.md)
+- [docs/orizon/COMMANDS.md](COMMANDS.md)
+- [docs/orizon/ROADMAP.md](ROADMAP.md)
+- [docs/orizon/UPDATE.md](UPDATE.md)
+- [docs/orizon/NETWORK.md](NETWORK.md)
+- [docs/orizon/LAPTOP_HARDWARE.md](LAPTOP_HARDWARE.md)
+- [docs/orizon/ZIMAOS_LAB.md](ZIMAOS_LAB.md)
+
+## Hard Limits
+
+- Do not claim Lenovo, real AP, USB dongle, or physical hardware validation
+  unless that hardware was actually tested by the user.
+- Do not commit private keys, local env files, imported firmware blobs, or
+  hotspot credentials.
+- Do not run the full VM matrix unless the current task explicitly asks for it.
+- Do not publish a release commit that updates `kernel.elf` without also checking
+  whether `Orizon-OS.iso`, `manifest.txt`, `manifest.sig`, and `release.txt`
+  need to move with it.
