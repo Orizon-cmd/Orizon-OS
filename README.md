@@ -37,9 +37,9 @@ le developpement noyau:
   installer des composants separes du kernel
 - console avec scrollback, support molette souris PS/2, `edit` ameliore et
   navigation historique `Up/Down`
-- diagnostics `sysinfo`, `hw`, `mounts` et `report` pour voir CPU, memoire,
-  stockage, racines data, reseau, USB/PS2, installation, update et principaux
-  peripheriques PCI
+- diagnostics `sysinfo`, `hw`, `mounts`, `report`, `report save` et `selftest`
+  pour voir CPU, memoire, stockage, racines data, reseau, USB/PS2, installation,
+  update et principaux peripheriques PCI
 - service `ssh` experimental: listener TCP/22, banniere SSH Orizon, paquet
   `KEXINIT`, X25519, signature hote RSA de developpement, `ECDH_REPLY`,
   `NEWKEYS`, premiere lecture/reponse chiffree `SERVICE_REQUEST` /
@@ -47,8 +47,10 @@ le developpement noyau:
   `session`, `pty-req`, `shell`, `exec`, mini-shell distant de diagnostic,
   configuration `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics
   `ssh status`
-- inspection stockage avec `disks`, `partitions`, `storage detail` et
-  selection du disque actif via `storage select <n>`
+- inspection stockage avec `disks`, `partitions`, `storage detail`,
+  `storage diag`, `logs storage`, `logs pci`, `disk identify`,
+  `disk read-test`, `gpt scan` et selection du disque actif via
+  `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
   rapport compact `report`; apres installation, le boot log est conserve dans
   `/logs/boot.log`
@@ -217,13 +219,17 @@ console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
 de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `touch`, `mkdir`, `rm`,
 `write`, `append`, `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
-`pkg`, `update`, `storage`, `free`, `timer`, `audit`, `sync`, `status`, `auth`, `hostkey`,
+`pkg`, `update`, `update status`, `storage`, `disk identify`,
+`disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
+`audit`, `ssh sessions`, `sync`, `status`, `auth`, `hostkey`,
 `whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`,
 `ssh lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
 commande distante directe. Le service remet l'ecoute TCP en etat apres une
 session fermee, garde une protection anti-bruteforce dans `/system/ssh.conf`,
 et expose `audit` / `ssh audit` pour verifier sessions, auth, commandes,
-derniers evenements et fermetures de canal. Les longues sorties SSH sont
+derniers evenements et fermetures de canal. `report save` ecrit
+`/workspace/hardware-report.txt` depuis SSH pour exporter un diagnostic complet.
+Les longues sorties SSH sont
 segmentees en plusieurs paquets pour eviter les coupures sur `logs ssh` ou
 `cat`; les commandes `logs ssh` et `logs boot` montrent la fin du journal quand
 il devient long. `ssh hostkey` affiche l'identite hote RSA generee pour
@@ -274,8 +280,17 @@ Apres boot, verifier:
 ```text
 sysinfo
 report
+report save
+selftest
 hw
 pci
+pci bars
+logs storage
+logs pci
+storage diag
+disk identify
+disk read-test
+gpt scan
 input
 wifi
 ```
@@ -556,12 +571,15 @@ python scripts/orizon/orizon_update.py --from-github --mode local-iso
 Ces commandes rafraichissent `Orizon-OS.iso` a la racine. Le mode `github-iso`
 est le plus simple pour une machine qui veut juste recevoir une mise a jour; le
 mode `--from-github --mode local-iso` sert aux machines qui ont la toolchain et
-doivent reconstruire.
+  doivent reconstruire.
 Les modes de build rafraichissent aussi `updates/x86_64/` pour que la commande
 `update` dans Orizon recoive le meme kernel que l'ISO publiee. Le manifeste
 signe contient maintenant la taille et le SHA-256 de `Orizon-OS.iso`, et
 `updates/x86_64/release.txt` resume les hashes ISO/payload/manifest/signature
-pour eviter d'oublier un artefact release dans le commit.
+pour eviter d'oublier un artefact release dans le commit. La validation release
+refuse aussi un manifeste ou un `release.txt` dont les tailles/SHA-256 de
+`kernel.elf`, `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig` ou
+`Orizon-OS.iso` ne correspondent pas aux artefacts courants.
 
 Backends disponibles:
 

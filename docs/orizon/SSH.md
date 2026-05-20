@@ -12,6 +12,7 @@ ssh password <mot-de-passe>
 ssh start
 ssh status
 ssh audit
+ssh sessions
 ssh auth
 ssh auth max <essais>
 ssh auth lockout <secondes>
@@ -26,6 +27,8 @@ ssh password off
 ssh poll
 ssh stop
 logs ssh
+report save
+selftest ssh
 bootguard
 ```
 
@@ -39,8 +42,8 @@ desactive l'authentification par mot de passe.
 `ssh auth max <essais>` et `ssh auth lockout <secondes>` changent la politique
 anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
 `30` secondes de verrouillage.
-`ssh audit` affiche le meme rapport d'audit depuis la console locale que la
-commande distante `audit`.
+`ssh audit` et `ssh sessions` affichent le meme rapport d'audit depuis la
+console locale que les commandes distantes `audit` et `ssh sessions`.
 `ssh hostkey` affiche l'identite hote, `ssh hostkey reload` recharge
 `/system/ssh_host_rsa.key`, et `ssh hostkey reset` regenere une cle RSA locale
 persistante pour l'installation courante. La cle de bootstrap compilee ne sert
@@ -78,26 +81,33 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
-  `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `storage`, `storage diag`,
-  `pci`, `pci bars`, `free`, `timer`, `bootguard`, `audit`, `sync`, `status`,
+  `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
+  `storage diag`, `logs storage`, `logs pci`, `disk identify`,
+  `disk read-test`, `gpt scan`, `selftest`, `pci`, `pci bars`, `report save`,
+  `free`, `timer`, `bootguard`, `audit`, `ssh sessions`, `sync`, `status`,
   `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
   Le mode shell PTY accepte les fins de ligne
   CR/LF d'OpenSSH, echo les caracteres saisis, et peut enchainer plusieurs
   commandes dans une meme session interactive.
-- Audit: `audit` affiche le cumul des sessions, auth reussies/echouees,
+- Audit: `audit` / `ssh sessions` affiche le cumul des sessions, auth reussies/echouees,
   commandes `exec`, commandes shell, fermetures de canal, recoveries listener,
   temps idle, derniere commande et les derniers evenements recents; les
   evenements sont aussi journalises dans `/logs/ssh.log` avec le mot de passe
   masque. Le meme rapport est disponible localement avec `ssh audit`.
-- Journaux: `logs ssh` et `logs boot` affichent maintenant la fin du fichier si
-  le journal est long, pour garder les evenements recents visibles pendant une
-  session d'administration distante.
+- Journaux: `logs ssh`, `logs boot`, `logs storage` et `logs pci` affichent les
+  etats utiles sans action destructive; storage/PCI sont des snapshots
+  diagnostiques quand aucun vrai fichier journal persistant n'existe encore.
+- Rapport materiel: `report save` ecrit `/workspace/hardware-report.txt` depuis
+  SSH pour capturer storage, PCI BARs, USB, Wi-Fi, reseau, bootguard, update,
+  selftest et les queues de logs avant une validation Lenovo.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
-  `write`/`append`/`touch`/`mkdir`/`rm`, et sauvegarder avec `sync`.
+  `write`/`append`/`touch`/`mkdir`/`rm`, lancer les diagnostics non destructifs
+  `selftest`, `disk identify`, `disk read-test`, `gpt scan`, et sauvegarder avec
+  `sync`.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros
   paquets, segmente les longues sorties `CHANNEL_DATA` en plusieurs paquets, et
   remet l'ecoute TCP/22 en etat apres une fermeture de canal ou une session
@@ -140,5 +150,6 @@ Pour transformer ce listener en acces distant complet, il reste a ajouter:
 - durcir encore l'authentification: rotation du hash, permissions du fichier
   config et journalisation plus detaillee par IP
 - brancher le shell SSH sur une vraie pseudo-console Orizon partageant toutes
-  les commandes locales, au lieu du sous-ensemble distant actuel
+  les commandes locales; le sous-ensemble distant couvre deja les diagnostics
+  importants mais pas encore toute la console
 - rotation/rechargement propre des cles hote dans `/system/ssh.conf`

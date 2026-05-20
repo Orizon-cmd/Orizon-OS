@@ -404,6 +404,38 @@ def validate_manifest_signature_metadata(manifest: Path, sig_path: Path) -> None
         raise RuntimeError("manifest.sig does not contain a valid hex signature")
 
 
+def validate_manifest_artifact(
+    manifest_text: str, *, key: str, path: Path, expected_repo_path: str
+) -> None:
+    manifest_path = manifest_value(manifest_text, f"{key}-path")
+    manifest_size = manifest_value(manifest_text, f"{key}-size")
+    manifest_sha = manifest_value(manifest_text, f"{key}-sha256")
+    if manifest_path != expected_repo_path:
+        raise RuntimeError(
+            f"Signed manifest {key}-path mismatch: {manifest_path} != {expected_repo_path}"
+        )
+    if manifest_size != str(path.stat().st_size):
+        raise RuntimeError(f"Signed manifest {key}-size does not match {path}")
+    if manifest_sha != sha256_file(path):
+        raise RuntimeError(f"Signed manifest {key}-sha256 does not match {path}")
+
+
+def validate_release_report_artifact(
+    report_text: str, *, key: str, path: Path, expected_repo_path: str
+) -> None:
+    report_path = manifest_value(report_text, f"{key}-path")
+    report_size = manifest_value(report_text, f"{key}-size")
+    report_sha = manifest_value(report_text, f"{key}-sha256")
+    if report_path != expected_repo_path:
+        raise RuntimeError(
+            f"release.txt {key}-path mismatch: {report_path} != {expected_repo_path}"
+        )
+    if report_size != str(path.stat().st_size):
+        raise RuntimeError(f"release.txt {key}-size does not match {path}")
+    if report_sha != sha256_file(path):
+        raise RuntimeError(f"release.txt {key}-sha256 does not match {path}")
+
+
 def validate_release_bundle(
     *,
     update_dir: Path,
@@ -412,23 +444,57 @@ def validate_release_bundle(
 ) -> None:
     manifest = update_dir / "manifest.txt"
     sig_path = update_dir / "manifest.sig"
+    release = update_dir / DEFAULT_RELEASE_REPORT
     required = [
         update_dir / "kernel.elf",
         update_dir / "BOOTX64.EFI",
         update_dir / "limine.conf",
         manifest,
         sig_path,
-        update_dir / DEFAULT_RELEASE_REPORT,
+        release,
     ]
     for artifact in required:
         if not artifact.exists():
             raise FileNotFoundError(f"Release artifact missing: {artifact}")
     validate_manifest_signature_metadata(manifest, sig_path)
+    manifest_text = manifest.read_text(encoding="utf-8")
+    release_text = release.read_text(encoding="utf-8")
+
+    validate_manifest_artifact(
+        manifest_text,
+        key="kernel",
+        path=update_dir / "kernel.elf",
+        expected_repo_path="updates/x86_64/kernel.elf",
+    )
+    validate_manifest_artifact(
+        manifest_text,
+        key="efi",
+        path=update_dir / "BOOTX64.EFI",
+        expected_repo_path="updates/x86_64/BOOTX64.EFI",
+    )
+    validate_manifest_artifact(
+        manifest_text,
+        key="limine",
+        path=update_dir / "limine.conf",
+        expected_repo_path="updates/x86_64/limine.conf",
+    )
+    for label, path in (
+        ("kernel", update_dir / "kernel.elf"),
+        ("efi", update_dir / "BOOTX64.EFI"),
+        ("limine", update_dir / "limine.conf"),
+        ("manifest", manifest),
+        ("manifest-signature", sig_path),
+    ):
+        validate_release_report_artifact(
+            release_text,
+            key=label,
+            path=path,
+            expected_repo_path=repo_relative_path(path),
+        )
 
     if root_iso_path is not None:
         if not root_iso_path.exists():
             raise FileNotFoundError(f"Release root ISO missing: {root_iso_path}")
-        manifest_text = manifest.read_text(encoding="utf-8")
         expected_iso_path = manifest_value(manifest_text, "iso-path")
         expected_iso_size = manifest_value(manifest_text, "iso-size")
         expected_iso_sha = manifest_value(manifest_text, "iso-sha256")
@@ -440,6 +506,12 @@ def validate_release_bundle(
             raise RuntimeError("Signed manifest iso-size does not match output ISO")
         if expected_iso_sha != actual_iso_sha:
             raise RuntimeError("Signed manifest iso-sha256 does not match output ISO")
+        if manifest_value(release_text, "iso-path") != root_iso_repo_path:
+            raise RuntimeError("release.txt iso-path does not match output ISO")
+        if manifest_value(release_text, "iso-size") != actual_iso_size:
+            raise RuntimeError("release.txt iso-size does not match output ISO")
+        if manifest_value(release_text, "iso-sha256") != actual_iso_sha:
+            raise RuntimeError("release.txt iso-sha256 does not match output ISO")
 
     print("Release bundle validation: OK")
 

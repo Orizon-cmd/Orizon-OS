@@ -2037,6 +2037,127 @@ int orizon_update_rollback(char *report, size_t report_size) {
   return 0;
 }
 
+static void update_status_append(char *out, size_t out_size, const char *line) {
+  size_t used;
+
+  if (!out || out_size == 0 || !line) {
+    return;
+  }
+  used = strlen(out);
+  if (used + 1 >= out_size) {
+    return;
+  }
+  snprintf(out + used, out_size - used, "%s\n", line);
+}
+
+void orizon_update_format_status(char *out, size_t out_size) {
+  char manifest[UPDATE_MANIFEST_MAX];
+  char sig[UPDATE_MANIFEST_SIG_MAX];
+  char line[256];
+  char value[128];
+  char manifest_hash[SHA256_HEX_SIZE];
+  size_t manifest_len = 0;
+  size_t sig_len = 0;
+  int manifest_ok;
+  int sig_ok;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  update_status_append(out, out_size, "update status:");
+  snprintf(line, sizeof(line), "  state: %s", update_status_text);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  boot-mode: %s",
+           update_installed_marker_present() ? "installed" : "live-iso");
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  update-source: %s channel=%s",
+           UPDATE_SOURCE, UPDATE_CHANNEL);
+  update_status_append(out, out_size, line);
+
+  manifest_ok =
+      update_read_file(UPDATE_MANIFEST_PATH, manifest, sizeof(manifest),
+                       &manifest_len) == 0 &&
+      manifest_len > 0;
+  sig_ok = update_read_file(UPDATE_MANIFEST_SIG_PATH, sig, sizeof(sig),
+                            &sig_len) == 0 &&
+           sig_len > 0;
+  snprintf(line, sizeof(line), "  manifest: %s path=%s bytes=%lu",
+           manifest_ok ? "present" : "missing", UPDATE_MANIFEST_PATH,
+           (unsigned long)manifest_len);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  manifest.sig: %s path=%s bytes=%lu",
+           sig_ok ? "present" : "missing", UPDATE_MANIFEST_SIG_PATH,
+           (unsigned long)sig_len);
+  update_status_append(out, out_size, line);
+
+  if (manifest_ok) {
+    sha256_buffer_hex(manifest, manifest_len, manifest_hash);
+    snprintf(line, sizeof(line), "  manifest-sha256: %s", manifest_hash);
+    update_status_append(out, out_size, line);
+    if (manifest_copy_value(manifest, "version", value, sizeof(value)) == 0) {
+      snprintf(line, sizeof(line), "  manifest-version: %s", value);
+      update_status_append(out, out_size, line);
+    }
+    if (manifest_copy_value(manifest, "commit", value, sizeof(value)) == 0) {
+      snprintf(line, sizeof(line), "  manifest-commit: %s", value);
+      update_status_append(out, out_size, line);
+    }
+    if (manifest_copy_value(manifest, "kernel-sha256", value,
+                            sizeof(value)) == 0) {
+      snprintf(line, sizeof(line), "  kernel-sha256: %s", value);
+      update_status_append(out, out_size, line);
+    }
+    if (manifest_copy_value(manifest, "iso-sha256", value, sizeof(value)) ==
+        0) {
+      snprintf(line, sizeof(line), "  iso-sha256: %s", value);
+      update_status_append(out, out_size, line);
+    }
+  }
+
+  if (sig_ok) {
+    char sig_hash[SHA256_HEX_SIZE];
+    if (manifest_copy_value(sig, "key-id", value, sizeof(value)) == 0) {
+      snprintf(line, sizeof(line), "  signature-key-id: %s", value);
+      update_status_append(out, out_size, line);
+    }
+    if (manifest_copy_value(sig, "manifest-sha256", sig_hash,
+                            sizeof(sig_hash)) == 0) {
+      snprintf(line, sizeof(line), "  signature-manifest-match: %s",
+               manifest_ok && hex_equal(sig_hash, manifest_hash) ? "yes"
+                                                                 : "no");
+      update_status_append(out, out_size, line);
+    }
+  }
+
+  update_status_append(
+      out, out_size,
+      "  tls-root-trust: embedded root trust used by HTTPS/TLS probe");
+  snprintf(line, sizeof(line), "  retry-https: retries=%lu range-cache=yes",
+           (unsigned long)UPDATE_RANGE_RETRIES);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line),
+           "  resume-cache: kernel=%s efi=%s limine=%s",
+           vfs_exists(UPDATE_KERNEL_CACHE_PATH) ? "present" : "empty",
+           vfs_exists(UPDATE_EFI_CACHE_PATH) ? "present" : "empty",
+           vfs_exists(UPDATE_LIMINE_CACHE_PATH) ? "present" : "empty");
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  bootguard-pending: %s",
+           vfs_exists(UPDATE_BOOT_GUARD_PATH) ? "yes" : "no");
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  rollback-ready: %s",
+           vfs_exists(UPDATE_ROLLBACK_INFO_PATH) ? "yes" : "no");
+  update_status_append(out, out_size, line);
+  update_status_append(
+      out, out_size,
+      "  nvram-bootnext: prepared=no reason=efi-runtime-writer-not-implemented");
+  update_status_append(
+      out, out_size,
+      update_installed_marker_present()
+          ? "  action: update may run on installed Orizon"
+          : "  action: live ISO can inspect status; install required before update");
+}
+
 const char *orizon_update_status(void) {
   return update_status_text;
 }

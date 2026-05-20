@@ -16,7 +16,9 @@
 #include "../include/pci.h"
 #include "../include/power.h"
 #include "../include/ps2.h"
+#include "../include/report.h"
 #include "../include/sched.h"
+#include "../include/selftest.h"
 #include "../include/ssh.h"
 #include "../include/storage.h"
 #include "../include/string.h"
@@ -651,6 +653,29 @@ static int term_parse_uint(const char *s, int *out) {
   return 0;
 }
 
+static int term_parse_uint64_allow_zero(const char *s, uint64_t *out) {
+  uint64_t value = 0;
+  int seen = 0;
+
+  if (!s || !out) {
+    return -1;
+  }
+  while (*s >= '0' && *s <= '9') {
+    uint64_t digit = (uint64_t)(*s - '0');
+    if (value > (0xffffffffffffffffULL - digit) / 10ULL) {
+      return -1;
+    }
+    value = value * 10ULL + digit;
+    seen = 1;
+    s++;
+  }
+  if (!seen) {
+    return -1;
+  }
+  *out = value;
+  return 0;
+}
+
 static const char *term_skip_spaces(const char *s) {
   while (s && *s == ' ') {
     s++;
@@ -686,12 +711,12 @@ static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
       "about", "append", "boot-check", "bootguard", "cat", "cd", "clear", "cp", "date",
-      "disks", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
-      "free", "grep", "head", "help", "history", "hostname", "hw", "id",
+      "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
+      "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
       "install", "install-status",
       "input", "keyboard", "ls", "mkdir", "mounts", "mv",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
-      "rollback-status", "repair-boot", "rm", "shutdown", "stat", "storage", "partitions", "sync",
+      "rollback-status", "repair-boot", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write"};
   const char *matches[16];
@@ -699,8 +724,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
 
   for (size_t i = 0; i < sizeof(commands) / sizeof(commands[0]); i++) {
     if (!term_install_already_complete() &&
-        (strcmp(commands[i], "update") == 0 ||
-         strcmp(commands[i], "rollback") == 0 ||
+        (strcmp(commands[i], "rollback") == 0 ||
          strcmp(commands[i], "rollback-status") == 0 ||
          strcmp(commands[i], "bootguard") == 0)) {
       continue;
@@ -2167,7 +2191,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   if (default_view) {
     term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
     term_puts_t(term,
-                "Use: logs boot | logs network | logs usb | logs wifi | logs ssh | logs update | logs install | logs all\n");
+                "Use: logs boot | logs storage | logs pci | logs network | logs usb | logs wifi | logs ssh | logs update | logs install | logs all\n");
     if (vfs_exists(KLOG_BOOT_PATH)) {
       term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
     } else {
@@ -2206,6 +2230,22 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
                          "/workspace/.orizon/update.log", 8192);
     return;
   }
+  if (term_command_is(args, "storage")) {
+    storage_format_log(term_diag_buf, sizeof(term_diag_buf));
+    term_puts_t(term, term_diag_buf);
+    if (term_diag_buf[0] && term_diag_buf[strlen(term_diag_buf) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
+  if (term_command_is(args, "pci")) {
+    pci_format_diagnostics(term_diag_buf, sizeof(term_diag_buf));
+    term_puts_t(term, term_diag_buf);
+    if (term_diag_buf[0] && term_diag_buf[strlen(term_diag_buf) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
   if (term_command_is(args, "network") || term_command_is(args, "net")) {
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 8192);
     return;
@@ -2236,6 +2276,10 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     }
     term_print_file_tail(term, "/workspace/.orizon/update.log",
                          "/workspace/.orizon/update.log", 4096);
+    storage_format_log(term_diag_buf, sizeof(term_diag_buf));
+    term_puts_t(term, term_diag_buf);
+    pci_format_diagnostics(term_diag_buf, sizeof(term_diag_buf));
+    term_puts_t(term, term_diag_buf);
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 4096);
     term_print_file_tail(term, usb_log_path(), usb_log_path(), 4096);
     term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 4096);
@@ -2248,7 +2292,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: logs [boot|network|usb|wifi|ssh|update|install|all]\n");
+              "usage: logs [boot|storage|pci|network|usb|wifi|ssh|update|install|all]\n");
 }
 
 static void term_print_diagnostic_hints(terminal_t *term) {
@@ -2620,12 +2664,23 @@ static void term_wifi_record_validation(const char *label, const char *ssid,
   term_wifi_write_last(block);
 }
 
-static void term_run_update(terminal_t *term) {
+static void term_run_update(terminal_t *term, const char *cmd) {
   static char report[8192];
+  const char *args =
+      term_skip_spaces(cmd + (term_command_is(cmd, "orizon-update") ? 13 : 6));
+
+  if (term_command_is(args, "status")) {
+    orizon_update_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
 
   if (!term_install_already_complete()) {
     term_puts_t(term,
-                "update: unavailable in live boot. Install Orizon OS first.\n");
+                "update: unavailable in live boot. Install Orizon OS first. Use 'update status' for diagnostics.\n");
     return;
   }
   term_puts_t(term, "\033[1;36mStarting Orizon update...\033[0m\n");
@@ -2636,6 +2691,44 @@ static void term_run_update(terminal_t *term) {
   orizon_update_set_progress(NULL, NULL);
   if (report[0] == '\0') {
     term_puts_t(term, "update: no output produced\n");
+  }
+}
+
+static void term_run_disk(terminal_t *term, const char *cmd) {
+  static char report[4096];
+  const char *args = term_skip_spaces(cmd + 4);
+
+  if (*args == '\0' || term_command_is(args, "identify") ||
+      term_command_is(args, "id")) {
+    storage_format_identify(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
+  if (term_command_is(args, "read-test") || term_command_is(args, "read")) {
+    const char *value = term_skip_spaces(args + (term_command_is(args, "read") ? 4 : 9));
+    uint64_t lba = 0;
+    if (*value && term_parse_uint64_allow_zero(value, &lba) < 0) {
+      term_puts_t(term, "usage: disk read-test [lba]\n");
+      return;
+    }
+    storage_read_test(lba, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  term_puts_t(term, "usage: disk identify | disk read-test [lba]\n");
+}
+
+static void term_run_selftest(terminal_t *term, const char *cmd) {
+  static char report[8192];
+  const char *args = term_skip_spaces(cmd + 8);
+
+  orizon_selftest_format(args, report, sizeof(report));
+  term_puts_t(term, report);
+  if (report[0] && report[strlen(report) - 1] != '\n') {
+    term_puts_t(term, "\n");
   }
 }
 
@@ -3610,7 +3703,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
                                 "GitHub reachable over Wi-Fi; launching updater");
     term_puts_t(term,
                 "wifi update: GitHub reachable over Wi-Fi; launching update...\n");
-    term_run_update(term);
+    term_run_update(term, "update");
     return;
   }
 
@@ -4394,11 +4487,15 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
     term_puts_t(term, "  usb [rescan] - Show USB/HID/USB-Ethernet diagnostics\n");
     term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
-    term_puts_t(term, "  logs [name] - Read recent boot/network/usb/wifi/update logs\n");
+    term_puts_t(term, "  logs [name] - Read boot/storage/pci/network/usb/wifi/update logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
+    term_puts_t(term, "  report save - Write /workspace/hardware-report.txt\n");
+    term_puts_t(term, "  selftest [network|storage|crypto|ssh|update] - Non-destructive checks\n");
     term_puts_t(term, "  mounts    - Show Orizon data roots\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
+    term_puts_t(term, "  disk identify | disk read-test [lba] - Read-only disk diagnostics\n");
+    term_puts_t(term, "  gpt scan  - Read-only GPT partition scan\n");
     term_puts_t(term, "  partitions - List GPT partitions on selected disk\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");
     term_puts_t(term, "  storage diag - Explain storage/NVMe/eMMC detection\n");
@@ -4462,6 +4559,7 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "  rollback-status - Show rollback metadata\n");
       term_puts_t(term, "  bootguard [confirm] - Show/confirm update boot validation\n");
     }
+    term_puts_t(term, "  update status - Show manifest/signature/TLS/rollback state\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
     term_puts_t(term, "  version   - Show kernel build version\n");
     term_puts_t(term, "  neofetch  - System info\n");
@@ -4504,8 +4602,21 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "logs")) {
     term_print_log_summary(term, cmd);
   } else if (term_command_is(cmd, "report")) {
+    const char *args = term_skip_spaces(cmd + 6);
     if (term_install_already_complete()) {
       klog_persist_boot_if_installed();
+    }
+    if (term_command_is(args, "save")) {
+      char status[160];
+      if (orizon_report_save(status, sizeof(status)) == 0) {
+        term_puts_t(term, status);
+        term_puts_t(term, "read with: cat ");
+        term_puts_t(term, ORIZON_HARDWARE_REPORT_PATH);
+        term_puts_t(term, "\n");
+      } else {
+        term_puts_t(term, status);
+      }
+      return;
     }
     term_print_report(term);
   } else if (strncmp(cmd, "ls", 2) == 0) {
@@ -4871,8 +4982,17 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_print_disks(term);
   } else if (term_command_is(cmd, "partitions")) {
     term_print_partitions(term);
+  } else if (term_command_is(cmd, "gpt")) {
+    const char *args = term_skip_spaces(cmd + 3);
+    if (*args == '\0' || term_command_is(args, "scan")) {
+      term_print_partitions(term);
+    } else {
+      term_puts_t(term, "usage: gpt scan\n");
+    }
   } else if (term_command_is(cmd, "mounts")) {
     term_print_mounts(term);
+  } else if (term_command_is(cmd, "disk")) {
+    term_run_disk(term, cmd);
   } else if (term_command_is(cmd, "storage")) {
     char capacity[64];
     const char *args = term_skip_spaces(cmd + 7);
@@ -4996,7 +5116,7 @@ void term_execute(terminal_t *term, const char *cmd) {
                 "If this was an install boot, remove/eject the ISO or USB media now.\n");
     power_schedule_shutdown(TIMER_HZ * 3);
   } else if (term_command_is(cmd, "update") || term_command_is(cmd, "orizon-update")) {
-    term_run_update(term);
+    term_run_update(term, cmd);
   } else if (term_command_is(cmd, "rollback")) {
     term_run_rollback(term);
   } else if (term_command_is(cmd, "bootguard")) {
@@ -5015,6 +5135,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     }
   } else if (term_command_is(cmd, "pkg")) {
     term_run_pkg(term, cmd);
+  } else if (term_command_is(cmd, "selftest")) {
+    term_run_selftest(term, cmd);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");

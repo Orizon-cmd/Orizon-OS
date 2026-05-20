@@ -14,7 +14,11 @@ design note.
 - Release packaging is guarded: `Orizon-OS.iso`, `updates/x86_64/kernel.elf`,
   `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig`, and
   `release.txt` are generated and cross-checked by
-  `scripts/orizon/orizon_update.py`.
+  `scripts/orizon/orizon_update.py`, including manifest/release size and
+  SHA-256 consistency for the current ISO.
+- Hardware capture is exportable with `report save`, which writes the
+  non-destructive `/workspace/hardware-report.txt` bundle containing storage,
+  PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
 - Wired VM networking supports e1000/e1000e, RTL8139, and VirtIO-net. The
   ZimaOS NAT smoke cases for those NICs have passed before; do not rerun the
   full matrix unless that is the explicit task.
@@ -50,7 +54,11 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 ## What To Capture Next
 
 - ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `pkg status`,
-  `update status`, and `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT first.
+  `update status`, `report save`, `selftest crypto`, and `hostkey` on e1000e,
+  VirtIO-net, and RTL8139 NAT first.
+- Lenovo storage capture, only when the user boots the new ISO: `report save`,
+  `storage diag`, `logs storage`, `logs pci`, `pci bars`, `disk identify`, and
+  `gpt scan`; do not install while investigating missing-disk detection.
 - USB Ethernet hardware: `usb rescan`, `usb`, `logs usb`, `net status`.
 - Lenovo Wi-Fi AP validation, only on the user's real hardware: `wifi validate
   <ssid> [password]`, then `logs wifi`, `net status`, `wifi wpa`, and

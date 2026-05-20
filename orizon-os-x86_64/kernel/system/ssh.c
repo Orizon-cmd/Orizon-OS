@@ -8,14 +8,17 @@
 
 #include "../include/ssh.h"
 #include "../include/aes_gcm.h"
+#include "../include/install.h"
 #include "../include/kmalloc.h"
 #include "../include/klog.h"
 #include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/packages.h"
 #include "../include/pci.h"
+#include "../include/report.h"
 #include "../include/rsa.h"
 #include "../include/sched.h"
+#include "../include/selftest.h"
 #include "../include/sha256.h"
 #include "../include/storage.h"
 #include "../include/string.h"
@@ -2760,6 +2763,35 @@ static void ssh_shell_print_pci(const char *args) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_report(const char *args) {
+  static char out[SSH_CHANNEL_TEXT_BUF];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (ssh_shell_command_is(sub, "save")) {
+    orizon_report_save(out, sizeof(out));
+    if (strlen(out) + strlen("read with: cat " ORIZON_HARDWARE_REPORT_PATH
+                             "\r\n") < sizeof(out)) {
+      strcat(out, "read with: cat " ORIZON_HARDWARE_REPORT_PATH "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+
+  if (ssh_shell_command_is(sub, "show") || *sub == '\0') {
+    orizon_report_format(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n[truncated over SSH; use report save]\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+
+  ssh_queue_channel_text("usage: report [save|show]\r\n");
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_mutate_path(const char *arg, const char *op) {
   static char path[MAX_PATH];
   int rc = -1;
@@ -2885,6 +2917,16 @@ static void ssh_shell_set_auth_policy_remote(const char *args) {
 static void ssh_shell_print_log(const char *which) {
   if (ssh_shell_command_is(which, "ssh")) {
     ssh_shell_print_file(ORIZON_SSH_LOG_PATH, 1800, 1);
+  } else if (ssh_shell_command_is(which, "storage")) {
+    static char out[1800];
+    storage_format_log(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+  } else if (ssh_shell_command_is(which, "pci")) {
+    static char out[1800];
+    pci_format_diagnostics(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
   } else if (ssh_shell_command_is(which, "boot")) {
     ssh_shell_print_file(KLOG_BOOT_PATH, 1800, 1);
   } else if (ssh_shell_command_is(which, "update")) {
@@ -2975,7 +3017,7 @@ static void ssh_shell_print_update(const char *args) {
   const char *sub = ssh_shell_skip_spaces(args);
 
   if (ssh_shell_command_is(sub, "status")) {
-    snprintf(report, sizeof(report), "update: %s\r\n", orizon_update_status());
+    orizon_update_format_status(report, sizeof(report));
   } else if (ssh_shell_command_is(sub, "bootguard")) {
     orizon_update_boot_guard_status(report, sizeof(report));
   } else {
@@ -2986,6 +3028,63 @@ static void ssh_shell_print_update(const char *args) {
     strcat(report, "\r\n");
   }
   ssh_queue_channel_text(report);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_disk(const char *args) {
+  static char out[2200];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "identify") ||
+      ssh_shell_command_is(sub, "id")) {
+    storage_format_identify(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "read-test") ||
+             ssh_shell_command_is(sub, "read")) {
+    uint32_t lba = 0;
+    const char *value =
+        ssh_shell_skip_spaces(sub + (ssh_shell_command_is(sub, "read") ? 4 : 9));
+    if (*value && ssh_shell_parse_uint(value, &lba) < 0) {
+      snprintf(out, sizeof(out), "usage: disk read-test [lba]\r\n");
+    } else {
+      storage_read_test((uint64_t)lba, out, sizeof(out));
+    }
+  } else {
+    snprintf(out, sizeof(out), "usage: disk identify | disk read-test [lba]\r\n");
+  }
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_gpt(const char *args) {
+  static char out[2200];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "scan")) {
+    if (orizon_install_format_partitions(out, sizeof(out)) < 0 &&
+        out[0] == '\0') {
+      snprintf(out, sizeof(out), "gpt scan: no selected disk\r\n");
+    }
+  } else {
+    snprintf(out, sizeof(out), "usage: gpt scan\r\n");
+  }
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_selftest(const char *args) {
+  static char out[SSH_CHANNEL_TEXT_BUF];
+
+  orizon_selftest_format(ssh_shell_skip_spaces(args), out, sizeof(out));
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
   ssh_shell_prompt();
 }
 
@@ -3202,7 +3301,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, storage diag, pci, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, exit\r\n");
+        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3254,18 +3353,23 @@ static void ssh_remote_shell_execute(const char *line) {
         "  head <file>          print a shorter file preview\r\n"
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
-        "  logs [name]          show boot/network/usb/wifi/ssh/update logs\r\n"
+        "  logs [name]          show boot/storage/pci/network/usb/wifi/ssh/update logs\r\n"
         "  net|route|dns|ping   show network diagnostics\r\n"
         "  usb|usb rescan       show USB diagnostics\r\n"
         "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
         "  usb rescan           rescan USB root ports\r\n"
         "  ps|pkg|update        show system/update state\r\n"
         "  storage|storage diag show storage and disk detection state\r\n"
+        "  disk identify        show read-only disk/NVMe identity\r\n"
+        "  disk read-test [lba] read one sector without writing\r\n"
+        "  gpt scan             read-only GPT partition scan\r\n"
+        "  selftest [scope]     run PASS/WARN/FAIL live checks\r\n"
         "  pci [bars]           list PCI devices for hardware diagnosis\r\n"
+        "  report save          write /workspace/hardware-report.txt\r\n"
         "  free                 show heap state\r\n"
         "  bootguard            show update boot validation state\r\n"
         "  rollback-status      show saved rollback metadata\r\n"
-        "  audit                show SSH session counters\r\n"
+        "  audit|ssh sessions   show SSH session counters\r\n"
         "  algorithms           show negotiated SSH algorithms\r\n"
         "  ssh password <pass>  change remote SSH password\r\n"
         "  ssh auth ...         change auth policy\r\n"
@@ -3447,12 +3551,28 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_storage(line + 7);
     return;
   }
+  if (ssh_shell_command_is(line, "disk")) {
+    ssh_shell_print_disk(line + 4);
+    return;
+  }
+  if (ssh_shell_command_is(line, "gpt")) {
+    ssh_shell_print_gpt(line + 3);
+    return;
+  }
+  if (ssh_shell_command_is(line, "selftest")) {
+    ssh_shell_print_selftest(line + 8);
+    return;
+  }
   if (strcmp(line, "disks") == 0) {
     ssh_shell_print_storage("");
     return;
   }
   if (ssh_shell_command_is(line, "pci")) {
     ssh_shell_print_pci(line + 3);
+    return;
+  }
+  if (ssh_shell_command_is(line, "report")) {
+    ssh_shell_print_report(line + 6);
     return;
   }
   if (strcmp(line, "timer") == 0) {
@@ -3466,6 +3586,10 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (strcmp(line, "free") == 0) {
     ssh_shell_print_free();
+    return;
+  }
+  if (strcmp(line, "ssh sessions") == 0 || strcmp(line, "sessions") == 0) {
+    ssh_shell_print_audit();
     return;
   }
   if (ssh_shell_command_is(line, "net") ||
@@ -3560,7 +3684,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_shell_suppress_prompt = 1;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, storage, storage diag, pci, free, timer, bootguard, rollback-status, audit, sync, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -3590,13 +3714,22 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_print_update(cmd + (cmd[0] == 'u' ? 6 : 13));
   } else if (ssh_shell_command_is(cmd, "storage")) {
     ssh_shell_print_storage(cmd + 7);
+  } else if (ssh_shell_command_is(cmd, "disk")) {
+    ssh_shell_print_disk(cmd + 4);
+  } else if (ssh_shell_command_is(cmd, "gpt")) {
+    ssh_shell_print_gpt(cmd + 3);
+  } else if (ssh_shell_command_is(cmd, "selftest")) {
+    ssh_shell_print_selftest(cmd + 8);
   } else if (strcmp(cmd, "disks") == 0) {
     ssh_shell_print_storage("");
   } else if (ssh_shell_command_is(cmd, "pci")) {
     ssh_shell_print_pci(cmd + 3);
+  } else if (ssh_shell_command_is(cmd, "report")) {
+    ssh_shell_print_report(cmd + 6);
   } else if (strcmp(cmd, "free") == 0) {
     ssh_shell_print_free();
-  } else if (strcmp(cmd, "audit") == 0 || strcmp(cmd, "ssh audit") == 0) {
+  } else if (strcmp(cmd, "audit") == 0 || strcmp(cmd, "ssh audit") == 0 ||
+             strcmp(cmd, "ssh sessions") == 0 || strcmp(cmd, "sessions") == 0) {
     ssh_shell_print_audit();
   } else if (strcmp(cmd, "sync") == 0) {
     ssh_queue_channel_text(vfs_persist_save() == 0

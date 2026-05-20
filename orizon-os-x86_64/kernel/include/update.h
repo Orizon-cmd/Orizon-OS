@@ -17,5 +17,6 @@ void orizon_update_boot_guard_shell_ready(void);
 void orizon_update_boot_guard_status(char *out, size_t out_size);
 int orizon_update_boot_guard_confirm(char *report, size_t report_size);
 const char *orizon_update_status(void);
+void orizon_update_format_status(char *out, size_t out_size);
 
 #endif /* _UPDATE_H */

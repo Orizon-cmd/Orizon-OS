@@ -29,9 +29,20 @@ $commands = @(
   "free",
   "ps",
   "pkg status",
+  "update status",
   "storage",
   "storage diag",
+  "logs storage",
+  "logs pci",
+  "disk identify",
+  "disk read-test",
+  "gpt scan",
+  "selftest crypto",
+  "selftest ssh",
+  "ssh sessions",
   "pci bars",
+  "report save",
+  "head /workspace/hardware-report.txt",
   "timer",
   "usb",
   "usb rescan",
@@ -117,8 +128,38 @@ run_cmd() {
     "storage diag")
       grep -q "storage diagnostics:" "`$OUT" || { echo "missing storage diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "logs storage")
+      grep -q "storage log:" "`$OUT" || { echo "missing storage log"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "logs pci")
+      grep -q "pci diagnostics:" "`$OUT" || { echo "missing pci log"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "disk identify")
+      grep -q "disk identify:" "`$OUT" || { echo "missing disk identify"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "disk read-test")
+      grep -Eq "disk read-test: (PASS|WARN|FAIL)" "`$OUT" || { echo "missing disk read-test"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "gpt scan")
+      ! grep -q "command not found" "`$OUT" || { echo "gpt scan is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "selftest crypto")
+      grep -q "summary: PASS" "`$OUT" || { echo "crypto selftest did not pass"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "selftest ssh"|"ssh sessions")
+      grep -Eq "ssh\\.(listener|identity)|ssh audit:" "`$OUT" || { echo "missing ssh selftest/session output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "update status")
+      grep -q "update status:" "`$OUT" || { echo "missing update status"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "pci bars")
       grep -q "PCI devices:" "`$OUT" || { echo "missing PCI diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "report save")
+      grep -q "/workspace/hardware-report.txt" "`$OUT" || { echo "missing report save output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "head /workspace/hardware-report.txt")
+      grep -q "Orizon hardware report" "`$OUT" || { echo "missing saved hardware report"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "rollback-status")
       ! grep -q "command not found" "`$OUT" || { echo "rollback-status is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

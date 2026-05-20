@@ -22,8 +22,8 @@
   downloads.
 - Release packaging guard: the signed manifest records root ISO size/SHA-256,
   the helper emits `updates/x86_64/release.txt`, and build modes validate that
-  ISO, boot payloads, `manifest.txt`, and `manifest.sig` are present before
-  publication.
+  ISO, boot payloads, `manifest.txt`, `manifest.sig`, and `release.txt` match
+  the current artifact sizes/SHA-256 values before publication.
 - Post-update boot guard: pending/testing markers, a boot-count-style Limine
   fallback default while the refreshed kernel is proving itself, automatic
   validation once the refreshed kernel reaches the shell, `bootguard`
@@ -32,7 +32,8 @@
 - Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
   `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
-  `sysinfo`, `hw`, `mounts`, `logs`, `report`, `ps`, and `uptime`.
+  `sysinfo`, `hw`, `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`,
+  and `uptime`.
 - Documentation cleanup: `START_HERE.md` now summarizes the current state,
   guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
   operator command checklist separate from the long-form subsystem notes.
@@ -42,7 +43,8 @@
   `SERVICE_REQUEST` parsing, encrypted `SERVICE_ACCEPT`, explicit password
   authentication for user `orizon`, `session` channel open, `pty-req`, `shell`,
   `exec`, a remote diagnostic/admin shell with VFS/log/network/process/package/
-  storage/network/Wi-Fi commands, remote auth/password/lockout/hostkey
+  storage/network/Wi-Fi/report/selftest commands, remote
+  auth/password/lockout/hostkey
   administration, direct remote file edits, heap diagnostics, audit
   counters/recent events, multi-packet channel output for longer logs, graceful
   listener recovery, anti-bruteforce lockout, config reload, per-install RSA
@@ -52,7 +54,9 @@
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
   families, persistent `/logs/usb.log` capture with family/support/blocker
   fields, xHCI CDC-ECM raw Ethernet and Realtek RTL815x packet paths,
-  AHCI/NVMe storage probes, Intel e1000/e1000e, RTL8139,
+  AHCI/NVMe storage probes, read-only `disk identify` / `disk read-test` /
+  `gpt scan`, Intel VMD/RST/eMMC blocker diagnostics with PCI BAR and
+  secondary-bus capture, Intel e1000/e1000e, RTL8139,
   VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
   upload staging, alive polling diagnostics, and host-side command/RX/TX queue
@@ -94,7 +98,8 @@
 ## Next Hardware Track
 
 1. Make the Lenovo 500w Yoga Gen 4 a concrete real-laptop target: boot,
-   keyboard, NVMe, diagnostics, then I2C-HID touchpad.
+   keyboard, capture `report save` plus storage/PCI logs for the missing-disk
+   case, then validate NVMe/VMD behaviour and I2C-HID touchpad.
 2. Improve USB HID keyboard coverage for non-US layouts and laptop keypads.
 3. Harden LAPIC timer calibration and add x2APIC support for newer firmware
    modes.
@@ -110,7 +115,9 @@
    ASIX AX88xxx, SMSC/LAN95xx, RNDIS if needed, using the captured
    `/logs/usb.log` VID/PID/endpoint evidence first, then hardware validation on
    the Lenovo adapter's actual VID/PID.
-8. Harden NVMe and AHCI writes with more error reporting and timeout handling.
+8. Implement true Intel VMD remapping if the Lenovo capture confirms the NVMe is
+   hidden behind VMD/RST, then harden NVMe and AHCI writes with more error
+   reporting and timeout handling.
 9. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 10. Extend the VM test matrix beyond the current NAT smoke path: bridge cases,
    AHCI/NVMe storage permutations, USB Ethernet cases, and at least one

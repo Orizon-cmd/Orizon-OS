@@ -46,9 +46,19 @@ Storage can also be inspected outside the installer:
 ```text
 disks
 partitions
+gpt scan
 storage detail
+storage diag
+logs storage
+logs pci
+disk identify
+disk read-test
 storage select 1
 ```
+
+Those commands are non-destructive. If a real laptop does not show its internal
+disk, do not run `install`; capture `report save`, `storage diag`, `logs
+storage`, `logs pci`, `pci bars`, and `disk identify` first.
 
 It writes runtime/staging state:
 

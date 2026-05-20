@@ -29,7 +29,10 @@ development target, not a ZimaOS-only assumption.
 - CPU/timer: Local APIC timer is the intended path. If the footer still says
   `timer irq fallback active`, keep `sysinfo` and `report` output for the next
   timer pass.
-- Storage: NVMe is expected to be the correct disk path for this laptop.
+- Storage: NVMe is expected to be the correct disk path for this laptop. Orizon
+  now also logs AHCI/NVMe/VMD/RST/eMMC blockers, NVMe CAP/CC/CSTS/admin status,
+  and PCI BAR/secondary-bus hints, but the Lenovo missing-disk case still needs
+  a fresh capture from the new ISO before claiming it fixed.
 - Keyboard: The internal keyboard should work through the existing PS/2 path.
 - Display: Orizon uses the boot framebuffer only; there is no Intel graphics
   modesetting driver yet.
@@ -166,12 +169,24 @@ wifi txcmd m4 arm
 wifi txcmd data
 wifi txcmd data arm
 storage
+storage diag
+logs storage
+logs pci
+pci bars
+disk identify
+disk read-test
+gpt scan
+report save
+selftest storage
 disks
 ```
 
 `pci` lists every PCI device Orizon can see and adds a rough driver hint. `input`
 shows PS/2, USB HID, and I2C/SMBus candidates so we can verify whether the
 touchpad path is visible from Orizon.
+For missing internal storage, do not install. Run `report save` first, then keep
+`/workspace/hardware-report.txt` plus the individual `storage diag`, `logs
+storage`, `logs pci`, and `pci bars` output.
 
 ## Repeatable Linux Inventory
 
@@ -199,8 +214,8 @@ module.
 
 ## Driver Plan For This Laptop
 
-1. Keep boot stability first: timer source, keyboard, framebuffer, NVMe, and
-   installer must work without fallback surprises.
+1. Keep boot stability first: timer source, keyboard, framebuffer, NVMe/VMD
+   detection diagnostics, and installer must work without fallback surprises.
 2. Add ACPI namespace walking so Orizon discovers devices such as `ELAN0647`
    and `WCOM508E` dynamically instead of relying on the first Lenovo target
    table.

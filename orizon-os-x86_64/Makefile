@@ -84,6 +84,8 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/system/klog.c \
            $(KERNEL_DIR)/system/install.c \
            $(KERNEL_DIR)/system/packages.c \
+           $(KERNEL_DIR)/system/report.c \
+           $(KERNEL_DIR)/system/selftest.c \
            $(KERNEL_DIR)/system/ssh.c \
            $(KERNEL_DIR)/system/update.c \
            $(KERNEL_DIR)/drivers/framebuffer.c \

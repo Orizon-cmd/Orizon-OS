@@ -58,7 +58,10 @@ net config ip <ip> gateway <gateway> dns <dns> [subnet <mask>]
 route
 dns raw.githubusercontent.com
 ping 8.8.8.8
+update status
 update
+logs storage
+logs pci
 logs network
 logs update
 ```
@@ -72,6 +75,7 @@ ssh password <password>
 ssh start
 ssh status
 ssh audit
+ssh sessions
 ssh auth
 ssh auth max <attempts>
 ssh auth lockout <seconds>
@@ -81,6 +85,8 @@ ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
 logs ssh
+report save
+selftest ssh
 ```
 
 Use SSH for ZimaOS/VM diagnostics and remote admin commands. Keep long soak and
@@ -138,21 +144,36 @@ real AP validation on the user's Lenovo before it can be called hardware-proven.
 ```text
 sysinfo
 report
+report save
+selftest
+selftest network
+selftest storage
+selftest crypto
+selftest ssh
+selftest update
 hw
 pci
 pci bars
+logs pci
 input
 storage
 disks
 storage diag
+logs storage
+disk identify
+disk read-test
+gpt scan
 partitions
 mounts
 logs all
 ```
 
 For Lenovo hardware work, capture command output rather than summarizing it from
-memory. If the internal disk is missing, run `storage diag` first; it is
-read-only and reports NVMe/AHCI candidates, Intel RST/VMD blockers, and
-SDHCI/eMMC cases without installing or writing to disk. The useful files are
-`/logs/wifi.log`, `/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
+memory. Start with `report save`, then copy `/workspace/hardware-report.txt`.
+If the internal disk is missing, run `storage diag`, `logs storage`, `logs pci`,
+`pci bars`, `disk identify`, and `gpt scan`; they are read-only and report
+NVMe/AHCI candidates, Intel RST/VMD blockers, secondary PCI bus hints, NVMe
+CAP/CC/CSTS/admin errors, and SDHCI/eMMC cases without installing or writing to
+disk. The useful files are `/workspace/hardware-report.txt`, `/logs/wifi.log`,
+`/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
 `/workspace/.orizon/update.log`.

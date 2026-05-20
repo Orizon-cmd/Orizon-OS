@@ -58,6 +58,12 @@ request per artifact. The older chunk path remains as fallback, now with larger
 If the booted kernel and UEFI loader already match the public manifest, `update`
 skips the boot artifact download and ESP rewrite, then only checks packages.
 
+`update status` is safe in the live ISO and on installed systems. It reports
+whether the cached manifest/signature are present, whether `manifest.sig`
+metadata matches the manifest SHA-256, the embedded TLS/root-trust posture,
+HTTPS retry/resume cache state, bootguard pending state, rollback readiness,
+and the live-ISO vs installed-system difference.
+
 After success, reboot to start the refreshed boot payload.
 
 ## Rollback
@@ -265,7 +271,9 @@ All build/update flows refresh the root `Orizon-OS.iso` artifact unless
 `--no-publish-root-iso` is used. Local and ZimaOS build modes also refresh
 `updates/x86_64/release.txt` and validate that `manifest.sig` matches the
 current `manifest.txt`; when the root ISO is published, its size and SHA-256
-must match the signed `iso-*` fields.
+must match the signed `iso-*` fields. The release validator also checks that
+`kernel.elf`, `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig`, and
+`release.txt` all describe the current artifacts instead of a stale build.
 
 ## Backends
 
