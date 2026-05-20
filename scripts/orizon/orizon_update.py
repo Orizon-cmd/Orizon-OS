@@ -20,6 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = "orizon-os-x86_64"
 DEFAULT_ROOT_ISO = "Orizon-OS.iso"
 DEFAULT_UPDATE_DIR = "updates/x86_64"
+DEFAULT_RELEASE_REPORT = "release.txt"
 DEFAULT_GITHUB_REPO = "https://github.com/Orizon-cmd/Orizon-OS.git"
 DEFAULT_GITHUB_REF = "main"
 DEFAULT_PACKAGE_REPO = "https://github.com/Orizon-cmd/Orizon-Packages.git"
@@ -214,6 +215,21 @@ def sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def repo_relative_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def manifest_value(text: str, key: str) -> str | None:
+    prefix = key + " "
+    for line in text.splitlines():
+        if line.startswith(prefix):
+            return line[len(prefix) :].strip()
+    return None
+
+
 def load_manifest_signing_key(key_path: Path, *, generate: bool):
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
@@ -306,6 +322,8 @@ def write_update_manifest(
     package_repo: str,
     package_ref: str,
     package_index_path: str,
+    root_iso_path: Path | None,
+    root_iso_repo_path: str,
 ) -> None:
     kernel = update_dir / "kernel.elf"
     efi = update_dir / "BOOTX64.EFI"
@@ -345,8 +363,18 @@ def write_update_manifest(
         f"package-index-path {package_index_path}",
         f"package-index-size {package_index_size}",
         f"package-index-sha256 {package_index_sha256}",
-        "",
     ]
+    if root_iso_path is not None:
+        if not root_iso_path.exists():
+            raise FileNotFoundError(f"Published root ISO not found: {root_iso_path}")
+        lines.extend(
+            [
+                f"iso-path {root_iso_repo_path}",
+                f"iso-size {root_iso_path.stat().st_size}",
+                f"iso-sha256 {sha256_file(root_iso_path)}",
+            ]
+        )
+    lines.append("")
     manifest.write_text("\n".join(lines), encoding="utf-8")
     print(f"Published update manifest: {manifest}")
     write_manifest_signature(
@@ -354,6 +382,115 @@ def write_update_manifest(
         signing_key_path=signing_key_path,
         generate_key=generate_signing_key,
     )
+
+
+def validate_manifest_signature_metadata(manifest: Path, sig_path: Path) -> None:
+    if not manifest.exists():
+        raise FileNotFoundError(f"Missing signed manifest: {manifest}")
+    if not sig_path.exists():
+        raise FileNotFoundError(f"Missing manifest signature: {sig_path}")
+    sig_text = sig_path.read_text(encoding="utf-8")
+    algorithm = manifest_value(sig_text, "algorithm")
+    key_id = manifest_value(sig_text, "key-id")
+    manifest_sha = manifest_value(sig_text, "manifest-sha256")
+    signature_hex = manifest_value(sig_text, "signature")
+    if algorithm != "rsa-pkcs1-sha256":
+        raise RuntimeError(f"Unexpected manifest signature algorithm: {algorithm}")
+    if key_id != MANIFEST_SIGNING_KEY_ID:
+        raise RuntimeError(f"Unexpected manifest signing key id: {key_id}")
+    if manifest_sha != sha256_file(manifest):
+        raise RuntimeError("manifest.sig does not match the current manifest.txt")
+    if not signature_hex or not re.fullmatch(r"[0-9a-f]+", signature_hex):
+        raise RuntimeError("manifest.sig does not contain a valid hex signature")
+
+
+def validate_release_bundle(
+    *,
+    update_dir: Path,
+    root_iso_path: Path | None,
+    root_iso_repo_path: str,
+) -> None:
+    manifest = update_dir / "manifest.txt"
+    sig_path = update_dir / "manifest.sig"
+    required = [
+        update_dir / "kernel.elf",
+        update_dir / "BOOTX64.EFI",
+        update_dir / "limine.conf",
+        manifest,
+        sig_path,
+        update_dir / DEFAULT_RELEASE_REPORT,
+    ]
+    for artifact in required:
+        if not artifact.exists():
+            raise FileNotFoundError(f"Release artifact missing: {artifact}")
+    validate_manifest_signature_metadata(manifest, sig_path)
+
+    if root_iso_path is not None:
+        if not root_iso_path.exists():
+            raise FileNotFoundError(f"Release root ISO missing: {root_iso_path}")
+        manifest_text = manifest.read_text(encoding="utf-8")
+        expected_iso_path = manifest_value(manifest_text, "iso-path")
+        expected_iso_size = manifest_value(manifest_text, "iso-size")
+        expected_iso_sha = manifest_value(manifest_text, "iso-sha256")
+        actual_iso_size = str(root_iso_path.stat().st_size)
+        actual_iso_sha = sha256_file(root_iso_path)
+        if expected_iso_path != root_iso_repo_path:
+            raise RuntimeError("Signed manifest iso-path does not match output ISO")
+        if expected_iso_size != actual_iso_size:
+            raise RuntimeError("Signed manifest iso-size does not match output ISO")
+        if expected_iso_sha != actual_iso_sha:
+            raise RuntimeError("Signed manifest iso-sha256 does not match output ISO")
+
+    print("Release bundle validation: OK")
+
+
+def write_release_report(
+    *,
+    update_dir: Path,
+    root_iso_path: Path | None,
+    root_iso_repo_path: str,
+    repo_url: str,
+) -> None:
+    report = update_dir / DEFAULT_RELEASE_REPORT
+    manifest = update_dir / "manifest.txt"
+    sig_path = update_dir / "manifest.sig"
+    lines = [
+        "release-report-version 1",
+        f"created-utc {datetime.datetime.now(datetime.timezone.utc).isoformat()}",
+        f"source {repo_url}",
+    ]
+
+    if root_iso_path is not None and root_iso_path.exists():
+        lines.extend(
+            [
+                f"iso-path {root_iso_repo_path}",
+                f"iso-size {root_iso_path.stat().st_size}",
+                f"iso-sha256 {sha256_file(root_iso_path)}",
+            ]
+        )
+    else:
+        lines.append("iso-path not-published")
+
+    for label, path in (
+        ("kernel", update_dir / "kernel.elf"),
+        ("efi", update_dir / "BOOTX64.EFI"),
+        ("limine", update_dir / "limine.conf"),
+        ("manifest", manifest),
+        ("manifest-signature", sig_path),
+    ):
+        if path.exists():
+            lines.extend(
+                [
+                    f"{label}-path {repo_relative_path(path)}",
+                    f"{label}-size {path.stat().st_size}",
+                    f"{label}-sha256 {sha256_file(path)}",
+                ]
+            )
+        else:
+            lines.append(f"{label}-path missing")
+    lines.append("")
+    report.write_text("\n".join(lines), encoding="utf-8")
+    print(f"Published release report: {report}")
 
 
 def publish_update_payloads_from_local_tree(
@@ -366,6 +503,8 @@ def publish_update_payloads_from_local_tree(
     package_repo: str,
     package_ref: str,
     package_index_path: str,
+    root_iso_path: Path | None,
+    root_iso_repo_path: str,
 ) -> None:
     update_dir.mkdir(parents=True, exist_ok=True)
     payloads = [
@@ -387,6 +526,8 @@ def publish_update_payloads_from_local_tree(
         package_repo=package_repo,
         package_ref=package_ref,
         package_index_path=package_index_path,
+        root_iso_path=root_iso_path,
+        root_iso_repo_path=root_iso_repo_path,
     )
 
 
@@ -401,6 +542,8 @@ def publish_update_payloads_from_zimaos(
     package_repo: str,
     package_ref: str,
     package_index_path: str,
+    root_iso_path: Path | None,
+    root_iso_repo_path: str,
 ) -> None:
     update_dir.mkdir(parents=True, exist_ok=True)
     payloads = [
@@ -424,6 +567,8 @@ def publish_update_payloads_from_zimaos(
         package_repo=package_repo,
         package_ref=package_ref,
         package_index_path=package_index_path,
+        root_iso_path=root_iso_path,
+        root_iso_repo_path=root_iso_repo_path,
     )
 
 
@@ -476,6 +621,7 @@ def build_on_zimaos(
     package_repo: str,
     package_ref: str,
     package_index_path: str,
+    root_iso_repo_path: str,
 ) -> None:
     cmd = [
         sys.executable,
@@ -494,7 +640,7 @@ def build_on_zimaos(
         cmd.append("--deploy-vm")
     run(cmd)
 
-    if publish:
+    if publish or publish_payloads:
         env_config = parse_env_file(REPO_ROOT / env_file)
         client = connect_ssh(env_config)
         try:
@@ -505,10 +651,13 @@ def build_on_zimaos(
             remote_project_root = (
                 f"{remote_root.rstrip('/')}/workspace/{Path(source_dir).name}"
             )
-            sftp = client.open_sftp()
-            sftp.get(remote_iso, str(output_iso))
-            sftp.close()
-            print(f"Published ISO: {output_iso}")
+            if publish:
+                sftp = client.open_sftp()
+                try:
+                    sftp.get(remote_iso, str(output_iso))
+                finally:
+                    sftp.close()
+                print(f"Published ISO: {output_iso}")
             if publish_payloads:
                 publish_update_payloads_from_zimaos(
                     client=client,
@@ -520,6 +669,8 @@ def build_on_zimaos(
                     package_repo=package_repo,
                     package_ref=package_ref,
                     package_index_path=package_index_path,
+                    root_iso_path=output_iso if publish else None,
+                    root_iso_repo_path=root_iso_repo_path,
                 )
         finally:
             client.close()
@@ -655,6 +806,7 @@ def main() -> int:
     publish_payloads = not args.no_publish_update_payloads
     update_dir = REPO_ROOT / args.update_dir
     signing_key_path = REPO_ROOT / args.manifest_signing_key
+    root_iso_repo_path = repo_relative_path(output_iso)
 
     if args.mode == "github-iso":
         download_github_iso(
@@ -676,6 +828,8 @@ def main() -> int:
                 package_repo=args.package_repo,
                 package_ref=args.package_ref,
                 package_index_path=args.package_index_path,
+                root_iso_path=output_iso if publish else None,
+                root_iso_repo_path=root_iso_repo_path,
             )
     elif args.mode == "zimaos-iso":
         build_on_zimaos(
@@ -694,6 +848,7 @@ def main() -> int:
             package_repo=args.package_repo,
             package_ref=args.package_ref,
             package_index_path=args.package_index_path,
+            root_iso_repo_path=root_iso_repo_path,
         )
     else:
         build_on_zimaos(
@@ -712,6 +867,20 @@ def main() -> int:
             package_repo=args.package_repo,
             package_ref=args.package_ref,
             package_index_path=args.package_index_path,
+            root_iso_repo_path=root_iso_repo_path,
+        )
+
+    if args.mode != "github-iso" and publish_payloads:
+        write_release_report(
+            update_dir=update_dir,
+            root_iso_path=output_iso if publish else None,
+            root_iso_repo_path=root_iso_repo_path,
+            repo_url=args.github_repo,
+        )
+        validate_release_bundle(
+            update_dir=update_dir,
+            root_iso_path=output_iso if publish else None,
+            root_iso_repo_path=root_iso_repo_path,
         )
 
     print("Orizon update complete.")

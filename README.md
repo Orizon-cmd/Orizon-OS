@@ -558,7 +558,10 @@ est le plus simple pour une machine qui veut juste recevoir une mise a jour; le
 mode `--from-github --mode local-iso` sert aux machines qui ont la toolchain et
 doivent reconstruire.
 Les modes de build rafraichissent aussi `updates/x86_64/` pour que la commande
-`update` dans Orizon recoive le meme kernel que l'ISO publiee.
+`update` dans Orizon recoive le meme kernel que l'ISO publiee. Le manifeste
+signe contient maintenant la taille et le SHA-256 de `Orizon-OS.iso`, et
+`updates/x86_64/release.txt` resume les hashes ISO/payload/manifest/signature
+pour eviter d'oublier un artefact release dans le commit.
 
 Backends disponibles:
 

@@ -118,6 +118,7 @@ The public manifest and its detached signature are stored in the repository at:
 ```text
 updates/x86_64/manifest.txt
 updates/x86_64/manifest.sig
+updates/x86_64/release.txt
 ```
 
 Required keys:
@@ -143,6 +144,9 @@ package-commit <resolved-package-repo-commit>
 package-index-path packages/x86_64/index.txt
 package-index-size <bytes>
 package-index-sha256 <sha256>
+iso-path Orizon-OS.iso
+iso-size <bytes>
+iso-sha256 <sha256>
 ```
 
 The kernel accepts only non-empty payload sizes within its fixed safety caps
@@ -154,6 +158,13 @@ downloads `manifest.sig`, checks the manifest SHA-256, and verifies an
 `orizon-update-root-2026-05`. A public branch without this signature is treated
 as unsigned and the update is blocked before any boot payload or package is
 installed.
+
+The `iso-*` keys are release metadata for humans and tooling. Older kernels
+ignore them, but because they are inside the signed manifest the release helper
+can verify that the root `Orizon-OS.iso` committed to GitHub corresponds to the
+same build as the published update payloads. `release.txt` records the ISO,
+payload, manifest, and signature hashes so a commit review can spot a missing
+artifact quickly.
 
 The release helper signs manifests with a local private key:
 
@@ -251,7 +262,10 @@ python scripts/orizon/orizon_update.py --from-github --mode zimaos-vm
 ```
 
 All build/update flows refresh the root `Orizon-OS.iso` artifact unless
-`--no-publish-root-iso` is used.
+`--no-publish-root-iso` is used. Local and ZimaOS build modes also refresh
+`updates/x86_64/release.txt` and validate that `manifest.sig` matches the
+current `manifest.txt`; when the root ISO is published, its size and SHA-256
+must match the signed `iso-*` fields.
 
 ## Backends
 

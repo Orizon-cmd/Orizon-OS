@@ -20,6 +20,10 @@
   an embedded Orizon update root key, package-index commit/SHA pinning, and
   TLS SAN/chain/signature validation anchored to ISRG Root X1 for GitHub
   downloads.
+- Release packaging guard: the signed manifest records root ISO size/SHA-256,
+  the helper emits `updates/x86_64/release.txt`, and build modes validate that
+  ISO, boot payloads, `manifest.txt`, and `manifest.sig` are present before
+  publication.
 - Post-update boot guard: pending/testing markers, a boot-count-style Limine
   fallback default while the refreshed kernel is proving itself, automatic
   validation once the refreshed kernel reaches the shell, `bootguard`
