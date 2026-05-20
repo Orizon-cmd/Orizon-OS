@@ -427,8 +427,9 @@ verification de `updates/x86_64/manifest.sig` avec la cle update embarquee,
 telechargement des artefacts par requetes HTTP `Range`, verification SHA-256,
 reprise des artefacts partiels caches dans `/workspace/.orizon`, puis
 reecriture de l'ESP installee avec le nouveau `kernel.elf`, `BOOTX64.EFI` et
-`limine.conf`, puis lecture de l'index public
-`Orizon-Packages` pour installer ou mettre a jour les paquets `.opkg`. La
+`limine.conf`, puis lecture de l'index public `Orizon-Packages` epingle par
+commit et SHA-256 dans le manifeste signe pour installer ou mettre a jour les
+paquets `.opkg`. La
 partition data Orizon et `/workspace` sont preserves.
 
 Pendant l'operation, la console affiche les etapes en continu: etat courant,
@@ -485,7 +486,10 @@ updates/x86_64/manifest.sig
 publication la regenere avec la cle locale ignoree
 `config/keys/update-signing.private.pem`; le noyau ne contient que la cle
 publique update `orizon-update-root-2026-05`. Une branche publique sans
-`manifest.sig` valide est refusee avant toute installation de payload.
+`manifest.sig` valide est refusee avant toute installation de payload. Le
+manifeste signe epingle aussi le commit du depot `Orizon-Packages` et le
+SHA-256 de `packages/x86_64/index.txt`, puis chaque entree de l'index epingle
+le SHA-256 du `.opkg`.
 
 La transaction ecrit ses etats et journaux ici:
 

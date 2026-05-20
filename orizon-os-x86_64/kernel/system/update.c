@@ -50,8 +50,6 @@
 #define UPDATE_MANIFEST_SIG_REMOTE "updates/x86_64/manifest.sig"
 #define UPDATE_MANIFEST_SIGNING_KEY_ID "orizon-update-root-2026-05"
 #define UPDATE_PACKAGE_SOURCE "https://github.com/Orizon-cmd/Orizon-Packages"
-#define UPDATE_PACKAGE_RAW_PREFIX "/Orizon-cmd/Orizon-Packages/main/"
-#define UPDATE_PACKAGE_INDEX_REMOTE "packages/x86_64/index.txt"
 #define UPDATE_CHUNK_BYTES 65536U
 #define UPDATE_RANGE_RETRIES 5U
 #define UPDATE_MANIFEST_MAX 4096U
@@ -93,6 +91,11 @@ typedef struct {
   char limine_path[160];
   char limine_sha256[SHA256_HEX_SIZE];
   size_t limine_size;
+  char package_source[96];
+  char package_commit[64];
+  char package_index_path[180];
+  char package_index_sha256[SHA256_HEX_SIZE];
+  size_t package_index_size;
 } update_manifest_t;
 
 typedef struct {
@@ -1129,12 +1132,26 @@ static int parse_update_manifest(const char *text, update_manifest_t *manifest) 
                           sizeof(manifest->limine_path)) < 0 ||
       manifest_copy_value(text, "limine-sha256", manifest->limine_sha256,
                           sizeof(manifest->limine_sha256)) < 0 ||
-      manifest_size_value(text, "limine-size", &manifest->limine_size) < 0) {
+      manifest_size_value(text, "limine-size", &manifest->limine_size) < 0 ||
+      manifest_copy_value(text, "package-source", manifest->package_source,
+                          sizeof(manifest->package_source)) < 0 ||
+      manifest_copy_value(text, "package-commit", manifest->package_commit,
+                          sizeof(manifest->package_commit)) < 0 ||
+      manifest_copy_value(text, "package-index-path",
+                          manifest->package_index_path,
+                          sizeof(manifest->package_index_path)) < 0 ||
+      manifest_size_value(text, "package-index-size",
+                          &manifest->package_index_size) < 0 ||
+      manifest_copy_value(text, "package-index-sha256",
+                          manifest->package_index_sha256,
+                          sizeof(manifest->package_index_sha256)) < 0) {
     return -1;
   }
   if (manifest->kernel_size == 0 || manifest->kernel_size > UPDATE_KERNEL_MAX ||
       manifest->efi_size == 0 || manifest->efi_size > UPDATE_EFI_MAX ||
-      manifest->limine_size == 0 || manifest->limine_size >= UPDATE_CONF_MAX) {
+      manifest->limine_size == 0 || manifest->limine_size >= UPDATE_CONF_MAX ||
+      manifest->package_index_size == 0 ||
+      manifest->package_index_size >= UPDATE_PACKAGE_INDEX_MAX) {
     return -1;
   }
   if (!update_token_safe(manifest->version) ||
@@ -1142,12 +1159,18 @@ static int parse_update_manifest(const char *text, update_manifest_t *manifest) 
       strcmp(manifest->channel, UPDATE_CHANNEL) != 0 ||
       !(strcmp(manifest->source, UPDATE_SOURCE) == 0 ||
         strcmp(manifest->source, UPDATE_SOURCE ".git") == 0) ||
+      !(strcmp(manifest->package_source, UPDATE_PACKAGE_SOURCE) == 0 ||
+        strcmp(manifest->package_source, UPDATE_PACKAGE_SOURCE ".git") == 0) ||
+      !update_token_safe(manifest->package_commit) ||
       !update_path_safe(manifest->kernel_path, "updates/x86_64/", ".elf") ||
       !update_path_safe(manifest->efi_path, "updates/x86_64/", ".EFI") ||
       !update_path_safe(manifest->limine_path, "updates/x86_64/", ".conf") ||
+      !update_path_safe(manifest->package_index_path, "packages/x86_64/",
+                        ".txt") ||
       !sha256_text_valid(manifest->kernel_sha256) ||
       !sha256_text_valid(manifest->efi_sha256) ||
-      !sha256_text_valid(manifest->limine_sha256)) {
+      !sha256_text_valid(manifest->limine_sha256) ||
+      !sha256_text_valid(manifest->package_index_sha256)) {
     return -1;
   }
   return 0;
@@ -1538,41 +1561,54 @@ static int download_artifact(const char *label, const char *relative,
                                 cache_path, report, report_size);
 }
 
-static int update_install_remote_packages(char *report, size_t report_size) {
+static int build_package_raw_prefix(const update_manifest_t *manifest, char *out,
+                                    size_t out_size) {
+  if (!manifest || !out || out_size == 0 ||
+      !update_token_safe(manifest->package_commit)) {
+    return -1;
+  }
+  return snprintf(out, out_size, "/Orizon-cmd/Orizon-Packages/%s/",
+                  manifest->package_commit) < (int)out_size
+             ? 0
+             : -1;
+}
+
+static int update_install_remote_packages(const update_manifest_t *manifest,
+                                          char *report, size_t report_size) {
   update_package_index_t index;
   char line[256];
+  char package_prefix[160];
   char pkg_report[2048];
-  size_t index_len = 0;
   size_t installed_len = 0;
   size_t installed_count = 0;
   size_t skipped_count = 0;
-  char index_hash[SHA256_HEX_SIZE];
-  uint64_t index_started_ticks = timer_ticks();
+
+  if (!manifest || build_package_raw_prefix(manifest, package_prefix,
+                                            sizeof(package_prefix)) != 0) {
+    update_set_state("update: blocked - invalid package source");
+    append_report(report, report_size, "update: invalid package source");
+    return -1;
+  }
 
   update_set_state("update: downloading package index");
   append_report(report, report_size,
                 "[6/8] Checking Orizon package repository");
   append_report(report, report_size, "Package source: " UPDATE_PACKAGE_SOURCE);
-  if (download_text_with_retries("package-index", UPDATE_PACKAGE_RAW_PREFIX,
-                                 UPDATE_PACKAGE_INDEX_REMOTE,
-                                 update_package_index_text,
-                                 sizeof(update_package_index_text) - 1,
-                                 &index_len, line, sizeof(line)) != 0 ||
-      index_len == 0) {
+  snprintf(line, sizeof(line), "Package commit: %s", manifest->package_commit);
+  append_report(report, report_size, line);
+  if (download_verified_blob(
+          "package-index", package_prefix, manifest->package_index_path,
+          manifest->package_index_size, manifest->package_index_sha256,
+          update_package_index_text, sizeof(update_package_index_text) - 1,
+          UPDATE_PACKAGE_INDEX_PATH, report, report_size) != 0) {
     update_set_state("update: blocked - package index download failed");
     append_report(report, report_size, "update: package index download failed");
     return -1;
   }
-  update_package_index_text[index_len] = '\0';
-  sha256_buffer_hex(update_package_index_text, index_len, index_hash);
-  update_write_blob(UPDATE_PACKAGE_INDEX_PATH, update_package_index_text,
-                    index_len);
+  update_package_index_text[manifest->package_index_size] = '\0';
   snprintf(line, sizeof(line), "Get: package index [%lu bytes]",
-           (unsigned long)index_len);
+           (unsigned long)manifest->package_index_size);
   append_report(report, report_size, line);
-  snprintf(line, sizeof(line), "package-index sha256 %s", index_hash);
-  update_append_log(line);
-  append_timing(report, report_size, "package-index", index_started_ticks);
 
   if (parse_package_index(update_package_index_text, &index) < 0) {
     update_set_state("update: blocked - invalid package index");
@@ -1598,8 +1634,8 @@ static int update_install_remote_packages(char *report, size_t report_size) {
 
     snprintf(line, sizeof(line), "Inst: %s %s", entry->name, entry->version);
     append_report(report, report_size, line);
-    if (download_verified_blob(entry->name, UPDATE_PACKAGE_RAW_PREFIX,
-                               entry->path, entry->size, entry->sha256,
+    if (download_verified_blob(entry->name, package_prefix, entry->path,
+                               entry->size, entry->sha256,
                                update_package_blob, sizeof(update_package_blob),
                                NULL, report, report_size) < 0) {
       update_set_state("update: blocked - package download failed");
@@ -1786,7 +1822,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     update_set_state("update: boot payload already current");
     append_report(report, report_size,
                   "[5/8] Boot payload already current, skipping ESP rewrite");
-    if (update_install_remote_packages(report, report_size) < 0) {
+    if (update_install_remote_packages(&manifest, report, report_size) < 0) {
       vfs_persist_save();
       sched_set_process_state("update-manager", SCHED_SLEEPING);
       sched_enter_process("gui-shell");
@@ -1875,7 +1911,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
                       update_limine_fallback_conf, fallback_len);
   }
 
-  if (update_install_remote_packages(report, report_size) < 0) {
+  if (update_install_remote_packages(&manifest, report, report_size) < 0) {
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");

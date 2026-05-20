@@ -22,6 +22,9 @@ DEFAULT_ROOT_ISO = "Orizon-OS.iso"
 DEFAULT_UPDATE_DIR = "updates/x86_64"
 DEFAULT_GITHUB_REPO = "https://github.com/Orizon-cmd/Orizon-OS.git"
 DEFAULT_GITHUB_REF = "main"
+DEFAULT_PACKAGE_REPO = "https://github.com/Orizon-cmd/Orizon-Packages.git"
+DEFAULT_PACKAGE_REF = "main"
+DEFAULT_PACKAGE_INDEX_PATH = "packages/x86_64/index.txt"
 DEFAULT_MANIFEST_SIGNING_KEY = "config/keys/update-signing.private.pem"
 MANIFEST_SIGNING_KEY_ID = "orizon-update-root-2026-05"
 MANIFEST_SIGNING_MODULUS_HEX = (
@@ -188,6 +191,21 @@ def download_file(url: str, output_path: Path) -> None:
     print(f"SHA256: {hasher.hexdigest()}")
 
 
+def download_bytes(url: str, *, max_bytes: int) -> bytes:
+    chunks: list[bytes] = []
+    used = 0
+    with urllib.request.urlopen(url, timeout=60) as response:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            used += len(chunk)
+            if used > max_bytes:
+                raise RuntimeError(f"Downloaded object exceeds safety cap: {url}")
+            chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def sha256_file(path: Path) -> str:
     hasher = hashlib.sha256()
     with path.open("rb") as handle:
@@ -260,6 +278,24 @@ def update_version() -> str:
     return datetime.datetime.now().strftime("%Y.%m.%d-%H%M")
 
 
+def package_index_metadata(
+    *, package_repo: str, package_ref: str, package_index_path: str
+) -> tuple[str, int, str, str]:
+    resolved_ref = resolve_github_ref(package_repo, package_ref)
+    if resolved_ref != package_ref:
+        print(f"Package ref {package_ref} resolved to {resolved_ref}")
+    url = github_raw_url(package_repo, resolved_ref, package_index_path)
+    data = download_bytes(url, max_bytes=8192)
+    if not data:
+        raise RuntimeError(f"Package index is empty: {url}")
+    digest = hashlib.sha256(data).hexdigest()
+    print(f"Package index: {package_index_path}")
+    print(f"Package index commit: {resolved_ref}")
+    print(f"Package index size: {len(data)} bytes")
+    print(f"Package index SHA256: {digest}")
+    return resolved_ref, len(data), digest, url
+
+
 def write_update_manifest(
     *,
     update_dir: Path,
@@ -267,6 +303,9 @@ def write_update_manifest(
     version: str,
     signing_key_path: Path,
     generate_signing_key: bool,
+    package_repo: str,
+    package_ref: str,
+    package_index_path: str,
 ) -> None:
     kernel = update_dir / "kernel.elf"
     efi = update_dir / "BOOTX64.EFI"
@@ -276,6 +315,14 @@ def write_update_manifest(
     for artifact in (kernel, efi, limine):
         if not artifact.exists():
             raise FileNotFoundError(f"Missing update artifact: {artifact}")
+
+    package_commit, package_index_size, package_index_sha256, _package_url = (
+        package_index_metadata(
+            package_repo=package_repo,
+            package_ref=package_ref,
+            package_index_path=package_index_path,
+        )
+    )
 
     lines = [
         "manifest-version 1",
@@ -293,6 +340,11 @@ def write_update_manifest(
         "limine-path updates/x86_64/limine.conf",
         f"limine-size {limine.stat().st_size}",
         f"limine-sha256 {sha256_file(limine)}",
+        f"package-source {package_repo}",
+        f"package-commit {package_commit}",
+        f"package-index-path {package_index_path}",
+        f"package-index-size {package_index_size}",
+        f"package-index-sha256 {package_index_sha256}",
         "",
     ]
     manifest.write_text("\n".join(lines), encoding="utf-8")
@@ -311,6 +363,9 @@ def publish_update_payloads_from_local_tree(
     repo_url: str,
     signing_key_path: Path,
     generate_signing_key: bool,
+    package_repo: str,
+    package_ref: str,
+    package_index_path: str,
 ) -> None:
     update_dir.mkdir(parents=True, exist_ok=True)
     payloads = [
@@ -329,6 +384,9 @@ def publish_update_payloads_from_local_tree(
         version=update_version(),
         signing_key_path=signing_key_path,
         generate_signing_key=generate_signing_key,
+        package_repo=package_repo,
+        package_ref=package_ref,
+        package_index_path=package_index_path,
     )
 
 
@@ -340,6 +398,9 @@ def publish_update_payloads_from_zimaos(
     repo_url: str,
     signing_key_path: Path,
     generate_signing_key: bool,
+    package_repo: str,
+    package_ref: str,
+    package_index_path: str,
 ) -> None:
     update_dir.mkdir(parents=True, exist_ok=True)
     payloads = [
@@ -360,6 +421,9 @@ def publish_update_payloads_from_zimaos(
         version=update_version(),
         signing_key_path=signing_key_path,
         generate_signing_key=generate_signing_key,
+        package_repo=package_repo,
+        package_ref=package_ref,
+        package_index_path=package_index_path,
     )
 
 
@@ -409,6 +473,9 @@ def build_on_zimaos(
     github_repo: str,
     signing_key_path: Path,
     generate_signing_key: bool,
+    package_repo: str,
+    package_ref: str,
+    package_index_path: str,
 ) -> None:
     cmd = [
         sys.executable,
@@ -450,6 +517,9 @@ def build_on_zimaos(
                     repo_url=github_repo,
                     signing_key_path=signing_key_path,
                     generate_signing_key=generate_signing_key,
+                    package_repo=package_repo,
+                    package_ref=package_ref,
+                    package_index_path=package_index_path,
                 )
         finally:
             client.close()
@@ -502,6 +572,21 @@ def main() -> int:
         "--github-iso-url",
         default="",
         help="Explicit ISO URL. Overrides --github-repo/--github-ref/--github-iso-path.",
+    )
+    parser.add_argument(
+        "--package-repo",
+        default=DEFAULT_PACKAGE_REPO,
+        help="Public Orizon package repository URL pinned into the signed manifest.",
+    )
+    parser.add_argument(
+        "--package-ref",
+        default=DEFAULT_PACKAGE_REF,
+        help="Package repository branch, tag, or commit pinned into the signed manifest.",
+    )
+    parser.add_argument(
+        "--package-index-path",
+        default=DEFAULT_PACKAGE_INDEX_PATH,
+        help="Package index path inside the package repository.",
     )
     parser.add_argument(
         "--source-dir",
@@ -588,6 +673,9 @@ def main() -> int:
                 repo_url=args.github_repo,
                 signing_key_path=signing_key_path,
                 generate_signing_key=args.generate_manifest_signing_key,
+                package_repo=args.package_repo,
+                package_ref=args.package_ref,
+                package_index_path=args.package_index_path,
             )
     elif args.mode == "zimaos-iso":
         build_on_zimaos(
@@ -603,6 +691,9 @@ def main() -> int:
             github_repo=args.github_repo,
             signing_key_path=signing_key_path,
             generate_signing_key=args.generate_manifest_signing_key,
+            package_repo=args.package_repo,
+            package_ref=args.package_ref,
+            package_index_path=args.package_index_path,
         )
     else:
         build_on_zimaos(
@@ -618,6 +709,9 @@ def main() -> int:
             github_repo=args.github_repo,
             signing_key_path=signing_key_path,
             generate_signing_key=args.generate_manifest_signing_key,
+            package_repo=args.package_repo,
+            package_ref=args.package_ref,
+            package_index_path=args.package_index_path,
         )
 
     print("Orizon update complete.")

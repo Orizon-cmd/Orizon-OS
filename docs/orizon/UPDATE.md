@@ -137,14 +137,22 @@ efi-sha256 <sha256>
 limine-path updates/x86_64/limine.conf
 limine-size <bytes>
 limine-sha256 <sha256>
+package-source https://github.com/Orizon-cmd/Orizon-Packages.git
+package-commit <resolved-package-repo-commit>
+package-index-path packages/x86_64/index.txt
+package-index-size <bytes>
+package-index-sha256 <sha256>
 ```
 
 The kernel accepts only non-empty payload sizes within its fixed safety caps
-and verifies all hashes before writing the ESP. Before parsing the manifest, it
+and verifies all hashes before writing the ESP. The signed manifest also pins
+the exact package repository commit and package index SHA-256, so package
+metadata cannot silently drift on `main`. Before parsing the manifest, Orizon
 downloads `manifest.sig`, checks the manifest SHA-256, and verifies an
 `rsa-pkcs1-sha256` signature against the compiled Orizon update root key
 `orizon-update-root-2026-05`. A public branch without this signature is treated
-as unsigned and the update is blocked before any boot payload is installed.
+as unsigned and the update is blocked before any boot payload or package is
+installed.
 
 The release helper signs manifests with a local private key:
 
@@ -180,7 +188,8 @@ Index entries use this first format:
 package <name> <version> <path> <size> <sha256>
 ```
 
-The index SHA-256 verifies the full `.opkg` file. The package manager then
+The signed OS manifest pins the package index path, size, commit, and SHA-256.
+Each index entry then verifies the full `.opkg` file, and the package manager
 checks the package's own payload SHA-256 before installing files. The local
 package commands remain:
 

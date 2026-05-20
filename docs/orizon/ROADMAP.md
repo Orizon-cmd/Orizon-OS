@@ -17,8 +17,9 @@
   fetches, resumable boot-artifact caches, full-disk ESP rewrite, and
   side-by-side `/EFI/Orizon` refresh for dual-boot data installs.
 - Update authenticity guard: detached RSA PKCS#1/SHA-256 manifest signatures,
-  an embedded Orizon update root key, and TLS SAN/chain/signature validation
-  anchored to ISRG Root X1 for GitHub downloads.
+  an embedded Orizon update root key, package-index commit/SHA pinning, and
+  TLS SAN/chain/signature validation anchored to ISRG Root X1 for GitHub
+  downloads.
 - Post-update boot guard: pending/testing markers, a boot-count-style Limine
   fallback default while the refreshed kernel is proving itself, automatic
   validation once the refreshed kernel reaches the shell, `bootguard`
@@ -70,8 +71,8 @@
    firmware can automatically select rollback even when the refreshed kernel
    never reaches Orizon early boot.
 2. Add package rollback metadata before package updates overwrite files.
-3. Make the package repository signed, not only SHA-256 verified through the
-   public manifest/index.
+3. Add detached package repository signatures and key rotation; the package
+   index is already pinned through the signed OS manifest.
 4. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
    bridge/DHCP failure messages.
 5. Finish SSH remote login hardening: safer config permissions, key rotation,
