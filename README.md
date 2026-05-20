@@ -180,6 +180,7 @@ Pour lancer la matrice reseau VM depuis le labo ZimaOS:
 python scripts/orizon/build_x86_64_on_zimaos.py
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl8139
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
+python scripts/orizon/test_update_rollback_vm.py
 ```
 
 Le build ZimaOS direct rapatrie maintenant aussi `Orizon-OS.iso` a la racine
@@ -189,7 +190,8 @@ provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
 `selftest`, les logs, `report save`, `cat /workspace/hardware-report.txt` et
 `hostkey`. Le mode `--include-lifecycle` capture une screenshot framebuffer,
 declenche `reboot`, reverifie SSH apres redemarrage, puis teste `shutdown`
-propre en VM.
+propre en VM. Le smoke `test_update_rollback_vm.py` utilise une VM jetable
+installee pour verifier `update`, manifeste/signature, bootguard et `rollback`.
 
 ## Acces SSH Orizon
 

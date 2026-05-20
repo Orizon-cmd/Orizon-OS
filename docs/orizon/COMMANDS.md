@@ -11,8 +11,9 @@ python scripts/orizon/orizon_update.py --mode zimaos-iso
 python scripts/orizon/orizon_update.py --mode zimaos-vm
 python scripts/orizon/orizon_update.py --mode github-iso
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
+python scripts/orizon/test_update_rollback_vm.py
 git diff --check
-python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py
+python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py scripts/orizon/test_update_rollback_vm.py
 ```
 
 Expected release artifacts:

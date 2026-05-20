@@ -275,6 +275,25 @@ must match the signed `iso-*` fields. The release validator also checks that
 `kernel.elf`, `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig`, and
 `release.txt` all describe the current artifacts instead of a stale build.
 
+## ZimaOS VM Validation
+
+The dedicated update/rollback smoke test installs Orizon into a disposable
+ZimaOS VM disk, then validates the installed-only update path through SSH:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-iso
+python scripts/orizon/test_update_rollback_vm.py
+```
+
+The test performs a full-disk install in the VM, checks `update status`,
+temporarily removes `/workspace/.orizon/installed` to confirm the live-boot
+guard refuses `update`, restores the marker, downloads and verifies the signed
+GitHub manifest/signature, checks TLS/root-trust and resume-cache status, runs
+`rollback`, reboots, and verifies the installed system still reports rollback
+metadata. If the boot payload already matches the public manifest, the test
+documents that the payload rewrite/bootguard-armed branch was not forced; using
+an older boot tree will exercise that branch.
+
 ## Backends
 
 - `github-iso`: download `Orizon-OS.iso` from the public GitHub repository.

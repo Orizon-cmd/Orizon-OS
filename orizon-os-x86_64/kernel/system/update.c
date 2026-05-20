@@ -52,6 +52,7 @@
 #define UPDATE_PACKAGE_SOURCE "https://github.com/Orizon-cmd/Orizon-Packages"
 #define UPDATE_CHUNK_BYTES 65536U
 #define UPDATE_RANGE_RETRIES 5U
+#define UPDATE_METADATA_PAIR_RETRIES 3U
 #define UPDATE_MANIFEST_MAX 4096U
 #define UPDATE_MANIFEST_SIG_MAX 1024U
 #define UPDATE_MANIFEST_SIG_BYTES 256U
@@ -1059,6 +1060,17 @@ static int verify_update_manifest_signature(const char *manifest,
   return 0;
 }
 
+static int update_manifest_signature_matches_hash(const char *sig_text,
+                                                  const char *manifest_hash) {
+  update_manifest_signature_t sig;
+
+  if (!sig_text || !manifest_hash ||
+      parse_manifest_signature(sig_text, &sig) != 0) {
+    return -1;
+  }
+  return hex_equal(sig.manifest_sha256, manifest_hash) ? 1 : 0;
+}
+
 static int update_token_safe(const char *text) {
   int seen = 0;
   if (!text) {
@@ -1668,6 +1680,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   char current_efi_hash[SHA256_HEX_SIZE];
   size_t manifest_len = 0;
   size_t manifest_sig_len = 0;
+  int metadata_verified = 0;
   char update_text[512];
   char rollback_text[512];
   uint64_t total_started_ticks = timer_ticks();
@@ -1745,59 +1758,122 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_append_log(net_line);
 
   update_set_state("update: downloading github manifest");
-  if (download_text_with_retries("github-manifest", UPDATE_RAW_PREFIX,
-                                 UPDATE_MANIFEST_REMOTE, update_manifest_text,
-                                 sizeof(update_manifest_text) - 1,
-                                 &manifest_len, net_line,
-                                 sizeof(net_line)) != 0 ||
-      manifest_len == 0) {
-    update_set_state("update: blocked - manifest download failed");
-    append_report(report, report_size, "[4/8] GitHub manifest download failed");
-    netstack_format_status(net_line, sizeof(net_line));
-    append_report(report, report_size, net_line);
-    append_report(report, report_size,
-                  "Hint: check DNS/gateway with 'dns raw.githubusercontent.com', "
-                  "'route' and 'ping 8.8.8.8'.");
-    vfs_persist_save();
-    sched_set_process_state("update-manager", SCHED_SLEEPING);
-    sched_enter_process("gui-shell");
-    return -3;
-  }
-  update_manifest_text[manifest_len] = '\0';
-  snprintf(line, sizeof(line), "Get: manifest.txt [%lu bytes]",
-           (unsigned long)manifest_len);
-  update_progress_line(line);
-  sha256_buffer_hex(update_manifest_text, manifest_len, manifest_hash);
-  update_write_blob(UPDATE_PROOF_PATH, update_manifest_text, manifest_len);
-  update_write_line(UPDATE_PROOF_HASH_PATH, manifest_hash);
-  if (download_text_with_retries("github-manifest-signature", UPDATE_RAW_PREFIX,
-                                 UPDATE_MANIFEST_SIG_REMOTE,
-                                 update_manifest_sig_text,
-                                 sizeof(update_manifest_sig_text) - 1,
-                                 &manifest_sig_len, net_line,
-                                 sizeof(net_line)) != 0 ||
-      manifest_sig_len == 0) {
-    update_set_state("update: blocked - manifest signature download failed");
-    append_report(report, report_size,
-                  "[4/8] GitHub manifest signature download failed");
-    if (net_line[0]) {
+  for (unsigned metadata_attempt = 1;
+       metadata_attempt <= UPDATE_METADATA_PAIR_RETRIES; metadata_attempt++) {
+    manifest_len = 0;
+    manifest_sig_len = 0;
+    update_manifest_text[0] = '\0';
+    update_manifest_sig_text[0] = '\0';
+    net_line[0] = '\0';
+    if (download_text_with_retries("github-manifest", UPDATE_RAW_PREFIX,
+                                   UPDATE_MANIFEST_REMOTE,
+                                   update_manifest_text,
+                                   sizeof(update_manifest_text) - 1,
+                                   &manifest_len, net_line,
+                                   sizeof(net_line)) != 0 ||
+        manifest_len == 0) {
+      if (metadata_attempt < UPDATE_METADATA_PAIR_RETRIES) {
+        snprintf(line, sizeof(line),
+                 "[4/8] GitHub manifest download retry %lu/%lu",
+                 (unsigned long)(metadata_attempt + 1),
+                 (unsigned long)UPDATE_METADATA_PAIR_RETRIES);
+        append_report(report, report_size, line);
+        update_append_log(line);
+        update_set_state("update: retrying github manifest");
+        continue;
+      }
+      update_set_state("update: blocked - manifest download failed");
+      append_report(report, report_size,
+                    "[4/8] GitHub manifest download failed");
+      netstack_format_status(net_line, sizeof(net_line));
       append_report(report, report_size, net_line);
+      append_report(report, report_size,
+                    "Hint: check DNS/gateway with 'dns raw.githubusercontent.com', "
+                    "'route' and 'ping 8.8.8.8'.");
+      vfs_persist_save();
+      sched_set_process_state("update-manager", SCHED_SLEEPING);
+      sched_enter_process("gui-shell");
+      return -3;
     }
-    vfs_persist_save();
-    sched_set_process_state("update-manager", SCHED_SLEEPING);
-    sched_enter_process("gui-shell");
-    return -4;
-  }
-  update_manifest_sig_text[manifest_sig_len] = '\0';
-  if (verify_update_manifest_signature(update_manifest_text, manifest_len,
-                                       update_manifest_sig_text, manifest_hash,
-                                       report, report_size) != 0) {
+    update_manifest_text[manifest_len] = '\0';
+    snprintf(line, sizeof(line), "Get: manifest.txt [%lu bytes]",
+             (unsigned long)manifest_len);
+    update_progress_line(line);
+    sha256_buffer_hex(update_manifest_text, manifest_len, manifest_hash);
+    if (download_text_with_retries("github-manifest-signature",
+                                   UPDATE_RAW_PREFIX,
+                                   UPDATE_MANIFEST_SIG_REMOTE,
+                                   update_manifest_sig_text,
+                                   sizeof(update_manifest_sig_text) - 1,
+                                   &manifest_sig_len, net_line,
+                                   sizeof(net_line)) != 0 ||
+        manifest_sig_len == 0) {
+      if (metadata_attempt < UPDATE_METADATA_PAIR_RETRIES) {
+        snprintf(line, sizeof(line),
+                 "[4/8] GitHub manifest signature retry %lu/%lu",
+                 (unsigned long)(metadata_attempt + 1),
+                 (unsigned long)UPDATE_METADATA_PAIR_RETRIES);
+        append_report(report, report_size, line);
+        update_append_log(line);
+        update_set_state("update: retrying github manifest signature");
+        continue;
+      }
+      update_set_state("update: blocked - manifest signature download failed");
+      append_report(report, report_size,
+                    "[4/8] GitHub manifest signature download failed");
+      if (net_line[0]) {
+        append_report(report, report_size, net_line);
+      }
+      vfs_persist_save();
+      sched_set_process_state("update-manager", SCHED_SLEEPING);
+      sched_enter_process("gui-shell");
+      return -4;
+    }
+    update_manifest_sig_text[manifest_sig_len] = '\0';
+    if (update_manifest_signature_matches_hash(update_manifest_sig_text,
+                                               manifest_hash) == 0 &&
+        metadata_attempt < UPDATE_METADATA_PAIR_RETRIES) {
+      snprintf(line, sizeof(line),
+               "[4/8] Manifest/signature pair mismatch, retry %lu/%lu",
+               (unsigned long)(metadata_attempt + 1),
+               (unsigned long)UPDATE_METADATA_PAIR_RETRIES);
+      append_report(report, report_size, line);
+      update_append_log(line);
+      update_set_state("update: retrying manifest signature pair");
+      continue;
+    }
+    if (verify_update_manifest_signature(update_manifest_text, manifest_len,
+                                         update_manifest_sig_text,
+                                         manifest_hash, report,
+                                         report_size) == 0) {
+      metadata_verified = 1;
+      break;
+    }
+    if (metadata_attempt < UPDATE_METADATA_PAIR_RETRIES) {
+      snprintf(line, sizeof(line),
+               "[4/8] Manifest signature invalid, retry %lu/%lu",
+               (unsigned long)(metadata_attempt + 1),
+               (unsigned long)UPDATE_METADATA_PAIR_RETRIES);
+      append_report(report, report_size, line);
+      update_append_log(line);
+      update_set_state("update: retrying manifest signature verification");
+      continue;
+    }
     update_set_state("update: blocked - manifest signature invalid");
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
     return -4;
   }
+  if (!metadata_verified) {
+    update_set_state("update: blocked - manifest signature invalid");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -4;
+  }
+  update_write_blob(UPDATE_PROOF_PATH, update_manifest_text, manifest_len);
+  update_write_line(UPDATE_PROOF_HASH_PATH, manifest_hash);
   if (parse_update_manifest(update_manifest_text, &manifest) < 0) {
     update_set_state("update: blocked - invalid manifest");
     append_report(report, report_size, "[4/8] Invalid GitHub update manifest");

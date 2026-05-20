@@ -3175,10 +3175,46 @@ static void ssh_shell_print_update(const char *args) {
   if (ssh_shell_command_is(sub, "status")) {
     orizon_update_format_status(report, sizeof(report));
   } else if (ssh_shell_command_is(sub, "bootguard")) {
-    orizon_update_boot_guard_status(report, sizeof(report));
+    const char *guard_args = ssh_shell_skip_spaces(sub + strlen("bootguard"));
+    if (ssh_shell_command_is(guard_args, "confirm") ||
+        ssh_shell_command_is(guard_args, "validate")) {
+      orizon_update_boot_guard_confirm(report, sizeof(report));
+    } else {
+      orizon_update_boot_guard_status(report, sizeof(report));
+    }
   } else {
     orizon_update_full_upgrade(report, sizeof(report));
   }
+  if (strlen(report) + 2 < sizeof(report) &&
+      (report[0] == '\0' || report[strlen(report) - 1] != '\n')) {
+    strcat(report, "\r\n");
+  }
+  ssh_queue_channel_text(report);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_bootguard(const char *args) {
+  static char report[4096];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (ssh_shell_command_is(sub, "confirm") ||
+      ssh_shell_command_is(sub, "validate")) {
+    orizon_update_boot_guard_confirm(report, sizeof(report));
+  } else {
+    orizon_update_boot_guard_status(report, sizeof(report));
+  }
+  if (strlen(report) + 2 < sizeof(report) &&
+      (report[0] == '\0' || report[strlen(report) - 1] != '\n')) {
+    strcat(report, "\r\n");
+  }
+  ssh_queue_channel_text(report);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_rollback(void) {
+  static char report[SSH_CHANNEL_TEXT_BUF];
+
+  orizon_update_rollback(report, sizeof(report));
   if (strlen(report) + 2 < sizeof(report) &&
       (report[0] == '\0' || report[strlen(report) - 1] != '\n')) {
     strcat(report, "\r\n");
@@ -3465,7 +3501,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3533,7 +3569,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  report save          write /workspace/hardware-report.txt\r\n"
         "  install-plan [mode]  save non-destructive installer preflight report\r\n"
         "  free                 show heap state\r\n"
-        "  bootguard            show update boot validation state\r\n"
+        "  bootguard [confirm]  show/confirm update boot validation state\r\n"
+        "  rollback             restore the currently booted payload on installed VM\r\n"
         "  rollback-status      show saved rollback metadata\r\n"
         "  audit|ssh sessions   show SSH session counters\r\n"
         "  algorithms           show negotiated SSH algorithms\r\n"
@@ -3555,13 +3592,12 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "bootguard") == 0) {
-    orizon_update_boot_guard_status(out, sizeof(out));
-    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
-    ssh_shell_prompt();
+  if (ssh_shell_command_is(line, "bootguard")) {
+    ssh_shell_print_bootguard(line + strlen("bootguard"));
+    return;
+  }
+  if (strcmp(line, "rollback") == 0) {
+    ssh_shell_print_rollback();
     return;
   }
   if (strcmp(line, "rollback-status") == 0) {
@@ -3872,7 +3908,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -3941,12 +3977,10 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (strcmp(cmd, "bootguard") == 0) {
-    orizon_update_boot_guard_status(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
+  } else if (ssh_shell_command_is(cmd, "bootguard")) {
+    ssh_shell_print_bootguard(cmd + strlen("bootguard"));
+  } else if (strcmp(cmd, "rollback") == 0) {
+    ssh_shell_print_rollback();
   } else if (strcmp(cmd, "rollback-status") == 0) {
     ssh_shell_print_rollback_status();
   } else if (ssh_shell_command_is(cmd, "ssh password")) {

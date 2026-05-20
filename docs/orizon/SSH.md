@@ -31,6 +31,8 @@ report save
 install-plan
 selftest ssh
 bootguard
+bootguard confirm
+rollback
 ```
 
 `ssh password <mot-de-passe>` active l'authentification explicite pour
@@ -85,7 +87,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`, `pci bars`, `report save`,
-  `install-plan`, `free`, `timer`, `bootguard`, `audit`, `ssh sessions`, `sync`, `reboot`,
+  `install-plan`, `free`, `timer`, `bootguard`, `bootguard confirm`,
+  `rollback`, `audit`, `ssh sessions`, `sync`, `reboot`,
   `shutdown`, `status`, `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
   Le mode shell PTY accepte les fins de ligne
@@ -117,7 +120,7 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
   `write`/`append`/`touch`/`mkdir`/`rm`, lancer les diagnostics non destructifs
   `selftest`, `disk identify`, `disk read-test`, `disk read-test last`,
-  `gpt scan`, et sauvegarder avec `sync`. En VM, `reboot` et `shutdown` persistent d'abord les racines Orizon
+  `gpt scan`, `bootguard confirm`, `rollback`, et sauvegarder avec `sync`. En VM, `reboot` et `shutdown` persistent d'abord les racines Orizon
   puis planifient le redemarrage ou l'extinction.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros
   paquets, segmente les longues sorties `CHANNEL_DATA` en plusieurs paquets,

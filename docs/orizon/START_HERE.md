@@ -54,7 +54,7 @@ Quick checks before a commit:
 
 ```powershell
 git diff --check
-python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py
+python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py scripts/orizon/test_update_rollback_vm.py
 ```
 
 ## What To Capture Next
@@ -65,6 +65,9 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 - ZimaOS VM lifecycle smoke, when requested: `python scripts/orizon/test_vm_matrix.py
   --cases nat-e1000e --include-lifecycle` adds framebuffer screenshot,
   SSH-triggered reboot, post-reboot SSH, and clean VM shutdown.
+- ZimaOS installed update/rollback smoke, when requested:
+  `python scripts/orizon/test_update_rollback_vm.py` installs a disposable VM,
+  validates signed update metadata, runs rollback, reboots, and shuts down.
 - Lenovo storage capture, only when the user boots the new ISO: `report save`,
   `storage diag`, `logs storage`, `logs pci`, `pci bars`, `disk identify`, and
   `gpt scan`; do not install while investigating missing-disk detection.

@@ -48,6 +48,7 @@ $commands = @(
   "tail /workspace/hardware-report.txt",
   "cat /workspace/.orizon/install-report.txt",
   "logs install",
+  "rollback",
   "timer",
   "usb",
   "usb rescan",
@@ -177,6 +178,9 @@ run_cmd() {
       ;;
     "cat /workspace/.orizon/install-report.txt"|"logs install")
       grep -q "Orizon install preflight" "`$OUT" && grep -q "write-scope: none" "`$OUT" || { echo "missing installer preflight report"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "rollback")
+      grep -q "unavailable in live boot" "`$OUT" || { echo "rollback command did not return the live-boot guard"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "rollback-status")
       ! grep -q "command not found" "`$OUT" || { echo "rollback-status is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

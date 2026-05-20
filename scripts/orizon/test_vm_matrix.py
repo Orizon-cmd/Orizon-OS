@@ -187,6 +187,7 @@ def run_ssh_checks(
         ("cat /workspace/hardware-report.txt", "Live Kernel Log Tail"),
         ("install-plan", "install-plan: wrote"),
         ("cat /workspace/.orizon/install-report.txt", "write-scope: none"),
+        ("rollback", "unavailable in live boot"),
         ("hostkey", "fingerprint-sha256"),
     ]
     if include_update:
