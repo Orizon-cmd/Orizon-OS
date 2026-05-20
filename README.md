@@ -256,6 +256,7 @@ partition depuis Orizon.
 Pour revoir le plan:
 
 ```text
+install-plan
 install-status
 ```
 

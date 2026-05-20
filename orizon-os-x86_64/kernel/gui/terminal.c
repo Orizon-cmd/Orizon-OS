@@ -729,7 +729,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "about", "append", "boot-check", "bootguard", "cat", "cd", "clear", "cp", "date",
       "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
       "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
-      "install", "install-status",
+      "install", "install-plan", "install-status",
       "input", "keyboard", "ls", "mkdir", "mounts", "mv",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
@@ -3837,6 +3837,85 @@ static int term_install_already_complete(void) {
   return 0;
 }
 
+static void term_run_install_plan(terminal_t *term, const char *cmd) {
+  static char report[4096];
+  orizon_install_config_t config;
+  storage_device_info_t disk;
+  char disk_name[24];
+  const char *args = term_skip_spaces(cmd + strlen("install-plan"));
+  const char *mode = "manual-later";
+  int disk_index = -1;
+  int data_partition = -1;
+  int count;
+
+  if (*args != '\0') {
+    if (term_command_is(args, "manual") ||
+        term_command_is(args, "manual-later")) {
+      mode = "manual-later";
+    } else if (term_command_is(args, "dual-boot-esp")) {
+      mode = "dual-boot-esp";
+    } else if (term_command_is(args, "guided-full-disk") ||
+               term_command_is(args, "full")) {
+      mode = "guided-full-disk";
+    } else if (term_command_is(args, "dual-boot-data")) {
+      const char *part_arg =
+          term_skip_spaces(args + strlen("dual-boot-data"));
+      mode = "dual-boot-data";
+      if (strncmp(part_arg, "part", 4) == 0) {
+        part_arg += 4;
+      }
+      if (term_parse_uint(part_arg, &data_partition) < 0) {
+        term_puts_t(term,
+                    "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\n");
+        return;
+      }
+    } else {
+      term_puts_t(term,
+                  "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\n");
+      return;
+    }
+  }
+
+  disk_name[0] = '\0';
+  count = storage_device_count();
+  if (count > 0) {
+    disk_index = storage_selected_device();
+    if (disk_index < 0) {
+      disk_index = 0;
+    }
+    if (storage_get_device(disk_index, &disk) == 0) {
+      snprintf(disk_name, sizeof(disk_name), "%s", disk.name);
+    }
+  }
+  if (disk_name[0] == '\0') {
+    snprintf(disk_name, sizeof(disk_name), "none");
+  }
+
+  config.language = "en_US";
+  config.keyboard = input_keyboard_layout();
+  config.disk_mode = mode;
+  config.hostname = "orizon-vm";
+  config.disk_index = disk_index;
+  config.disk_name = disk_name;
+  config.data_partition_index = data_partition;
+
+  orizon_install_format_plan(&config, report, sizeof(report));
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  if (term_write_text_file("/workspace/.orizon/install-report.txt", report) <
+      0) {
+    term_puts_t(term, "install-plan: failed to write report\n");
+    return;
+  }
+  term_puts_t(term, report);
+  if (report[0] && report[strlen(report) - 1] != '\n') {
+    term_puts_t(term, "\n");
+  }
+  term_puts_t(term,
+              "install-plan: wrote /workspace/.orizon/install-report.txt\n"
+              "read with: cat /workspace/.orizon/install-report.txt\n");
+}
+
 static int term_install_value_is(const char *value, const char *a,
                                  const char *b, const char *c) {
   return strcmp(value, a) == 0 || (b && strcmp(value, b) == 0) ||
@@ -3993,18 +4072,26 @@ static void term_install_prompt(terminal_t *term) {
       term_puts_t(term, line);
     }
     if (strcmp(term->install_disk_mode, "manual-later") == 0) {
+      term_puts_t(term,
+                  "  Preflight: /workspace/.orizon/install-report.txt will be saved before any disk write.\n");
       term_puts_t(term, "Type SAVE to store the plan, or cancel to abort: ");
     } else if (strcmp(term->install_disk_mode, "dual-boot-data") == 0) {
+      term_puts_t(term,
+                  "  Preflight: /workspace/.orizon/install-report.txt will be saved before any disk write.\n");
       snprintf(line, sizeof(line),
                "Type DUALDATA %s %s to claim that partition, or cancel to abort: ",
                term->install_disk_name, term->install_data_partition_name);
       term_puts_t(term, line);
     } else if (strcmp(term->install_disk_mode, "dual-boot-esp") == 0) {
+      term_puts_t(term,
+                  "  Preflight: /workspace/.orizon/install-report.txt will be saved before any disk write.\n");
       snprintf(line, sizeof(line),
                "Type DUALBOOT %s to write /EFI/Orizon only, or cancel to abort: ",
                term->install_disk_name);
       term_puts_t(term, line);
     } else {
+      term_puts_t(term,
+                  "  Preflight: /workspace/.orizon/install-report.txt will be saved before any disk write.\n");
       snprintf(line, sizeof(line),
                "Type ERASE %s to write this disk, or cancel to abort: ",
                term->install_disk_name);
@@ -4053,10 +4140,20 @@ static void term_install_write_plan(terminal_t *term) {
   vfs_mkdir("/packages");
   vfs_mkdir("/logs");
 
+  config.language = term->install_language;
+  config.keyboard = term->install_keyboard;
+  config.disk_mode = term->install_disk_mode;
+  config.hostname = term->install_hostname;
+  config.disk_index = term->install_disk_index;
+  config.disk_name = term->install_disk_name;
+  config.data_partition_index = term->install_data_partition_index;
+  orizon_install_format_plan(&config, install_report, sizeof(install_report));
+
   snprintf(plan, sizeof(plan),
            "installer-version 1\n"
            "os Orizon OS\n"
            "source live-iso\n"
+           "preflight-report /workspace/.orizon/install-report.txt\n"
            "language %s\n"
            "keyboard %s\n"
            "hostname %s\n"
@@ -4096,6 +4193,8 @@ static void term_install_write_plan(terminal_t *term) {
 
   if (term_write_text_file("/workspace/.orizon/install-plan", plan) < 0 ||
       term_write_text_file("/workspace/.orizon/install-state", state) < 0 ||
+      term_write_text_file("/workspace/.orizon/install-report.txt",
+                           install_report) < 0 ||
       term_write_text_file("/workspace/.orizon/keyboard",
                            term->install_keyboard) < 0 ||
       term_write_text_file("/system/install-state", state) < 0 ||
@@ -4129,13 +4228,6 @@ static void term_install_write_plan(terminal_t *term) {
     term_puts_t(term, "\nPreparing non-destructive ESP write...\n");
   }
 
-  config.language = term->install_language;
-  config.keyboard = term->install_keyboard;
-  config.disk_mode = term->install_disk_mode;
-  config.hostname = term->install_hostname;
-  config.disk_index = term->install_disk_index;
-  config.disk_name = term->install_disk_name;
-  config.data_partition_index = term->install_data_partition_index;
   term_puts_t(term, "\n");
   if (orizon_install_run(&config, install_report, sizeof(install_report)) == 0) {
     term_puts_t(term, install_report);
@@ -4566,6 +4658,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  ssh start/status/algorithms/stop - Manage TCP/22 SSH listener\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
+    term_puts_t(term, "  install-plan [mode] - Save non-destructive installer preflight report\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
     term_puts_t(term, "  dualboot-check - Verify /EFI/Orizon side-by-side boot files\n");
@@ -5095,17 +5188,41 @@ void term_execute(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "install")) {
     term_start_installer(term);
     return;
+  } else if (term_command_is(cmd, "install-plan")) {
+    term_run_install_plan(term, cmd);
   } else if (term_command_is(cmd, "install-status")) {
     char buf[2048];
-    int n = term_read_regular_file(term, "install-plan",
-                                   "/workspace/.orizon/install-plan", buf,
-                                   sizeof(buf), "install-status");
+    int any = 0;
+    int n = term_read_text_file_silent("/workspace/.orizon/install-plan", buf,
+                                       sizeof(buf));
     if (n > 0) {
       buf[n] = '\0';
+      term_puts_t(term, "install-plan:\n");
       term_puts_t(term, buf);
       if (buf[n - 1] != '\n') {
         term_puts_t(term, "\n");
       }
+      any = 1;
+    }
+    n = term_read_text_file_silent("/workspace/.orizon/install-report.txt", buf,
+                                   sizeof(buf));
+    if (n > 0) {
+      term_puts_t(term, "preflight-report:\n");
+      term_puts_t(term, buf);
+      if (buf[n - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+      any = 1;
+    }
+    n = term_read_text_file_silent("/workspace/.orizon/install-log", buf,
+                                   sizeof(buf));
+    if (n > 0) {
+      term_puts_t(term, "install-log:\n");
+      term_puts_t(term, buf);
+      if (buf[n - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+      any = 1;
     }
     n = term_read_text_file_silent("/workspace/.orizon/install-state", buf,
                                    sizeof(buf));
@@ -5115,6 +5232,11 @@ void term_execute(terminal_t *term, const char *cmd) {
       if (buf[n - 1] != '\n') {
         term_puts_t(term, "\n");
       }
+      any = 1;
+    }
+    if (!any) {
+      term_puts_t(term,
+                  "install-status: no installer state or preflight report saved yet\n");
     }
   } else if (term_command_is(cmd, "boot-check")) {
     static char boot_report[8192];

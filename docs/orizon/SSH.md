@@ -28,6 +28,7 @@ ssh poll
 ssh stop
 logs ssh
 report save
+install-plan
 selftest ssh
 bootguard
 ```
@@ -84,7 +85,7 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`, `pci bars`, `report save`,
-  `free`, `timer`, `bootguard`, `audit`, `ssh sessions`, `sync`, `reboot`,
+  `install-plan`, `free`, `timer`, `bootguard`, `audit`, `ssh sessions`, `sync`, `reboot`,
   `shutdown`, `status`, `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
   Le mode shell PTY accepte les fins de ligne
@@ -105,6 +106,11 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   `report show` utilisent maintenant un tampon de sortie plus large ou une vue
   de fin de fichier pour lire un rapport complet depuis un vrai client SSH,
   sans passer par l'ecran framebuffer.
+- Rapport installateur VM: `install-plan` est non destructif et ecrit
+  `/workspace/.orizon/install-report.txt`; lire ensuite avec `cat
+  /workspace/.orizon/install-report.txt` ou `logs install` pour verifier le
+  mode, le disque cible, la portee d'ecriture et la confirmation requise avant
+  toute installation.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout

@@ -27,6 +27,19 @@ Run from the Orizon console:
 install
 ```
 
+Before running the guided flow, or from SSH in a VM, this command writes a
+non-destructive preflight report:
+
+```text
+install-plan
+cat /workspace/.orizon/install-report.txt
+```
+
+Optional report modes are `manual`, `dual-boot-esp`, `dual-boot-data <part>`,
+and `guided-full-disk`. They do not install anything; they only document the
+target disk, write scope, confirmation string, partition snapshot, and any
+obvious blocker.
+
 The guided flow currently asks for:
 
 - language: `fr_FR` or `en_US`
@@ -65,6 +78,7 @@ first.
 It writes runtime/staging state:
 
 ```text
+/workspace/.orizon/install-report.txt
 /workspace/.orizon/install-plan
 /workspace/.orizon/install-state
 /workspace/.orizon/installed
@@ -195,7 +209,7 @@ Remove/eject the ISO or USB installer before the next boot.
 
 It then schedules shutdown. On the next boot, the persistent installed marker
 blocks `install` to avoid accidental reinstall/destructive disk writes. Use
-`install-status` to review the saved state.
+`install-status` to review the saved state, preflight report, and install log.
 
 The selected keyboard layout is now applied by the kernel input layer. Current
 layouts are `fr-azerty` and `us-qwerty`; accent keys are mapped to ASCII-safe

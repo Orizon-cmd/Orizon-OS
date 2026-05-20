@@ -19,6 +19,9 @@ design note.
 - Hardware capture is exportable with `report save`, which writes the
   non-destructive `/workspace/hardware-report.txt` bundle containing storage,
   PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
+- Installer preflight is exportable with `install-plan`, which writes the
+  non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
+  review before any disk write.
 - The local framebuffer console can scroll long outputs with `z` up and `s`
   down on an empty prompt; SSH `cat /workspace/hardware-report.txt` is preferred
   for copying the full report.
@@ -57,8 +60,8 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 ## What To Capture Next
 
 - ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `pkg status`,
-  `update status`, `report save`, `selftest crypto`, and `hostkey` on e1000e,
-  VirtIO-net, and RTL8139 NAT first.
+  `update status`, `report save`, `install-plan`, `selftest crypto`, and
+  `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT first.
 - ZimaOS VM lifecycle smoke, when requested: `python scripts/orizon/test_vm_matrix.py
   --cases nat-e1000e --include-lifecycle` adds framebuffer screenshot,
   SSH-triggered reboot, post-reboot SSH, and clean VM shutdown.

@@ -7,7 +7,8 @@
   side-by-side `/EFI/Orizon` boot files, and `dualboot-check` verification.
 - Installed dual-boot data path: the installer can reuse an existing prepared
   partition as `Orizon Data`, preserve the shared ESP, keep live-created data,
-  and enable `update` without requiring a new ISO.
+  and enable `update` without requiring a new ISO. `install-plan` now exports a
+  non-destructive preflight report for VM/SSH review before any disk write.
 - Persistent Orizon data roots: `/workspace`, `/home`, `/system`,
   `/packages`, `/logs`, and `/tmp`, now guarded so persistence writes only
   activate when an Orizon data partition is actually present, including

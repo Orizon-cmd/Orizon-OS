@@ -786,6 +786,210 @@ static void append_check_line(char *report, size_t report_size,
   append_report(report, report_size, line);
 }
 
+static const char *install_write_scope_for_mode(const char *mode) {
+  if (!mode || strcmp(mode, "manual-later") == 0) {
+    return "none (plan/report only)";
+  }
+  if (strcmp(mode, "dual-boot-data") == 0) {
+    return "existing ESP /EFI/Orizon plus selected Orizon data partition marker";
+  }
+  if (strcmp(mode, "dual-boot-esp") == 0) {
+    return "existing ESP /EFI/Orizon only; partitions remain intact";
+  }
+  if (strcmp(mode, "guided-full-disk") == 0) {
+    return "DESTRUCTIVE: rewrite whole target disk GPT/ESP/data layout";
+  }
+  return "unknown";
+}
+
+static const char *install_strategy_for_mode(const char *mode) {
+  if (!mode || strcmp(mode, "manual-later") == 0) {
+    return "plan-only";
+  }
+  if (strcmp(mode, "dual-boot-data") == 0) {
+    return "side-by-side ESP plus prepared Orizon data partition";
+  }
+  if (strcmp(mode, "dual-boot-esp") == 0) {
+    return "side-by-side ESP boot files only";
+  }
+  if (strcmp(mode, "guided-full-disk") == 0) {
+    return "UEFI fallback full-disk Orizon install";
+  }
+  return "unknown";
+}
+
+static void install_append_partition_snapshot(char *report,
+                                              size_t report_size) {
+  char line[224];
+  char size_text[64];
+  int found = 0;
+
+  append_report(report, report_size, "partition-snapshot:");
+  for (int i = 1; i <= (int)INSTALL_GPT_ENTRY_COUNT; i++) {
+    orizon_install_partition_info_t part;
+    if (orizon_install_get_partition(i, &part) < 0) {
+      continue;
+    }
+    storage_format_size(part.sectors, size_text, sizeof(size_text));
+    snprintf(line, sizeof(line), "  part%d size=%s type=%s name=\"%s\"%s",
+             part.index, size_text, part.type, part.name,
+             part.usable_for_data ? " data-candidate=yes" : "");
+    append_report(report, report_size, line);
+    found++;
+    if (found >= 32) {
+      append_report(report, report_size,
+                    "  ... partition list truncated; run gpt scan for all entries");
+      break;
+    }
+  }
+  if (!found) {
+    append_report(report, report_size,
+                  "  none readable; run storage diag and gpt scan");
+  }
+}
+
+int orizon_install_format_plan(const orizon_install_config_t *config,
+                               char *report, size_t report_size) {
+  storage_device_info_t disk;
+  orizon_install_partition_info_t part;
+  char line[256];
+  char size_text[64];
+  char disk_token[32];
+  const char *mode;
+  int disk_index;
+  int disk_ok = 0;
+  int rc = 0;
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  append_report(report, report_size, "Orizon install preflight");
+  append_report(report, report_size,
+                "purpose: non-destructive VM/live-ISO installer report");
+
+  if (!config) {
+    append_report(report, report_size, "status: FAIL invalid configuration");
+    return -1;
+  }
+
+  mode = config->disk_mode ? config->disk_mode : "manual-later";
+  disk_index = config->disk_index;
+  if (disk_index < 0 && storage_device_count() > 0) {
+    disk_index = storage_selected_device();
+    if (disk_index < 0) {
+      disk_index = 0;
+    }
+  }
+
+  snprintf(line, sizeof(line), "language: %s",
+           config->language ? config->language : "(unset)");
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "keyboard: %s",
+           config->keyboard ? config->keyboard : "(unset)");
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "hostname: %s",
+           config->hostname ? config->hostname : "(unset)");
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "mode: %s", mode);
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "write-scope: %s",
+           install_write_scope_for_mode(mode));
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "boot-strategy: %s",
+           install_strategy_for_mode(mode));
+  append_report(report, report_size, line);
+
+  if (disk_index >= 0 && storage_get_device(disk_index, &disk) == 0) {
+    disk_ok = 1;
+    storage_select_device(disk_index);
+    storage_format_size(disk.sectors, size_text, sizeof(size_text));
+    snprintf(disk_token, sizeof(disk_token), "%s", disk.name);
+    snprintf(line, sizeof(line),
+             "target-disk: index=%d name=%s driver=%s writable=%s size=%s model=\"%s\"",
+             disk.index + 1, disk.name, disk.driver,
+             disk.writable ? "yes" : "no", size_text, disk.model);
+    append_report(report, report_size, line);
+  } else {
+    snprintf(disk_token, sizeof(disk_token), "%s",
+             config->disk_name ? config->disk_name : "none");
+    append_report(report, report_size,
+                  "target-disk: none selectable; this report did not write disk");
+  }
+
+  if (strcmp(mode, "manual-later") == 0) {
+    append_report(report, report_size, "confirmation-required: SAVE");
+    append_report(report, report_size,
+                  "status: PASS no disk write requested");
+    append_report(report, report_size,
+                  "report-path: /workspace/.orizon/install-report.txt");
+    return 0;
+  }
+
+  if (!disk_ok) {
+    append_report(report, report_size,
+                  "status: WARN target disk is not selectable");
+    append_report(report, report_size,
+                  "next: run storage diag, logs storage, logs pci, disk identify");
+    return -2;
+  }
+
+  if (strcmp(mode, "dual-boot-data") == 0) {
+    snprintf(line, sizeof(line), "confirmation-required: DUALDATA %s part%d",
+             disk_token, config->data_partition_index);
+    append_report(report, report_size, line);
+    if (config->data_partition_index > 0 &&
+        orizon_install_get_partition(config->data_partition_index, &part) == 0) {
+      storage_format_size(part.sectors, size_text, sizeof(size_text));
+      snprintf(line, sizeof(line),
+               "data-target: part%d size=%s type=%s name=\"%s\" usable=%s",
+               part.index, size_text, part.type, part.name,
+               part.usable_for_data ? "yes" : "no");
+      append_report(report, report_size, line);
+      if (!part.usable_for_data) {
+        rc = -3;
+        append_report(report, report_size,
+                      "status: WARN selected partition is not a safe Orizon data candidate");
+      }
+    } else {
+      rc = -3;
+      append_report(report, report_size,
+                    "status: WARN no readable selected data partition");
+    }
+    install_append_partition_snapshot(report, report_size);
+  } else if (strcmp(mode, "dual-boot-esp") == 0) {
+    snprintf(line, sizeof(line), "confirmation-required: DUALBOOT %s",
+             disk_token);
+    append_report(report, report_size, line);
+    install_append_partition_snapshot(report, report_size);
+  } else if (strcmp(mode, "guided-full-disk") == 0) {
+    uint64_t min_sectors = INSTALL_DATA_START_LBA + 65536ULL;
+    snprintf(line, sizeof(line), "confirmation-required: ERASE %s",
+             disk_token);
+    append_report(report, report_size, line);
+    snprintf(line, sizeof(line),
+             "minimum-size: %lu sectors; target-sectors: %lu",
+             (unsigned long)min_sectors, (unsigned long)disk.sectors);
+    append_report(report, report_size, line);
+    if (disk.sectors < min_sectors) {
+      rc = -4;
+      append_report(report, report_size,
+                    "status: WARN target disk is too small for full install");
+    }
+  } else {
+    rc = -5;
+    append_report(report, report_size, "status: WARN unknown installer mode");
+  }
+
+  append_report(report, report_size,
+                "safety: no writes happen until the exact confirmation string is typed");
+  append_report(report, report_size,
+                "report-path: /workspace/.orizon/install-report.txt");
+  if (rc == 0) {
+    append_report(report, report_size, "status: PASS preflight complete");
+  }
+  return rc;
+}
+
 static int gpt_find_esp(gpt_partition_t *out, char *report,
                         size_t report_size) {
   static const uint8_t esp_type[16] = {

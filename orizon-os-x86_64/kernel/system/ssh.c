@@ -75,6 +75,7 @@
 #define SSH_SESSION_IDLE_TIMEOUT_TICKS (15ULL * TIMER_HZ)
 #define SSH_UPDATE_LOG_PATH "/workspace/.orizon/update.log"
 #define SSH_INSTALL_LOG_PATH "/workspace/.orizon/install-log"
+#define SSH_INSTALL_REPORT_PATH "/workspace/.orizon/install-report.txt"
 #define SSH_WIFI_LOG_PATH "/logs/wifi.log"
 #define SSH_ROLLBACK_INFO_PATH "/workspace/.orizon/rollback-info"
 
@@ -2265,6 +2266,7 @@ static void ssh_process_channel_open(const uint8_t *payload,
 
 static void ssh_remote_exec_execute(const uint8_t *command,
                                     size_t command_len);
+static int ssh_write_absolute_text_file(const char *path, const char *text);
 
 static const char *ssh_shell_skip_spaces(const char *s) {
   while (s && *s == ' ') {
@@ -2834,6 +2836,96 @@ static void ssh_shell_print_report(const char *args) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_install_plan(const char *args) {
+  static char report[4096];
+  static char out[SSH_CHANNEL_TEXT_BUF];
+  storage_device_info_t disk;
+  orizon_install_config_t config;
+  char disk_name[24];
+  char line[160];
+  size_t used = 0;
+  const char *sub = ssh_shell_skip_spaces(args);
+  const char *mode = "manual-later";
+  int disk_index = -1;
+  int data_partition = -1;
+  int count;
+
+  if (*sub != '\0') {
+    if (ssh_shell_command_is(sub, "manual") ||
+        ssh_shell_command_is(sub, "manual-later")) {
+      mode = "manual-later";
+    } else if (ssh_shell_command_is(sub, "dual-boot-esp")) {
+      mode = "dual-boot-esp";
+    } else if (ssh_shell_command_is(sub, "guided-full-disk") ||
+               ssh_shell_command_is(sub, "full")) {
+      mode = "guided-full-disk";
+    } else if (ssh_shell_command_is(sub, "dual-boot-data")) {
+      uint32_t parsed = 0;
+      const char *part_arg =
+          ssh_shell_skip_spaces(sub + strlen("dual-boot-data"));
+      mode = "dual-boot-data";
+      if (strncmp(part_arg, "part", 4) == 0) {
+        part_arg += 4;
+      }
+      if (ssh_shell_parse_uint(part_arg, &parsed) < 0) {
+        ssh_queue_channel_text(
+            "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\r\n");
+        ssh_shell_prompt();
+        return;
+      }
+      data_partition = (int)parsed;
+    } else {
+      ssh_queue_channel_text(
+          "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\r\n");
+      ssh_shell_prompt();
+      return;
+    }
+  }
+
+  disk_name[0] = '\0';
+  count = storage_device_count();
+  if (count > 0) {
+    disk_index = storage_selected_device();
+    if (disk_index < 0) {
+      disk_index = 0;
+    }
+    if (storage_get_device(disk_index, &disk) == 0) {
+      snprintf(disk_name, sizeof(disk_name), "%s", disk.name);
+    }
+  }
+  if (disk_name[0] == '\0') {
+    snprintf(disk_name, sizeof(disk_name), "none");
+  }
+
+  config.language = "en_US";
+  config.keyboard = "ssh";
+  config.disk_mode = mode;
+  config.hostname = "orizon-vm";
+  config.disk_index = disk_index;
+  config.disk_name = disk_name;
+  config.data_partition_index = data_partition;
+
+  orizon_install_format_plan(&config, report, sizeof(report));
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  if (ssh_write_absolute_text_file(SSH_INSTALL_REPORT_PATH, report) < 0) {
+    ssh_queue_channel_text("install-plan: failed to write report\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+
+  ssh_shell_append(out, sizeof(out), &used, report);
+  if (used == 0 || out[used - 1] != '\n') {
+    ssh_shell_append(out, sizeof(out), &used, "\r\n");
+  }
+  snprintf(line, sizeof(line),
+           "install-plan: wrote %s\r\nread with: cat %s\r\n",
+           SSH_INSTALL_REPORT_PATH, SSH_INSTALL_REPORT_PATH);
+  ssh_shell_append(out, sizeof(out), &used, line);
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_mutate_path(const char *arg, const char *op) {
   static char path[MAX_PATH];
   int rc = -1;
@@ -2890,6 +2982,24 @@ static void ssh_shell_write_text(const char *args, int append) {
   vfs_close(f);
   ssh_queue_channel_text(append ? "append: ok\r\n" : "write: ok\r\n");
   ssh_shell_prompt();
+}
+
+static int ssh_write_absolute_text_file(const char *path, const char *text) {
+  file_t *f;
+
+  if (!path || !text) {
+    return -1;
+  }
+  f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return -1;
+  }
+  if (vfs_write(f, text, strlen(text)) < 0) {
+    vfs_close(f);
+    return -1;
+  }
+  vfs_close(f);
+  return 0;
 }
 
 static void ssh_shell_print_audit(void) {
@@ -2974,7 +3084,11 @@ static void ssh_shell_print_log(const char *which) {
   } else if (ssh_shell_command_is(which, "update")) {
     ssh_shell_print_file(SSH_UPDATE_LOG_PATH, 1800, 1);
   } else if (ssh_shell_command_is(which, "install")) {
-    ssh_shell_print_file(SSH_INSTALL_LOG_PATH, 1800, 1);
+    if (vfs_exists(SSH_INSTALL_LOG_PATH)) {
+      ssh_shell_print_file(SSH_INSTALL_LOG_PATH, 1800, 1);
+    } else {
+      ssh_shell_print_file(SSH_INSTALL_REPORT_PATH, 1800, 1);
+    }
   } else if (ssh_shell_command_is(which, "network") ||
              ssh_shell_command_is(which, "net")) {
     ssh_shell_print_file(netstack_log_path(), 1800, 1);
@@ -3351,7 +3465,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, disk read-test last, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3417,6 +3531,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  selftest [scope]     run PASS/WARN/FAIL live checks\r\n"
         "  pci [bars]           list PCI devices for hardware diagnosis\r\n"
         "  report save          write /workspace/hardware-report.txt\r\n"
+        "  install-plan [mode]  save non-destructive installer preflight report\r\n"
         "  free                 show heap state\r\n"
         "  bootguard            show update boot validation state\r\n"
         "  rollback-status      show saved rollback metadata\r\n"
@@ -3631,6 +3746,10 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_report(line + 6);
     return;
   }
+  if (ssh_shell_command_is(line, "install-plan")) {
+    ssh_shell_print_install_plan(line + strlen("install-plan"));
+    return;
+  }
   if (strcmp(line, "timer") == 0) {
     timer_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
@@ -3753,7 +3872,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -3797,6 +3916,8 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_print_pci(cmd + 3);
   } else if (ssh_shell_command_is(cmd, "report")) {
     ssh_shell_print_report(cmd + 6);
+  } else if (ssh_shell_command_is(cmd, "install-plan")) {
+    ssh_shell_print_install_plan(cmd + strlen("install-plan"));
   } else if (strcmp(cmd, "free") == 0) {
     ssh_shell_print_free();
   } else if (strcmp(cmd, "audit") == 0 || strcmp(cmd, "ssh audit") == 0 ||

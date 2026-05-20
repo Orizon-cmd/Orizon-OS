@@ -30,6 +30,8 @@ typedef struct {
 int orizon_install_get_partition(int partition_index,
                                  orizon_install_partition_info_t *out);
 int orizon_install_format_partitions(char *report, size_t report_size);
+int orizon_install_format_plan(const orizon_install_config_t *config,
+                               char *report, size_t report_size);
 int orizon_install_run(const orizon_install_config_t *config, char *report,
                        size_t report_size);
 int orizon_install_boot_check(char *report, size_t report_size);

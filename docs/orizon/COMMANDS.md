@@ -31,6 +31,7 @@ updates/x86_64/release.txt
 
 ```text
 install
+install-plan
 install-status
 boot-check
 dualboot-check
@@ -46,6 +47,11 @@ logs update
 Known limit: rollback is currently Limine/boot-count style after Orizon early
 boot. True firmware `BootNext` through UEFI Runtime Services is not implemented
 yet.
+
+`install-plan` is non-destructive. It writes
+`/workspace/.orizon/install-report.txt` so VM/SSH checks can review the selected
+disk, mode, write scope, confirmation string, and GPT snapshot before any
+installer write happens.
 
 ## Network And Update
 

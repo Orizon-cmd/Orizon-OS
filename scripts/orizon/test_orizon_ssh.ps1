@@ -43,8 +43,11 @@ $commands = @(
   "ssh sessions",
   "pci bars",
   "report save",
+  "install-plan",
   "head /workspace/hardware-report.txt",
   "tail /workspace/hardware-report.txt",
+  "cat /workspace/.orizon/install-report.txt",
+  "logs install",
   "timer",
   "usb",
   "usb rescan",
@@ -163,11 +166,17 @@ run_cmd() {
     "report save")
       grep -q "/workspace/hardware-report.txt" "`$OUT" || { echo "missing report save output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "install-plan")
+      grep -q "install-plan: wrote /workspace/.orizon/install-report.txt" "`$OUT" || { echo "missing install-plan output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "head /workspace/hardware-report.txt")
       grep -q "Orizon hardware report" "`$OUT" || { echo "missing saved hardware report"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "tail /workspace/hardware-report.txt")
       grep -q "\\[tail\\]" "`$OUT" && grep -q "ssh: CHANNEL" "`$OUT" || { echo "missing hardware report tail"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "cat /workspace/.orizon/install-report.txt"|"logs install")
+      grep -q "Orizon install preflight" "`$OUT" && grep -q "write-scope: none" "`$OUT" || { echo "missing installer preflight report"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "rollback-status")
       ! grep -q "command not found" "`$OUT" || { echo "rollback-status is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
