@@ -85,6 +85,11 @@ default and marks the update as validated. If the refreshed kernel reaches
 Orizon early boot but fails before the shell, the next default boot selects
 `Orizon OS Rollback` automatically.
 
+`bootguard` now also reports the remaining validation attempts, the Limine
+firmware type, and the EFI system table address when booted through UEFI. That
+is the prepared plumbing for a future `BootNext` writer, but Orizon still does
+not call UEFI Runtime Services yet.
+
 If the refreshed system does not boot correctly, or if automatic fallback has
 selected the rollback entry, run:
 
@@ -102,7 +107,8 @@ rollback-status
 This is the current recovery layer. It is boot-count style and automatic after
 the refreshed kernel reaches Orizon early boot. True UEFI NVRAM `BootNext` or a
 firmware-level boot-count path, which would also cover failures before the
-kernel starts at all, is still a future hardening step.
+kernel starts at all, is still a future hardening step even though the Limine
+EFI system table handoff is now captured for diagnostics.
 
 ## Public Manifest
 
@@ -234,7 +240,7 @@ Update the lab VM from the latest public source:
 python scripts/orizon/orizon_update.py --from-github --mode zimaos-vm
 ```
 
-All three flows refresh the root `Orizon-OS.iso` artifact unless
+All build/update flows refresh the root `Orizon-OS.iso` artifact unless
 `--no-publish-root-iso` is used.
 
 ## Backends
@@ -307,5 +313,5 @@ Runtime files:
 The current updater is intentionally direct: one installed ESP is refreshed in
 place after artifact verification. The next reliability steps are:
 
-- UEFI NVRAM `BootNext` or bootloader-level boot-count fallback before the
-  refreshed kernel starts at all
+- UEFI NVRAM `BootNext` writing through Runtime Services, or bootloader-level
+  boot-count fallback before the refreshed kernel starts at all

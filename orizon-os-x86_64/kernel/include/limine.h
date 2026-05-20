@@ -42,6 +42,15 @@
   {LIMINE_COMMON_MAGIC, 0xad97e90e83f1ed67, 0x31eb5d1c5ff23b69}
 #define LIMINE_MODULE_REQUEST                                                  \
   {LIMINE_COMMON_MAGIC, 0x3e7e279702be32af, 0xca1c4f3bd1280cee}
+#define LIMINE_FIRMWARE_TYPE_REQUEST                                           \
+  {LIMINE_COMMON_MAGIC, 0x8c2f75d90bef28a8, 0x7045a4688eac00c3}
+#define LIMINE_EFI_SYSTEM_TABLE_REQUEST                                        \
+  {LIMINE_COMMON_MAGIC, 0x5ceba5163eaaf6d6, 0x0a6981610cf65fcc}
+
+#define LIMINE_FIRMWARE_TYPE_X86BIOS 0
+#define LIMINE_FIRMWARE_TYPE_UEFI32 1
+#define LIMINE_FIRMWARE_TYPE_UEFI64 2
+#define LIMINE_FIRMWARE_TYPE_SBI 3
 
 #define LIMINE_INTERNAL_MODULE_REQUIRED (1 << 0)
 
@@ -217,6 +226,28 @@ struct limine_rsdp_request {
   uint64_t id[4];
   uint64_t revision;
   struct limine_rsdp_response *response;
+};
+
+struct limine_firmware_type_response {
+  uint64_t revision;
+  uint64_t firmware_type;
+};
+
+struct limine_firmware_type_request {
+  uint64_t id[4];
+  uint64_t revision;
+  struct limine_firmware_type_response *response;
+};
+
+struct limine_efi_system_table_response {
+  uint64_t revision;
+  void *address;
+};
+
+struct limine_efi_system_table_request {
+  uint64_t id[4];
+  uint64_t revision;
+  struct limine_efi_system_table_response *response;
 };
 
 #endif /* _LIMINE_H */

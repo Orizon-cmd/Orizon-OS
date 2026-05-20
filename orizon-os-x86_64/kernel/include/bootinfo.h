@@ -16,6 +16,9 @@ int boot_payloads_ready(void);
 const char *boot_cmdline(void);
 int boot_cmdline_has(const char *needle);
 void *boot_rsdp_address(void);
+uint64_t boot_firmware_type(void);
+const char *boot_firmware_type_name(void);
+void *boot_efi_system_table(void);
 int boot_find_module(const char *needle, const void **address, size_t *size,
                      const char **path, const char **cmdline);
 

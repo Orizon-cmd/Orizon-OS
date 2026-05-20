@@ -65,8 +65,9 @@
 
 ## Next Stability Track
 
-1. Add true UEFI NVRAM `BootNext` or bootloader-native boot-count integration
-   so firmware can automatically select rollback even when the refreshed kernel
+1. Turn the captured Limine EFI system table handoff into true UEFI NVRAM
+   `BootNext` writing, or add bootloader-native boot-count integration, so
+   firmware can automatically select rollback even when the refreshed kernel
    never reaches Orizon early boot.
 2. Add package rollback metadata before package updates overwrite files.
 3. Make the package repository signed, not only SHA-256 verified through the

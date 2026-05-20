@@ -122,6 +122,11 @@ bootguard confirm
 rollback-status
 ```
 
+The bootguard status includes the validation counter, detected firmware type,
+and the EFI system table address when Limine provides it. This prepares the
+future NVRAM/`BootNext` path, but current automatic rollback is still the Limine
+fallback-config path after Orizon early boot.
+
 Verify the side-by-side ESP files with:
 
 ```text

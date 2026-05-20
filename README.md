@@ -178,7 +178,9 @@ python scripts/orizon/build_x86_64_on_zimaos.py
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl8139
 ```
 
-Elle provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
+Le build ZimaOS direct rapatrie maintenant aussi `Orizon-OS.iso` a la racine
+apres compilation reussie, sauf avec `--no-publish-root-iso`. La matrice
+provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
 `net status`, `ping`, `dns`, `pkg status`, `update status` et `hostkey`.
 
 ## Acces SSH Orizon
@@ -450,8 +452,11 @@ boot du kernel mis a jour, Orizon arme automatiquement cette entree comme
 default de secours jusqu'a ce que le shell soit atteint; si le shell est pret,
 le default normal est restaure et le boot est valide. Si une mise a jour boote
 mal apres l'entree dans Orizon mais avant le shell, le boot suivant choisit le
-rollback par defaut. Une fois dans ce slot, la commande suivante restaure le
-payload demarre comme slot principal:
+rollback par defaut. Le bootguard journalise aussi le compteur de tentatives,
+le type de firmware et, en UEFI, l'adresse EFI system table exposee par Limine;
+la vraie ecriture NVRAM `BootNext` reste volontairement non active tant que les
+Runtime Services ne sont pas cables. Une fois dans ce slot, la commande suivante
+restaure le payload demarre comme slot principal:
 
 ```text
 rollback

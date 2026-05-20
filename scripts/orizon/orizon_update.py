@@ -421,6 +421,7 @@ def build_on_zimaos(
         source_dir,
         "--remote-root",
         remote_root,
+        "--no-publish-root-iso",
     ]
     if deploy_vm:
         cmd.append("--deploy-vm")

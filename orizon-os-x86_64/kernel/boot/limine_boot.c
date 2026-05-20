@@ -43,6 +43,24 @@ __attribute__((used,
                     .revision = 0,
                     .response = NULL};
 
+/* Firmware type, used to gate future UEFI NVRAM/BootNext support. */
+__attribute__((
+    used,
+    section(".limine_requests"))) static volatile struct limine_firmware_type_request
+    firmware_type_request = {.id = {0xc7b1dd30df4c8b88, 0x0a82e883a194f07b,
+                                    0x8c2f75d90bef28a8, 0x7045a4688eac00c3},
+                             .revision = 0,
+                             .response = NULL};
+
+/* EFI system table pointer; currently exposed for diagnostics/prep only. */
+__attribute__((
+    used,
+    section(".limine_requests"))) static volatile struct limine_efi_system_table_request
+    efi_system_table_request = {.id = {0xc7b1dd30df4c8b88, 0x0a82e883a194f07b,
+                                       0x5ceba5163eaaf6d6, 0x0a6981610cf65fcc},
+                                .revision = 0,
+                                .response = NULL};
+
 /* HHDM request (Higher Half Direct Map offset) */
 __attribute__((used,
                section(".limine_requests"))) static volatile struct limine_hhdm_request
@@ -97,6 +115,8 @@ static const void *loaded_boot_efi_image = NULL;
 static size_t loaded_boot_efi_image_size = 0;
 static const char *loaded_payload_status = "boot payloads not captured";
 static const char *loaded_kernel_cmdline = "";
+static uint64_t loaded_firmware_type = (uint64_t)-1;
+static void *loaded_efi_system_table = NULL;
 
 /* Debug framebuffer access */
 uint32_t *g_fb_ptr = NULL;
@@ -130,6 +150,15 @@ static void capture_boot_payloads(void) {
   loaded_boot_efi_image = NULL;
   loaded_boot_efi_image_size = 0;
   loaded_kernel_cmdline = "";
+  loaded_firmware_type = (uint64_t)-1;
+  loaded_efi_system_table = NULL;
+
+  if (firmware_type_request.response) {
+    loaded_firmware_type = firmware_type_request.response->firmware_type;
+  }
+  if (efi_system_table_request.response) {
+    loaded_efi_system_table = efi_system_table_request.response->address;
+  }
 
   if (kernel_file_request.response &&
       kernel_file_request.response->kernel_file &&
@@ -184,6 +213,22 @@ void *boot_rsdp_address(void) {
   }
   return NULL;
 }
+uint64_t boot_firmware_type(void) { return loaded_firmware_type; }
+const char *boot_firmware_type_name(void) {
+  switch (loaded_firmware_type) {
+    case LIMINE_FIRMWARE_TYPE_X86BIOS:
+      return "x86-bios";
+    case LIMINE_FIRMWARE_TYPE_UEFI32:
+      return "uefi32";
+    case LIMINE_FIRMWARE_TYPE_UEFI64:
+      return "uefi64";
+    case LIMINE_FIRMWARE_TYPE_SBI:
+      return "sbi";
+    default:
+      return "unknown";
+  }
+}
+void *boot_efi_system_table(void) { return loaded_efi_system_table; }
 int boot_find_module(const char *needle, const void **address, size_t *size,
                      const char **path, const char **cmdline) {
   if (!needle || !needle[0] || !module_request.response ||

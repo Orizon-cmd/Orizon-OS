@@ -51,6 +51,16 @@ def main() -> int:
         help="Local project directory to build remotely.",
     )
     parser.add_argument(
+        "--output-iso",
+        default="Orizon-OS.iso",
+        help="Local root ISO artifact refreshed after a successful remote build.",
+    )
+    parser.add_argument(
+        "--no-publish-root-iso",
+        action="store_true",
+        help="Build remotely without copying the resulting ISO back locally.",
+    )
+    parser.add_argument(
         "--remote-root",
         default="/DATA/orizon-build/x86_64",
         help="Remote build workspace root on ZimaOS.",
@@ -168,6 +178,13 @@ def main() -> int:
         print(f"Remote project root: {remote_project_root}")
         print(f"Remote iso root: {remote_iso_root}")
         print(f"Remote artifacts: {remote_artifacts}")
+
+        if not args.no_publish_root_iso:
+            output_iso = Path(args.output_iso)
+            output_iso.parent.mkdir(parents=True, exist_ok=True)
+            sftp.get(f"{remote_project_root}/orizonos-x86_64.iso",
+                     str(output_iso))
+            print(f"Published ISO: {output_iso}")
 
         if args.deploy_vm:
             cmd = [

@@ -711,6 +711,24 @@ void orizon_update_boot_guard_check(void) {
 
   if (hex_equal(current_hash, expected_hash)) {
     attempts_left = update_boot_guard_attempts_left(guard);
+    if (attempts_left == 0) {
+      fallback_armed =
+          (update_boot_guard_install_limine_config(UPDATE_LIMINE_FALLBACK_PATH,
+                                                   "fallback") == 0);
+      update_boot_guard_write_testing(
+          0,
+          fallback_armed
+              ? "boot-guard: validation attempts exhausted; rollback fallback remains armed until shell confirms"
+              : "boot-guard: validation attempts exhausted; rollback fallback arm failed",
+          current_hash, expected_hash, rollback_hash, fallback_armed);
+      update_write_line(
+          UPDATE_ROLLBACK_STATE_PATH,
+          fallback_armed
+              ? "rollback armed: update validation attempts exhausted; shell must restore normal boot"
+              : "rollback available: update validation attempts exhausted; fallback config could not be armed");
+      vfs_persist_save();
+      return;
+    }
     if (attempts_left > 0) {
       attempts_left--;
     }
@@ -822,6 +840,18 @@ void orizon_update_boot_guard_status(char *out, size_t out_size) {
   } else {
     boot_guard_append(out, out_size, "running-kernel-sha256 unavailable");
   }
+  snprintf(buf, sizeof(buf), "firmware %s", boot_firmware_type_name());
+  boot_guard_append(out, out_size, buf);
+  if (boot_efi_system_table()) {
+    snprintf(buf, sizeof(buf), "efi-system-table 0x%016lx",
+             (unsigned long)(uintptr_t)boot_efi_system_table());
+    boot_guard_append(out, out_size, buf);
+  } else {
+    boot_guard_append(out, out_size, "efi-system-table unavailable");
+  }
+  boot_guard_append(
+      out, out_size,
+      "nvram-bootnext prepared=no reason=efi-runtime-writer-not-implemented");
   if (update_read_file(UPDATE_ROLLBACK_STATE_PATH, buf, sizeof(buf), NULL) ==
       0) {
     boot_guard_append(out, out_size, "rollback-state:");
