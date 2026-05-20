@@ -354,13 +354,15 @@ pile IPv4 sait maintenant choisir ce lien Wi-Fi quand WPA2 est guarded-ready:
 GitHub passent par des trames Ethernet encapsulees en CCMP. `wifi online
 <ssid> [password]` enchaine maintenant `wifi join`, DHCP via CCMP, DNS vers
 `raw.githubusercontent.com` et un probe TLS GitHub; si ce probe passe,
-`update` peut utiliser le lien Wi-Fi deja configure. `wifi update <ssid>
-[password]` fait la meme validation puis lance directement l'updater sur un
-systeme installe. Ces deux commandes ecrivent une preuve PASS/FAIL dans
-`/logs/wifi.log` et `/workspace/.orizon/wifi-validation`, consultable avec
-`logs wifi`. Il reste a valider ce chemin sur le Lenovo avec un vrai AP et a
-durcir les traces de diagnostic quand un AP refuse ou chiffre differemment une
-trame protegee.
+`update` peut utiliser le lien Wi-Fi deja configure. `wifi validate <ssid>
+[password]` fait la meme validation sans lancer de mise a jour, et `wifi
+update <ssid> [password]` valide puis lance directement l'updater sur un
+systeme installe. Ces commandes ecrivent une preuve PASS/FAIL multi-lignes dans
+`/logs/wifi.log` et `/workspace/.orizon/wifi-validation`, avec etat WPA/CCMP,
+DHCP, route, DNS et indice de prochaine action, consultable avec `logs wifi`.
+Il reste a valider ce chemin sur le Lenovo avec un vrai AP et a durcir les
+traces de diagnostic quand un AP refuse ou chiffre differemment une trame
+protegee.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:

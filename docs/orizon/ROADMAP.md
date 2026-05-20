@@ -56,10 +56,11 @@
   data path that the IPv4 stack can use for ARP/DHCP/IPv4 once WPA2 is
   guarded-ready. `wifi join` now orchestrates
   the bringup/scan/connect/WPA sequence with concise progress output, and
-  `wifi online` extends that into DHCP, DNS, and GitHub TLS readiness for
-  update-over-Wi-Fi validation. `wifi update` reuses the same guarded path and
-  launches the installed updater once GitHub is reachable over Wi-Fi. The
-  validation path persists PASS/FAIL evidence in `/logs/wifi.log` and
+  `wifi online` / `wifi validate` extend that into DHCP, DNS, and GitHub TLS
+  readiness for update-over-Wi-Fi validation. `wifi update` reuses the same
+  guarded path and launches the installed updater once GitHub is reachable over
+  Wi-Fi. The validation path persists PASS/FAIL evidence plus WPA/CCMP and
+  network snapshots in `/logs/wifi.log` and
   `/workspace/.orizon/wifi-validation` for Lenovo AP testing.
 - Repeatable ZimaOS VM smoke matrix: dedicated libvirt VMs can validate boot,
   DHCP, SSH, ping, DNS, package status, update status, and host-key state across
@@ -93,8 +94,9 @@
 4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
    report parser for ELAN/Wacom multitouch and stylus events.
 5. Build Intel CNVi Wi-Fi properly: validate `wifi online` and `wifi update`
-   on the Lenovo against a real WPA2 AP, then harden protected RX/retry
-   diagnostics against AP-specific behaviour.
+   on the Lenovo against a real WPA2 AP using the saved `wifi validate`
+   evidence, then harden protected RX/retry diagnostics against AP-specific
+   behaviour.
 6. Implement USB hub downstream enumeration if the Lenovo adapter appears
    behind a dock or multi-port hub.
 7. Extend USB Ethernet beyond the first xHCI CDC-ECM/RTL815x path: add CDC-NCM,

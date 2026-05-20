@@ -10987,7 +10987,7 @@ int wifi_join(const char *ssid, const char *password, char *report,
   snprintf(line, sizeof(line),
            "wifi join: ready link=wifi ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
            "next: run net dhcp, then dns raw.githubusercontent.com or update; "
-           "wifi online probes this path and wifi update launches the updater\n",
+           "wifi online/validate probe this path and wifi update launches the updater\n",
            wifi_status_state.connect_ssid, wifi_status_state.connect_bssid[0],
            wifi_status_state.connect_bssid[1],
            wifi_status_state.connect_bssid[2],

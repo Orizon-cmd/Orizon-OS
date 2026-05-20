@@ -20,10 +20,11 @@ The command performs a kernel-owned full-upgrade transaction:
 - prepare the local package database under `/system` and `/workspace/.orizon`
 - probe Ethernet and configure IPv4 with DHCP, then static fallback from
   `/system/network.conf` if DHCP is unavailable
-- reuse a guarded Wi-Fi/CCMP link if `wifi join` or `wifi online` has already
-  made `net status` report `link=wifi`; `wifi update <ssid> [password]` runs
-  that Wi-Fi validation, persists PASS/FAIL evidence to `/logs/wifi.log`, and
-  then launches this updater directly
+- reuse a guarded Wi-Fi/CCMP link if `wifi join`, `wifi online`, or
+  `wifi validate` has already made `net status` report `link=wifi`; `wifi
+  update <ssid> [password]` runs that Wi-Fi validation, persists PASS/FAIL
+  evidence with WPA/CCMP/DHCP/DNS/TLS snapshots to `/logs/wifi.log`, and then
+  launches this updater directly
 - resolve `raw.githubusercontent.com`
 - open TCP/TLS to GitHub without launching host tools
 - download `updates/x86_64/manifest.txt` from the public repository
@@ -297,6 +298,7 @@ Persistent files:
 /workspace/.orizon/update-limine.part
 /workspace/.orizon/update-limine.normal
 /workspace/.orizon/update-limine.fallback
+/workspace/.orizon/wifi-validation
 /workspace/.orizon/github-https-manifest
 /workspace/.orizon/github-https-manifest.sha256
 /workspace/.orizon/packages

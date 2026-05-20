@@ -101,12 +101,14 @@ development target, not a ZimaOS-only assumption.
   `link=wifi` when this path is selected. `wifi online <ssid> [password]`
   runs the guarded join, DHCP over CCMP, DNS for `raw.githubusercontent.com`,
   and a GitHub TLS probe so an operator can validate the update path before
-  running `update`. `wifi update <ssid> [password]` runs the same validation
+  running `update`. `wifi validate <ssid> [password]` runs the same proof
+  without starting the updater, while `wifi update <ssid> [password]` validates
   and then launches the installed-system updater over the configured Wi-Fi
-  link. Both commands persist step-by-step PASS/FAIL evidence in
-  `/logs/wifi.log` and `/workspace/.orizon/wifi-validation`, readable with
-  `logs wifi`. Real hardware validation still needs a full AP test for DHCP
-  replies and protected CCMP RX traces.
+  link. These commands persist step-by-step PASS/FAIL evidence plus a compact
+  WPA/CCMP, DHCP, route and DNS snapshot in `/logs/wifi.log` and
+  `/workspace/.orizon/wifi-validation`, readable with `logs wifi`. Real
+  hardware validation still needs a full AP test for DHCP replies and protected
+  CCMP RX traces.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -139,6 +141,7 @@ wifi scan poll
 wifi connect <ssid> [password]
 wifi join <ssid> [password]
 wifi online <ssid> [password]
+wifi validate <ssid> [password]
 wifi update <ssid> [password]
 wifi wpa
 wifi key
@@ -208,5 +211,6 @@ module.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
 6. Grow the Intel Wi-Fi path in order: validate WPA2 M3/M4 plus GTK install on
-   real APs, run `wifi online` and `wifi update` through DHCP/DNS/TLS, then
-   harden protected RX retry diagnostics against AP-specific behaviour.
+   real APs, run `wifi validate`, `wifi online`, and `wifi update` through
+   DHCP/DNS/TLS, then harden protected RX retry diagnostics against
+   AP-specific behaviour.

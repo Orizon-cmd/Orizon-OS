@@ -2457,6 +2457,169 @@ static void term_wifi_write_last(const char *line) {
   vfs_close(f);
 }
 
+static size_t term_wifi_append_text(char *dst, size_t size, size_t used,
+                                    const char *text) {
+  size_t len;
+  size_t copy;
+
+  if (!dst || size == 0 || !text || used >= size - 1) {
+    return used;
+  }
+  len = strlen(text);
+  copy = len;
+  if (copy > size - used - 1) {
+    copy = size - used - 1;
+  }
+  memcpy(dst + used, text, copy);
+  used += copy;
+  dst[used] = '\0';
+  return used;
+}
+
+static const char *term_wifi_validation_hint(const char *stage) {
+  if (!stage) {
+    return "run wifi status, wifi wpa, wifi data and logs wifi";
+  }
+  if (strcmp(stage, "join") == 0) {
+    return "check wifi bringup, wifi scan poll, selected AP security and WPA traces";
+  }
+  if (strcmp(stage, "ccmp-ready") == 0) {
+    return "check wifi wpa, wifi key pairwise/gtk state, wifi data and protected RX";
+  }
+  if (strcmp(stage, "dhcp") == 0) {
+    return "check AP DHCP server, CCMP data TX/RX, net status and logs network";
+  }
+  if (strcmp(stage, "dns") == 0) {
+    return "check DHCP DNS option, route, gateway reachability and dns command output";
+  }
+  if (strcmp(stage, "tls") == 0) {
+    return "check GitHub reachability, TLS/root trust status and update log";
+  }
+  if (strcmp(stage, "update") == 0) {
+    return "install Orizon to disk before update, then rerun wifi update";
+  }
+  return "capture logs wifi, net status, wifi wpa and wifi data";
+}
+
+static void term_wifi_record_validation(const char *label, const char *ssid,
+                                        const char *stage,
+                                        const char *result,
+                                        const char *detail) {
+  char block[4096];
+  char line[1024];
+  size_t used = 0;
+  const wifi_status_t *s = wifi_get_status();
+
+  block[0] = '\0';
+  snprintf(line, sizeof(line),
+           "wifi-validation: label=\"%s\" result=%s stage=%s ssid=\"%s\"\n",
+           label ? label : "wifi", result ? result : "unknown",
+           stage ? stage : "unknown", ssid ? ssid : "");
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+
+  if (detail && detail[0]) {
+    snprintf(line, sizeof(line), "detail: %s\n", detail);
+    used = term_wifi_append_text(block, sizeof(block), used, line);
+  }
+
+  snprintf(line, sizeof(line),
+           "wifi: present=%s driver=%s chipset=%s firmware=%s valid=%s "
+           "apm=%s boot=%s alive=%s queues=%s context=%s scheduler=%s "
+           "rx=%s scan=%s connect=%s bind=%s txcmd=%s key=%s status=%s\n",
+           s->present ? "yes" : "no", s->driver ? s->driver : "unknown",
+           s->chipset ? s->chipset : "unknown",
+           (s->firmware_present && s->firmware_name) ? s->firmware_name
+                                                     : "missing",
+           s->firmware_valid ? "yes" : "no",
+           s->apm_ready ? "awake" : (s->apm_timeout ? "timeout" : "idle"),
+           s->boot_ready ? "ready" : (s->boot_failed ? "failed" : "idle"),
+           s->alive_seen ? "seen" : (s->alive_timeout ? "timeout" : "idle"),
+           s->queues_ready ? (s->queues_armed ? "armed" : "staged")
+                            : (s->queues_failed ? "failed" : "idle"),
+           s->context_ready ? (s->context_armed ? "armed" : "staged")
+                            : (s->context_failed ? "failed" : "idle"),
+           s->scheduler_ready ? (s->scheduler_armed ? "armed" : "staged")
+                              : (s->scheduler_failed ? "failed" : "idle"),
+           s->rx_path_ready ? "ready"
+                            : (s->rx_path_failed ? "failed" : "idle"),
+           s->scan_complete_seen
+               ? "complete"
+               : (s->scan_inflight ? "inflight"
+                                    : (s->scan_failed ? "failed" : "idle")),
+           s->connect_assoc_confirmed
+               ? (s->connect_data_ready ? "data-ready" : "associated")
+               : (s->connect_ready
+                      ? (s->connect_wpa ? "wpa-plan" : "open-plan")
+                      : (s->connect_failed ? "failed" : "idle")),
+           s->bind_sta_response_seen
+               ? "acked"
+               : (s->bind_sent
+                      ? "sent"
+                      : (s->bind_ready
+                             ? "ready"
+                             : (s->bind_failed ? "failed" : "idle"))),
+           s->txcmd_response_seen
+               ? "acked"
+               : (s->txcmd_sent
+                      ? "sent"
+                      : (s->txcmd_failed ? "failed" : "idle")),
+           (s->wpa_key_installed && s->wpa_gtk_key_installed)
+               ? "installed"
+               : (s->wpa_key_failed ? "failed" : "pending"),
+           s->status ? s->status : "unknown");
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+
+  snprintf(line, sizeof(line),
+           "wpa: target=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x "
+           "pmk=%s m1=%s m2=%s m3=%s m4=%s pairwise=%s gtk=%s "
+           "eapol=%lu key-frames=%lu replay=0x%08x%08x\n",
+           s->connect_ssid, s->connect_bssid[0], s->connect_bssid[1],
+           s->connect_bssid[2], s->connect_bssid[3],
+           s->connect_bssid[4], s->connect_bssid[5],
+           s->connect_pmk_ready ? "ready" : "missing",
+           s->wpa_m1_seen ? "seen" : "pending",
+           s->wpa_m2_tx_acked ? "acked"
+                              : (s->wpa_m2_data_ready ? "ready" : "pending"),
+           s->wpa_m3_seen ? "seen" : "pending",
+           s->wpa_m4_tx_acked ? "acked"
+                              : (s->wpa_m4_data_ready ? "ready" : "pending"),
+           s->wpa_key_installed ? "installed" : "pending",
+           s->wpa_gtk_key_installed ? "installed" : "pending",
+           s->wpa_eapol_packets, s->wpa_key_frames,
+           s->wpa_replay_counter_hi, s->wpa_replay_counter_lo);
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+
+  snprintf(line, sizeof(line),
+           "ccmp: data=%s tx=%s rx-ready=%s rx-packets=%u "
+           "rx-decrypt-failed=%s eth=0x%04x checksum=0x%08x\n",
+           s->ccmp_data_ready ? "ready" : "pending",
+           s->ccmp_tx_acked ? "acked" : "pending",
+           s->ccmp_rx_ready ? "yes" : "no", s->ccmp_rx_packets,
+           s->ccmp_rx_decrypt_failed ? "yes" : "no",
+           s->ccmp_rx_eth_type, s->ccmp_rx_checksum);
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+
+  netstack_format_status(line, sizeof(line));
+  used = term_wifi_append_text(block, sizeof(block), used, "net: ");
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+  used = term_wifi_append_text(block, sizeof(block), used, "\n");
+  netstack_format_route(line, sizeof(line));
+  used = term_wifi_append_text(block, sizeof(block), used, "route: ");
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+  used = term_wifi_append_text(block, sizeof(block), used, "\n");
+  netstack_format_dns(line, sizeof(line));
+  used = term_wifi_append_text(block, sizeof(block), used, "dns: ");
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+  used = term_wifi_append_text(block, sizeof(block), used, "\n");
+
+  snprintf(line, sizeof(line), "hint: %s\n",
+           term_wifi_validation_hint(stage));
+  used = term_wifi_append_text(block, sizeof(block), used, line);
+
+  term_wifi_log_line(block);
+  term_wifi_write_last(block);
+}
+
 static void term_run_update(terminal_t *term) {
   static char report[8192];
 
@@ -2996,19 +3159,24 @@ static int term_wifi_online_probe(terminal_t *term, const char *label,
            label, ssid);
   term_wifi_log_line(evidence);
   term_wifi_write_last(evidence);
+  term_wifi_record_validation(label, ssid, "start", "START",
+                              "starting guarded WPA2/CCMP online validation");
 
   term_puts_t(term, label);
   term_puts_t(term, ": joining guarded WPA2/CCMP link...\n");
   if (wifi_join(ssid, password, line, sizeof(line)) != 0) {
     term_puts_t(term, line);
+    term_wifi_log_line(line);
     snprintf(evidence, sizeof(evidence),
              "%s: FAIL stage=join ssid=\"%s\"", label, ssid);
     term_wifi_log_line(evidence);
-    term_wifi_write_last(evidence);
+    term_wifi_record_validation(label, ssid, "join", "FAIL",
+                                "wifi_join did not complete; inspect WPA/AP stage details");
     vfs_persist_save();
     return -1;
   }
   term_puts_t(term, line);
+  term_wifi_log_line(line);
   if (!wifi_data_link_ready()) {
     term_puts_t(term, label);
     term_puts_t(term,
@@ -3016,7 +3184,8 @@ static int term_wifi_online_probe(terminal_t *term, const char *label,
     snprintf(evidence, sizeof(evidence),
              "%s: FAIL stage=ccmp-ready ssid=\"%s\"", label, ssid);
     term_wifi_log_line(evidence);
-    term_wifi_write_last(evidence);
+    term_wifi_record_validation(label, ssid, "ccmp-ready", "FAIL",
+                                "association exists but guarded CCMP data path is not ready");
     vfs_persist_save();
     return -1;
   }
@@ -3042,7 +3211,8 @@ static int term_wifi_online_probe(terminal_t *term, const char *label,
     snprintf(evidence, sizeof(evidence),
              "%s: FAIL stage=dhcp ssid=\"%s\"", label, ssid);
     term_wifi_log_line(evidence);
-    term_wifi_write_last(evidence);
+    term_wifi_record_validation(label, ssid, "dhcp", "FAIL",
+                                "DHCP over the protected Wi-Fi link failed");
     vfs_persist_save();
     return -1;
   }
@@ -3058,7 +3228,8 @@ static int term_wifi_online_probe(terminal_t *term, const char *label,
     snprintf(evidence, sizeof(evidence),
              "%s: FAIL stage=dns host=raw.githubusercontent.com", label);
     term_wifi_log_line(evidence);
-    term_wifi_write_last(evidence);
+    term_wifi_record_validation(label, ssid, "dns", "FAIL",
+                                "DNS resolution failed after DHCP");
     vfs_persist_save();
     return -1;
   }
@@ -3078,11 +3249,13 @@ static int term_wifi_online_probe(terminal_t *term, const char *label,
     term_puts_t(term, ": GitHub TLS probe failed\n");
     if (line[0]) {
       term_puts_t(term, line);
+      term_wifi_log_line(line);
     }
     snprintf(evidence, sizeof(evidence),
              "%s: FAIL stage=tls host=raw.githubusercontent.com", label);
     term_wifi_log_line(evidence);
-    term_wifi_write_last(evidence);
+    term_wifi_record_validation(label, ssid, "tls", "FAIL",
+                                "GitHub TLS probe failed after DNS");
     vfs_persist_save();
     return -1;
   }
@@ -3094,7 +3267,8 @@ static int term_wifi_online_probe(terminal_t *term, const char *label,
            "%s: PASS ssid=\"%s\" ccmp=yes dhcp=yes dns=yes tls=yes tls-bytes=%lu",
            label, ssid, (unsigned long)tls_len);
   term_wifi_log_line(evidence);
-  term_wifi_write_last(evidence);
+  term_wifi_record_validation(label, ssid, "tls", "PASS",
+                              "GitHub TLS probe passed over protected Wi-Fi");
   vfs_persist_save();
   return 0;
 }
@@ -3383,11 +3557,14 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
-  if (term_command_is(args, "online")) {
-    rest = term_skip_spaces(args + 6);
+  if (term_command_is(args, "online") || term_command_is(args, "validate")) {
+    int validate = term_command_is(args, "validate");
+    rest = term_skip_spaces(args + (validate ? 8 : 6));
     rest = term_read_token(rest, ssid, sizeof(ssid));
     if (!rest) {
-      term_puts_t(term, "usage: wifi online <ssid> [password]\n");
+      term_puts_t(term,
+                  validate ? "usage: wifi validate <ssid> [password]\n"
+                           : "usage: wifi online <ssid> [password]\n");
       return;
     }
     password[0] = '\0';
@@ -3395,9 +3572,13 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
       term_read_token(rest, password, sizeof(password));
     }
 
-    if (term_wifi_online_probe(term, "wifi online", ssid, password) == 0) {
+    if (term_wifi_online_probe(term,
+                               validate ? "wifi validate" : "wifi online",
+                               ssid, password) == 0) {
       term_puts_t(term,
-                  "wifi online: update path ready; run `update` to use Wi-Fi\n");
+                  validate
+                      ? "wifi validate: AP/WPA2/DHCP/DNS/TLS path ready\n"
+                      : "wifi online: update path ready; run `update` to use Wi-Fi\n");
     }
     return;
   }
@@ -3419,8 +3600,14 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     if (!term_install_already_complete()) {
       term_puts_t(term,
                   "wifi update: network is ready, but update requires an installed Orizon disk\n");
+      term_wifi_record_validation(
+          "wifi update", ssid, "update", "BLOCKED",
+          "network validation passed, but live boot cannot run installed update");
+      vfs_persist_save();
       return;
     }
+    term_wifi_record_validation("wifi update", ssid, "update", "START",
+                                "GitHub reachable over Wi-Fi; launching updater");
     term_puts_t(term,
                 "wifi update: GitHub reachable over Wi-Fi; launching update...\n");
     term_run_update(term);
@@ -3428,7 +3615,7 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|join <ssid> [password]|online <ssid> [password]|update <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|join <ssid> [password]|online <ssid> [password]|validate <ssid> [password]|update <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -4240,6 +4427,8 @@ void term_execute(terminal_t *term, const char *cmd) {
                 "  wifi join <ssid> [password] - Auto Wi-Fi bringup/connect/WPA\n");
     term_puts_t(term,
                 "  wifi online <ssid> [password] - Join, DHCP, DNS and GitHub TLS probe\n");
+    term_puts_t(term,
+                "  wifi validate <ssid> [password] - Persist AP/WPA2/DHCP/DNS/TLS proof\n");
     term_puts_t(term,
                 "  wifi update <ssid> [password] - Validate Wi-Fi path then run update\n");
     term_puts_t(term,
