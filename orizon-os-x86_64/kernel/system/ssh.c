@@ -67,6 +67,10 @@
 #define SSH_AUTH_LOCKOUT_SECONDS_LIMIT 3600U
 #define SSH_HOSTKEY_FILE_MAX 1600U
 #define SSH_SESSION_IDLE_TIMEOUT_TICKS (15ULL * TIMER_HZ)
+#define SSH_UPDATE_LOG_PATH "/workspace/.orizon/update.log"
+#define SSH_INSTALL_LOG_PATH "/workspace/.orizon/install-log"
+#define SSH_WIFI_LOG_PATH "/logs/wifi.log"
+#define SSH_ROLLBACK_INFO_PATH "/workspace/.orizon/rollback-info"
 
 /*
  * Development host key for the current staged SSH server.
@@ -2771,6 +2775,24 @@ static void ssh_shell_print_audit(void) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_algorithms(void) {
+  char out[1800];
+
+  ssh_format_algorithms(out, sizeof(out));
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_rollback_status(void) {
+  if (!vfs_exists(SSH_ROLLBACK_INFO_PATH)) {
+    ssh_queue_channel_text(
+        "rollback-status: rollback-info: No such file\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  ssh_shell_print_file(SSH_ROLLBACK_INFO_PATH, 1800, 1);
+}
+
 static void ssh_shell_set_password(const char *password) {
   char out[256];
 
@@ -2814,6 +2836,17 @@ static void ssh_shell_print_log(const char *which) {
     ssh_shell_print_file(ORIZON_SSH_LOG_PATH, 1800, 1);
   } else if (ssh_shell_command_is(which, "boot")) {
     ssh_shell_print_file(KLOG_BOOT_PATH, 1800, 1);
+  } else if (ssh_shell_command_is(which, "update")) {
+    ssh_shell_print_file(SSH_UPDATE_LOG_PATH, 1800, 1);
+  } else if (ssh_shell_command_is(which, "install")) {
+    ssh_shell_print_file(SSH_INSTALL_LOG_PATH, 1800, 1);
+  } else if (ssh_shell_command_is(which, "network") ||
+             ssh_shell_command_is(which, "net")) {
+    ssh_shell_print_file(netstack_log_path(), 1800, 1);
+  } else if (ssh_shell_command_is(which, "usb")) {
+    ssh_shell_print_file(usb_log_path(), 1800, 1);
+  } else if (ssh_shell_command_is(which, "wifi")) {
+    ssh_shell_print_file(SSH_WIFI_LOG_PATH, 1800, 1);
   } else {
     char out[SSH_CHANNEL_TEXT_BUF];
     size_t n = klog_snapshot(out, sizeof(out) - 3);
@@ -3118,7 +3151,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, free, bootguard, audit, status, auth, hostkey, exit\r\n");
+        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3170,7 +3203,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  head <file>          print a shorter file preview\r\n"
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
-        "  logs [ssh|boot]      show logs\r\n"
+        "  logs [name]          show boot/network/usb/wifi/ssh/update logs\r\n"
         "  net|route|dns|ping   show network diagnostics\r\n"
         "  usb|usb rescan       show USB diagnostics\r\n"
         "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
@@ -3178,7 +3211,9 @@ static void ssh_remote_shell_execute(const char *line) {
         "  ps|pkg|update        show system/update state\r\n"
         "  storage|free         show storage and heap state\r\n"
         "  bootguard            show update boot validation state\r\n"
+        "  rollback-status      show saved rollback metadata\r\n"
         "  audit                show SSH session counters\r\n"
+        "  algorithms           show negotiated SSH algorithms\r\n"
         "  ssh password <pass>  change remote SSH password\r\n"
         "  ssh auth ...         change auth policy\r\n"
         "  sync                 persist Orizon data roots\r\n"
@@ -3205,6 +3240,10 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
+  if (strcmp(line, "rollback-status") == 0) {
+    ssh_shell_print_rollback_status();
+    return;
+  }
   if (strcmp(line, "auth") == 0 || strcmp(line, "ssh auth") == 0) {
     ssh_format_auth(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
@@ -3216,6 +3255,11 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (strcmp(line, "audit") == 0 || strcmp(line, "ssh audit") == 0) {
     ssh_shell_print_audit();
+    return;
+  }
+  if (strcmp(line, "algorithms") == 0 ||
+      strcmp(line, "ssh algorithms") == 0) {
+    ssh_shell_print_algorithms();
     return;
   }
   if (strcmp(line, "hostkey") == 0 || strcmp(line, "ssh hostkey") == 0) {
@@ -3455,7 +3499,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_shell_suppress_prompt = 1;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, storage, free, timer, bootguard, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, storage, free, timer, bootguard, rollback-status, audit, sync, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -3505,6 +3549,8 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "rollback-status") == 0) {
+    ssh_shell_print_rollback_status();
   } else if (ssh_shell_command_is(cmd, "ssh password")) {
     const char *args = ssh_shell_skip_spaces(cmd + strlen("ssh password"));
     if (ssh_shell_command_is(args, "off") ||
@@ -3545,6 +3591,9 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "algorithms") == 0 ||
+             strcmp(cmd, "ssh algorithms") == 0) {
+    ssh_shell_print_algorithms();
   } else if (strcmp(cmd, "hostkey") == 0 || strcmp(cmd, "ssh hostkey") == 0) {
     ssh_format_hostkey(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {

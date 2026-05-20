@@ -23,6 +23,7 @@ $commands = @(
   "status",
   "auth",
   "hostkey",
+  "ssh algorithms",
   "net status",
   "wifi status",
   "free",
@@ -33,10 +34,14 @@ $commands = @(
   "usb",
   "usb rescan",
   "bootguard",
+  "rollback-status",
   "write /workspace/ssh-regression.txt alpha",
   "append /workspace/ssh-regression.txt beta",
   "cat /workspace/ssh-regression.txt",
   "audit",
+  "logs network",
+  "logs usb",
+  "logs wifi",
   "logs ssh",
   "rm /workspace/ssh-regression.txt",
   "audit"
@@ -89,6 +94,9 @@ run_cmd() {
     "hostkey")
       grep -q "ssh hostkey:" "`$OUT" && grep -q "fingerprint-sha256" "`$OUT" || { echo "missing hostkey output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "ssh algorithms")
+      grep -q "ssh algorithms:" "`$OUT" || { echo "missing algorithms output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "net status")
       grep -q "ipv4=" "`$OUT" || { echo "net status was not dispatched to the network command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -103,6 +111,12 @@ run_cmd() {
       ;;
     "bootguard")
       grep -q "Orizon boot guard" "`$OUT" || { echo "missing bootguard output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "rollback-status")
+      ! grep -q "command not found" "`$OUT" || { echo "rollback-status is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "logs network"|"logs usb"|"logs wifi")
+      ! grep -q "command not found" "`$OUT" || { echo "`$cmd is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "logs ssh")
       grep -q "audit:" "`$OUT" || { echo "missing ssh log audit lines"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
