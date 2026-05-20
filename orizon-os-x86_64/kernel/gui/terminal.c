@@ -731,7 +731,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
       "install", "install-status",
       "input", "keyboard", "ls", "mkdir", "mounts", "mv",
-      "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "report", "rollback",
+      "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write"};
@@ -4568,6 +4568,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  dualboot-check - Verify /EFI/Orizon side-by-side boot files\n");
     term_puts_t(term, "  repair-boot - Rewrite installed boot files\n");
     term_puts_t(term, "  keyboard [fr|us] - Show or change keyboard layout\n");
+    term_puts_t(term, "  reboot    - Save /workspace and restart the machine\n");
     term_puts_t(term, "  shutdown  - Save /workspace and power off\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
@@ -5124,6 +5125,13 @@ void term_execute(terminal_t *term, const char *cmd) {
     static char repair_report[8192];
     orizon_install_repair_boot(repair_report, sizeof(repair_report));
     term_puts_t(term, repair_report);
+  } else if (term_command_is(cmd, "reboot") ||
+             term_command_is(cmd, "restart")) {
+    vfs_persist_save();
+    term_puts_t(term,
+                "REBOOT in 2 seconds.\n"
+                "The VM should restart and return to the Orizon console.\n");
+    power_schedule_reboot(TIMER_HZ * 2);
   } else if (term_command_is(cmd, "shutdown") ||
              term_command_is(cmd, "poweroff")) {
     vfs_persist_save();

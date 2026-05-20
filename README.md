@@ -179,12 +179,17 @@ Pour lancer la matrice reseau VM depuis le labo ZimaOS:
 ```powershell
 python scripts/orizon/build_x86_64_on_zimaos.py
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl8139
+python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
 ```
 
 Le build ZimaOS direct rapatrie maintenant aussi `Orizon-OS.iso` a la racine
 apres compilation reussie, sauf avec `--no-publish-root-iso`. La matrice
 provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
-`net status`, `ping`, `dns`, `pkg status`, `update status` et `hostkey`.
+`net status`, `timer`, `ping`, `dns`, `pkg status`, `update status`,
+`selftest`, les logs, `report save`, `cat /workspace/hardware-report.txt` et
+`hostkey`. Le mode `--include-lifecycle` capture une screenshot framebuffer,
+declenche `reboot`, reverifie SSH apres redemarrage, puis teste `shutdown`
+propre en VM.
 
 ## Acces SSH Orizon
 
@@ -221,7 +226,7 @@ de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `touch`, `mkdir`, `rm`,
 `write`, `append`, `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
 `disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
-`audit`, `ssh sessions`, `sync`, `status`, `auth`, `hostkey`,
+`audit`, `ssh sessions`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
 `whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`,
 `ssh lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
 commande distante directe. Le service remet l'ecoute TCP en etat apres une

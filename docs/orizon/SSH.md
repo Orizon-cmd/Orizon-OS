@@ -84,8 +84,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `gpt scan`, `selftest`, `pci`, `pci bars`, `report save`,
-  `free`, `timer`, `bootguard`, `audit`, `ssh sessions`, `sync`, `status`,
-  `auth`, `hostkey`, `whoami`,
+  `free`, `timer`, `bootguard`, `audit`, `ssh sessions`, `sync`, `reboot`,
+  `shutdown`, `status`, `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
   Le mode shell PTY accepte les fins de ligne
   CR/LF d'OpenSSH, echo les caracteres saisis, et peut enchainer plusieurs
@@ -110,7 +110,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
   `write`/`append`/`touch`/`mkdir`/`rm`, lancer les diagnostics non destructifs
   `selftest`, `disk identify`, `disk read-test`, `gpt scan`, et sauvegarder avec
-  `sync`.
+  `sync`. En VM, `reboot` et `shutdown` persistent d'abord les racines Orizon
+  puis planifient le redemarrage ou l'extinction.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros
   paquets, segmente les longues sorties `CHANNEL_DATA` en plusieurs paquets,
   garde le transport reutilisable apres une commande `exec`, et remet l'ecoute

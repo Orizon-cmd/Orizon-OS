@@ -108,6 +108,46 @@ def find_nat_ip(client, sudo_password: str, mac: str, network_name: str, timeout
     return ""
 
 
+def wait_domstate(
+    client,
+    sudo_password: str,
+    vm_name: str,
+    wanted: set[str],
+    timeout: int,
+) -> str:
+    deadline = time.time() + timeout
+    last = ""
+    while time.time() < deadline:
+        last = run_sudo_command(
+            client,
+            sudo_password,
+            f"virsh domstate {vm_name} || true",
+            check=False,
+        ).strip().lower()
+        if last in wanted:
+            return last
+        time.sleep(1)
+    return last
+
+
+def capture_framebuffer_smoke(client, sudo_password: str, vm_name: str) -> tuple[bool, int]:
+    remote_ppm = f"/tmp/{vm_name}-framebuffer.ppm"
+    out = run_sudo_command(
+        client,
+        sudo_password,
+        "sh -c 'rm -f {0}; virsh screenshot {1} {0} >/dev/null 2>&1; "
+        "if [ -s {0} ]; then wc -c < {0}; else echo 0; fi; rm -f {0}'".format(
+            remote_ppm, vm_name
+        ),
+        check=False,
+    ).strip()
+    try:
+        size = int(out.splitlines()[-1])
+    except (ValueError, IndexError):
+        size = 0
+    return size > 4096, size
+
+
 def domif_mac(client, sudo_password: str, vm_name: str) -> str:
     out = run_sudo_command(client, sudo_password, f"virsh domiflist {vm_name}")
     for line in out.splitlines():
@@ -129,10 +169,16 @@ def run_ssh_checks(
     commands = [
         ("status", "ssh: enabled="),
         ("net status", "ipv4=yes"),
+        ("timer", "source="),
         ("ping 8.8.8.8", "reply from"),
         ("dns raw.githubusercontent.com", " -> "),
         ("pkg status", "Orizon package manager"),
         ("update status", "update:"),
+        ("selftest", "summary:"),
+        ("logs storage", "storage log:"),
+        ("logs network", "ipv4:"),
+        ("report save", "hardware-report.txt"),
+        ("cat /workspace/hardware-report.txt", "Live Kernel Log Tail"),
         ("hostkey", "fingerprint-sha256"),
     ]
     if include_update:
@@ -193,6 +239,93 @@ rm -f "$ASKPASS" "$PASSFILE" "$OUT"
     return run_command(client, f"bash {remote}", check=True)
 
 
+def run_ssh_one(client, ip: str, password: str, command: str, needle: str, timeout: int) -> str:
+    encoded = base64.b64encode(password.encode("utf-8")).decode("ascii")
+    remote_script = f"""#!/usr/bin/env bash
+set -u
+ASKPASS=/tmp/orizon_one_askpass.sh
+PASSFILE=/tmp/orizon_one_password.txt
+KNOWN=/tmp/orizon_one_known_hosts
+OUT=/tmp/orizon_one_output.txt
+printf '%s' '{encoded}' | base64 -d > "$PASSFILE"
+cat > "$ASKPASS" <<'EOS'
+#!/bin/sh
+cat /tmp/orizon_one_password.txt
+EOS
+chmod +x "$ASKPASS"
+rm -f "$KNOWN"
+DISPLAY=none SSH_ASKPASS="$ASKPASS" SSH_ASKPASS_REQUIRE=force timeout {timeout}s setsid ssh -n \\
+  -oNumberOfPasswordPrompts=1 \\
+  -oPreferredAuthentications=password \\
+  -oPubkeyAuthentication=no \\
+  -oStrictHostKeyChecking=no \\
+  -oUserKnownHostsFile="$KNOWN" \\
+  -oConnectTimeout=5 \\
+  orizon@{ip} "{command}" > "$OUT" 2>&1
+rc=$?
+cat "$OUT"
+if [ "$rc" -ne 0 ] || ! grep -qi "{needle}" "$OUT"; then
+  echo "single ssh command failed rc=$rc expected={needle}" >&2
+  rm -f "$ASKPASS" "$PASSFILE" "$OUT"
+  exit 1
+fi
+rm -f "$ASKPASS" "$PASSFILE" "$OUT"
+"""
+    remote = "/tmp/orizon_matrix_ssh_one.sh"
+    sftp = client.open_sftp()
+    with sftp.open(remote, "w") as handle:
+        handle.write(remote_script)
+    run_command(client, f"chmod +x {remote}")
+    return run_command(client, f"bash {remote}", check=True)
+
+
+def run_lifecycle_checks(
+    client,
+    sudo_password: str,
+    cfg: dict,
+    ip: str,
+    password: str,
+    *,
+    boot_timeout: int,
+    ssh_timeout: int,
+) -> str:
+    vm_name = cfg["name"]
+    mac = domif_mac(client, sudo_password, vm_name)
+    lines: list[str] = []
+
+    ok, size = capture_framebuffer_smoke(client, sudo_password, vm_name)
+    lines.append(f"framebuffer screenshot: {'ok' if ok else 'warn'} bytes={size}")
+
+    lines.append("--- ssh reboot ---")
+    lines.append(run_ssh_one(client, ip, password, "reboot", "scheduled", ssh_timeout))
+    time.sleep(8)
+    state = wait_domstate(client, sudo_password, vm_name, {"running"}, boot_timeout)
+    if state != "running":
+        raise RuntimeError(f"VM did not return to running after reboot; state={state}")
+    boot_and_start_ssh(client, sudo_password, vm_name, password)
+    reboot_ip = find_nat_ip(
+        client, sudo_password, mac, cfg["network_name"], boot_timeout
+    )
+    if not reboot_ip:
+        raise RuntimeError("guest IP unavailable after reboot")
+    lines.append(f"reboot ssh ip={reboot_ip}")
+    lines.append(
+        run_ssh_one(client, reboot_ip, password, "selftest", "summary:", ssh_timeout)
+    )
+
+    lines.append("--- ssh shutdown ---")
+    lines.append(
+        run_ssh_one(client, reboot_ip, password, "shutdown", "scheduled", ssh_timeout)
+    )
+    state = wait_domstate(
+        client, sudo_password, vm_name, {"shut off", "shutoff"}, boot_timeout
+    )
+    if state not in {"shut off", "shutoff"}:
+        raise RuntimeError(f"VM did not shut off cleanly; state={state}")
+    lines.append(f"shutdown state={state}")
+    return "\n".join(lines)
+
+
 def parse_cases(raw: str) -> list[str]:
     if raw == "all":
         return list(MATRIX_CASES)
@@ -217,6 +350,11 @@ def main() -> int:
     parser.add_argument("--boot-timeout", type=int, default=60)
     parser.add_argument("--ssh-timeout", type=int, default=40)
     parser.add_argument("--include-update", action="store_true")
+    parser.add_argument(
+        "--include-lifecycle",
+        action="store_true",
+        help="Also verify framebuffer screenshot, SSH reboot, post-reboot SSH, and SSH shutdown.",
+    )
     args = parser.parse_args()
 
     env_config = parse_env_file(Path(args.env_file))
@@ -276,6 +414,17 @@ def main() -> int:
                 include_update=args.include_update,
             )
             print(output)
+            if args.include_lifecycle:
+                lifecycle = run_lifecycle_checks(
+                    client,
+                    sudo_password,
+                    cfg,
+                    ip,
+                    args.password,
+                    boot_timeout=args.boot_timeout,
+                    ssh_timeout=args.ssh_timeout,
+                )
+                print(lifecycle)
             results.append((case_name, "ok", ip))
 
         print("=== matrix summary ===")

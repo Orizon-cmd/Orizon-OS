@@ -15,6 +15,7 @@
 #include "../include/netstack.h"
 #include "../include/packages.h"
 #include "../include/pci.h"
+#include "../include/power.h"
 #include "../include/report.h"
 #include "../include/rsa.h"
 #include "../include/sched.h"
@@ -3315,7 +3316,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, exit\r\n");
+        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3388,6 +3389,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  ssh password <pass>  change remote SSH password\r\n"
         "  ssh auth ...         change auth policy\r\n"
         "  sync                 persist Orizon data roots\r\n"
+        "  reboot|shutdown      persist roots and restart/power off the VM\r\n"
         "  whoami|uname|uptime  basic system info\r\n"
         "  exit                 close channel\r\n");
     ssh_shell_prompt();
@@ -3644,6 +3646,18 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
+  if (strcmp(line, "reboot") == 0 || strcmp(line, "restart") == 0) {
+    vfs_persist_save();
+    ssh_queue_channel_text("reboot: scheduled in 2 seconds\r\n");
+    power_schedule_reboot(TIMER_HZ * 2);
+    return;
+  }
+  if (strcmp(line, "shutdown") == 0 || strcmp(line, "poweroff") == 0) {
+    vfs_persist_save();
+    ssh_queue_channel_text("shutdown: scheduled in 2 seconds\r\n");
+    power_schedule_shutdown(TIMER_HZ * 2);
+    return;
+  }
   if (strcmp(line, "uptime") == 0) {
     snprintf(out, sizeof(out), "uptime=%lus ticks=%lu hz=%lu\r\n",
              (unsigned long)timer_uptime_seconds(),
@@ -3698,7 +3712,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_shell_suppress_prompt = 1;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -3749,6 +3763,14 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_queue_channel_text(vfs_persist_save() == 0
                                ? "sync: persistent roots saved\r\n"
                                : "sync: save failed or not installed\r\n");
+  } else if (strcmp(cmd, "reboot") == 0 || strcmp(cmd, "restart") == 0) {
+    vfs_persist_save();
+    ssh_queue_channel_text("reboot: scheduled in 2 seconds\r\n");
+    power_schedule_reboot(TIMER_HZ * 2);
+  } else if (strcmp(cmd, "shutdown") == 0 || strcmp(cmd, "poweroff") == 0) {
+    vfs_persist_save();
+    ssh_queue_channel_text("shutdown: scheduled in 2 seconds\r\n");
+    power_schedule_shutdown(TIMER_HZ * 2);
   } else if (strcmp(cmd, "timer") == 0) {
     timer_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {

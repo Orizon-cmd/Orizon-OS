@@ -76,6 +76,7 @@ should be checked to avoid broken updates or failed provisioning.
 - `python scripts/orizon/deploy_orizon_vm_update.py --artifact image/orizonos-x86_64.img`
 - `python scripts/orizon/deploy_x86_64_tree_vm.py`
 - `python scripts/orizon/build_x86_64_on_zimaos.py --deploy-vm`
+- `python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle`
 
 ## VNC Access
 

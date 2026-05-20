@@ -59,6 +59,9 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 - ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `pkg status`,
   `update status`, `report save`, `selftest crypto`, and `hostkey` on e1000e,
   VirtIO-net, and RTL8139 NAT first.
+- ZimaOS VM lifecycle smoke, when requested: `python scripts/orizon/test_vm_matrix.py
+  --cases nat-e1000e --include-lifecycle` adds framebuffer screenshot,
+  SSH-triggered reboot, post-reboot SSH, and clean VM shutdown.
 - Lenovo storage capture, only when the user boots the new ISO: `report save`,
   `storage diag`, `logs storage`, `logs pci`, `pci bars`, `disk identify`, and
   `gpt scan`; do not install while investigating missing-disk detection.
