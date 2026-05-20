@@ -1,12 +1,12 @@
 release-report-version 1
-created-utc 2026-05-20T15:04:24.772674+00:00
+created-utc 2026-05-20T15:52:58.022191+00:00
 source https://github.com/Orizon-cmd/Orizon-OS.git
 iso-path Orizon-OS.iso
-iso-size 23001088
-iso-sha256 bdd70c0b973aea197d7fef95561051e6e55944ffed7c8190d089b11a1dde8ebd
+iso-size 23003136
+iso-sha256 8ab3cdc9d7354c2b9a7b20e3fe2690ac41cd0682346579062322f67e65350fba
 kernel-path updates/x86_64/kernel.elf
-kernel-size 3884968
-kernel-sha256 5f7804f5e6ec3d7a7c65481fc8366c3ec70db227cad6c6e023b690da89f7d28d
+kernel-size 3885792
+kernel-sha256 724ad304a8abc7905ab7c04ab1e7293b695c9cca8b10a94c4ae7ff81e444c7c9
 efi-path updates/x86_64/BOOTX64.EFI
 efi-size 249856
 efi-sha256 51ca2b20ed14bbc678a396cdfb0c1d941acbc155cabebc9bfafabe4cdae1be73
@@ -15,7 +15,7 @@ limine-size 941
 limine-sha256 ff3c93a5301b5c21f6b953f3f1de7209f042615f85acfd9d440d7b5a9a754bde
 manifest-path updates/x86_64/manifest.txt
 manifest-size 953
-manifest-sha256 cc637f5b041c39f507b0f75fa354fe410368b6fb48cb8f326c162430bbbb55b1
+manifest-sha256 cd8d4a0a229829d1ad189b2a5a208a4357f5eacb2d96adfbe52032626b43f33f
 manifest-signature-path updates/x86_64/manifest.sig
 manifest-signature-size 690
-manifest-signature-sha256 c5a8f4c8622db958020fc98583538997b9ba457bf8d45cb578e5c147a7139ffe
+manifest-signature-sha256 7bc4c233e95c962c03fb8b7211b96266057d89a9e1733557cc84f55620dbd15c

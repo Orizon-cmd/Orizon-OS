@@ -35,8 +35,8 @@ le developpement noyau:
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
   installer des composants separes du kernel
-- console avec scrollback, support molette souris PS/2, `edit` ameliore et
-  navigation historique `Up/Down`
+- console avec scrollback, defilement clavier `z`/`s`, support molette souris
+  PS/2, `edit` ameliore et navigation historique `Up/Down`
 - diagnostics `sysinfo`, `hw`, `mounts`, `report`, `report save` et `selftest`
   pour voir CPU, memoire, stockage, racines data, reseau, USB/PS2, installation,
   update et principaux peripheriques PCI
@@ -229,10 +229,11 @@ session fermee, garde une protection anti-bruteforce dans `/system/ssh.conf`,
 et expose `audit` / `ssh audit` pour verifier sessions, auth, commandes,
 derniers evenements et fermetures de canal. `report save` ecrit
 `/workspace/hardware-report.txt` depuis SSH pour exporter un diagnostic complet.
-Les longues sorties SSH sont
-segmentees en plusieurs paquets pour eviter les coupures sur `logs ssh` ou
-`cat`; les commandes `logs ssh` et `logs boot` montrent la fin du journal quand
-il devient long. `ssh hostkey` affiche l'identite hote RSA generee pour
+Les longues sorties SSH sont segmentees en plusieurs paquets pour eviter les
+coupures sur `report show`, `cat /workspace/hardware-report.txt` ou `logs`;
+un meme transport SSH peut aussi rouvrir un canal `exec` apres une commande.
+Les commandes `logs ssh` et `logs boot` montrent la fin du journal quand il
+devient long. `ssh hostkey` affiche l'identite hote RSA generee pour
 l'installation et stockee dans `/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).

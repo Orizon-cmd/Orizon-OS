@@ -51,6 +51,7 @@ static const uint32_t term_colors[16] = {
 
 #define TERM_EDIT_MAX 2048
 #define TERM_SCROLLBACK_LINES 256
+#define TERM_KEY_SCROLL_LINES 3
 #define TERM_HISTORY_MAX 32
 #define TERM_HISTORY_PATH "/workspace/.orizon/history"
 #define TERM_WIFI_LOG_PATH "/logs/wifi.log"
@@ -304,6 +305,21 @@ void term_scroll_view(terminal_t *term, int lines) {
   if (term->scroll_offset > term->scroll_count) {
     term->scroll_offset = term->scroll_count;
   }
+}
+
+static int term_handle_scrollback_key(terminal_t *term, int key) {
+  if (!term || term->edit_mode || term->install_mode || term->input_len != 0) {
+    return 0;
+  }
+  if (key == 'z' || key == 'Z') {
+    term_scroll_view(term, key == 'Z' ? TERM_ROWS / 2 : TERM_KEY_SCROLL_LINES);
+    return 1;
+  }
+  if ((key == 's' || key == 'S') && term->scroll_offset > 0) {
+    term_scroll_view(term, key == 'S' ? -(TERM_ROWS / 2) : -TERM_KEY_SCROLL_LINES);
+    return 1;
+  }
+  return 0;
 }
 
 /* Newline */
@@ -5246,6 +5262,9 @@ void term_handle_key(terminal_t *term, int key) {
   if (!term) return;
 
   if (!term->edit_mode && !term->install_mode) {
+    if (term_handle_scrollback_key(term, key)) {
+      return;
+    }
     if (key == '\t') {
       term_autocomplete(term);
       return;

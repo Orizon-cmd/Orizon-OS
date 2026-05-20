@@ -177,3 +177,11 @@ CAP/CC/CSTS/admin errors, and SDHCI/eMMC cases without installing or writing to
 disk. The useful files are `/workspace/hardware-report.txt`, `/logs/wifi.log`,
 `/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
 `/workspace/.orizon/update.log`.
+
+## Local Console Scrolling
+
+When a command is longer than the visible framebuffer console, use `z` on an
+empty prompt to scroll up and `s` to scroll back down. Uppercase `Z` and `S`
+move by a larger half-screen step. The shortcut only steals `s` while the view
+is already scrolled, so commands such as `storage`, `selftest`, and `ssh` still
+type normally at the bottom prompt.

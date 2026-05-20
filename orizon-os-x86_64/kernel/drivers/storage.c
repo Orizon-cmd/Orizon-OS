@@ -546,16 +546,33 @@ static int nvme_identify_namespace(void) {
   }
 
   uint8_t flbas = nvme_identify_buf[26] & 0x0F;
+  uint8_t nlbaf = nvme_identify_buf[25] & 0x1F;
   if (flbas >= 16) {
     storage_log_append("storage: NVMe namespace FLBAS invalid");
     return -1;
   }
-  uint8_t lba_shift = nvme_identify_buf[128 + flbas * 4 + 3];
+  if (flbas > nlbaf) {
+    storage_log_append("storage: NVMe namespace active LBAF out of range");
+    return -1;
+  }
+  uint16_t metadata_size =
+      (uint16_t)nvme_identify_buf[128 + flbas * 4] |
+      ((uint16_t)nvme_identify_buf[128 + flbas * 4 + 1] << 8);
+  uint8_t lba_shift = nvme_identify_buf[128 + flbas * 4 + 2];
+  uint8_t relative_perf = nvme_identify_buf[128 + flbas * 4 + 3] & 0x03;
   if (lba_shift >= 32) {
     storage_log_append("storage: NVMe namespace LBA shift invalid");
     return -1;
   }
   nvme_lba_size = 1U << lba_shift;
+  {
+    char line[160];
+    snprintf(line, sizeof(line),
+             "storage: NVMe namespace format flbas=%u nlbaf=%u lbads=%u ms=%u rp=%u",
+             (unsigned)flbas, (unsigned)nlbaf, (unsigned)lba_shift,
+             (unsigned)metadata_size, (unsigned)relative_perf);
+    storage_log_append(line);
+  }
   if (nvme_lba_size != ORIZON_SECTOR_SIZE && nvme_lba_size != 4096U) {
     set_status("storage: NVMe namespace LBA size is unsupported");
     return -1;

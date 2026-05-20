@@ -33,8 +33,9 @@
 #define SSH_RX_BUF 2048
 #define SSH_PACKET_MAX 4096
 #define SSH_TX_BUF 1400
-#define SSH_CHANNEL_TEXT_BUF 4096
+#define SSH_CHANNEL_TEXT_BUF 65536
 #define SSH_CHANNEL_DATA_CHUNK 960
+#define SSH_FILE_READ_MAX (SSH_CHANNEL_TEXT_BUF / 2)
 #define SSH_AUDIT_RECENT 4
 
 #define SSH_MSG_DISCONNECT 1
@@ -2237,7 +2238,19 @@ static void ssh_process_channel_open(const uint8_t *payload,
 
   if (type_len == strlen("session") && memcmp(type, "session", type_len) == 0) {
     ssh_server_channel = 0;
+    ssh_status.shell_ready = 0;
     ssh_status.channel_open_seen = 1;
+    ssh_status.channel_open_confirm_sent = 0;
+    ssh_channel_success_pending = 0;
+    ssh_channel_failure_pending = 0;
+    ssh_channel_data_pending = 0;
+    ssh_channel_exit_status_pending = 0;
+    ssh_channel_close_pending = 0;
+    ssh_channel_close_sent = 0;
+    ssh_channel_tx_len = 0;
+    ssh_channel_tx_off = 0;
+    ssh_channel_last_chunk_len = 0;
+    ssh_shell_line_len = 0;
     ssh_channel_open_confirm_pending = 1;
     ssh_set_status("ssh: session channel open received");
     return;
@@ -2519,7 +2532,7 @@ static void ssh_shell_print_ls(const char *arg) {
 static void ssh_shell_print_file(const char *arg, size_t max_bytes, int tail) {
   static char path[MAX_PATH];
   static char out[SSH_CHANNEL_TEXT_BUF];
-  static char buf[1800];
+  static char buf[SSH_FILE_READ_MAX];
   size_t used = 0;
   size_t text_start = 0;
   size_t file_size = 0;
@@ -2779,8 +2792,9 @@ static void ssh_shell_print_report(const char *args) {
   }
 
   if (ssh_shell_command_is(sub, "show") || *sub == '\0') {
-    orizon_report_format(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
+    int n = orizon_report_format(out, sizeof(out));
+    if (n >= 0 && (size_t)n >= sizeof(out) - 1 &&
+        strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n[truncated over SSH; use report save]\r\n");
     }
     ssh_queue_channel_text(out);
@@ -3499,7 +3513,7 @@ static void ssh_remote_shell_execute(const char *line) {
     return;
   }
   if (ssh_shell_command_is(line, "cat")) {
-    ssh_shell_print_file(ssh_shell_skip_spaces(line + 3), 1400, 0);
+    ssh_shell_print_file(ssh_shell_skip_spaces(line + 3), SSH_FILE_READ_MAX, 0);
     return;
   }
   if (ssh_shell_command_is(line, "head")) {
@@ -3688,7 +3702,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
-    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), 1400, 0);
+    ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 3), SSH_FILE_READ_MAX, 0);
   } else if (ssh_shell_command_is(cmd, "head")) {
     ssh_shell_print_file(ssh_shell_skip_spaces(cmd + 4), 700, 0);
   } else if (ssh_shell_command_is(cmd, "touch")) {
@@ -4434,9 +4448,8 @@ int ssh_poll(void) {
       ssh_seq_out++;
       ssh_channel_close_pending = 0;
       ssh_channel_close_sent = 1;
-      ssh_disconnect_close_polls = 6;
       ssh_channel_close_total++;
-      ssh_set_status("ssh: channel close sent; graceful relisten pending");
+      ssh_set_status("ssh: channel close sent; transport reusable");
     } else if (tx_kind == 14) {
       if (ssh_pending_ctr_s2c_ready) {
         memcpy(ssh_ctr_s2c, ssh_pending_ctr_s2c, sizeof(ssh_ctr_s2c));

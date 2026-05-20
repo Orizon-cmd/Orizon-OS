@@ -19,6 +19,9 @@ design note.
 - Hardware capture is exportable with `report save`, which writes the
   non-destructive `/workspace/hardware-report.txt` bundle containing storage,
   PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
+- The local framebuffer console can scroll long outputs with `z` up and `s`
+  down on an empty prompt; SSH `cat /workspace/hardware-report.txt` is preferred
+  for copying the full report.
 - Wired VM networking supports e1000/e1000e, RTL8139, and VirtIO-net. The
   ZimaOS NAT smoke cases for those NICs have passed before; do not rerun the
   full matrix unless that is the explicit task.
