@@ -286,6 +286,7 @@ def write_manifest_signature(
             ]
         ),
         encoding="utf-8",
+        newline="\n",
     )
     print(f"Published signed update manifest: {sig_path}")
 
@@ -375,7 +376,7 @@ def write_update_manifest(
             ]
         )
     lines.append("")
-    manifest.write_text("\n".join(lines), encoding="utf-8")
+    manifest.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     print(f"Published update manifest: {manifest}")
     write_manifest_signature(
         manifest=manifest,
@@ -402,6 +403,12 @@ def validate_manifest_signature_metadata(manifest: Path, sig_path: Path) -> None
         raise RuntimeError("manifest.sig does not match the current manifest.txt")
     if not signature_hex or not re.fullmatch(r"[0-9a-f]+", signature_hex):
         raise RuntimeError("manifest.sig does not contain a valid hex signature")
+
+
+def validate_lf_text_artifact(path: Path) -> None:
+    data = path.read_bytes()
+    if b"\r\n" in data:
+        raise RuntimeError(f"{path} must use LF line endings for GitHub raw hashes")
 
 
 def validate_manifest_artifact(
@@ -456,6 +463,8 @@ def validate_release_bundle(
     for artifact in required:
         if not artifact.exists():
             raise FileNotFoundError(f"Release artifact missing: {artifact}")
+    for text_artifact in (update_dir / "limine.conf", manifest, sig_path, release):
+        validate_lf_text_artifact(text_artifact)
     validate_manifest_signature_metadata(manifest, sig_path)
     manifest_text = manifest.read_text(encoding="utf-8")
     release_text = release.read_text(encoding="utf-8")
@@ -561,7 +570,7 @@ def write_release_report(
         else:
             lines.append(f"{label}-path missing")
     lines.append("")
-    report.write_text("\n".join(lines), encoding="utf-8")
+    report.write_text("\n".join(lines), encoding="utf-8", newline="\n")
     print(f"Published release report: {report}")
 
 
@@ -588,6 +597,8 @@ def publish_update_payloads_from_local_tree(
         if not src.exists():
             raise FileNotFoundError(f"Built payload not found: {src}")
         shutil.copy2(src, dst)
+        if dst.name == "limine.conf":
+            dst.write_text(dst.read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
         print(f"Published update artifact: {dst}")
     write_update_manifest(
         update_dir=update_dir,
