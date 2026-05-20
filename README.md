@@ -21,7 +21,8 @@ le developpement noyau:
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
   Ethernet Intel e1000/e1000e, Realtek RTL8139, VirtIO-net pour Proxmox/QEMU,
-  chemin paquet USB Ethernet xHCI pour CDC-ECM brut et Realtek RTL815x, et
+  chemin paquet USB Ethernet xHCI pour CDC-ECM brut et Realtek RTL815x,
+  diagnostics persistants `/logs/usb.log` pour CDC-NCM/ASIX/SMSC/RNDIS, et
   detection stage-0 du Wi-Fi Intel CNVi
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
@@ -163,8 +164,8 @@ route
 logs network
 ```
 
-La configuration est sauvegardee dans `/system/network.conf` et le journal
-reseau dans `/logs/network.log`, donc une machine Proxmox en bridge sans NAT
+La configuration est sauvegardee dans `/system/network.conf` et les journaux
+reseau/USB dans `/logs/network.log` et `/logs/usb.log`, donc une machine Proxmox en bridge sans NAT
 peut rester connectee a GitHub si son LAN autorise la passerelle et le DNS.
 En cas de machine Proxmox configuree en VirtIO moderne-only, choisir le modele
 `Intel E1000` reste un fallback compatible.

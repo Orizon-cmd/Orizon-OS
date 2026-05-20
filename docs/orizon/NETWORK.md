@@ -22,6 +22,7 @@ usb rescan
 net status
 hw
 report
+logs usb
 ```
 
 The first real packet path is active on xHCI for CDC-ECM style raw Ethernet
@@ -35,6 +36,11 @@ Known diagnostic families also include ASIX `AX88xxx`, SMSC/LAN95xx, CDC-NCM,
 and RNDIS-style adapters. These are identified by VID/PID/class today, but
 packet-format support still needs a family-specific driver.
 
+Every detected USB network candidate is appended to `/logs/usb.log` with the
+controller, port, VID/PID, descriptor family, selected driver hint, endpoint
+map, support status and last setup error. This is the file to capture when a
+new dongle is seen but DHCP cannot run yet.
+
 `usb` also prints xHCI/EHCI root-port diagnostics. If an adapter was plugged in
 after boot, run `usb rescan` first. The useful cases are:
 
@@ -42,8 +48,10 @@ after boot, run `usb rescan` first. The useful cases are:
   controllers and selected the best candidate by connected/root-port count.
 - `usb-net present=yes ready=yes raw=yes`: the packet driver is active; run
   `net dhcp` or `net auto`.
-- `usb-net present=yes ready=no`: the adapter was identified, but this family
-  still needs a packet driver or setup stage.
+- `usb-net present=yes family=... support=... ready=no`: the adapter was
+  identified, but the support field explains whether it is missing endpoint
+  descriptors, waiting for CDC-NCM/ASIX/SMSC/RNDIS work, or failed during xHCI
+  setup.
 - `usb-device ... hint=usb-hub`: the adapter is probably behind a USB hub or
   USB-C dock; Orizon needs hub downstream enumeration first.
 - `xhci-ports ... conn ... usb-device count=0`: the root port sees something,
@@ -54,6 +62,15 @@ If the status says `ready=yes raw=yes`, `net dhcp` can transmit through the USB
 adapter. If it remains pending, capture the VID/PID and root-port line; that
 tells us whether the next driver should be CDC-NCM, ASIX, SMSC/LAN95xx, RNDIS,
 or USB hub downstream enumeration.
+
+Useful capture sequence for a new dongle:
+
+```text
+usb rescan
+usb
+logs usb
+net status
+```
 
 Orizon configures IPv4 with DHCP first, then falls back to a persistent static
 configuration from `/system/network.conf` if DHCP is not available. NAT and

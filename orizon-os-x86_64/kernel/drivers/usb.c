@@ -5,6 +5,7 @@
 #include "../include/usb.h"
 #include "../include/gui.h"
 #include "../include/string.h"
+#include "../include/vfs.h"
 
 /* Forward declarations */
 void usb_xhci_init(void);
@@ -34,6 +35,12 @@ static unsigned long usb_seen_devices = 0;
 static usb_device_info_t usb_last_device;
 static usb_net_info_t usb_net;
 
+#define USB_LOG_PATH "/logs/usb.log"
+
+const char *usb_log_path(void) {
+  return USB_LOG_PATH;
+}
+
 static uint16_t usb_le16(const uint8_t *p) {
   return (uint16_t)(p[0] | (p[1] << 8));
 }
@@ -59,6 +66,17 @@ static int usb_id_is_smsc_lan(uint16_t vid) {
   return vid == 0x0424;
 }
 
+static int usb_id_is_cdc_ncm(const usb_net_info_t *info) {
+  return info && info->interface_class == 0x02 &&
+         info->interface_subclass == 0x0d;
+}
+
+static int usb_id_is_rndis(const usb_net_info_t *info) {
+  return info && info->interface_class == 0xe0 &&
+         info->interface_subclass == 0x01 &&
+         info->interface_protocol == 0x03;
+}
+
 static int usb_class_is_net(uint8_t cls, uint8_t sub, uint8_t proto) {
   if (cls == 0x02) {
     return 1; /* CDC control: ECM/NCM and related USB networking classes. */
@@ -80,6 +98,107 @@ static int usb_net_is_raw_ethernet(const usb_net_info_t *info) {
     return 1; /* CDC ECM uses raw Ethernet frames on its bulk data pipes. */
   }
   return 0;
+}
+
+static const char *usb_net_family_for(const usb_net_info_t *info) {
+  if (!info) {
+    return "unknown";
+  }
+  if (usb_id_is_realtek_lan(info->vendor_id, info->product_id)) {
+    return "rtl815x";
+  }
+  if (usb_id_is_asix_lan(info->vendor_id, info->product_id)) {
+    return "asix-ax88xxx";
+  }
+  if (usb_id_is_smsc_lan(info->vendor_id)) {
+    return "smsc-lan95xx";
+  }
+  if (usb_net_is_raw_ethernet(info)) {
+    return "cdc-ecm";
+  }
+  if (usb_id_is_cdc_ncm(info)) {
+    return "cdc-ncm";
+  }
+  if (usb_id_is_rndis(info)) {
+    return "rndis";
+  }
+  if (info->interface_class == 0x0a) {
+    return "cdc-data";
+  }
+  return "usb-net";
+}
+
+static void usb_net_update_support(usb_net_info_t *info) {
+  if (!info) {
+    return;
+  }
+  snprintf(info->family, sizeof(info->family), "%s",
+           usb_net_family_for(info));
+  if (!info->bulk_in_ep || !info->bulk_out_ep) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "blocked: missing bulk IN/OUT endpoint descriptors");
+  } else if (usb_id_is_realtek_lan(info->vendor_id, info->product_id)) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "supported: RTL815x xHCI vendor init and frame descriptors");
+  } else if (usb_net_is_raw_ethernet(info)) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "supported: CDC-ECM raw Ethernet bulk pipes");
+  } else if (usb_id_is_cdc_ncm(info)) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "pending: CDC-NCM NTB framing not implemented");
+  } else if (usb_id_is_asix_lan(info->vendor_id, info->product_id)) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "pending: ASIX vendor init/framing not implemented");
+  } else if (usb_id_is_smsc_lan(info->vendor_id)) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "pending: SMSC/LAN95xx vendor init not implemented");
+  } else if (usb_id_is_rndis(info)) {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "pending: RNDIS control/data protocol not implemented");
+  } else {
+    snprintf(info->support_status, sizeof(info->support_status),
+             "pending: unknown USB Ethernet packet format");
+  }
+}
+
+static void usb_log_line(const char *line) {
+  file_t *f;
+  if (!line) {
+    return;
+  }
+  vfs_mkdir("/logs");
+  f = vfs_open(USB_LOG_PATH, O_CREAT | O_WRONLY | O_APPEND);
+  if (!f) {
+    return;
+  }
+  vfs_write(f, line, strlen(line));
+  vfs_write(f, "\n", 1);
+  vfs_close(f);
+}
+
+static void usb_log_net_event(const char *event,
+                              const usb_net_info_t *info) {
+  char line[512];
+  if (!info) {
+    return;
+  }
+  snprintf(line, sizeof(line),
+           "%s controller=%s port=%u vid=%04x pid=%04x "
+           "family=%s driver=%s iface=%02x/%02x/%02x cfg=%u "
+           "bulk-in=%02x/%u bulk-out=%02x/%u intr-in=%02x/%u/%u "
+           "ready=%s raw=%s link=%s support=%s status=%s",
+           event ? event : "event", info->controller, info->port,
+           info->vendor_id, info->product_id, info->family,
+           info->driver_hint, info->interface_class,
+           info->interface_subclass, info->interface_protocol,
+           info->config_value, info->bulk_in_ep, info->bulk_in_mps,
+           info->bulk_out_ep, info->bulk_out_mps, info->intr_in_ep,
+           info->intr_in_mps, info->intr_interval,
+           info->ready ? "yes" : "no",
+           info->raw_ethernet ? "yes" : "no",
+           info->link_up ? "up" : "down", info->support_status,
+           info->status);
+  usb_log_line(line);
 }
 
 static void usb_net_make_mac(usb_net_info_t *info) {
@@ -332,15 +451,18 @@ void usb_note_device(const char *controller, uint8_t port,
                             candidate.interface_subclass,
                             candidate.interface_protocol));
   candidate.raw_ethernet = usb_net_is_raw_ethernet(&candidate);
+  usb_net_update_support(&candidate);
   snprintf(candidate.status, sizeof(candidate.status),
            candidate.raw_ethernet
                ? "USB CDC Ethernet detected; awaiting xHCI bulk binding"
-               : "USB Ethernet detected; vendor/class driver pending");
+               : "USB Ethernet detected; see support field");
+  usb_log_net_event("candidate", &candidate);
 
   if (!usb_net.present ||
       (!usb_net.bulk_in_ep && candidate.bulk_in_ep) ||
       (!usb_net.bulk_out_ep && candidate.bulk_out_ep)) {
     usb_net = candidate;
+    usb_log_net_event("selected", &usb_net);
     serial_puts("[USB] network adapter detected: ");
     serial_puts(candidate.driver_hint);
     serial_puts("\n");
@@ -395,7 +517,7 @@ void usb_format_net_status(char *buf, size_t size) {
            "ctrl-if=%u data-if=%u bulk-in=%02x/%u bulk-out=%02x/%u "
            "intr-in=%02x/%u/%u burst=%u/%u/%u "
            "mac=%02x:%02x:%02x:%02x:%02x:%02x ready=%s raw=%s link=%s "
-           "driver=%s status=%s",
+           "family=%s driver=%s support=%s status=%s",
            usb_net.controller, usb_net.port, usb_net.vendor_id,
            usb_net.product_id, usb_net.device_class, usb_net.device_subclass,
            usb_net.device_protocol, usb_net.interface_class,
@@ -408,8 +530,8 @@ void usb_format_net_status(char *buf, size_t size) {
            usb_net.mac[1], usb_net.mac[2], usb_net.mac[3], usb_net.mac[4],
            usb_net.mac[5], usb_net.ready ? "yes" : "no",
            usb_net.raw_ethernet ? "yes" : "no",
-           usb_net.link_up ? "up" : "down", usb_net.driver_hint,
-           usb_net.status);
+           usb_net.link_up ? "up" : "down", usb_net.family,
+           usb_net.driver_hint, usb_net.support_status, usb_net.status);
 }
 
 int usb_net_present(void) {
@@ -446,10 +568,15 @@ void usb_net_mark_ready(const char *transport, int raw_ethernet) {
   if (transport && transport[0]) {
     snprintf(usb_net.driver_hint, sizeof(usb_net.driver_hint), "%s", transport);
   }
+  snprintf(usb_net.support_status, sizeof(usb_net.support_status),
+           usb_net.raw_ethernet
+               ? "active: packet path is ready for DHCP"
+               : "blocked: packet format unsupported by active driver");
   snprintf(usb_net.status, sizeof(usb_net.status),
            usb_net.raw_ethernet
                ? "USB Ethernet ready; raw frames enabled for DHCP"
                : "USB Ethernet configured; packet format unsupported");
+  usb_log_net_event("ready", &usb_net);
 }
 
 void usb_net_mark_setup_failed(const char *transport, const char *status) {
@@ -462,8 +589,11 @@ void usb_net_mark_setup_failed(const char *transport, const char *status) {
   if (transport && transport[0]) {
     snprintf(usb_net.driver_hint, sizeof(usb_net.driver_hint), "%s", transport);
   }
+  snprintf(usb_net.support_status, sizeof(usb_net.support_status),
+           "blocked: xHCI USB Ethernet setup failed");
   snprintf(usb_net.status, sizeof(usb_net.status), "%s",
            status && status[0] ? status : "USB Ethernet setup failed");
+  usb_log_net_event("setup-failed", &usb_net);
 }
 
 void usb_net_set_mac(const uint8_t mac[6]) {

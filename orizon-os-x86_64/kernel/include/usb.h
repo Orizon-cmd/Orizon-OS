@@ -38,7 +38,9 @@ typedef struct {
   int raw_ethernet;
   int link_up;
   uint8_t mac[6];
+  char family[32];
   char driver_hint[32];
+  char support_status[128];
   char status[128];
 } usb_net_info_t;
 
@@ -73,6 +75,7 @@ void usb_format_status(char *buf, size_t size);
 void usb_format_device_status(char *buf, size_t size);
 void usb_format_net_status(char *buf, size_t size);
 void usb_format_port_status(char *buf, size_t size);
+const char *usb_log_path(void);
 unsigned long usb_device_count(void);
 int usb_net_present(void);
 int usb_net_ready(void);

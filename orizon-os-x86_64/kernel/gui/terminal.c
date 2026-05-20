@@ -2167,7 +2167,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   if (default_view) {
     term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
     term_puts_t(term,
-                "Use: logs boot | logs network | logs wifi | logs ssh | logs update | logs install | logs all\n");
+                "Use: logs boot | logs network | logs usb | logs wifi | logs ssh | logs update | logs install | logs all\n");
     if (vfs_exists(KLOG_BOOT_PATH)) {
       term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
     } else {
@@ -2180,6 +2180,9 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     }
     if (vfs_exists(netstack_log_path())) {
       term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 1024);
+    }
+    if (vfs_exists(usb_log_path())) {
+      term_print_file_tail(term, usb_log_path(), usb_log_path(), 1024);
     }
     if (vfs_exists(TERM_WIFI_LOG_PATH)) {
       term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 1024);
@@ -2207,6 +2210,10 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 8192);
     return;
   }
+  if (term_command_is(args, "usb")) {
+    term_print_file_tail(term, usb_log_path(), usb_log_path(), 8192);
+    return;
+  }
   if (term_command_is(args, "wifi")) {
     term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 8192);
     term_print_file_tail(term, TERM_WIFI_LAST_PATH, TERM_WIFI_LAST_PATH, 2048);
@@ -2230,6 +2237,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, "/workspace/.orizon/update.log",
                          "/workspace/.orizon/update.log", 4096);
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 4096);
+    term_print_file_tail(term, usb_log_path(), usb_log_path(), 4096);
     term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 4096);
     term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 4096);
     term_print_file_tail(term, "/workspace/.orizon/install-log",
@@ -2239,7 +2247,8 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     return;
   }
 
-  term_puts_t(term, "usage: logs [boot|network|ssh|update|install|all]\n");
+  term_puts_t(term,
+              "usage: logs [boot|network|usb|wifi|ssh|update|install|all]\n");
 }
 
 static void term_print_diagnostic_hints(terminal_t *term) {
@@ -4195,7 +4204,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
     term_puts_t(term, "  usb [rescan] - Show USB/HID/USB-Ethernet diagnostics\n");
     term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
-    term_puts_t(term, "  logs [name] - Read recent boot/network/update/install logs\n");
+    term_puts_t(term, "  logs [name] - Read recent boot/network/usb/wifi/update logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  mounts    - Show Orizon data roots\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");

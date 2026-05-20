@@ -43,7 +43,8 @@
   `/system/ssh_host_rsa.key`, `/system/ssh.conf`, and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, USB root-port rescans,
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
-  families, xHCI CDC-ECM raw Ethernet and Realtek RTL815x packet paths,
+  families, persistent `/logs/usb.log` capture with family/support/blocker
+  fields, xHCI CDC-ECM raw Ethernet and Realtek RTL815x packet paths,
   AHCI/NVMe storage probes, Intel e1000/e1000e, RTL8139,
   VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
@@ -97,8 +98,9 @@
 6. Implement USB hub downstream enumeration if the Lenovo adapter appears
    behind a dock or multi-port hub.
 7. Extend USB Ethernet beyond the first xHCI CDC-ECM/RTL815x path: add CDC-NCM,
-   ASIX AX88xxx, SMSC/LAN95xx, RNDIS if needed, and hardware validation on the
-   Lenovo adapter's actual VID/PID.
+   ASIX AX88xxx, SMSC/LAN95xx, RNDIS if needed, using the captured
+   `/logs/usb.log` VID/PID/endpoint evidence first, then hardware validation on
+   the Lenovo adapter's actual VID/PID.
 8. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 9. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
 10. Extend the VM test matrix beyond the current NAT smoke path: bridge cases,
