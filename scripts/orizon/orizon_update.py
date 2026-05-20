@@ -22,6 +22,19 @@ DEFAULT_ROOT_ISO = "Orizon-OS.iso"
 DEFAULT_UPDATE_DIR = "updates/x86_64"
 DEFAULT_GITHUB_REPO = "https://github.com/Orizon-cmd/Orizon-OS.git"
 DEFAULT_GITHUB_REF = "main"
+DEFAULT_MANIFEST_SIGNING_KEY = "config/keys/update-signing.private.pem"
+MANIFEST_SIGNING_KEY_ID = "orizon-update-root-2026-05"
+MANIFEST_SIGNING_MODULUS_HEX = (
+    "a7a007e2312f120311859724f6ca3b7713dd75dc23ca0945cae6c4718384ae63"
+    "3198e98c32946cccb6597eab0f0dfdc3509f7953ef665d1b581fde1c1d5f4ed"
+    "cadda1fc65c6611362d033ad9d8b5959ce925157ed3849a6ab72c5eb85581b9"
+    "c5c54763638ad98dcf4f1135eeeb9d73f83773224ffc4ea4bbc79cd36e66f312"
+    "601dcd6614301b37c82ce1e27b789feac9f2818e5d15cf3b6a78f21afc060a5"
+    "34803356c4379febaadaaf06c89612c4644ab965a5b5ff13715290799ef1aaba"
+    "fb26bf7707b0da9d27d8115622c53770fb5095cd81001ee91ae7d2cdfe656031"
+    "9484693adef94bbfc2b36d40e4d945a25ce61761611475e97a085bf9da81087"
+    "7e87"
+)
 
 
 def run(command: list[str], *, cwd: Path = REPO_ROOT) -> None:
@@ -183,12 +196,77 @@ def sha256_file(path: Path) -> str:
     return hasher.hexdigest()
 
 
+def load_manifest_signing_key(key_path: Path, *, generate: bool):
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    if not key_path.exists() and generate:
+        key_path.parent.mkdir(parents=True, exist_ok=True)
+        key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        key_path.write_bytes(
+            key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        )
+        print(f"Generated local manifest signing key: {key_path}")
+    if not key_path.exists():
+        raise FileNotFoundError(
+            f"Missing manifest signing key: {key_path}. "
+            "Restore the trusted release key, or rotate the embedded update root key."
+        )
+    key = serialization.load_pem_private_key(key_path.read_bytes(), password=None)
+    if not isinstance(key, rsa.RSAPrivateKey):
+        raise ValueError(f"Manifest signing key {key_path} is not an RSA key.")
+    public_numbers = key.public_key().public_numbers()
+    if f"{public_numbers.n:0512x}" != MANIFEST_SIGNING_MODULUS_HEX:
+        raise ValueError(
+            f"Manifest signing key {key_path} does not match "
+            f"{MANIFEST_SIGNING_KEY_ID}. Restore the release key or rotate the "
+            "embedded kernel update root before publishing."
+        )
+    return key
+
+
+def write_manifest_signature(
+    *, manifest: Path, signing_key_path: Path, generate_key: bool
+) -> None:
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    key = load_manifest_signing_key(signing_key_path, generate=generate_key)
+    data = manifest.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    signature = key.sign(data, padding.PKCS1v15(), hashes.SHA256())
+    sig_path = manifest.with_suffix(".sig")
+    sig_path.write_text(
+        "\n".join(
+            [
+                "signature-version 1",
+                "algorithm rsa-pkcs1-sha256",
+                f"key-id {MANIFEST_SIGNING_KEY_ID}",
+                f"manifest-sha256 {digest}",
+                f"signature {signature.hex()}",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    print(f"Published signed update manifest: {sig_path}")
+
+
 def update_version() -> str:
     return datetime.datetime.now().strftime("%Y.%m.%d-%H%M")
 
 
 def write_update_manifest(
-    *, update_dir: Path, repo_url: str, version: str
+    *,
+    update_dir: Path,
+    repo_url: str,
+    version: str,
+    signing_key_path: Path,
+    generate_signing_key: bool,
 ) -> None:
     kernel = update_dir / "kernel.elf"
     efi = update_dir / "BOOTX64.EFI"
@@ -219,10 +297,20 @@ def write_update_manifest(
     ]
     manifest.write_text("\n".join(lines), encoding="utf-8")
     print(f"Published update manifest: {manifest}")
+    write_manifest_signature(
+        manifest=manifest,
+        signing_key_path=signing_key_path,
+        generate_key=generate_signing_key,
+    )
 
 
 def publish_update_payloads_from_local_tree(
-    *, source_dir: Path, update_dir: Path, repo_url: str
+    *,
+    source_dir: Path,
+    update_dir: Path,
+    repo_url: str,
+    signing_key_path: Path,
+    generate_signing_key: bool,
 ) -> None:
     update_dir.mkdir(parents=True, exist_ok=True)
     payloads = [
@@ -235,7 +323,13 @@ def publish_update_payloads_from_local_tree(
             raise FileNotFoundError(f"Built payload not found: {src}")
         shutil.copy2(src, dst)
         print(f"Published update artifact: {dst}")
-    write_update_manifest(update_dir=update_dir, repo_url=repo_url, version=update_version())
+    write_update_manifest(
+        update_dir=update_dir,
+        repo_url=repo_url,
+        version=update_version(),
+        signing_key_path=signing_key_path,
+        generate_signing_key=generate_signing_key,
+    )
 
 
 def publish_update_payloads_from_zimaos(
@@ -244,6 +338,8 @@ def publish_update_payloads_from_zimaos(
     remote_project_root: str,
     update_dir: Path,
     repo_url: str,
+    signing_key_path: Path,
+    generate_signing_key: bool,
 ) -> None:
     update_dir.mkdir(parents=True, exist_ok=True)
     payloads = [
@@ -258,7 +354,13 @@ def publish_update_payloads_from_zimaos(
             print(f"Published update artifact: {local_dst}")
     finally:
         sftp.close()
-    write_update_manifest(update_dir=update_dir, repo_url=repo_url, version=update_version())
+    write_update_manifest(
+        update_dir=update_dir,
+        repo_url=repo_url,
+        version=update_version(),
+        signing_key_path=signing_key_path,
+        generate_signing_key=generate_signing_key,
+    )
 
 
 def download_github_iso(
@@ -305,6 +407,8 @@ def build_on_zimaos(
     publish_payloads: bool,
     update_dir: Path,
     github_repo: str,
+    signing_key_path: Path,
+    generate_signing_key: bool,
 ) -> None:
     cmd = [
         sys.executable,
@@ -343,6 +447,8 @@ def build_on_zimaos(
                     remote_project_root=remote_project_root,
                     update_dir=update_dir,
                     repo_url=github_repo,
+                    signing_key_path=signing_key_path,
+                    generate_signing_key=generate_signing_key,
                 )
         finally:
             client.close()
@@ -422,6 +528,19 @@ def main() -> int:
         help="Directory where update payloads and manifest are published.",
     )
     parser.add_argument(
+        "--manifest-signing-key",
+        default=DEFAULT_MANIFEST_SIGNING_KEY,
+        help="Local private key used to sign updates/x86_64/manifest.sig.",
+    )
+    parser.add_argument(
+        "--generate-manifest-signing-key",
+        action="store_true",
+        help=(
+            "Bootstrap a local key file if missing; the generated key must be "
+            "embedded as a rotated kernel update root before publishing."
+        ),
+    )
+    parser.add_argument(
         "--env-file",
         default="config/hosts/zimaos.local.env",
         help="ZimaOS backend env file.",
@@ -449,6 +568,7 @@ def main() -> int:
     publish = not args.no_publish_root_iso
     publish_payloads = not args.no_publish_update_payloads
     update_dir = REPO_ROOT / args.update_dir
+    signing_key_path = REPO_ROOT / args.manifest_signing_key
 
     if args.mode == "github-iso":
         download_github_iso(
@@ -465,6 +585,8 @@ def main() -> int:
                 source_dir=source_dir,
                 update_dir=update_dir,
                 repo_url=args.github_repo,
+                signing_key_path=signing_key_path,
+                generate_signing_key=args.generate_manifest_signing_key,
             )
     elif args.mode == "zimaos-iso":
         build_on_zimaos(
@@ -478,6 +600,8 @@ def main() -> int:
             publish_payloads=publish_payloads,
             update_dir=update_dir,
             github_repo=args.github_repo,
+            signing_key_path=signing_key_path,
+            generate_signing_key=args.generate_manifest_signing_key,
         )
     else:
         build_on_zimaos(
@@ -491,6 +615,8 @@ def main() -> int:
             publish_payloads=publish_payloads,
             update_dir=update_dir,
             github_repo=args.github_repo,
+            signing_key_path=signing_key_path,
+            generate_signing_key=args.generate_manifest_signing_key,
         )
 
     print("Orizon update complete.")

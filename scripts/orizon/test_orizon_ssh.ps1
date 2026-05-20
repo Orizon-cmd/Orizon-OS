@@ -20,6 +20,11 @@ if (-not $Password) {
 $encodedPassword = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Password))
 $commands = @(
   "help",
+  "status",
+  "auth",
+  "hostkey",
+  "net status",
+  "wifi status",
   "free",
   "ps",
   "pkg status",
@@ -75,6 +80,21 @@ run_cmd() {
     "help")
       grep -q "Remote Orizon commands" "`$OUT" || { echo "missing help output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "status")
+      grep -q "ssh: enabled=" "`$OUT" || { echo "missing ssh status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "auth")
+      grep -q "ssh auth:" "`$OUT" || { echo "missing ssh auth output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "hostkey")
+      grep -q "ssh hostkey:" "`$OUT" && grep -q "fingerprint-sha256" "`$OUT" || { echo "missing hostkey output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "net status")
+      grep -q "ipv4=" "`$OUT" || { echo "net status was not dispatched to the network command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "wifi status")
+      grep -q "driver=" "`$OUT" || { echo "wifi status was not dispatched to the wifi command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "cat /workspace/ssh-regression.txt")
       grep -q "alpha" "`$OUT" && grep -q "beta" "`$OUT" || { echo "missing cat output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -103,6 +123,27 @@ while IFS= read -r cmd; do
 done <<'EOC'
 $commandBlock
 EOC
+
+echo "--- shell pty multi-command ---"
+printf 'status\rnet status\rwifi status\rexit\r' | DISPLAY=none SSH_ASKPASS="`$ASKPASS" SSH_ASKPASS_REQUIRE=force timeout ${TimeoutSeconds}s setsid ssh -tt \
+  -oNumberOfPasswordPrompts=1 \
+  -oPreferredAuthentications=password \
+  -oPubkeyAuthentication=no \
+  -oStrictHostKeyChecking=no \
+  -oUserKnownHostsFile="`$KNOWN" \
+  -oConnectTimeout=5 \
+  orizon@$VmIp > "`$OUT" 2>&1
+rc=`$?
+cat "`$OUT"
+echo "rc=`$rc"
+if [ "`$rc" -ne 0 ]; then
+  rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"
+  exit "`$rc"
+fi
+grep -q "Orizon OS remote shell" "`$OUT" || { echo "missing remote shell banner"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+grep -q "ssh: enabled=" "`$OUT" || { echo "missing pty ssh status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+grep -q "ipv4=" "`$OUT" || { echo "missing pty net status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+grep -q "driver=" "`$OUT" || { echo "missing pty wifi status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
 
 rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"
 echo "Orizon SSH regression OK"

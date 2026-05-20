@@ -7892,10 +7892,13 @@ int wifi_scan_poll(char *report, size_t report_size) {
   return s->scan_failed ? -1 : 0;
 }
 
+static int wifi_ccmp_rx_selftest(void);
+
 int wifi_crypto_probe(char *report, size_t report_size) {
   int rc;
   int aes_rc;
   int ccm_rc;
+  int ccmp_rx_rc;
 
   if (!report || report_size == 0) {
     return -1;
@@ -7904,25 +7907,29 @@ int wifi_crypto_probe(char *report, size_t report_size) {
   rc = sha1_selftest();
   aes_rc = aes128_key_unwrap_selftest();
   ccm_rc = aes128_ccm_selftest();
+  ccmp_rx_rc = wifi_ccmp_rx_selftest();
   snprintf(report, report_size,
            "wifi crypto: %s\n"
            "sha1: %s\n"
            "pbkdf2-hmac-sha1: %s\n"
            "aes-128-key-unwrap: %s\n"
            "aes-128-ccm: %s\n"
+           "ccmp-protected-rx: %s\n"
            "wpa2: pmk-bytes=%u iterations=%u passphrase-len=%u..%u "
            "hex-psk-len=%u\n"
            "note: connect reports only PMK/GTK checksums, never keys\n",
-           rc == 0 && aes_rc == 0 && ccm_rc == 0 ? "self-test passed"
-                                                  : "self-test failed",
+           rc == 0 && aes_rc == 0 && ccm_rc == 0 && ccmp_rx_rc == 0
+               ? "self-test passed"
+               : "self-test failed",
            rc == 0 || rc == -2 || rc == -3 ? "ok" : "failed",
            rc == 0 ? "ok" : "failed",
            aes_rc == 0 ? "ok" : "failed",
            ccm_rc == 0 ? "ok" : "failed",
+           ccmp_rx_rc == 0 ? "ok" : "failed",
            WIFI_WPA2_PMK_BYTES, WIFI_WPA2_PBKDF2_ITERATIONS,
            WIFI_WPA2_MIN_PASSPHRASE, WIFI_WPA2_MAX_PASSPHRASE,
            WIFI_WPA2_HEX_PSK_CHARS);
-  return rc == 0 && aes_rc == 0 && ccm_rc == 0 ? 0 : -1;
+  return rc == 0 && aes_rc == 0 && ccm_rc == 0 && ccmp_rx_rc == 0 ? 0 : -1;
 }
 
 static void wifi_connect_copy_mac(uint8_t *dst, const uint8_t *src) {
@@ -9142,6 +9149,108 @@ static int wifi_ccmp_parse_protected_data(const uint8_t *frame,
   wifi_status_state.ccmp_rx_packets++;
   wifi_status_state.status = "wifi: protected CCMP Ethernet payload received";
   return 1;
+}
+
+static int wifi_ccmp_rx_selftest(void) {
+  static wifi_status_t saved_state;
+  static uint8_t saved_ptk[WIFI_WPA_PTK_BYTES];
+  static uint8_t saved_gtk[WIFI_WPA_GTK_BYTES];
+  static uint8_t saved_rx_plain[WIFI_CCMP_ETH_PAYLOAD_BYTES];
+  static uint8_t saved_rx_payload[WIFI_CCMP_ETH_PAYLOAD_BYTES];
+  static uint8_t saved_rx_src[6];
+  static uint8_t frame[128] __attribute__((aligned(16)));
+  static uint8_t plain[64] __attribute__((aligned(16)));
+  uint8_t aad[WIFI_CCMP_AAD_BYTES];
+  uint8_t nonce[WIFI_CCMP_NONCE_BYTES];
+  uint8_t pn[6];
+  uint8_t qos_tid = 0;
+  const uint8_t local_mac[6] = {0x02, 0x4f, 0x5a, 0x20, 0x26, 0x01};
+  const uint8_t bssid[6] = {0x02, 0xaa, 0xbb, 0xcc, 0xdd, 0xee};
+  const uint8_t src_mac[6] = {0x02, 0x11, 0x22, 0x33, 0x44, 0x55};
+  const uint8_t tk[WIFI_WPA_TK_BYTES] = {
+      0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+      0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff};
+  static const uint8_t payload[] = {
+      'O', 'r', 'i', 'z', 'o', 'n', ' ', 'C', 'C', 'M', 'P', ' ', 'R', 'X'};
+  uint16_t fc;
+  uint32_t hdr_len = WIFI_80211_MGMT_HEADER_BYTES;
+  uint32_t plain_len = 8U + (uint32_t)sizeof(payload);
+  uint32_t frame_len = hdr_len + WIFI_CCMP_HEADER_BYTES + plain_len +
+                       WIFI_CCMP_MIC_BYTES;
+  uint32_t aad_len;
+  int parsed;
+  int ok;
+
+  saved_state = wifi_status_state;
+  memcpy(saved_ptk, wifi_wpa_ptk, sizeof(saved_ptk));
+  memcpy(saved_gtk, wifi_wpa_gtk, sizeof(saved_gtk));
+  memcpy(saved_rx_plain, wifi_ccmp_rx_plain, sizeof(saved_rx_plain));
+  memcpy(saved_rx_payload, wifi_ccmp_rx_payload, sizeof(saved_rx_payload));
+  memcpy(saved_rx_src, wifi_ccmp_rx_src_mac, sizeof(saved_rx_src));
+
+  memset(frame, 0, sizeof(frame));
+  memset(plain, 0, sizeof(plain));
+  memset(wifi_wpa_ptk, 0, sizeof(wifi_wpa_ptk));
+  memcpy(wifi_wpa_ptk + WIFI_WPA_KCK_BYTES + WIFI_WPA_KEK_BYTES, tk,
+         sizeof(tk));
+  wifi_status_state.present = 1;
+  wifi_status_state.driver_ready = 1;
+  wifi_status_state.connect_ready = 1;
+  wifi_status_state.connect_wpa = 1;
+  wifi_status_state.connect_data_ready = 1;
+  wifi_status_state.wpa_key_installed = 1;
+  wifi_status_state.wpa_gtk_key_installed = 1;
+  wifi_status_state.wpa_m4_tx_acked = 1;
+  wifi_connect_copy_mac(wifi_status_state.connect_local_mac, local_mac);
+  wifi_connect_copy_mac(wifi_status_state.connect_bssid, bssid);
+
+  fc = (uint16_t)((WIFI_80211_TYPE_DATA << 2) | WIFI_80211_FC_FROMDS |
+                  WIFI_80211_FC_PROTECTED);
+  wifi_write_le16(frame + 0U, fc);
+  wifi_write_le16(frame + 2U, 0);
+  wifi_connect_copy_mac(frame + 4U, local_mac);
+  wifi_connect_copy_mac(frame + 10U, bssid);
+  wifi_connect_copy_mac(frame + 16U, src_mac);
+  wifi_write_le16(frame + 22U, 0);
+
+  wifi_ccmp_pn_from_u64(0x010203040506ULL, pn);
+  wifi_ccmp_write_header(frame + hdr_len, pn, WIFI_SEC_KEY_PAIRWISE_KEY_ID);
+  plain[0] = 0xaaU;
+  plain[1] = 0xaaU;
+  plain[2] = 0x03U;
+  plain[3] = 0x00U;
+  plain[4] = 0x00U;
+  plain[5] = 0x00U;
+  wifi_write_be16(plain + 6U, 0x88b5U);
+  memcpy(plain + 8U, payload, sizeof(payload));
+
+  aad_len = wifi_ccmp_build_aad(frame, hdr_len, aad, &qos_tid);
+  memset(nonce, 0, sizeof(nonce));
+  nonce[0] = qos_tid;
+  memcpy(nonce + 1U, bssid, sizeof(bssid));
+  memcpy(nonce + 7U, pn, sizeof(pn));
+
+  ok = aes128_ccm_encrypt(tk, nonce, sizeof(nonce), aad, aad_len, plain,
+                          plain_len, frame + hdr_len + WIFI_CCMP_HEADER_BYTES,
+                          frame + hdr_len + WIFI_CCMP_HEADER_BYTES + plain_len,
+                          WIFI_CCMP_MIC_BYTES) == 0;
+  parsed = ok ? wifi_ccmp_parse_protected_data(
+                    frame, frame_len, fc,
+                    (fc & WIFI_80211_FC_SUBTYPE_MASK) >> 4)
+              : 0;
+  ok = ok && parsed && wifi_status_state.ccmp_rx_ready &&
+       wifi_status_state.ccmp_rx_len == sizeof(payload) &&
+       wifi_status_state.ccmp_rx_eth_type == 0x88b5U &&
+       wifi_mac_equal6(wifi_ccmp_rx_src_mac, src_mac) &&
+       memcmp(wifi_ccmp_rx_payload, payload, sizeof(payload)) == 0;
+
+  wifi_status_state = saved_state;
+  memcpy(wifi_wpa_ptk, saved_ptk, sizeof(saved_ptk));
+  memcpy(wifi_wpa_gtk, saved_gtk, sizeof(saved_gtk));
+  memcpy(wifi_ccmp_rx_plain, saved_rx_plain, sizeof(saved_rx_plain));
+  memcpy(wifi_ccmp_rx_payload, saved_rx_payload, sizeof(saved_rx_payload));
+  memcpy(wifi_ccmp_rx_src_mac, saved_rx_src, sizeof(saved_rx_src));
+  return ok ? 0 : -1;
 }
 
 static int wifi_ccmp_build_diag_frame(char *report, size_t report_size) {
@@ -10877,7 +10986,8 @@ int wifi_join(const char *ssid, const char *password, char *report,
 
   snprintf(line, sizeof(line),
            "wifi join: ready link=wifi ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x\n"
-           "next: run net dhcp, then dns raw.githubusercontent.com or update\n",
+           "next: run net dhcp, then dns raw.githubusercontent.com or update; "
+           "wifi online probes this path and wifi update launches the updater\n",
            wifi_status_state.connect_ssid, wifi_status_state.connect_bssid[0],
            wifi_status_state.connect_bssid[1],
            wifi_status_state.connect_bssid[2],

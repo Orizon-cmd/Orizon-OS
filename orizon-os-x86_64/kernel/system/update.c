@@ -14,6 +14,7 @@
 #include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/packages.h"
+#include "../include/rsa.h"
 #include "../include/sched.h"
 #include "../include/sha256.h"
 #include "../include/string.h"
@@ -23,6 +24,7 @@
 #define UPDATE_STATE_PATH "/workspace/.orizon/update-state"
 #define UPDATE_LOG_PATH "/workspace/.orizon/update.log"
 #define UPDATE_MANIFEST_PATH "/workspace/.orizon/update-manifest"
+#define UPDATE_MANIFEST_SIG_PATH "/workspace/.orizon/update-manifest.sig"
 #define UPDATE_PACKAGE_INDEX_PATH "/workspace/.orizon/package-index"
 #define UPDATE_PROOF_PATH "/workspace/.orizon/github-https-manifest"
 #define UPDATE_PROOF_HASH_PATH "/workspace/.orizon/github-https-manifest.sha256"
@@ -31,20 +33,31 @@
 #define UPDATE_ROLLBACK_INFO_PATH "/workspace/.orizon/rollback-info"
 #define UPDATE_BOOT_GUARD_PATH "/workspace/.orizon/boot-guard"
 #define UPDATE_BOOT_GUARD_STATUS_PATH "/system/boot-guard"
+#define UPDATE_KERNEL_CACHE_PATH "/workspace/.orizon/update-kernel.part"
+#define UPDATE_EFI_CACHE_PATH "/workspace/.orizon/update-efi.part"
+#define UPDATE_LIMINE_CACHE_PATH "/workspace/.orizon/update-limine.part"
+#define UPDATE_LIMINE_NORMAL_PATH "/workspace/.orizon/update-limine.normal"
+#define UPDATE_LIMINE_FALLBACK_PATH "/workspace/.orizon/update-limine.fallback"
 #define SYSTEM_STATE_PATH "/system/update-state"
 #define SYSTEM_SOURCE_PATH "/system/update-source"
 #define SYSTEM_MANIFEST_PATH "/system/update-manifest"
+#define SYSTEM_MANIFEST_SIG_PATH "/system/update-manifest.sig"
 #define UPDATE_SOURCE "https://github.com/Orizon-cmd/Orizon-OS"
 #define UPDATE_CHANNEL "main"
 #define UPDATE_RAW_HOST "raw.githubusercontent.com"
 #define UPDATE_RAW_PREFIX "/Orizon-cmd/Orizon-OS/main/"
 #define UPDATE_MANIFEST_REMOTE "updates/x86_64/manifest.txt"
+#define UPDATE_MANIFEST_SIG_REMOTE "updates/x86_64/manifest.sig"
+#define UPDATE_MANIFEST_SIGNING_KEY_ID "orizon-update-root-2026-05"
 #define UPDATE_PACKAGE_SOURCE "https://github.com/Orizon-cmd/Orizon-Packages"
 #define UPDATE_PACKAGE_RAW_PREFIX "/Orizon-cmd/Orizon-Packages/main/"
 #define UPDATE_PACKAGE_INDEX_REMOTE "packages/x86_64/index.txt"
 #define UPDATE_CHUNK_BYTES 65536U
 #define UPDATE_RANGE_RETRIES 5U
 #define UPDATE_MANIFEST_MAX 4096U
+#define UPDATE_MANIFEST_SIG_MAX 1024U
+#define UPDATE_MANIFEST_SIG_BYTES 256U
+#define UPDATE_BOOT_GUARD_ATTEMPTS 2U
 #define UPDATE_PACKAGE_INDEX_MAX 8192U
 #define UPDATE_PACKAGE_MAX (48U * 1024U)
 #define UPDATE_PACKAGE_MAX_ENTRIES 16U
@@ -82,17 +95,51 @@ typedef struct {
   size_t limine_size;
 } update_manifest_t;
 
+typedef struct {
+  char key_id[64];
+  char manifest_sha256[SHA256_HEX_SIZE];
+  uint8_t signature[UPDATE_MANIFEST_SIG_BYTES];
+} update_manifest_signature_t;
+
 static const char *update_status_text = "update: not run";
 static char update_manifest_text[UPDATE_MANIFEST_MAX];
+static char update_manifest_sig_text[UPDATE_MANIFEST_SIG_MAX];
 static char update_package_index_text[UPDATE_PACKAGE_INDEX_MAX];
 static char update_installed_db_text[UPDATE_INSTALLED_DB_MAX];
 static uint8_t update_package_blob[UPDATE_PACKAGE_MAX] __attribute__((aligned(4096)));
 static uint8_t update_kernel[UPDATE_KERNEL_MAX] __attribute__((aligned(4096)));
 static uint8_t update_efi[UPDATE_EFI_MAX] __attribute__((aligned(4096)));
 static char update_limine_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
+static char update_limine_guard_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
+static char update_limine_fallback_conf[UPDATE_CONF_MAX] __attribute__((aligned(4096)));
 static uint8_t update_chunk[UPDATE_CHUNK_BYTES] __attribute__((aligned(4096)));
 static orizon_update_progress_fn update_progress_fn = NULL;
 static void *update_progress_ctx = NULL;
+
+static const uint8_t update_manifest_root_n[UPDATE_MANIFEST_SIG_BYTES] = {
+    0xa7, 0xa0, 0x07, 0xe2, 0x31, 0x2f, 0x12, 0x03, 0x11, 0x85, 0x97, 0x24,
+    0xf6, 0xca, 0x3b, 0x77, 0x13, 0xdd, 0x75, 0xdc, 0x23, 0xca, 0x09, 0x45,
+    0xca, 0xe6, 0xc4, 0x71, 0x83, 0x84, 0xae, 0x63, 0x31, 0x98, 0xe9, 0x8c,
+    0x32, 0x94, 0x6c, 0xcc, 0xb6, 0x59, 0x7e, 0xab, 0x0f, 0x0d, 0xfd, 0xc3,
+    0x50, 0x9f, 0x79, 0x53, 0xef, 0x66, 0x5d, 0x1b, 0x58, 0x1f, 0xde, 0x1c,
+    0x1d, 0x5f, 0x4e, 0xdc, 0xad, 0xda, 0x1f, 0xc6, 0x5c, 0x66, 0x11, 0x36,
+    0x2d, 0x03, 0x3a, 0xd9, 0xd8, 0xb5, 0x95, 0x9c, 0xe9, 0x25, 0x15, 0x7e,
+    0xd3, 0x84, 0x9a, 0x6a, 0xb7, 0x2c, 0x5e, 0xb8, 0x55, 0x81, 0xb9, 0xc5,
+    0xc5, 0x47, 0x63, 0x63, 0x8a, 0xd9, 0x8d, 0xcf, 0x4f, 0x11, 0x35, 0xee,
+    0xeb, 0x9d, 0x73, 0xf8, 0x37, 0x73, 0x22, 0x4f, 0xfc, 0x4e, 0xa4, 0xbb,
+    0xc7, 0x9c, 0xd3, 0x6e, 0x66, 0xf3, 0x12, 0x60, 0x1d, 0xcd, 0x66, 0x14,
+    0x30, 0x1b, 0x37, 0xc8, 0x2c, 0xe1, 0xe2, 0x7b, 0x78, 0x9f, 0xea, 0xc9,
+    0xf2, 0x81, 0x8e, 0x5d, 0x15, 0xcf, 0x3b, 0x6a, 0x78, 0xf2, 0x1a, 0xfc,
+    0x06, 0x0a, 0x53, 0x48, 0x03, 0x35, 0x6c, 0x43, 0x79, 0xfe, 0xba, 0xad,
+    0xaa, 0xf0, 0x6c, 0x89, 0x61, 0x2c, 0x46, 0x44, 0xab, 0x96, 0x5a, 0x5b,
+    0x5f, 0xf1, 0x37, 0x15, 0x29, 0x07, 0x99, 0xef, 0x1a, 0xab, 0xaf, 0xb2,
+    0x6b, 0xf7, 0x70, 0x7b, 0x0d, 0xa9, 0xd2, 0x7d, 0x81, 0x15, 0x62, 0x2c,
+    0x53, 0x77, 0x0f, 0xb5, 0x09, 0x5c, 0xd8, 0x10, 0x01, 0xee, 0x91, 0xae,
+    0x7d, 0x2c, 0xdf, 0xe6, 0x56, 0x03, 0x19, 0x48, 0x46, 0x93, 0xad, 0xef,
+    0x94, 0xbb, 0xfc, 0x2b, 0x36, 0xd4, 0x0e, 0x4d, 0x94, 0x5a, 0x25, 0xce,
+    0x61, 0x76, 0x16, 0x11, 0x47, 0x5e, 0x97, 0xa0, 0x85, 0xbf, 0x9d, 0xa8,
+    0x10, 0x87, 0x7e, 0x87,
+};
 
 static const char rollback_limine_entry[] =
     "\n"
@@ -167,6 +214,32 @@ static void update_write_blob(const char *path, const void *data, size_t size) {
     vfs_write(f, data, size);
   }
   vfs_close(f);
+}
+
+static int update_read_blob(const char *path, void *buf, size_t cap,
+                            size_t *out_len) {
+  file_t *f;
+  size_t used = 0;
+  ssize_t n = 0;
+
+  if (!path || !buf || cap == 0) {
+    return -1;
+  }
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    return -1;
+  }
+  while (used < cap && (n = vfs_read(f, (uint8_t *)buf + used, cap - used)) > 0) {
+    used += (size_t)n;
+  }
+  vfs_close(f);
+  if (n < 0) {
+    return -1;
+  }
+  if (out_len) {
+    *out_len = used;
+  }
+  return 0;
 }
 
 static int update_read_file(const char *path, char *buf, size_t cap,
@@ -302,6 +375,7 @@ static int update_installed_marker_present(void) {
 }
 
 static int sha256_text_valid(const char *text);
+static int parse_size_value(const char *text, size_t *out);
 static int manifest_copy_value(const char *manifest, const char *key, char *out,
                                size_t out_size);
 
@@ -318,6 +392,79 @@ static int append_limine_rollback_entry(char *conf, size_t cap) {
     return -1;
   }
   snprintf(conf + used, cap - used, "%s", rollback_limine_entry);
+  return 0;
+}
+
+static unsigned limine_entry_index_named(const char *conf, const char *name) {
+  const char *p = conf;
+  unsigned index = 0;
+
+  if (!conf || !name) {
+    return 0;
+  }
+  while (*p) {
+    const char *line = p;
+    size_t len = 0;
+    while (p[len] && p[len] != '\n' && p[len] != '\r') {
+      len++;
+    }
+    if (len > 1 && line[0] == '/') {
+      index++;
+      if (strlen(name) == len - 1 && strncmp(line + 1, name, len - 1) == 0) {
+        return index;
+      }
+    }
+    p += len;
+    while (*p == '\n' || *p == '\r') {
+      p++;
+    }
+  }
+  return 0;
+}
+
+static int limine_write_default_entry(const char *src, char *dst, size_t cap,
+                                      unsigned default_entry) {
+  const char *p = src;
+  size_t out = 0;
+  char line[48];
+  int wrote_default = 0;
+
+  if (!src || !dst || cap == 0 || default_entry == 0) {
+    return -1;
+  }
+
+  snprintf(line, sizeof(line), "default_entry: %lu\n",
+           (unsigned long)default_entry);
+  if (strlen(line) + 1 >= cap) {
+    return -1;
+  }
+  memcpy(dst, line, strlen(line));
+  out = strlen(line);
+  wrote_default = 1;
+
+  while (*p) {
+    const char *line_start = p;
+    size_t len = 0;
+    while (p[len] && p[len] != '\n' && p[len] != '\r') {
+      len++;
+    }
+    if (!(len >= 14 && strncmp(line_start, "default_entry:", 14) == 0)) {
+      if (out + len + 2 >= cap) {
+        return -1;
+      }
+      memcpy(dst + out, line_start, len);
+      out += len;
+      dst[out++] = '\n';
+    }
+    p += len;
+    while (*p == '\n' || *p == '\r') {
+      p++;
+    }
+  }
+  if (!wrote_default || out >= cap) {
+    return -1;
+  }
+  dst[out] = '\0';
   return 0;
 }
 
@@ -343,9 +490,57 @@ static void update_boot_guard_write(const char *text) {
   update_write_blob(UPDATE_BOOT_GUARD_STATUS_PATH, text, strlen(text));
 }
 
+static unsigned update_boot_guard_attempts_left(const char *guard) {
+  char value[24];
+  size_t attempts = UPDATE_BOOT_GUARD_ATTEMPTS;
+
+  if (guard && manifest_copy_value(guard, "attempts-left", value,
+                                   sizeof(value)) == 0 &&
+      parse_size_value(value, &attempts) == 0) {
+    if (attempts > UPDATE_BOOT_GUARD_ATTEMPTS) {
+      attempts = UPDATE_BOOT_GUARD_ATTEMPTS;
+    }
+    return (unsigned)attempts;
+  }
+  return UPDATE_BOOT_GUARD_ATTEMPTS;
+}
+
+static int update_boot_guard_install_limine_config(const char *path,
+                                                   const char *label) {
+  size_t conf_len = 0;
+  static char install_report[1024];
+  char line[192];
+
+  if (!path || !label ||
+      update_read_blob(path, update_limine_guard_conf,
+                       sizeof(update_limine_guard_conf) - 1,
+                       &conf_len) != 0 ||
+      conf_len == 0 || conf_len >= sizeof(update_limine_guard_conf)) {
+    snprintf(line, sizeof(line),
+             "boot-guard: %s Limine config unavailable", label);
+    update_append_log(line);
+    return -1;
+  }
+
+  update_limine_guard_conf[conf_len] = '\0';
+  install_report[0] = '\0';
+  if (orizon_install_update_limine_config(update_limine_guard_conf, conf_len,
+                                          install_report,
+                                          sizeof(install_report)) != 0) {
+    snprintf(line, sizeof(line),
+             "boot-guard: %s Limine config install failed", label);
+    update_append_log(line);
+    return -1;
+  }
+  snprintf(line, sizeof(line), "boot-guard: %s Limine config installed",
+           label);
+  update_append_log(line);
+  return 0;
+}
+
 static void update_boot_guard_arm(const update_manifest_t *manifest,
                                   const char *rollback_hash) {
-  char guard[768];
+  char guard[900];
 
   if (!manifest || !rollback_hash || !sha256_text_valid(rollback_hash)) {
     return;
@@ -359,13 +554,15 @@ static void update_boot_guard_arm(const update_manifest_t *manifest,
            "updated-commit %s\n"
            "expected-kernel-sha256 %s\n"
            "rollback-kernel-sha256 %s\n"
-           "action reboot-and-auto-validate\n",
+           "attempts-left %lu\n"
+           "action boot-count-shell-validation\n",
            UPDATE_SOURCE, UPDATE_CHANNEL, manifest->version, manifest->commit,
-           manifest->kernel_sha256, rollback_hash);
+           manifest->kernel_sha256, rollback_hash,
+           (unsigned long)UPDATE_BOOT_GUARD_ATTEMPTS);
   update_boot_guard_write(guard);
   update_write_line(UPDATE_ROLLBACK_STATE_PATH,
                     "rollback available: update pending boot validation");
-  update_append_log("boot-guard: armed pending updated boot validation");
+  update_append_log("boot-guard: armed pending updated boot validation with boot-count");
 }
 
 static void update_boot_guard_mark_current(const update_manifest_t *manifest) {
@@ -422,18 +619,48 @@ static void update_boot_guard_write_state(const char *state,
   update_append_log(detail ? detail : "boot-guard: state updated");
 }
 
+static void update_boot_guard_write_testing(unsigned attempts_left,
+                                            const char *detail,
+                                            const char *current_hash,
+                                            const char *expected_hash,
+                                            const char *rollback_hash,
+                                            int fallback_armed) {
+  char guard[1000];
+
+  snprintf(guard, sizeof(guard),
+           "boot-guard-version 1\n"
+           "state testing\n"
+           "detail %s\n"
+           "current-kernel-sha256 %s\n"
+           "expected-kernel-sha256 %s\n"
+           "rollback-kernel-sha256 %s\n"
+           "attempts-left %lu\n"
+           "fallback-armed %s\n"
+           "action validate-at-shell-ready\n",
+           detail ? detail : "boot-guard: updated kernel entered Orizon",
+           current_hash ? current_hash : "unknown",
+           expected_hash ? expected_hash : "unknown",
+           rollback_hash ? rollback_hash : "unknown",
+           (unsigned long)attempts_left,
+           fallback_armed ? "yes" : "no");
+  update_boot_guard_write(guard);
+  update_append_log(detail ? detail : "boot-guard: updated kernel testing");
+}
+
 void orizon_update_boot_guard_check(void) {
   char guard[1024];
   char state[32];
   char expected_hash[SHA256_HEX_SIZE];
   char rollback_hash[SHA256_HEX_SIZE];
   char current_hash[SHA256_HEX_SIZE];
+  unsigned attempts_left = UPDATE_BOOT_GUARD_ATTEMPTS;
+  int fallback_armed = 0;
   static char rollback_report[4096];
 
   if (!update_installed_marker_present() ||
       update_read_file(UPDATE_BOOT_GUARD_PATH, guard, sizeof(guard), NULL) < 0 ||
       manifest_copy_value(guard, "state", state, sizeof(state)) < 0 ||
-      strcmp(state, "pending") != 0) {
+      (strcmp(state, "pending") != 0 && strcmp(state, "testing") != 0)) {
     return;
   }
 
@@ -483,13 +710,24 @@ void orizon_update_boot_guard_check(void) {
   }
 
   if (hex_equal(current_hash, expected_hash)) {
-    update_boot_guard_write_state(
-        "validated",
-        "boot-guard: updated kernel reached the Orizon shell",
-        current_hash, expected_hash, rollback_hash);
+    attempts_left = update_boot_guard_attempts_left(guard);
+    if (attempts_left > 0) {
+      attempts_left--;
+    }
+    fallback_armed =
+        (update_boot_guard_install_limine_config(UPDATE_LIMINE_FALLBACK_PATH,
+                                                 "fallback") == 0);
+    update_boot_guard_write_testing(
+        attempts_left,
+        fallback_armed
+            ? "boot-guard: updated kernel entered Orizon; rollback fallback armed until shell is ready"
+            : "boot-guard: updated kernel entered Orizon; rollback fallback arm failed",
+        current_hash, expected_hash, rollback_hash, fallback_armed);
     update_write_line(
         UPDATE_ROLLBACK_STATE_PATH,
-        "rollback available: updated boot validated; run rollback if needed");
+        fallback_armed
+            ? "rollback armed: updated boot testing; fallback default will run if shell is not reached"
+            : "rollback available: updated boot testing; fallback config could not be armed");
     vfs_persist_save();
     return;
   }
@@ -507,6 +745,58 @@ void orizon_update_boot_guard_check(void) {
       "unexpected-payload",
       "boot-guard: booted kernel does not match update or rollback hash",
       current_hash, expected_hash, rollback_hash);
+  vfs_persist_save();
+}
+
+void orizon_update_boot_guard_shell_ready(void) {
+  char guard[1024];
+  char state[32];
+  char expected_hash[SHA256_HEX_SIZE];
+  char rollback_hash[SHA256_HEX_SIZE];
+  char current_hash[SHA256_HEX_SIZE];
+
+  if (!update_installed_marker_present() ||
+      update_read_file(UPDATE_BOOT_GUARD_PATH, guard, sizeof(guard), NULL) < 0 ||
+      manifest_copy_value(guard, "state", state, sizeof(state)) < 0 ||
+      (strcmp(state, "pending") != 0 && strcmp(state, "testing") != 0)) {
+    return;
+  }
+
+  if (manifest_copy_value(guard, "expected-kernel-sha256", expected_hash,
+                          sizeof(expected_hash)) < 0 ||
+      manifest_copy_value(guard, "rollback-kernel-sha256", rollback_hash,
+                          sizeof(rollback_hash)) < 0 ||
+      !sha256_text_valid(expected_hash) ||
+      !sha256_text_valid(rollback_hash) || !boot_payloads_ready()) {
+    return;
+  }
+
+  sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
+                    current_hash);
+  if (!hex_equal(current_hash, expected_hash)) {
+    return;
+  }
+
+  if (update_boot_guard_install_limine_config(UPDATE_LIMINE_NORMAL_PATH,
+                                              "normal") != 0) {
+    update_boot_guard_write_state(
+        "restore-normal-failed",
+        "boot-guard: updated kernel reached shell but normal boot restore failed",
+        current_hash, expected_hash, rollback_hash);
+    update_write_line(
+        UPDATE_ROLLBACK_STATE_PATH,
+        "rollback default remains armed: updated shell reached but normal boot restore failed");
+    vfs_persist_save();
+    return;
+  }
+
+  update_boot_guard_write_state(
+      "validated",
+      "boot-guard: updated kernel reached shell; normal boot restored",
+      current_hash, expected_hash, rollback_hash);
+  update_write_line(
+      UPDATE_ROLLBACK_STATE_PATH,
+      "rollback available: updated boot validated; run rollback if needed");
   vfs_persist_save();
 }
 
@@ -557,6 +847,11 @@ int orizon_update_boot_guard_confirm(char *report, size_t report_size) {
   }
   sha256_buffer_hex(boot_kernel_image(), boot_kernel_image_size(),
                     current_hash);
+  if (update_boot_guard_install_limine_config(UPDATE_LIMINE_NORMAL_PATH,
+                                              "normal") != 0) {
+    append_report(report, report_size,
+                  "bootguard: current boot confirmed, but normal boot config restore failed");
+  }
   update_boot_guard_write_state(
       "validated-manual",
       "boot-guard: current boot manually confirmed by operator",
@@ -639,6 +934,96 @@ static int sha256_text_valid(const char *text) {
     }
   }
   return 1;
+}
+
+static int hex_nibble(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return c - 'a' + 10;
+  }
+  if (c >= 'A' && c <= 'F') {
+    return c - 'A' + 10;
+  }
+  return -1;
+}
+
+static int hex_decode_exact(const char *text, uint8_t *out, size_t out_len) {
+  if (!text || !out || strlen(text) != out_len * 2U) {
+    return -1;
+  }
+  for (size_t i = 0; i < out_len; i++) {
+    int hi = hex_nibble(text[i * 2U]);
+    int lo = hex_nibble(text[i * 2U + 1U]);
+    if (hi < 0 || lo < 0) {
+      return -1;
+    }
+    out[i] = (uint8_t)((hi << 4) | lo);
+  }
+  return 0;
+}
+
+static int parse_manifest_signature(const char *text,
+                                    update_manifest_signature_t *sig) {
+  char signature_hex[UPDATE_MANIFEST_SIG_BYTES * 2U + 1U];
+
+  if (!text || !sig || !strstr(text, "signature-version 1") ||
+      !strstr(text, "algorithm rsa-pkcs1-sha256")) {
+    return -1;
+  }
+  memset(sig, 0, sizeof(*sig));
+  if (manifest_copy_value(text, "key-id", sig->key_id,
+                          sizeof(sig->key_id)) < 0 ||
+      manifest_copy_value(text, "manifest-sha256", sig->manifest_sha256,
+                          sizeof(sig->manifest_sha256)) < 0 ||
+      manifest_copy_value(text, "signature", signature_hex,
+                          sizeof(signature_hex)) < 0) {
+    return -1;
+  }
+  if (strcmp(sig->key_id, UPDATE_MANIFEST_SIGNING_KEY_ID) != 0 ||
+      !sha256_text_valid(sig->manifest_sha256) ||
+      hex_decode_exact(signature_hex, sig->signature,
+                       sizeof(sig->signature)) != 0) {
+    return -1;
+  }
+  return 0;
+}
+
+static int verify_update_manifest_signature(const char *manifest,
+                                            size_t manifest_len,
+                                            const char *sig_text,
+                                            const char *manifest_hash,
+                                            char *report,
+                                            size_t report_size) {
+  update_manifest_signature_t sig;
+  uint8_t digest[SHA256_DIGEST_SIZE];
+  char line[192];
+
+  if (!manifest || !sig_text || !manifest_hash ||
+      parse_manifest_signature(sig_text, &sig) != 0) {
+    append_report(report, report_size,
+                  "update: invalid manifest signature metadata");
+    return -1;
+  }
+  if (!hex_equal(sig.manifest_sha256, manifest_hash)) {
+    append_report(report, report_size,
+                  "update: manifest signature hash mismatch");
+    return -1;
+  }
+  sha256_buffer(manifest, manifest_len, digest);
+  if (rsa_pkcs1v15_sha256_verify(sig.signature, sizeof(sig.signature), digest,
+                                 update_manifest_root_n,
+                                 sizeof(update_manifest_root_n)) != 0) {
+    append_report(report, report_size,
+                  "update: manifest signature verification failed");
+    return -1;
+  }
+  snprintf(line, sizeof(line), "Manifest signature verified key-id=%s",
+           sig.key_id);
+  append_report(report, report_size, line);
+  update_append_log(line);
+  return 0;
 }
 
 static int update_token_safe(const char *text) {
@@ -910,30 +1295,83 @@ static int download_range_prefixed(const char *prefix, const char *relative,
                                   out_cap, out_len, diag, diag_cap);
 }
 
-static int download_range_path(const char *relative, uint64_t start,
-                               uint64_t end, void *out, size_t out_cap,
-                               size_t *out_len, char *diag,
-                               size_t diag_cap) {
-  return download_range_prefixed(UPDATE_RAW_PREFIX, relative, start, end, out,
-                                 out_cap, out_len, diag, diag_cap);
+static int download_text_with_retries(const char *label, const char *prefix,
+                                      const char *relative, void *out,
+                                      size_t out_cap, size_t *out_len,
+                                      char *diag, size_t diag_cap) {
+  char line[224];
+  size_t got = 0;
+  int rc = -1;
+
+  if (!label || !relative || !out || out_cap == 0 || !out_len) {
+    return -1;
+  }
+  for (unsigned attempt = 1; attempt <= UPDATE_RANGE_RETRIES; attempt++) {
+    got = 0;
+    if (diag && diag_cap > 0) {
+      diag[0] = '\0';
+    }
+    rc = download_range_prefixed(prefix, relative, 0, (uint64_t)(out_cap - 1),
+                                 out, out_cap, &got, diag, diag_cap);
+    if (rc == 0 && got > 0 && got < out_cap) {
+      *out_len = got;
+      return 0;
+    }
+    snprintf(line, sizeof(line),
+             "update: retry %lu/%lu for %s manifest/index rc=%d got=%lu %s",
+             (unsigned long)attempt, (unsigned long)UPDATE_RANGE_RETRIES,
+             label, rc, (unsigned long)got,
+             (diag && diag[0]) ? diag : "");
+    update_append_log(line);
+  }
+  *out_len = got;
+  return rc ? rc : -1;
 }
 
 static int download_verified_blob(const char *label, const char *prefix,
                                   const char *relative, size_t expected_size,
                                   const char *expected_hash, void *dst,
-                                  size_t dst_cap, char *report,
-                                  size_t report_size) {
+                                  size_t dst_cap, const char *cache_path,
+                                  char *report, size_t report_size) {
   size_t done = 0;
   char line[224];
   char diag[192];
   char actual_hash[SHA256_HEX_SIZE];
   unsigned next_percent = 0;
   uint64_t started_ticks = timer_ticks();
+  size_t cached = 0;
 
   if (!relative || !expected_hash || !dst || expected_size == 0 ||
       expected_size > dst_cap) {
     append_report(report, report_size, "update: invalid manifest artifact");
     return -1;
+  }
+
+  if (cache_path && update_read_blob(cache_path, dst, dst_cap, &cached) == 0 &&
+      cached > 0) {
+    if (cached == expected_size) {
+      sha256_buffer_hex(dst, expected_size, actual_hash);
+      if (hex_equal(actual_hash, expected_hash)) {
+        snprintf(line, sizeof(line), "%s reused cached sha256 %s", label,
+                 actual_hash);
+        append_report(report, report_size, line);
+        update_append_log(line);
+        return 0;
+      }
+      update_append_log("update: cached artifact hash mismatch, refetching");
+      update_write_blob(cache_path, "", 0);
+      cached = 0;
+    } else if (cached < expected_size) {
+      done = cached;
+      snprintf(line, sizeof(line), "Resume: %s from %lu/%lu bytes", label,
+               (unsigned long)done, (unsigned long)expected_size);
+      append_report(report, report_size, line);
+      update_append_log(line);
+      goto ranged_chunks;
+    } else {
+      update_write_blob(cache_path, "", 0);
+      cached = 0;
+    }
   }
 
   snprintf(line, sizeof(line), "Downloading %s (%lu bytes)", label,
@@ -966,6 +1404,7 @@ static int download_verified_blob(const char *label, const char *prefix,
                 "update: fast download fallback to ranged chunks");
   done = 0;
 
+ranged_chunks:
   while (done < expected_size) {
     size_t wanted = expected_size - done;
     size_t got = 0;
@@ -1007,6 +1446,9 @@ static int download_verified_blob(const char *label, const char *prefix,
     }
     memcpy((uint8_t *)dst + done, update_chunk, got);
     done += got;
+    if (cache_path) {
+      update_write_blob(cache_path, dst, done);
+    }
 
     if (update_progress_fn) {
       unsigned percent =
@@ -1033,12 +1475,18 @@ verify_hash:
     update_append_log(line);
     snprintf(line, sizeof(line), "actual   %s", actual_hash);
     update_append_log(line);
+    if (cache_path) {
+      update_write_blob(cache_path, "", 0);
+    }
     return -3;
   }
 
   snprintf(line, sizeof(line), "%s verified sha256 %s", label, actual_hash);
   append_report(report, report_size, line);
   update_append_log(line);
+  if (cache_path) {
+    update_write_blob(cache_path, dst, expected_size);
+  }
   append_timing(report, report_size, label, started_ticks);
   return 0;
 }
@@ -1047,9 +1495,17 @@ static int download_artifact(const char *label, const char *relative,
                              size_t expected_size, const char *expected_hash,
                              void *dst, size_t dst_cap, char *report,
                              size_t report_size) {
+  const char *cache_path = NULL;
+  if (strcmp(label, "kernel.elf") == 0) {
+    cache_path = UPDATE_KERNEL_CACHE_PATH;
+  } else if (strcmp(label, "BOOTX64.EFI") == 0) {
+    cache_path = UPDATE_EFI_CACHE_PATH;
+  } else if (strcmp(label, "limine.conf") == 0) {
+    cache_path = UPDATE_LIMINE_CACHE_PATH;
+  }
   return download_verified_blob(label, UPDATE_RAW_PREFIX, relative,
                                 expected_size, expected_hash, dst, dst_cap,
-                                report, report_size);
+                                cache_path, report, report_size);
 }
 
 static int update_install_remote_packages(char *report, size_t report_size) {
@@ -1067,12 +1523,11 @@ static int update_install_remote_packages(char *report, size_t report_size) {
   append_report(report, report_size,
                 "[6/8] Checking Orizon package repository");
   append_report(report, report_size, "Package source: " UPDATE_PACKAGE_SOURCE);
-  if (download_range_prefixed(UPDATE_PACKAGE_RAW_PREFIX,
-                              UPDATE_PACKAGE_INDEX_REMOTE, 0,
-                              UPDATE_PACKAGE_INDEX_MAX - 2,
-                              update_package_index_text,
-                              sizeof(update_package_index_text) - 1,
-                              &index_len, line, sizeof(line)) != 0 ||
+  if (download_text_with_retries("package-index", UPDATE_PACKAGE_RAW_PREFIX,
+                                 UPDATE_PACKAGE_INDEX_REMOTE,
+                                 update_package_index_text,
+                                 sizeof(update_package_index_text) - 1,
+                                 &index_len, line, sizeof(line)) != 0 ||
       index_len == 0) {
     update_set_state("update: blocked - package index download failed");
     append_report(report, report_size, "update: package index download failed");
@@ -1116,7 +1571,7 @@ static int update_install_remote_packages(char *report, size_t report_size) {
     if (download_verified_blob(entry->name, UPDATE_PACKAGE_RAW_PREFIX,
                                entry->path, entry->size, entry->sha256,
                                update_package_blob, sizeof(update_package_blob),
-                               report, report_size) < 0) {
+                               NULL, report, report_size) < 0) {
       update_set_state("update: blocked - package download failed");
       return -3;
     }
@@ -1146,6 +1601,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   char rollback_hash[SHA256_HEX_SIZE];
   char current_efi_hash[SHA256_HEX_SIZE];
   size_t manifest_len = 0;
+  size_t manifest_sig_len = 0;
   char update_text[512];
   char rollback_text[512];
   uint64_t total_started_ticks = timer_ticks();
@@ -1223,10 +1679,11 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   update_append_log(net_line);
 
   update_set_state("update: downloading github manifest");
-  if (download_range_path(UPDATE_MANIFEST_REMOTE, 0, UPDATE_MANIFEST_MAX - 2,
-                          update_manifest_text,
-                          sizeof(update_manifest_text) - 1, &manifest_len,
-                          net_line, sizeof(net_line)) != 0 ||
+  if (download_text_with_retries("github-manifest", UPDATE_RAW_PREFIX,
+                                 UPDATE_MANIFEST_REMOTE, update_manifest_text,
+                                 sizeof(update_manifest_text) - 1,
+                                 &manifest_len, net_line,
+                                 sizeof(net_line)) != 0 ||
       manifest_len == 0) {
     update_set_state("update: blocked - manifest download failed");
     append_report(report, report_size, "[4/8] GitHub manifest download failed");
@@ -1247,6 +1704,34 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   sha256_buffer_hex(update_manifest_text, manifest_len, manifest_hash);
   update_write_blob(UPDATE_PROOF_PATH, update_manifest_text, manifest_len);
   update_write_line(UPDATE_PROOF_HASH_PATH, manifest_hash);
+  if (download_text_with_retries("github-manifest-signature", UPDATE_RAW_PREFIX,
+                                 UPDATE_MANIFEST_SIG_REMOTE,
+                                 update_manifest_sig_text,
+                                 sizeof(update_manifest_sig_text) - 1,
+                                 &manifest_sig_len, net_line,
+                                 sizeof(net_line)) != 0 ||
+      manifest_sig_len == 0) {
+    update_set_state("update: blocked - manifest signature download failed");
+    append_report(report, report_size,
+                  "[4/8] GitHub manifest signature download failed");
+    if (net_line[0]) {
+      append_report(report, report_size, net_line);
+    }
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -4;
+  }
+  update_manifest_sig_text[manifest_sig_len] = '\0';
+  if (verify_update_manifest_signature(update_manifest_text, manifest_len,
+                                       update_manifest_sig_text, manifest_hash,
+                                       report, report_size) != 0) {
+    update_set_state("update: blocked - manifest signature invalid");
+    vfs_persist_save();
+    sched_set_process_state("update-manager", SCHED_SLEEPING);
+    sched_enter_process("gui-shell");
+    return -4;
+  }
   if (parse_update_manifest(update_manifest_text, &manifest) < 0) {
     update_set_state("update: blocked - invalid manifest");
     append_report(report, report_size, "[4/8] Invalid GitHub update manifest");
@@ -1257,6 +1742,10 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   }
   update_write_blob(UPDATE_MANIFEST_PATH, update_manifest_text, manifest_len);
   update_write_blob(SYSTEM_MANIFEST_PATH, update_manifest_text, manifest_len);
+  update_write_blob(UPDATE_MANIFEST_SIG_PATH, update_manifest_sig_text,
+                    manifest_sig_len);
+  update_write_blob(SYSTEM_MANIFEST_SIG_PATH, update_manifest_sig_text,
+                    manifest_sig_len);
   snprintf(line, sizeof(line), "[4/8] Manifest %s commit %s",
            manifest.version, manifest.commit);
   append_report(report, report_size, line);
@@ -1325,6 +1814,35 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     sched_set_process_state("update-manager", SCHED_SLEEPING);
     sched_enter_process("gui-shell");
     return -5;
+  }
+  {
+    unsigned rollback_entry =
+        limine_entry_index_named(update_limine_conf, "Orizon OS Rollback");
+    size_t normal_len = 0;
+    size_t fallback_len = 0;
+
+    if (rollback_entry == 0 ||
+        limine_write_default_entry(update_limine_conf, update_limine_guard_conf,
+                                   sizeof(update_limine_guard_conf), 1) != 0 ||
+        limine_write_default_entry(update_limine_conf,
+                                   update_limine_fallback_conf,
+                                   sizeof(update_limine_fallback_conf),
+                                   rollback_entry) != 0) {
+      update_set_state("update: blocked - boot guard config failed");
+      append_report(report, report_size,
+                    "update: cannot prepare boot-count rollback configs");
+      vfs_persist_save();
+      sched_set_process_state("update-manager", SCHED_SLEEPING);
+      sched_enter_process("gui-shell");
+      return -5;
+    }
+    normal_len = strlen(update_limine_guard_conf);
+    fallback_len = strlen(update_limine_fallback_conf);
+    memcpy(update_limine_conf, update_limine_guard_conf, normal_len + 1);
+    update_write_blob(UPDATE_LIMINE_NORMAL_PATH, update_limine_guard_conf,
+                      normal_len);
+    update_write_blob(UPDATE_LIMINE_FALLBACK_PATH,
+                      update_limine_fallback_conf, fallback_len);
   }
 
   if (update_install_remote_packages(report, report_size) < 0) {

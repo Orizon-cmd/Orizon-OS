@@ -108,10 +108,13 @@ After a boot-payload update, Orizon writes a boot guard marker:
 /system/boot-guard
 ```
 
-The next installed boot auto-validates the updated kernel once it reaches the
-console. If the rollback Limine entry is selected while an update is pending,
-Orizon treats that as a recovery boot and attempts to restore the rollback
-payload as the main boot slot. Inspect it with:
+The next installed boot first arms a fallback Limine default to the rollback
+entry, then auto-validates the updated kernel only once it reaches the console.
+After validation Orizon restores the normal Limine default. If the refreshed
+kernel fails after early Orizon boot but before the console, the next default
+boot selects rollback. If the rollback Limine entry is selected while an update
+is pending, Orizon treats that as a recovery boot and attempts to restore the
+rollback payload as the main boot slot. Inspect it with:
 
 ```text
 bootguard
@@ -187,8 +190,8 @@ The installer can now partition and install to AHCI/SATA disks or NVMe
 namespaces with 512-byte LBAs. It can also create an installed dual-boot flow
 when a prepared partition already exists beside Windows/Linux. It is still
 intentionally narrow: no automatic NVRAM/BCD entry creation, no automatic
-shrink/create of an Orizon data partition yet, and no automatic boot-count
-recovery yet.
+shrink/create of an Orizon data partition yet, and no firmware-level boot-count
+recovery before the Orizon kernel starts.
 
 ## Next Kernel Layers
 

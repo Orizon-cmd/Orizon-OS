@@ -21,13 +21,15 @@ le developpement noyau:
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
 - pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
   Ethernet Intel e1000/e1000e, Realtek RTL8139, VirtIO-net pour Proxmox/QEMU,
-  et detection stage-0 du Wi-Fi Intel CNVi
+  chemin paquet USB Ethernet xHCI pour CDC-ECM brut et Realtek RTL815x, et
+  detection stage-0 du Wi-Fi Intel CNVi
 - commande `update` interne, disponible seulement apres installation disque,
   qui telecharge le manifeste GitHub, verifie les artefacts SHA-256 et reecrit
   soit l'ESP Orizon complet, soit uniquement `/EFI/Orizon` en dual boot data
-- garde de boot post-update: Orizon arme un etat `pending`, valide
-  automatiquement le nouveau kernel quand il atteint le shell, et expose
-  `bootguard` pour voir ou confirmer l'etat de validation
+- garde de boot post-update: Orizon arme un etat `pending`, bascule
+  temporairement le default Limine vers le rollback pendant le boot de test,
+  valide automatiquement le nouveau kernel quand il atteint le shell, puis
+  expose `bootguard` pour voir ou confirmer l'etat de validation
 - mini gestionnaire de paquets `pkg` avec format texte `.opkg`, SHA-256 du
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
@@ -169,6 +171,16 @@ En cas de machine Proxmox configuree en VirtIO moderne-only, choisir le modele
 
 Details: [docs/orizon/NETWORK.md](docs/orizon/NETWORK.md).
 
+Pour lancer la matrice reseau VM depuis le labo ZimaOS:
+
+```powershell
+python scripts/orizon/build_x86_64_on_zimaos.py
+python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl8139
+```
+
+Elle provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
+`net status`, `ping`, `dns`, `pkg status`, `update status` et `hostkey`.
+
 ## Acces SSH Orizon
 
 Le service SSH se demarre explicitement depuis la console:
@@ -201,18 +213,18 @@ desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
 console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
 de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `touch`, `mkdir`, `rm`,
-`write`, `append`, `logs`, `net`, `route`, `dns`, `ps`, `pkg`, `storage`,
-`free`, `timer`, `audit`, `sync`, `status`, `auth`, `hostkey`, `whoami`,
-`uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`, `ssh
-lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
+`write`, `append`, `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
+`pkg`, `update`, `storage`, `free`, `timer`, `audit`, `sync`, `status`, `auth`, `hostkey`,
+`whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`,
+`ssh lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
 commande distante directe. Le service remet l'ecoute TCP en etat apres une
 session fermee, garde une protection anti-bruteforce dans `/system/ssh.conf`,
 et expose `audit` / `ssh audit` pour verifier sessions, auth, commandes,
 derniers evenements et fermetures de canal. Les longues sorties SSH sont
 segmentees en plusieurs paquets pour eviter les coupures sur `logs ssh` ou
 `cat`; les commandes `logs ssh` et `logs boot` montrent la fin du journal quand
-il devient long. `ssh hostkey` affiche l'identite hote persistante stockee
-dans `/system/ssh_host_rsa.key`.
+il devient long. `ssh hostkey` affiche l'identite hote RSA generee pour
+l'installation et stockee dans `/system/ssh_host_rsa.key`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 
@@ -298,9 +310,9 @@ parseur sur vrai materiel.
 preparer les trames 802.11 open-system authentication + association request,
 avec template RSN WPA2-PSK si un mot de passe est fourni. Pour WPA2, Orizon
 derive aussi la PMK par PBKDF2-HMAC-SHA1 sans afficher la cle; `wifi crypto`
-verifie les vecteurs SHA-1/PBKDF2, AES key unwrap et AES-CCM integres. Les
-passphrases 8-63 caracteres et les PSK hexadecimales 64 caracteres sont
-acceptees. Le chemin RX reconnait deja
+verifie les vecteurs SHA-1/PBKDF2, AES key unwrap, AES-CCM et un aller-retour
+logiciel de RX CCMP protege AP->STA. Les passphrases 8-63 caracteres et les
+PSK hexadecimales 64 caracteres sont acceptees. Le chemin RX reconnait deja
 les reponses authentication/association correspondant au plan de connexion et
 stocke leurs status codes. `wifi tx [auth|assoc|m2|m4|data|all]`
 prepare maintenant les trames de gestion dans les buffers DMA TX et affiche le
@@ -336,9 +348,16 @@ premiere trame data protegee CCMP de diagnostic, et `wifi tx data` /
 `wifi txcmd data arm` peuvent la faire passer par le meme chemin TX garde. La
 pile IPv4 sait maintenant choisir ce lien Wi-Fi quand WPA2 est guarded-ready:
 `net status` affiche `link=wifi`, puis `net dhcp`, ARP, IPv4 et les essais
-GitHub passent par des trames Ethernet encapsulees en CCMP. Il reste a valider
-ce chemin sur le Lenovo avec un vrai AP et a durcir les traces de diagnostic
-quand un AP refuse ou chiffre differemment une trame protegee.
+GitHub passent par des trames Ethernet encapsulees en CCMP. `wifi online
+<ssid> [password]` enchaine maintenant `wifi join`, DHCP via CCMP, DNS vers
+`raw.githubusercontent.com` et un probe TLS GitHub; si ce probe passe,
+`update` peut utiliser le lien Wi-Fi deja configure. `wifi update <ssid>
+[password]` fait la meme validation puis lance directement l'updater sur un
+systeme installe. Ces deux commandes ecrivent une preuve PASS/FAIL dans
+`/logs/wifi.log` et `/workspace/.orizon/wifi-validation`, consultable avec
+`logs wifi`. Il reste a valider ce chemin sur le Lenovo avec un vrai AP et a
+durcir les traces de diagnostic quand un AP refuse ou chiffre differemment une
+trame protegee.
 
 Pour importer localement le firmware Intel depuis le Linux du Lenovo sans le
 committer dans Git:
@@ -400,10 +419,13 @@ update
 La commande lance une transaction interne, facon `apt full-upgrade`, sans
 programme externe: preparation de la base packages, probe Ethernet Intel
 `e1000/e1000e`, `RTL8139` ou `VirtIO-net`, configuration IPv4 DHCP avec fallback
-IP statique, DNS, TCP, TLS vers GitHub, telechargement du manifeste public,
-telechargement des artefacts par requetes HTTP `Range`, verification
-SHA-256, puis reecriture de l'ESP installee avec le nouveau `kernel.elf`,
-`BOOTX64.EFI` et `limine.conf`, puis lecture de l'index public
+IP statique, DNS, TCP, TLS vers GitHub avec verification SAN, chaine RSA et
+racine ISRG Root X1 embarquee, telechargement du manifeste public,
+verification de `updates/x86_64/manifest.sig` avec la cle update embarquee,
+telechargement des artefacts par requetes HTTP `Range`, verification SHA-256,
+reprise des artefacts partiels caches dans `/workspace/.orizon`, puis
+reecriture de l'ESP installee avec le nouveau `kernel.elf`, `BOOTX64.EFI` et
+`limine.conf`, puis lecture de l'index public
 `Orizon-Packages` pour installer ou mettre a jour les paquets `.opkg`. La
 partition data Orizon et `/workspace` sont preserves.
 
@@ -411,7 +433,9 @@ Pendant l'operation, la console affiche les etapes en continu: etat courant,
 manifest recu, progression par pourcentage sur chaque artefact, verification
 SHA-256 et ecriture de l'ESP. L'ecran ne reste donc plus silencieux jusqu'a la
 fin de la transaction. Les timings par etape sont aussi sauvegardes dans
-`/workspace/.orizon/update.log`.
+`/workspace/.orizon/update.log`. Les telechargements du manifeste et de l'index
+paquets sont retentes; les artefacts de boot reprennent depuis leur cache
+partiel si une tentative precedente a echoue.
 
 Avant de remplacer le payload principal, Orizon garde le kernel et le loader
 actuellement demarres dans un slot rollback sur l'ESP:
@@ -421,10 +445,13 @@ actuellement demarres dans un slot rollback sur l'ESP:
 /EFI/BOOT/BOOTX64.ROL
 ```
 
-Le menu Limine contient ensuite une entree `Orizon OS Rollback`. Si une mise a
-jour boote mal, cette entree permet de redemarrer sur l'ancien payload. Une
-fois dans ce slot, la commande suivante restaure le payload demarre comme slot
-principal:
+Le menu Limine contient ensuite une entree `Orizon OS Rollback`. Au premier
+boot du kernel mis a jour, Orizon arme automatiquement cette entree comme
+default de secours jusqu'a ce que le shell soit atteint; si le shell est pret,
+le default normal est restaure et le boot est valide. Si une mise a jour boote
+mal apres l'entree dans Orizon mais avant le shell, le boot suivant choisit le
+rollback par defaut. Une fois dans ce slot, la commande suivante restaure le
+payload demarre comme slot principal:
 
 ```text
 rollback
@@ -446,7 +473,14 @@ Le manifeste lu par le noyau se trouve ici:
 
 ```text
 updates/x86_64/manifest.txt
+updates/x86_64/manifest.sig
 ```
+
+`manifest.sig` est une signature RSA PKCS#1/SHA-256 detachee. L'outil de
+publication la regenere avec la cle locale ignoree
+`config/keys/update-signing.private.pem`; le noyau ne contient que la cle
+publique update `orizon-update-root-2026-05`. Une branche publique sans
+`manifest.sig` valide est refusee avant toute installation de payload.
 
 La transaction ecrit ses etats et journaux ici:
 

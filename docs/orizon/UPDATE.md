@@ -20,6 +20,10 @@ The command performs a kernel-owned full-upgrade transaction:
 - prepare the local package database under `/system` and `/workspace/.orizon`
 - probe Ethernet and configure IPv4 with DHCP, then static fallback from
   `/system/network.conf` if DHCP is unavailable
+- reuse a guarded Wi-Fi/CCMP link if `wifi join` or `wifi online` has already
+  made `net status` report `link=wifi`; `wifi update <ssid> [password]` runs
+  that Wi-Fi validation, persists PASS/FAIL evidence to `/logs/wifi.log`, and
+  then launches this updater directly
 - resolve `raw.githubusercontent.com`
 - open TCP/TLS to GitHub without launching host tools
 - download `updates/x86_64/manifest.txt` from the public repository
@@ -30,6 +34,7 @@ The command performs a kernel-owned full-upgrade transaction:
 - install missing or changed `.opkg` packages after verifying the index hash
 - keep the currently booted kernel and UEFI loader as the ESP rollback slot
 - rewrite only the installed ESP boot files
+- cache both normal and fallback Limine configs for the post-update boot guard
 - verify the rewritten ESP with the same boot checks used by `boot-check`
 - preserve the Orizon data partition and persistent roots `/workspace`,
   `/home`, `/system`, `/packages`, and `/logs`
@@ -73,8 +78,15 @@ The generated Limine config keeps the normal `Orizon OS` entry and adds:
 Orizon OS Rollback
 ```
 
-If the refreshed system does not boot correctly, boot the rollback entry. Once
-inside the rollback system, run:
+On the first boot into the refreshed kernel, the boot guard rewrites
+`limine.conf` so the rollback entry becomes the default until the shell is
+fully reached. When the shell is ready, Orizon restores the normal Limine
+default and marks the update as validated. If the refreshed kernel reaches
+Orizon early boot but fails before the shell, the next default boot selects
+`Orizon OS Rollback` automatically.
+
+If the refreshed system does not boot correctly, or if automatic fallback has
+selected the rollback entry, run:
 
 ```text
 rollback
@@ -87,15 +99,18 @@ the main boot slot again. Metadata is available with:
 rollback-status
 ```
 
-This is the first recovery layer. A future boot-count guard can make failed
-boot detection fully automatic before the kernel starts.
+This is the current recovery layer. It is boot-count style and automatic after
+the refreshed kernel reaches Orizon early boot. True UEFI NVRAM `BootNext` or a
+firmware-level boot-count path, which would also cover failures before the
+kernel starts at all, is still a future hardening step.
 
 ## Public Manifest
 
-The public manifest is stored in the repository at:
+The public manifest and its detached signature are stored in the repository at:
 
 ```text
 updates/x86_64/manifest.txt
+updates/x86_64/manifest.sig
 ```
 
 Required keys:
@@ -119,7 +134,23 @@ limine-sha256 <sha256>
 ```
 
 The kernel accepts only non-empty payload sizes within its fixed safety caps
-and verifies all hashes before writing the ESP.
+and verifies all hashes before writing the ESP. Before parsing the manifest, it
+downloads `manifest.sig`, checks the manifest SHA-256, and verifies an
+`rsa-pkcs1-sha256` signature against the compiled Orizon update root key
+`orizon-update-root-2026-05`. A public branch without this signature is treated
+as unsigned and the update is blocked before any boot payload is installed.
+
+The release helper signs manifests with a local private key:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-vm
+```
+
+The private key defaults to `config/keys/update-signing.private.pem` and is
+ignored by Git. Keep it only on the trusted release machine; the kernel contains
+only the public modulus. `--generate-manifest-signing-key` is a key-rotation
+bootstrap aid: a generated key must be embedded as the new kernel update root
+before publishing, otherwise the helper refuses to sign.
 
 ## Package Manager Link
 
@@ -224,10 +255,15 @@ All three flows refresh the root `Orizon-OS.iso` artifact unless
 - DNS A-record resolver.
 - ICMP `ping`, route, DNS and network log diagnostics.
 - Minimal blocking TCP client.
-- TLS 1.2 GitHub path with SNI, certificate metadata, RSA leaf signature proof,
-  X25519 key agreement, AES-128-GCM application data, encrypted HTTP `Range`
-  requests, and decrypted response bodies.
+- TLS 1.2 GitHub path with SNI, SAN host-name enforcement, certificate-chain
+  link checks, RSA leaf signature verification, an embedded ISRG Root X1 trust
+  anchor for the GitHub chain, X25519 key agreement, AES-128-GCM application
+  data, encrypted HTTP `Range` requests, and decrypted response bodies.
 - SHA-256 hashing for manifests and boot artifacts.
+- Retried HTTPS manifest/index fetches and resumable boot-artifact caches for
+  interrupted `kernel.elf`, `BOOTX64.EFI`, and `limine.conf` downloads.
+- Post-update boot guard that arms a fallback Limine default on first refreshed
+  boot and restores the normal default only after the shell is ready.
 - FAT32 ESP writer shared with the disk installer.
 - LAPIC timer first, PIT fallback, idle `hlt`, and first scheduler/process
   accounting.
@@ -240,6 +276,12 @@ Persistent files:
 /workspace/.orizon/update.log
 /workspace/.orizon/update-state
 /workspace/.orizon/update-manifest
+/workspace/.orizon/update-manifest.sig
+/workspace/.orizon/update-kernel.part
+/workspace/.orizon/update-efi.part
+/workspace/.orizon/update-limine.part
+/workspace/.orizon/update-limine.normal
+/workspace/.orizon/update-limine.fallback
 /workspace/.orizon/github-https-manifest
 /workspace/.orizon/github-https-manifest.sha256
 /workspace/.orizon/packages
@@ -256,6 +298,7 @@ Runtime files:
 /system/update-state
 /system/update-source
 /system/update-manifest
+/system/update-manifest.sig
 /system/installed
 ```
 
@@ -264,7 +307,5 @@ Runtime files:
 The current updater is intentionally direct: one installed ESP is refreshed in
 place after artifact verification. The next reliability steps are:
 
-- root trust anchoring instead of proof-level certificate checks
-- stronger retry/error recovery during HTTPS downloads
-- signed release manifests in addition to SHA-256 transport verification
-- boot-count based automatic fallback before the kernel starts
+- UEFI NVRAM `BootNext` or bootloader-level boot-count fallback before the
+  refreshed kernel starts at all

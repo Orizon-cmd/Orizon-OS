@@ -2418,3 +2418,103 @@ int orizon_install_update_esp_with_rollback(
       rollback_kernel_size, rollback_efi, rollback_efi_size, limine_conf,
       limine_conf_size, update_text, update_text_size, report, report_size);
 }
+
+int orizon_install_update_limine_config(const char *limine_conf,
+                                        size_t limine_conf_size,
+                                        char *report,
+                                        size_t report_size) {
+  static const char efi_short[11] = {'E', 'F', 'I', ' ', ' ', ' ', ' ',
+                                    ' ', ' ', ' ', ' '};
+  static const char boot_short[11] = {'B', 'O', 'O', 'T', ' ', ' ', ' ',
+                                     ' ', ' ', ' ', ' '};
+  static const char orizon_short[11] = {'O', 'R', 'I', 'Z', 'O', 'N', ' ',
+                                       ' ', ' ', ' ', ' '};
+  static const char limine_short[11] = {'L', 'I', 'M', 'I', 'N', 'E',
+                                       '~', '1', 'C', 'O', 'N'};
+  fat32_volume_t vol;
+  gpt_partition_t esp;
+  gpt_partition_t data;
+  uint8_t attr = 0;
+  uint32_t efi_dir = 0;
+  uint32_t boot_dir = 0;
+  uint32_t efi_boot_dir = 0;
+  uint32_t orizon_dir = 0;
+
+  if (!limine_conf || limine_conf_size == 0 ||
+      limine_conf_size > INSTALL_CLUSTER_BYTES) {
+    append_report(report, report_size,
+                  "bootguard: invalid Limine config payload");
+    return -1;
+  }
+
+  if (installed_gpt_layout_valid(report, report_size, 0)) {
+    if (fat32_mount_installed_esp(&vol, report, report_size) < 0) {
+      append_report(report, report_size,
+                    "bootguard: installed ESP mount failed");
+      return -2;
+    }
+    if (fat_find_entry_short(&vol, vol.root_cluster, boot_short, &attr,
+                             &boot_dir, NULL) < 0 ||
+        (attr & 0x10) == 0 ||
+        fat_find_entry_short(&vol, vol.root_cluster, efi_short, &attr,
+                             &efi_dir, NULL) < 0 ||
+        (attr & 0x10) == 0 ||
+        fat_find_entry_short(&vol, efi_dir, boot_short, &attr,
+                             &efi_boot_dir, NULL) < 0 ||
+        (attr & 0x10) == 0) {
+      append_report(report, report_size,
+                    "bootguard: installed Limine directories missing");
+      return -3;
+    }
+    if (fat_write_regular_file_short(&vol, vol.root_cluster, limine_short,
+                                     "limine.conf", limine_conf,
+                                     limine_conf_size) < 0 ||
+        fat_write_regular_file_short(&vol, boot_dir, limine_short,
+                                     "limine.conf", limine_conf,
+                                     limine_conf_size) < 0 ||
+        fat_write_regular_file_short(&vol, efi_boot_dir, limine_short,
+                                     "limine.conf", limine_conf,
+                                     limine_conf_size) < 0) {
+      append_report(report, report_size,
+                    "bootguard: installed Limine config write failed");
+      return -4;
+    }
+    append_report(report, report_size,
+                  "bootguard: installed Limine config updated");
+    return 0;
+  }
+
+  if (gpt_find_orizon_data(&data, report, report_size) == 0) {
+    UNUSED(data);
+    if (gpt_find_esp(&esp, report, report_size) < 0 ||
+        fat32_mount_existing_esp(&vol, &esp, report, report_size) < 0) {
+      append_report(report, report_size,
+                    "bootguard: dual-boot ESP mount failed");
+      return -5;
+    }
+    if (fat_find_entry_short(&vol, vol.root_cluster, efi_short, &attr,
+                             &efi_dir, NULL) < 0 ||
+        (attr & 0x10) == 0 ||
+        fat_find_entry_short(&vol, efi_dir, orizon_short, &attr,
+                             &orizon_dir, NULL) < 0 ||
+        (attr & 0x10) == 0) {
+      append_report(report, report_size,
+                    "bootguard: /EFI/Orizon not found");
+      return -6;
+    }
+    if (fat_write_regular_file_short(&vol, orizon_dir, limine_short,
+                                     "limine.conf", limine_conf,
+                                     limine_conf_size) < 0) {
+      append_report(report, report_size,
+                    "bootguard: dual-boot Limine config write failed");
+      return -7;
+    }
+    append_report(report, report_size,
+                  "bootguard: dual-boot Limine config updated");
+    return 0;
+  }
+
+  append_report(report, report_size,
+                "bootguard: no installed Orizon ESP layout found");
+  return -8;
+}

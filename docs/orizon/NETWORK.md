@@ -13,7 +13,7 @@ diagnostics and VM testing.
 ## USB Ethernet Adapters
 
 USB-to-Ethernet adapters are not PCI Ethernet cards, so they do not use the
-same driver path as `e1000`, `RTL8139`, or VirtIO-net. Orizon now records USB
+same driver path as `e1000`, `RTL8139`, or VirtIO-net. Orizon records USB
 network descriptors during xHCI/EHCI enumeration and exposes them through:
 
 ```text
@@ -24,28 +24,36 @@ hw
 report
 ```
 
-Known diagnostic families include Realtek `RTL8152/RTL8153/RTL8156`, ASIX
-`AX88xxx`, SMSC/LAN95xx, CDC-ECM, CDC-NCM, and RNDIS-style adapters. If one is
-detected, Orizon prints the controller, port, VID/PID, USB class, bulk
-endpoints, and a `driver=...` hint.
+The first real packet path is active on xHCI for CDC-ECM style raw Ethernet
+adapters and Realtek `RTL8152/RTL8153/RTL8155/RTL8156` devices. CDC-ECM uses
+the adapter's bulk endpoints as raw Ethernet pipes. RTL815x uses the Realtek
+vendor control registers to read the hardware MAC, disable RX aggregation for
+simple frames, enable TX/RX, and add/remove the small Realtek TX/RX USB frame
+descriptors before handing packets to the IPv4 stack.
+
+Known diagnostic families also include ASIX `AX88xxx`, SMSC/LAN95xx, CDC-NCM,
+and RNDIS-style adapters. These are identified by VID/PID/class today, but
+packet-format support still needs a family-specific driver.
 
 `usb` also prints xHCI/EHCI root-port diagnostics. If an adapter was plugged in
 after boot, run `usb rescan` first. The useful cases are:
 
 - `controllers=... selected=... cand0=...`: Orizon found multiple xHCI
   controllers and selected the best candidate by connected/root-port count.
-- `usb-net present=yes`: the adapter was identified; implement the matching
-  packet driver next.
+- `usb-net present=yes ready=yes raw=yes`: the packet driver is active; run
+  `net dhcp` or `net auto`.
+- `usb-net present=yes ready=no`: the adapter was identified, but this family
+  still needs a packet driver or setup stage.
 - `usb-device ... hint=usb-hub`: the adapter is probably behind a USB hub or
   USB-C dock; Orizon needs hub downstream enumeration first.
 - `xhci-ports ... conn ... usb-device count=0`: the root port sees something,
   but descriptor fetch still fails; capture the port line for driver work.
 
-Important: this is detection only for now. `net dhcp` still needs a USB NIC
-packet driver before it can transmit DHCP frames through that adapter. When the
-Lenovo has no built-in Ethernet port, run `usb rescan`, then `usb`, and capture
-the VID/PID or root-port line; that tells us which class driver should be
-implemented first.
+When the Lenovo has no built-in Ethernet port, run `usb rescan`, then `usb`.
+If the status says `ready=yes raw=yes`, `net dhcp` can transmit through the USB
+adapter. If it remains pending, capture the VID/PID and root-port line; that
+tells us whether the next driver should be CDC-NCM, ASIX, SMSC/LAN95xx, RNDIS,
+or USB hub downstream enumeration.
 
 Orizon configures IPv4 with DHCP first, then falls back to a persistent static
 configuration from `/system/network.conf` if DHCP is not available. NAT and
@@ -140,3 +148,19 @@ The local provisioning script already supports bridge mode. Use an empty
 `network_model` `virtio` now that Orizon has a VirtIO-net driver.
 
 Example: [config/vm/orizon-dev.bridge.example.json](../../config/vm/orizon-dev.bridge.example.json)
+
+## VM Network Matrix
+
+The ZimaOS lab can run a repeatable smoke matrix across libvirt NIC models:
+
+```powershell
+python scripts/orizon/build_x86_64_on_zimaos.py
+python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl8139
+```
+
+Each case provisions a dedicated VM/disk, boots the current remote `iso_root`,
+runs `net dhcp`, starts SSH, then checks `status`, `net status`, `ping`, `dns`,
+`pkg status`, `update status`, and `hostkey` through OpenSSH. Bridge cases are
+available with `--cases all`, but host reachability depends on the lab bridge or
+macvtap mode, so NAT cases are the default automated gate. The NAT gate covers
+e1000e, VirtIO-net, and RTL8139.

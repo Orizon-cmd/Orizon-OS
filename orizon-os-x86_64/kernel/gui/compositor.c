@@ -430,6 +430,8 @@ static void gui_run_deferred_core_services(void) {
     i2c_hid_deferred_probe = 2;
   }
 
+  gui_show_boot_stage("Confirming update boot readiness...");
+  orizon_update_boot_guard_shell_ready();
   boot_stage_hint = "Boot complete. Console, diagnostics and installer are ready.";
   splash_ticks_remaining = 0;
   needs_redraw = 1;

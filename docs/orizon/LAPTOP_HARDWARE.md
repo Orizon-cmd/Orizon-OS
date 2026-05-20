@@ -64,7 +64,8 @@ development target, not a ZimaOS-only assumption.
   derives the 32-byte PMK with PBKDF2-HMAC-SHA1 and only reports a checksum,
   never the key itself. It accepts 8-63 character passphrases and 64-character
   hexadecimal PSKs. `wifi crypto` runs built-in SHA-1, PBKDF2, AES key unwrap,
-  and AES-CCM known vector checks. The RX path already recognizes
+  AES-CCM known vector checks, and a synthetic AP-to-STA protected CCMP RX
+  roundtrip through the same parser used by real RX. The RX path already recognizes
   authentication and association response
   frames that match the prepared local STA/BSSID pair and records status
   codes/AID for diagnostics. `wifi tx [auth|assoc|m2|m4|data|all]` can now
@@ -97,8 +98,15 @@ development target, not a ZimaOS-only assumption.
   and `wifi tx data` / `wifi txcmd data arm` target that frame through the
   staged TX path. The IPv4 stack can now use that guarded Wi-Fi link as an L2
   backend for ARP, DHCP, IPv4, and GitHub update probes; `net status` reports
-  `link=wifi` when this path is selected. Real hardware validation still needs
-  a full AP test for DHCP replies and protected CCMP RX traces.
+  `link=wifi` when this path is selected. `wifi online <ssid> [password]`
+  runs the guarded join, DHCP over CCMP, DNS for `raw.githubusercontent.com`,
+  and a GitHub TLS probe so an operator can validate the update path before
+  running `update`. `wifi update <ssid> [password]` runs the same validation
+  and then launches the installed-system updater over the configured Wi-Fi
+  link. Both commands persist step-by-step PASS/FAIL evidence in
+  `/logs/wifi.log` and `/workspace/.orizon/wifi-validation`, readable with
+  `logs wifi`. Real hardware validation still needs a full AP test for DHCP
+  replies and protected CCMP RX traces.
 - Bluetooth, camera, audio, sensors, battery: Not supported yet.
 
 ## Useful Orizon Commands On Real Hardware
@@ -106,6 +114,7 @@ development target, not a ZimaOS-only assumption.
 ```text
 sysinfo
 report
+logs wifi
 hw
 pci
 pci bars
@@ -129,6 +138,8 @@ wifi scan arm
 wifi scan poll
 wifi connect <ssid> [password]
 wifi join <ssid> [password]
+wifi online <ssid> [password]
+wifi update <ssid> [password]
 wifi wpa
 wifi key
 wifi key pairwise arm
@@ -197,5 +208,5 @@ module.
 5. Expand xHCI from a single boot keyboard path to multi-device HID, so external
    USB mice and adapters become easier to test.
 6. Grow the Intel Wi-Fi path in order: validate WPA2 M3/M4 plus GTK install on
-   real APs, replace the CCMP diagnostic data frame with real ARP/DHCP/IPv4
-   payloads, then harden protected RX.
+   real APs, run `wifi online` and `wifi update` through DHCP/DNS/TLS, then
+   harden protected RX retry diagnostics against AP-specific behaviour.

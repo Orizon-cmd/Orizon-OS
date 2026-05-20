@@ -13,12 +13,17 @@
   activate when an Orizon data partition is actually present, including
   non-fixed LBAs on dual-boot disks.
 - In-kernel GitHub update path with SHA-256 verification, boot rollback slot,
-  streamed progress, rough elapsed timings, full-disk ESP rewrite, and
+  streamed progress, rough elapsed timings, retried manifest/package-index
+  fetches, resumable boot-artifact caches, full-disk ESP rewrite, and
   side-by-side `/EFI/Orizon` refresh for dual-boot data installs.
-- Post-update boot guard: pending update markers, automatic validation once
-  the refreshed kernel reaches the shell, `bootguard` diagnostics, and
-  automatic main-slot restore when the rollback boot entry is selected during
-  a pending update.
+- Update authenticity guard: detached RSA PKCS#1/SHA-256 manifest signatures,
+  an embedded Orizon update root key, and TLS SAN/chain/signature validation
+  anchored to ISRG Root X1 for GitHub downloads.
+- Post-update boot guard: pending/testing markers, a boot-count-style Limine
+  fallback default while the refreshed kernel is proving itself, automatic
+  validation once the refreshed kernel reaches the shell, `bootguard`
+  diagnostics, and automatic main-slot restore when the rollback boot entry is
+  selected during a pending update.
 - Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
   `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
@@ -29,37 +34,48 @@
   `SERVICE_REQUEST` parsing, encrypted `SERVICE_ACCEPT`, explicit password
   authentication for user `orizon`, `session` channel open, `pty-req`, `shell`,
   `exec`, a remote diagnostic/admin shell with VFS/log/network/process/package/
-  storage commands, remote auth/password/lockout/hostkey administration,
-  direct remote file edits, heap diagnostics, audit counters/recent events,
-  multi-packet channel output for longer logs, graceful listener recovery,
-  anti-bruteforce lockout, config reload, persistent
-  host-key file management in `/system/ssh_host_rsa.key`, `/system/ssh.conf`,
-  and `/logs/ssh.log`.
+  storage/network/Wi-Fi commands, remote auth/password/lockout/hostkey
+  administration, direct remote file edits, heap diagnostics, audit
+  counters/recent events, multi-packet channel output for longer logs, graceful
+  listener recovery, anti-bruteforce lockout, config reload, per-install RSA
+  host-key generation and persistent host-key file management in
+  `/system/ssh_host_rsa.key`, `/system/ssh.conf`, and `/logs/ssh.log`.
 - Hardware base: PS/2 and USB HID keyboard input, USB root-port rescans,
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
-  families, AHCI/NVMe storage probes, Intel e1000/e1000e, RTL8139,
+  families, xHCI CDC-ECM raw Ethernet and Realtek RTL815x packet paths,
+  AHCI/NVMe storage probes, Intel e1000/e1000e, RTL8139,
   VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
   upload staging, alive polling diagnostics, and host-side command/RX/TX queue
   memory staging. The Intel Wi-Fi WPA2 path can now derive PMK/PTK, prepare
   M2/M4, unwrap M3 key data, extract GTK, and stage pairwise/group SEC_KEY
   installs behind strict firmware ACK checks. It also has an AES-CCM self-test
-  and a software-encrypted CCMP Ethernet data path that the IPv4 stack can use
-  for ARP/DHCP/IPv4 once WPA2 is guarded-ready. `wifi join` now orchestrates
-  the bringup/scan/connect/WPA sequence with concise progress output.
+  plus a protected CCMP RX self-test, and a software-encrypted CCMP Ethernet
+  data path that the IPv4 stack can use for ARP/DHCP/IPv4 once WPA2 is
+  guarded-ready. `wifi join` now orchestrates
+  the bringup/scan/connect/WPA sequence with concise progress output, and
+  `wifi online` extends that into DHCP, DNS, and GitHub TLS readiness for
+  update-over-Wi-Fi validation. `wifi update` reuses the same guarded path and
+  launches the installed updater once GitHub is reachable over Wi-Fi. The
+  validation path persists PASS/FAIL evidence in `/logs/wifi.log` and
+  `/workspace/.orizon/wifi-validation` for Lenovo AP testing.
+- Repeatable ZimaOS VM smoke matrix: dedicated libvirt VMs can validate boot,
+  DHCP, SSH, ping, DNS, package status, update status, and host-key state across
+  NAT NIC models. Current verified NAT passes: e1000e, VirtIO-net, and RTL8139.
 
 ## Next Stability Track
 
-1. Add bootloader/NVRAM boot-count integration so firmware can automatically
-   select rollback even when the refreshed kernel never reaches Orizon.
+1. Add true UEFI NVRAM `BootNext` or bootloader-native boot-count integration
+   so firmware can automatically select rollback even when the refreshed kernel
+   never reaches Orizon early boot.
 2. Add package rollback metadata before package updates overwrite files.
 3. Make the package repository signed, not only SHA-256 verified through the
    public manifest/index.
 4. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
    bridge/DHCP failure messages.
-5. Finish SSH remote login hardening: generated per-install host-key material,
-   full PTY integration with the local Orizon terminal, safer config
-   permissions, key rotation, and longer multi-client soak tests.
+5. Finish SSH remote login hardening: safer config permissions, key rotation,
+   fuller PTY integration with the local Orizon terminal, and longer
+   multi-client soak tests.
 6. Finish dual boot: automatic UEFI NVRAM/BCD entry creation, boot-count
    recovery, and eventually an in-OS partition create/resize workflow beside
    existing operating systems.
@@ -73,18 +89,19 @@
    modes.
 4. Expand the new Intel LPSS/Synopsys DesignWare I2C-HID probe into a full HID
    report parser for ELAN/Wacom multitouch and stylus events.
-5. Build Intel CNVi Wi-Fi properly: validate WPA2 M3/M4 and GTK/group-key
-   handling on the Lenovo, test DHCP over the new CCMP L2 bridge, then harden
-   protected RX/retry diagnostics against real AP behaviour.
+5. Build Intel CNVi Wi-Fi properly: validate `wifi online` and `wifi update`
+   on the Lenovo against a real WPA2 AP, then harden protected RX/retry
+   diagnostics against AP-specific behaviour.
 6. Implement USB hub downstream enumeration if the Lenovo adapter appears
    behind a dock or multi-port hub.
-7. Implement the first USB Ethernet packet driver from real Lenovo diagnostics:
-   prefer CDC-ECM/NCM when the adapter supports it, otherwise Realtek RTL815x
-   or ASIX AX88xxx based on the detected VID/PID.
+7. Extend USB Ethernet beyond the first xHCI CDC-ECM/RTL815x path: add CDC-NCM,
+   ASIX AX88xxx, SMSC/LAN95xx, RNDIS if needed, and hardware validation on the
+   Lenovo adapter's actual VID/PID.
 8. Harden NVMe and AHCI writes with more error reporting and timeout handling.
 9. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
-10. Build a repeatable VM test matrix: NAT, bridge, AHCI, NVMe, VirtIO-net, and
-   at least one non-ZimaOS host.
+10. Extend the VM test matrix beyond the current NAT smoke path: bridge cases,
+   AHCI/NVMe storage permutations, USB Ethernet cases, and at least one
+   non-ZimaOS host.
 
 ## Next Userland Track
 

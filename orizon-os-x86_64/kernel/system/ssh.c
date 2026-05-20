@@ -10,6 +10,7 @@
 #include "../include/aes_gcm.h"
 #include "../include/kmalloc.h"
 #include "../include/klog.h"
+#include "../include/net.h"
 #include "../include/netstack.h"
 #include "../include/packages.h"
 #include "../include/rsa.h"
@@ -21,6 +22,7 @@
 #include "../include/update.h"
 #include "../include/usb.h"
 #include "../include/vfs.h"
+#include "../include/wifi.h"
 #include "../include/x25519.h"
 
 #define SSH_BANNER "SSH-2.0-OrizonSSH_0.1\r\n"
@@ -68,8 +70,8 @@
 
 /*
  * Development host key for the current staged SSH server.
- * TODO: replace with per-install persistent key generation before SSH shell is
- * enabled by default on real machines.
+ * Used only as a last-resort fallback when per-install key generation or
+ * persistence is unavailable.
  */
 static const uint8_t ORIZON_SSH_RSA_N[SSH_RSA_SIGNATURE_SIZE] = {
     0xac, 0x57, 0x1b, 0x62, 0x57, 0x43, 0xec, 0xaa, 0x07, 0x3d, 0xfe, 0xe6,
@@ -224,6 +226,7 @@ static int ssh_session_id_ready = 0;
 static uint8_t ssh_host_signature[SSH_RSA_SIGNATURE_SIZE];
 static int ssh_host_signature_ready = 0;
 static uint8_t ssh_hostkey_n[SSH_RSA_SIGNATURE_SIZE];
+static uint8_t ssh_hostkey_d[SSH_RSA_SIGNATURE_SIZE];
 static uint8_t ssh_hostkey_p[64];
 static uint8_t ssh_hostkey_q[64];
 static uint8_t ssh_hostkey_dmp1[64];
@@ -232,6 +235,8 @@ static uint8_t ssh_hostkey_iqmp[64];
 static rsa_crt_private_key_t ssh_hostkey = {
     .n = ORIZON_SSH_RSA_N,
     .n_len = sizeof(ORIZON_SSH_RSA_N),
+    .d = NULL,
+    .d_len = 0,
     .p = ORIZON_SSH_RSA_P,
     .p_len = sizeof(ORIZON_SSH_RSA_P),
     .q = ORIZON_SSH_RSA_Q,
@@ -285,6 +290,7 @@ static size_t ssh_channel_tx_off = 0;
 static size_t ssh_channel_last_chunk_len = 0;
 static char ssh_shell_line[256];
 static size_t ssh_shell_line_len = 0;
+static int ssh_shell_last_was_cr = 0;
 static char ssh_shell_cwd[MAX_PATH] = "/home/orizon";
 static int ssh_shell_suppress_prompt = 0;
 static uint32_t ssh_auth_success_total = 0;
@@ -304,6 +310,7 @@ static uint32_t ssh_audit_recent_count = 0;
 static int ssh_ensure_hostkey(void);
 static int ssh_load_hostkey_file(void);
 static int ssh_write_hostkey_file(void);
+static int ssh_generate_install_hostkey(char *report, size_t report_size);
 static int ssh_rebuild_host_key_blob(void);
 static void ssh_install_bootstrap_hostkey(void);
 static void ssh_reset_negotiation(void);
@@ -673,8 +680,12 @@ int ssh_reload_hostkey(char *report, size_t report_size) {
 }
 
 int ssh_reset_hostkey(char *report, size_t report_size) {
+  char gen_report[160];
+
   vfs_delete(ORIZON_SSH_HOSTKEY_PATH);
-  ssh_install_bootstrap_hostkey();
+  if (ssh_generate_install_hostkey(gen_report, sizeof(gen_report)) != 0) {
+    ssh_install_bootstrap_hostkey();
+  }
   if (ssh_write_hostkey_file() != 0) {
     if (report && report_size > 0) {
       snprintf(report, report_size,
@@ -685,7 +696,7 @@ int ssh_reset_hostkey(char *report, size_t report_size) {
   }
   if (report && report_size > 0) {
     snprintf(report, report_size,
-             "ssh: host key reset and persisted to %s\n"
+             "ssh: host key regenerated and persisted to %s\n"
              "ssh: hostkey-sha256=%s\n",
              ORIZON_SSH_HOSTKEY_PATH,
              ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256
@@ -923,8 +934,14 @@ static void ssh_install_hostkey_material(const uint8_t *n, const uint8_t *p,
                                          const uint8_t *q,
                                          const uint8_t *dmp1,
                                          const uint8_t *dmq1,
-                                         const uint8_t *iqmp) {
+                                         const uint8_t *iqmp,
+                                         const uint8_t *d) {
   memcpy(ssh_hostkey_n, n, sizeof(ssh_hostkey_n));
+  if (d) {
+    memcpy(ssh_hostkey_d, d, sizeof(ssh_hostkey_d));
+  } else {
+    memset(ssh_hostkey_d, 0, sizeof(ssh_hostkey_d));
+  }
   memcpy(ssh_hostkey_p, p, sizeof(ssh_hostkey_p));
   memcpy(ssh_hostkey_q, q, sizeof(ssh_hostkey_q));
   memcpy(ssh_hostkey_dmp1, dmp1, sizeof(ssh_hostkey_dmp1));
@@ -932,6 +949,8 @@ static void ssh_install_hostkey_material(const uint8_t *n, const uint8_t *p,
   memcpy(ssh_hostkey_iqmp, iqmp, sizeof(ssh_hostkey_iqmp));
   ssh_hostkey.n = ssh_hostkey_n;
   ssh_hostkey.n_len = sizeof(ssh_hostkey_n);
+  ssh_hostkey.d = d ? ssh_hostkey_d : NULL;
+  ssh_hostkey.d_len = d ? sizeof(ssh_hostkey_d) : 0;
   ssh_hostkey.p = ssh_hostkey_p;
   ssh_hostkey.p_len = sizeof(ssh_hostkey_p);
   ssh_hostkey.q = ssh_hostkey_q;
@@ -950,9 +969,152 @@ static void ssh_install_hostkey_material(const uint8_t *n, const uint8_t *p,
 static void ssh_install_bootstrap_hostkey(void) {
   ssh_install_hostkey_material(ORIZON_SSH_RSA_N, ORIZON_SSH_RSA_P,
                                ORIZON_SSH_RSA_Q, ORIZON_SSH_RSA_DMP1,
-                               ORIZON_SSH_RSA_DMQ1, ORIZON_SSH_RSA_IQMP);
+                               ORIZON_SSH_RSA_DMQ1, ORIZON_SSH_RSA_IQMP,
+                               NULL);
   ssh_set_hostkey_report("compiled-bootstrap",
                          "ssh: using compiled bootstrap host key", 0, 1);
+}
+
+static void ssh_cpuid(uint32_t leaf, uint32_t subleaf, uint32_t *a,
+                      uint32_t *b, uint32_t *c, uint32_t *d) {
+  uint32_t eax;
+  uint32_t ebx;
+  uint32_t ecx;
+  uint32_t edx;
+
+  __asm__ volatile("cpuid"
+                   : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+                   : "a"(leaf), "c"(subleaf));
+  if (a) *a = eax;
+  if (b) *b = ebx;
+  if (c) *c = ecx;
+  if (d) *d = edx;
+}
+
+static int ssh_rdrand64(uint64_t *out) {
+  uint64_t value = 0;
+  unsigned char ok = 0;
+
+  __asm__ volatile("rdrand %0; setc %1" : "=r"(value), "=qm"(ok));
+  if (ok && out) {
+    *out = value;
+    return 0;
+  }
+  return -1;
+}
+
+static void ssh_seed_file(sha256_ctx_t *ctx, const char *path,
+                          size_t max_bytes) {
+  char buf[192];
+  file_t *f;
+  ssize_t n;
+
+  if (!ctx || !path || max_bytes == 0) {
+    return;
+  }
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    return;
+  }
+  while (max_bytes > 0) {
+    size_t take = max_bytes < sizeof(buf) ? max_bytes : sizeof(buf);
+    n = vfs_read(f, buf, take);
+    if (n <= 0) {
+      break;
+    }
+    sha256_update(ctx, path, strlen(path));
+    sha256_update(ctx, buf, (size_t)n);
+    max_bytes -= (size_t)n;
+    if ((size_t)n < take) {
+      break;
+    }
+  }
+  vfs_close(f);
+}
+
+static void ssh_collect_hostkey_seed(uint8_t seed[SHA256_DIGEST_SIZE]) {
+  sha256_ctx_t ctx;
+  uint32_t eax = 0;
+  uint32_t ebx = 0;
+  uint32_t ecx = 0;
+  uint32_t edx = 0;
+  uint64_t ticks = timer_ticks();
+  uint64_t uptime = timer_uptime_seconds();
+  const net_device_status_t *net = net_get_status();
+
+  sha256_init(&ctx);
+  sha256_update(&ctx, "orizon-ssh-install-hostkey-v1", 29);
+  sha256_update(&ctx, &ticks, sizeof(ticks));
+  sha256_update(&ctx, &uptime, sizeof(uptime));
+  sha256_update(&ctx, &ssh_status.sessions, sizeof(ssh_status.sessions));
+  ssh_cpuid(0, 0, &eax, &ebx, &ecx, &edx);
+  sha256_update(&ctx, &eax, sizeof(eax));
+  sha256_update(&ctx, &ebx, sizeof(ebx));
+  sha256_update(&ctx, &ecx, sizeof(ecx));
+  sha256_update(&ctx, &edx, sizeof(edx));
+  ssh_cpuid(1, 0, &eax, &ebx, &ecx, &edx);
+  sha256_update(&ctx, &eax, sizeof(eax));
+  sha256_update(&ctx, &ebx, sizeof(ebx));
+  sha256_update(&ctx, &ecx, sizeof(ecx));
+  sha256_update(&ctx, &edx, sizeof(edx));
+  if (net) {
+    sha256_update(&ctx, &net->vendor_id, sizeof(net->vendor_id));
+    sha256_update(&ctx, &net->device_id, sizeof(net->device_id));
+    sha256_update(&ctx, net->mac, sizeof(net->mac));
+    if (net->driver) {
+      sha256_update(&ctx, net->driver, strlen(net->driver));
+    }
+  }
+  if (ecx & (1U << 30)) {
+    for (int i = 0; i < 8; i++) {
+      uint64_t rnd = 0;
+      if (ssh_rdrand64(&rnd) == 0) {
+        sha256_update(&ctx, &rnd, sizeof(rnd));
+      }
+    }
+  }
+  ssh_seed_file(&ctx, "/workspace/.orizon/installed", 512);
+  ssh_seed_file(&ctx, "/system/hostname", 128);
+  ssh_seed_file(&ctx, "/system/network.conf", 512);
+  ssh_seed_file(&ctx, "/system/version", 128);
+  sha256_final(&ctx, seed);
+}
+
+static int ssh_generate_install_hostkey(char *report, size_t report_size) {
+  rsa_generated_private_key_t generated;
+  uint8_t seed[SHA256_DIGEST_SIZE];
+  uint8_t zero_iqmp[64];
+  char gen_report[128];
+
+  memset(zero_iqmp, 0, sizeof(zero_iqmp));
+  memset(gen_report, 0, sizeof(gen_report));
+  ssh_collect_hostkey_seed(seed);
+  if (rsa_generate_private_key_1024(&generated, seed, gen_report,
+                                    sizeof(gen_report)) != 0) {
+    if (report && report_size > 0) {
+      snprintf(report, report_size, "ssh: host key generation failed: %s\n",
+               gen_report[0] ? gen_report : "rsa generator error");
+    }
+    return -1;
+  }
+  ssh_install_hostkey_material(generated.n, generated.p, generated.q,
+                               generated.dmp1, generated.dmq1, zero_iqmp,
+                               generated.d);
+  if (ssh_rebuild_host_key_blob() != 0) {
+    if (report && report_size > 0) {
+      snprintf(report, report_size, "ssh: generated host key is invalid\n");
+    }
+    return -1;
+  }
+  ssh_set_hostkey_report("generated-per-install",
+                         gen_report[0] ? gen_report
+                                       : "ssh: generated per-install RSA key",
+                         0, 0);
+  if (report && report_size > 0) {
+    snprintf(report, report_size, "ssh: generated per-install RSA host key\n%s\n",
+             gen_report);
+  }
+  return 0;
 }
 
 static int ssh_rebuild_host_key_blob(void) {
@@ -977,12 +1139,14 @@ static int ssh_load_hostkey_file(void) {
   file_t *f;
   char text[SSH_HOSTKEY_FILE_MAX];
   uint8_t n_buf[SSH_RSA_SIGNATURE_SIZE];
+  uint8_t d_buf[SSH_RSA_SIGNATURE_SIZE];
   uint8_t p_buf[64];
   uint8_t q_buf[64];
   uint8_t dmp1_buf[64];
   uint8_t dmq1_buf[64];
   uint8_t iqmp_buf[64];
   ssize_t n;
+  int has_private_d = 0;
 
   f = vfs_open(ORIZON_SSH_HOSTKEY_PATH, O_RDONLY);
   if (!f) {
@@ -991,19 +1155,38 @@ static int ssh_load_hostkey_file(void) {
   memset(text, 0, sizeof(text));
   n = vfs_read(f, text, sizeof(text) - 1);
   vfs_close(f);
-  if (n <= 0 || !strstr(text, "format orizon-ssh-rsa-crt-v1")) {
+  if (n <= 0 ||
+      (!strstr(text, "format orizon-ssh-rsa-crt-v1") &&
+       !strstr(text, "format orizon-ssh-rsa-private-v2"))) {
     return -1;
   }
-  if (ssh_parse_hex_field(text, "n", n_buf, sizeof(n_buf)) != 0 ||
-      ssh_parse_hex_field(text, "p", p_buf, sizeof(p_buf)) != 0 ||
-      ssh_parse_hex_field(text, "q", q_buf, sizeof(q_buf)) != 0 ||
-      ssh_parse_hex_field(text, "dmp1", dmp1_buf, sizeof(dmp1_buf)) != 0 ||
-      ssh_parse_hex_field(text, "dmq1", dmq1_buf, sizeof(dmq1_buf)) != 0 ||
-      ssh_parse_hex_field(text, "iqmp", iqmp_buf, sizeof(iqmp_buf)) != 0) {
+  memset(d_buf, 0, sizeof(d_buf));
+  memset(p_buf, 0, sizeof(p_buf));
+  memset(q_buf, 0, sizeof(q_buf));
+  memset(dmp1_buf, 0, sizeof(dmp1_buf));
+  memset(dmq1_buf, 0, sizeof(dmq1_buf));
+  memset(iqmp_buf, 0, sizeof(iqmp_buf));
+  if (ssh_parse_hex_field(text, "n", n_buf, sizeof(n_buf)) != 0) {
     return -1;
+  }
+  has_private_d = ssh_parse_hex_field(text, "d", d_buf, sizeof(d_buf)) == 0;
+  if (!has_private_d &&
+      (ssh_parse_hex_field(text, "p", p_buf, sizeof(p_buf)) != 0 ||
+       ssh_parse_hex_field(text, "q", q_buf, sizeof(q_buf)) != 0 ||
+       ssh_parse_hex_field(text, "dmp1", dmp1_buf, sizeof(dmp1_buf)) != 0 ||
+       ssh_parse_hex_field(text, "dmq1", dmq1_buf, sizeof(dmq1_buf)) != 0 ||
+       ssh_parse_hex_field(text, "iqmp", iqmp_buf, sizeof(iqmp_buf)) != 0)) {
+    return -1;
+  }
+  if (has_private_d) {
+    (void)ssh_parse_hex_field(text, "p", p_buf, sizeof(p_buf));
+    (void)ssh_parse_hex_field(text, "q", q_buf, sizeof(q_buf));
+    (void)ssh_parse_hex_field(text, "dmp1", dmp1_buf, sizeof(dmp1_buf));
+    (void)ssh_parse_hex_field(text, "dmq1", dmq1_buf, sizeof(dmq1_buf));
+    (void)ssh_parse_hex_field(text, "iqmp", iqmp_buf, sizeof(iqmp_buf));
   }
   ssh_install_hostkey_material(n_buf, p_buf, q_buf, dmp1_buf, dmq1_buf,
-                               iqmp_buf);
+                               iqmp_buf, has_private_d ? d_buf : NULL);
   if (ssh_rebuild_host_key_blob() != 0) {
     return -1;
   }
@@ -1024,7 +1207,10 @@ static int ssh_write_hostkey_file(void) {
   }
   memset(text, 0, sizeof(text));
   if (ssh_append_text(text, sizeof(text), &off,
-                      "format orizon-ssh-rsa-crt-v1\n"
+                      ssh_hostkey.d
+                          ? "format orizon-ssh-rsa-private-v2\n"
+                          : "format orizon-ssh-rsa-crt-v1\n") != 0 ||
+      ssh_append_text(text, sizeof(text), &off,
                       "algorithm rsa-sha2-256\n"
                       "source Orizon OS persistent SSH host identity\n") != 0) {
     return -1;
@@ -1038,8 +1224,11 @@ static int ssh_write_hostkey_file(void) {
            (unsigned long)timer_ticks());
   if (ssh_append_text(text, sizeof(text), &off, line) != 0 ||
       ssh_append_text(text, sizeof(text), &off,
-                      "generator compiled-bootstrap\n"
-                      "note rsa-generation-todo\n") != 0 ||
+                      ssh_hostkey.d ? "generator per-install-rsa-sha256\n"
+                                    : "generator compiled-bootstrap\n") != 0 ||
+      (ssh_hostkey.d &&
+       ssh_append_hex_line(text, sizeof(text), &off, "d", ssh_hostkey.d,
+                           ssh_hostkey.d_len) != 0) ||
       ssh_append_hex_line(text, sizeof(text), &off, "n", ssh_hostkey.n,
                           ssh_hostkey.n_len) != 0 ||
       ssh_append_hex_line(text, sizeof(text), &off, "p", ssh_hostkey.p,
@@ -1067,16 +1256,22 @@ static int ssh_write_hostkey_file(void) {
   vfs_close(f);
   ssh_set_hostkey_report(ORIZON_SSH_HOSTKEY_PATH,
                          "ssh: persistent host key file saved", 1,
-                         ssh_status.hostkey_bootstrap);
+                         ssh_hostkey.d ? 0 : ssh_status.hostkey_bootstrap);
   return 0;
 }
 
 static int ssh_ensure_hostkey(void) {
+  char report[160];
+
   if (ssh_status.hostkey_loaded && ssh_hostkey.n &&
       ssh_status.hostkey_sha256[0]) {
     return 0;
   }
   if (ssh_load_hostkey_file() == 0) {
+    return 0;
+  }
+  if (ssh_generate_install_hostkey(report, sizeof(report)) == 0 &&
+      ssh_write_hostkey_file() == 0) {
     return 0;
   }
   ssh_install_bootstrap_hostkey();
@@ -1527,6 +1722,7 @@ static void ssh_reset_negotiation(void) {
   ssh_channel_tx_off = 0;
   ssh_channel_last_chunk_len = 0;
   ssh_shell_line_len = 0;
+  ssh_shell_last_was_cr = 0;
   strcpy(ssh_shell_cwd, "/home/orizon");
 }
 
@@ -2241,6 +2437,29 @@ static int ssh_shell_parse_uint(const char *s, uint32_t *out) {
   return 0;
 }
 
+static const char *ssh_shell_read_token(const char *s, char *out,
+                                        size_t out_size) {
+  size_t len = 0;
+
+  if (!out || out_size == 0) {
+    return NULL;
+  }
+  out[0] = '\0';
+  s = ssh_shell_skip_spaces(s);
+  if (!s || *s == '\0') {
+    return NULL;
+  }
+  while (s[len] && s[len] != ' ' && len + 1 < out_size) {
+    out[len] = s[len];
+    len++;
+  }
+  out[len] = '\0';
+  while (s[len] && s[len] != ' ') {
+    len++;
+  }
+  return ssh_shell_skip_spaces(s + len);
+}
+
 static void ssh_shell_print_ls(const char *arg) {
   static char path[MAX_PATH];
   static char out[880];
@@ -2607,6 +2826,257 @@ static void ssh_shell_print_log(const char *which) {
   }
 }
 
+static void ssh_shell_print_dns(const char *args) {
+  char host[128];
+  char ip_s[24];
+  char out[192];
+  uint32_t ip = 0;
+
+  if (!ssh_shell_read_token(args, host, sizeof(host))) {
+    netstack_format_dns(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (netstack_resolve_a(host, &ip) != 0) {
+    ssh_queue_channel_text("dns: resolve failed\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  snprintf(out, sizeof(out), "%s -> %s\r\n", host, ip_s);
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_ping(const char *args) {
+  char target[128];
+  char ip_s[24];
+  char out[512];
+  char line[96];
+  size_t used = 0;
+  uint32_t ip = 0;
+
+  if (!ssh_shell_read_token(args, target, sizeof(target))) {
+    ssh_queue_channel_text("usage: ping <ip-or-host>\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  if (netstack_parse_ipv4(target, &ip) != 0 &&
+      netstack_resolve_a(target, &ip) != 0) {
+    ssh_queue_channel_text("ping: cannot resolve host\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  for (int i = 0; i < 4; i++) {
+    uint32_t ms = 0;
+    if (netstack_ping(ip, &ms) == 0) {
+      snprintf(line, sizeof(line), "reply from %s time=%lums\r\n", ip_s,
+               (unsigned long)ms);
+    } else {
+      snprintf(line, sizeof(line), "request timeout\r\n");
+    }
+    ssh_shell_append(out, sizeof(out), &used, line);
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_update(const char *args) {
+  static char report[SSH_CHANNEL_TEXT_BUF];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (ssh_shell_command_is(sub, "status")) {
+    snprintf(report, sizeof(report), "update: %s\r\n", orizon_update_status());
+  } else if (ssh_shell_command_is(sub, "bootguard")) {
+    orizon_update_boot_guard_status(report, sizeof(report));
+  } else {
+    orizon_update_full_upgrade(report, sizeof(report));
+  }
+  if (strlen(report) + 2 < sizeof(report) &&
+      (report[0] == '\0' || report[strlen(report) - 1] != '\n')) {
+    strcat(report, "\r\n");
+  }
+  ssh_queue_channel_text(report);
+  ssh_shell_prompt();
+}
+
+static int ssh_shell_arg_is_arm(const char *arg) {
+  return ssh_shell_command_is(arg, "arm") || ssh_shell_command_is(arg, "go") ||
+         ssh_shell_command_is(arg, "first");
+}
+
+static void ssh_shell_print_wifi(const char *args) {
+  static char report[SSH_CHANNEL_TEXT_BUF];
+  char ssid[96];
+  char password[96];
+  const char *sub = ssh_shell_skip_spaces(args);
+  const char *rest;
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "status")) {
+    wifi_format_status(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "scan")) {
+    const char *scan_args = ssh_shell_skip_spaces(sub + 4);
+    if (ssh_shell_command_is(scan_args, "poll") ||
+        ssh_shell_command_is(scan_args, "wait")) {
+      wifi_scan_poll(report, sizeof(report));
+    } else {
+      wifi_scan(ssh_shell_arg_is_arm(scan_args), report, sizeof(report));
+    }
+  } else if (ssh_shell_command_is(sub, "firmware")) {
+    wifi_firmware_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "hw")) {
+    wifi_hw_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "apm")) {
+    wifi_apm_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "load")) {
+    wifi_load_firmware(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "upload")) {
+    const char *upload_args = ssh_shell_skip_spaces(sub + 6);
+    if (ssh_shell_command_is(upload_args, "all")) {
+      const char *all_args = ssh_shell_skip_spaces(upload_args + 3);
+      wifi_upload_all_firmware(ssh_shell_arg_is_arm(all_args), report,
+                               sizeof(report));
+    } else {
+      wifi_upload_firmware(ssh_shell_arg_is_arm(upload_args), report,
+                           sizeof(report));
+    }
+  } else if (ssh_shell_command_is(sub, "boot")) {
+    wifi_boot_firmware(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 4)),
+                       report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "alive")) {
+    wifi_alive_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "queues")) {
+    wifi_queue_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 6)),
+                     report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "context")) {
+    wifi_context_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 7)),
+                       report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "scheduler")) {
+    wifi_scheduler_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 9)),
+                         report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "rx")) {
+    const char *rx_args = ssh_shell_skip_spaces(sub + 2);
+    wifi_rx_probe(ssh_shell_command_is(rx_args, "poll") ||
+                      ssh_shell_command_is(rx_args, "wait"),
+                  report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "command")) {
+    wifi_command_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 7)),
+                       report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "nvm-info")) {
+    wifi_nvm_info_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 8)),
+                        report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "nvm")) {
+    wifi_nvm_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 3)),
+                   report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "bringup")) {
+    wifi_bringup_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "crypto")) {
+    wifi_crypto_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "wpa")) {
+    wifi_wpa_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "key")) {
+    char target[16];
+    char mode[16];
+    int group_key = 0;
+    int arm_key = 0;
+    const char *key_args = ssh_shell_skip_spaces(sub + 3);
+
+    target[0] = '\0';
+    mode[0] = '\0';
+    rest = ssh_shell_read_token(key_args, target, sizeof(target));
+    if (target[0]) {
+      if (ssh_shell_arg_is_arm(target)) {
+        arm_key = 1;
+      } else if (strcmp(target, "gtk") == 0 || strcmp(target, "group") == 0) {
+        group_key = 1;
+        if (rest && *rest) {
+          ssh_shell_read_token(rest, mode, sizeof(mode));
+          arm_key = ssh_shell_arg_is_arm(mode);
+        }
+      } else if (strcmp(target, "pairwise") == 0 ||
+                 strcmp(target, "ptk") == 0) {
+        group_key = 0;
+        if (rest && *rest) {
+          ssh_shell_read_token(rest, mode, sizeof(mode));
+          arm_key = ssh_shell_arg_is_arm(mode);
+        }
+      }
+    }
+    wifi_key_probe(group_key, arm_key, report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "data")) {
+    wifi_data_probe(report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "bind")) {
+    wifi_bind_probe(ssh_shell_arg_is_arm(ssh_shell_skip_spaces(sub + 4)),
+                    report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "txcmd")) {
+    char target[16];
+    char mode[16];
+    int arm_txcmd = 0;
+    const char *txcmd_args = ssh_shell_skip_spaces(sub + 5);
+
+    target[0] = '\0';
+    mode[0] = '\0';
+    rest = ssh_shell_read_token(txcmd_args, target, sizeof(target));
+    if (target[0]) {
+      if (ssh_shell_arg_is_arm(target)) {
+        arm_txcmd = 1;
+        target[0] = '\0';
+      } else if (rest && *rest) {
+        ssh_shell_read_token(rest, mode, sizeof(mode));
+        arm_txcmd = ssh_shell_arg_is_arm(mode);
+      }
+    }
+    wifi_txcmd_probe(target, arm_txcmd, report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "tx")) {
+    char target[16];
+    const char *tx_args = ssh_shell_skip_spaces(sub + 2);
+
+    target[0] = '\0';
+    ssh_shell_read_token(tx_args, target, sizeof(target));
+    wifi_tx_stage_probe(target, report, sizeof(report));
+  } else if (ssh_shell_command_is(sub, "connect") ||
+             ssh_shell_command_is(sub, "join")) {
+    int join = ssh_shell_command_is(sub, "join");
+    rest = ssh_shell_skip_spaces(sub + (join ? 4 : 7));
+    rest = ssh_shell_read_token(rest, ssid, sizeof(ssid));
+    if (!rest) {
+      snprintf(report, sizeof(report), "usage: wifi %s <ssid> [password]\r\n",
+               join ? "join" : "connect");
+    } else {
+      password[0] = '\0';
+      if (*rest) {
+        ssh_shell_read_token(rest, password, sizeof(password));
+      }
+      if (join) {
+        wifi_join(ssid, password, report, sizeof(report));
+      } else {
+        wifi_connect(ssid, password, report, sizeof(report));
+      }
+    }
+  } else {
+    snprintf(report, sizeof(report),
+             "usage: wifi [status|hw|apm|firmware|load|upload [arm|all "
+             "[arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler "
+             "[arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|"
+             "bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|"
+             "scan [arm|poll]|connect <ssid> [password]|join <ssid> "
+             "[password]|tx [auth|assoc|m2|m4|data|all]|txcmd "
+             "[auth|assoc|m2|m4|data] [arm]]\r\n");
+  }
+
+  ssh_queue_channel_text(report);
+  if (strlen(report) + 2 < sizeof(report) &&
+      (report[0] == '\0' || report[strlen(report) - 1] != '\n')) {
+    ssh_queue_channel_text("\r\n");
+  }
+  ssh_shell_prompt();
+}
+
 static void ssh_process_channel_request(const uint8_t *payload,
                                         size_t payload_len) {
   const uint8_t *request = NULL;
@@ -2647,8 +3117,8 @@ static void ssh_process_channel_request(const uint8_t *payload,
       ssh_channel_success_pending = 1;
     }
     ssh_queue_channel_text(
-        "\r\nOrizon OS remote shell preview\r\n"
-        "Commands: help, ls, cd, cat, write, logs, net, ps, pkg, storage, free, bootguard, audit, status, auth, hostkey, exit\r\n");
+        "\r\nOrizon OS remote shell\r\n"
+        "Commands: help, ls, cd, cat, write, logs, net, wifi, ps, pkg, update, storage, free, bootguard, audit, status, auth, hostkey, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -2701,9 +3171,12 @@ static void ssh_remote_shell_execute(const char *line) {
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
         "  logs [ssh|boot]      show logs\r\n"
-        "  net|route|dns|usb    show network/USB diagnostics\r\n"
+        "  net|route|dns|ping   show network diagnostics\r\n"
+        "  usb|usb rescan       show USB diagnostics\r\n"
+        "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
         "  usb rescan           rescan USB root ports\r\n"
-        "  ps|pkg|storage|free  show system state\r\n"
+        "  ps|pkg|update        show system/update state\r\n"
+        "  storage|free         show storage and heap state\r\n"
         "  bootguard            show update boot validation state\r\n"
         "  audit                show SSH session counters\r\n"
         "  ssh password <pass>  change remote SSH password\r\n"
@@ -2856,12 +3329,21 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_log(ssh_shell_skip_spaces(line + 4));
     return;
   }
+  if (ssh_shell_command_is(line, "wifi")) {
+    ssh_shell_print_wifi(ssh_shell_skip_spaces(line + 4));
+    return;
+  }
   if (strcmp(line, "ps") == 0) {
     ssh_shell_print_ps();
     return;
   }
   if (ssh_shell_command_is(line, "pkg")) {
     ssh_shell_print_pkg(line + 3);
+    return;
+  }
+  if (ssh_shell_command_is(line, "update") ||
+      ssh_shell_command_is(line, "orizon-update")) {
+    ssh_shell_print_update(line + (line[0] == 'u' ? 6 : 13));
     return;
   }
   if (strcmp(line, "storage") == 0 || strcmp(line, "disks") == 0) {
@@ -2881,7 +3363,8 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_free();
     return;
   }
-  if (strcmp(line, "net") == 0 || strcmp(line, "network-status") == 0) {
+  if (ssh_shell_command_is(line, "net") ||
+      strcmp(line, "network-status") == 0) {
     netstack_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
@@ -2903,13 +3386,12 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "dns") == 0) {
-    netstack_format_dns(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
-    ssh_shell_prompt();
+  if (ssh_shell_command_is(line, "dns")) {
+    ssh_shell_print_dns(ssh_shell_skip_spaces(line + 3));
+    return;
+  }
+  if (ssh_shell_command_is(line, "ping")) {
+    ssh_shell_print_ping(ssh_shell_skip_spaces(line + 4));
     return;
   }
   if (strcmp(line, "sync") == 0) {
@@ -2971,9 +3453,9 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_record_command("exec", cmd);
 
   ssh_shell_suppress_prompt = 1;
-  if (strstr(cmd, "help")) {
+  if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, usb, usb rescan, ps, pkg, storage, free, timer, bootguard, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, storage, free, timer, bootguard, audit, sync, status, auth, hostkey, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
@@ -2992,10 +3474,15 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_write_text(cmd + 6, 1);
   } else if (ssh_shell_command_is(cmd, "logs")) {
     ssh_shell_print_log(ssh_shell_skip_spaces(cmd + 4));
+  } else if (ssh_shell_command_is(cmd, "wifi")) {
+    ssh_shell_print_wifi(ssh_shell_skip_spaces(cmd + 4));
   } else if (strcmp(cmd, "ps") == 0) {
     ssh_shell_print_ps();
   } else if (ssh_shell_command_is(cmd, "pkg")) {
     ssh_shell_print_pkg(cmd + 3);
+  } else if (ssh_shell_command_is(cmd, "update") ||
+             ssh_shell_command_is(cmd, "orizon-update")) {
+    ssh_shell_print_update(cmd + (cmd[0] == 'u' ? 6 : 13));
   } else if (strcmp(cmd, "storage") == 0 || strcmp(cmd, "disks") == 0) {
     ssh_shell_print_storage();
   } else if (strcmp(cmd, "free") == 0) {
@@ -3046,25 +3533,26 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   } else if (strcmp(cmd, "ssh hostkey reset") == 0) {
     ssh_reset_hostkey(out, sizeof(out));
     ssh_queue_channel_text(out);
-  } else if (strstr(cmd, "status")) {
+  } else if (strcmp(cmd, "status") == 0 || strcmp(cmd, "ssh status") == 0) {
     ssh_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (strstr(cmd, "auth")) {
+  } else if (strcmp(cmd, "auth") == 0 || strcmp(cmd, "ssh auth") == 0) {
     ssh_format_auth(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (strstr(cmd, "hostkey")) {
+  } else if (strcmp(cmd, "hostkey") == 0 || strcmp(cmd, "ssh hostkey") == 0) {
     ssh_format_hostkey(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (strcmp(cmd, "net") == 0 || strcmp(cmd, "network-status") == 0) {
+  } else if (ssh_shell_command_is(cmd, "net") ||
+             strcmp(cmd, "network-status") == 0) {
     netstack_format_status(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
@@ -3078,22 +3566,20 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (strcmp(cmd, "dns") == 0) {
-    netstack_format_dns(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
+  } else if (ssh_shell_command_is(cmd, "dns")) {
+    ssh_shell_print_dns(ssh_shell_skip_spaces(cmd + 3));
+  } else if (ssh_shell_command_is(cmd, "ping")) {
+    ssh_shell_print_ping(ssh_shell_skip_spaces(cmd + 4));
   } else if (strcmp(cmd, "uptime") == 0) {
     snprintf(out, sizeof(out), "uptime=%lus ticks=%lu hz=%lu\r\n",
              (unsigned long)timer_uptime_seconds(),
              (unsigned long)timer_ticks(), (unsigned long)timer_hz());
     ssh_queue_channel_text(out);
-  } else if (strstr(cmd, "whoami")) {
+  } else if (strcmp(cmd, "whoami") == 0 || strcmp(cmd, "id") == 0) {
     ssh_queue_channel_text("orizon\r\n");
-  } else if (strstr(cmd, "uname")) {
+  } else if (strcmp(cmd, "uname") == 0 || strcmp(cmd, "uname -a") == 0) {
     ssh_queue_channel_text("Orizon OS x86_64 OrizonSSH_0.1\r\n");
-  } else if (strstr(cmd, "pwd")) {
+  } else if (strcmp(cmd, "pwd") == 0) {
     ssh_queue_channel_text("/home/orizon\r\n");
   } else {
     snprintf(out, sizeof(out), "%s: command not found\r\n", cmd);
@@ -3125,23 +3611,34 @@ static void ssh_process_channel_data(const uint8_t *payload,
 
   for (size_t i = 0; i < data_len; i++) {
     char ch = (char)data[i];
-    if (ch == '\r') {
-      continue;
-    }
-    if (ch == '\n') {
+    if (ch == '\r' || ch == '\n') {
+      if (ch == '\n' && ssh_shell_last_was_cr) {
+        ssh_shell_last_was_cr = 0;
+        continue;
+      }
+      ssh_shell_last_was_cr = (ch == '\r');
+      ssh_queue_channel_text("\r\n");
       ssh_shell_line[ssh_shell_line_len] = '\0';
       ssh_remote_shell_execute(ssh_shell_line);
       ssh_shell_line_len = 0;
       continue;
     }
+    ssh_shell_last_was_cr = 0;
     if (ch == '\b' || ch == 0x7f) {
       if (ssh_shell_line_len > 0) {
         ssh_shell_line_len--;
+        ssh_queue_channel_text("\b \b");
       }
       continue;
     }
     if (ssh_shell_line_len + 1 < sizeof(ssh_shell_line)) {
       ssh_shell_line[ssh_shell_line_len++] = ch;
+      if (ch >= 32 && ch < 127) {
+        char echo[2];
+        echo[0] = ch;
+        echo[1] = '\0';
+        ssh_queue_channel_text(echo);
+      }
     }
   }
   ssh_set_status("ssh: shell data received");
@@ -3749,7 +4246,9 @@ void ssh_format_status(char *buf, size_t size) {
                : (ssh_status.userauth_request_seen ? "requested" : "pending"),
            (unsigned long)ssh_status.auth_failures,
            (unsigned long)lockout,
-           ssh_status.hostkey_persistent ? "persistent" : "bootstrap",
+           ssh_status.hostkey_persistent
+               ? "persistent"
+               : (ssh_status.hostkey_bootstrap ? "bootstrap" : "generated"),
            ssh_status.channel_open_confirm_sent
                ? "open"
                : (ssh_status.channel_open_seen ? "seen" : "pending"),
@@ -3787,8 +4286,7 @@ void ssh_format_algorithms(char *buf, size_t size) {
            "  key-c2s-sha256: %s\n"
            "  key-s2c-sha256: %s\n"
            "  mac-c2s-sha256: %s\n"
-           "  mac-s2c-sha256: %s\n"
-           "  next: generated per-install RSA material and full PTY\n",
+           "  mac-s2c-sha256: %s\n",
            ssh_status.client_banner_seen ? ssh_status.remote_banner : "none",
            ssh_status.client_kex_first[0] ? ssh_status.client_kex_first : "none",
            ssh_status.client_hostkey_first[0]
@@ -3925,8 +4423,7 @@ void ssh_format_hostkey(char *buf, size_t size) {
            "  source: %s\n"
            "  path: %s\n"
            "  fingerprint-sha256: %s\n"
-           "  status: %s\n"
-           "  next: replace bootstrap material with generated per-install RSA\n",
+           "  status: %s\n",
            ssh_status.hostkey_persistent ? "persistent-file" : "compiled",
            ssh_status.hostkey_bootstrap ? "yes" : "no",
            ssh_status.hostkey_source[0] ? ssh_status.hostkey_source : "none",
@@ -3957,7 +4454,7 @@ void ssh_format_report(char *buf, size_t size) {
            "config: %s\n"
            "log: %s\n"
            "local: %s:%u\n"
-           "note: SSH remote shell preview is enabled after password auth.\n",
+           "note: SSH remote shell is enabled after password auth.\n",
            status, algs, hostkey, ORIZON_SSH_CONFIG_PATH,
            ORIZON_SSH_LOG_PATH, ip, (unsigned)ORIZON_SSH_PORT);
 }

@@ -64,6 +64,7 @@
 #define RTL_RBSTART 0x30
 #define RTL_CR 0x37
 #define RTL_CAPR 0x38
+#define RTL_CBR 0x3A
 #define RTL_IMR 0x3C
 #define RTL_ISR 0x3E
 #define RTL_TCR 0x40
@@ -205,6 +206,7 @@ typedef struct {
 
 static volatile uint8_t *net_mmio = NULL;
 static net_driver_kind_t net_driver_kind = NET_DRIVER_NONE;
+static char net_usb_driver_hint[32] = "usb-ethernet";
 static net_device_status_t net_status_state = {
     .present = 0,
     .initialized = 0,
@@ -226,11 +228,24 @@ static uint32_t rx_next = 0;
 static uint32_t tx_tail = 0;
 
 static volatile uint8_t *rtl_mmio = NULL;
+static uint16_t rtl_io_base = 0;
+static int rtl_use_io = 0;
 static uint8_t rtl_rx_buf[RTL8139_RX_BUF_SIZE] __attribute__((aligned(4096)));
 static uint8_t rtl_tx_buf[RTL8139_TX_DESC_COUNT][NET_TX_BUF_SIZE]
     __attribute__((aligned(4)));
 static uint32_t rtl_rx_offset = 0;
 static uint32_t rtl_tx_cur = 0;
+static uint32_t rtl_rx_packets = 0;
+static uint32_t rtl_rx_errors = 0;
+static uint32_t rtl_tx_packets = 0;
+static uint32_t rtl_tx_errors = 0;
+static uint32_t rtl_last_rx_phys = 0;
+static uint32_t rtl_last_tx_phys = 0;
+static uint32_t rtl_last_tx_len = 0;
+static uint32_t rtl_last_tsd_before = 0;
+static uint32_t rtl_last_tsd_after = 0;
+static uint16_t rtl_last_rx_status = 0;
+static uint16_t rtl_last_rx_len = 0;
 
 static uint16_t virtio_io_base = 0;
 static int virtio_modern = 0;
@@ -328,22 +343,47 @@ static void e1000_write(uint32_t reg, uint32_t value) {
 }
 
 static uint8_t rtl_read8(uint32_t reg) {
+  if (rtl_use_io) {
+    return io_in8((uint16_t)(rtl_io_base + reg));
+  }
   return *(volatile uint8_t *)(rtl_mmio + reg);
 }
 
+static uint16_t rtl_read16(uint32_t reg) {
+  if (rtl_use_io) {
+    return io_in16((uint16_t)(rtl_io_base + reg));
+  }
+  return *(volatile uint16_t *)(rtl_mmio + reg);
+}
+
 static uint32_t rtl_read32(uint32_t reg) {
+  if (rtl_use_io) {
+    return io_in32((uint16_t)(rtl_io_base + reg));
+  }
   return *(volatile uint32_t *)(rtl_mmio + reg);
 }
 
 static void rtl_write8(uint32_t reg, uint8_t value) {
+  if (rtl_use_io) {
+    io_out8((uint16_t)(rtl_io_base + reg), value);
+    return;
+  }
   *(volatile uint8_t *)(rtl_mmio + reg) = value;
 }
 
 static void rtl_write16(uint32_t reg, uint16_t value) {
+  if (rtl_use_io) {
+    io_out16((uint16_t)(rtl_io_base + reg), value);
+    return;
+  }
   *(volatile uint16_t *)(rtl_mmio + reg) = value;
 }
 
 static void rtl_write32(uint32_t reg, uint32_t value) {
+  if (rtl_use_io) {
+    io_out32((uint16_t)(rtl_io_base + reg), value);
+    return;
+  }
   *(volatile uint32_t *)(rtl_mmio + reg) = value;
 }
 
@@ -579,7 +619,7 @@ static void e1000_setup_tx(void) {
 }
 
 static void rtl8139_refresh_link(void) {
-  if (!rtl_mmio) {
+  if (!rtl_use_io && !rtl_mmio) {
     net_status_state.link_up = 0;
     return;
   }
@@ -604,23 +644,40 @@ static int rtl8139_init_device(pci_device_info_t *dev) {
   net_driver_kind = NET_DRIVER_RTL8139;
 
   uint32_t cmd = pci_read32(dev->bus, dev->device, dev->function, 0x04);
-  cmd |= (1U << 1) | (1U << 2); /* memory space + bus master */
+  cmd |= (1U << 0) | (1U << 1) | (1U << 2); /* I/O + memory + bus master */
   pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd);
 
-  uint32_t bar = 0;
-  if ((dev->bar[1] & 0x1) == 0 && (dev->bar[1] & ~0xFULL)) {
-    bar = dev->bar[1] & ~0xFULL;
-  } else if ((dev->bar[0] & 0x1) == 0 && (dev->bar[0] & ~0xFULL)) {
-    bar = dev->bar[0] & ~0xFULL;
+  uint16_t io_base = 0;
+  uint32_t mmio_bar = 0;
+  for (int i = 0; i < 6; i++) {
+    if ((dev->bar[i] & 0x1) && (dev->bar[i] & ~0x3U)) {
+      io_base = (uint16_t)(dev->bar[i] & ~0x3U);
+      break;
+    }
   }
-  if (!bar) {
-    net_set_status("network: rtl8139 MMIO BAR missing");
-    return -1;
+  for (int i = 0; i < 6; i++) {
+    if ((dev->bar[i] & 0x1) == 0 && (dev->bar[i] & ~0xFULL)) {
+      mmio_bar = dev->bar[i] & ~0xFULL;
+      break;
+    }
   }
 
-  rtl_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(bar, 0x1000);
-  if (!rtl_mmio) {
-    net_set_status("network: rtl8139 MMIO map failed");
+  rtl_io_base = 0;
+  rtl_use_io = 0;
+  rtl_mmio = NULL;
+  if (io_base) {
+    rtl_io_base = io_base;
+    rtl_use_io = 1;
+    net_status_state.driver = "realtek-rtl8139-io";
+  } else if (mmio_bar) {
+    rtl_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(mmio_bar, 0x1000);
+    if (!rtl_mmio) {
+      net_set_status("network: rtl8139 MMIO map failed");
+      return -1;
+    }
+    net_status_state.driver = "realtek-rtl8139-mmio";
+  } else {
+    net_set_status("network: rtl8139 BAR missing");
     return -1;
   }
 
@@ -641,14 +698,27 @@ static int rtl8139_init_device(pci_device_info_t *dev) {
   memset(rtl_tx_buf, 0, sizeof(rtl_tx_buf));
   rtl_rx_offset = 0;
   rtl_tx_cur = 0;
+  rtl_rx_packets = 0;
+  rtl_rx_errors = 0;
+  rtl_tx_packets = 0;
+  rtl_tx_errors = 0;
+  rtl_last_rx_phys = (uint32_t)net_phys_addr(rtl_rx_buf);
+  rtl_last_tx_phys = 0;
+  rtl_last_tx_len = 0;
+  rtl_last_tsd_before = 0;
+  rtl_last_tsd_after = 0;
+  rtl_last_rx_status = 0;
+  rtl_last_rx_len = 0;
 
   rtl8139_read_mac();
-  rtl_write32(RTL_RBSTART, (uint32_t)net_phys_addr(rtl_rx_buf));
+  rtl_write32(RTL_RBSTART, rtl_last_rx_phys);
   rtl_write16(RTL_IMR, 0);
+  rtl_write16(RTL_ISR, 0xFFFFU);
+  rtl_write8(RTL_CR, RTL_CR_RE | RTL_CR_TE);
   rtl_write32(RTL_RCR, RTL_RCR_AAP | RTL_RCR_APM | RTL_RCR_AM | RTL_RCR_AB |
                            RTL_RCR_WRAP | (7U << 8));
-  rtl_write32(RTL_TCR, 0x03000000U);
-  rtl_write8(RTL_CR, RTL_CR_RE | RTL_CR_TE);
+  rtl_write32(RTL_TCR, 0x03000000U | (7U << 8));
+  rtl_write16(RTL_CAPR, 0);
 
   net_status_state.initialized = 1;
   rtl8139_refresh_link();
@@ -1220,7 +1290,10 @@ int net_init(void) {
       net_status_state.device_id = usb_info.product_id;
       if (usb_net_ready()) {
         net_driver_kind = NET_DRIVER_USB;
-        net_status_state.driver = usb_info.driver_hint;
+        snprintf(net_usb_driver_hint, sizeof(net_usb_driver_hint), "%s",
+                 usb_info.driver_hint[0] ? usb_info.driver_hint
+                                         : "usb-ethernet");
+        net_status_state.driver = net_usb_driver_hint;
         net_status_state.initialized = 1;
         net_status_state.link_up = usb_info.link_up;
         memcpy(net_status_state.mac, usb_info.mac, sizeof(net_status_state.mac));
@@ -1366,6 +1439,26 @@ const char *net_status(void) {
 
 void net_format_status(char *buf, size_t size) {
   const net_device_status_t *s = net_get_status();
+  if (net_driver_kind == NET_DRIVER_RTL8139 && (rtl_use_io || rtl_mmio)) {
+    snprintf(buf, size,
+             "driver=%s present=%s initialized=%s link=%s pci=%04x:%04x "
+             "mac=%02x:%02x:%02x:%02x:%02x:%02x io=%04x rx=%lu/%lu "
+             "tx=%lu/%lu tsd=%08lx/%08lx txlen=%lu txphys=%08lx "
+             "rxstat=%04x rxlen=%u capr=%04x cbr=%04x isr=%04x cr=%02x",
+             s->driver, s->present ? "yes" : "no",
+             s->initialized ? "yes" : "no", s->link_up ? "up" : "down",
+             s->vendor_id, s->device_id, s->mac[0], s->mac[1], s->mac[2],
+             s->mac[3], s->mac[4], s->mac[5], rtl_io_base,
+             (unsigned long)rtl_rx_packets, (unsigned long)rtl_rx_errors,
+             (unsigned long)rtl_tx_packets, (unsigned long)rtl_tx_errors,
+             (unsigned long)rtl_last_tsd_before,
+             (unsigned long)rtl_last_tsd_after,
+             (unsigned long)rtl_last_tx_len,
+             (unsigned long)rtl_last_tx_phys, rtl_last_rx_status,
+             (unsigned)rtl_last_rx_len, rtl_read16(RTL_CAPR),
+             rtl_read16(RTL_CBR), rtl_read16(RTL_ISR), rtl_read8(RTL_CR));
+    return;
+  }
   snprintf(buf, size,
            "driver=%s present=%s initialized=%s link=%s pci=%04x:%04x "
            "mac=%02x:%02x:%02x:%02x:%02x:%02x",
@@ -1408,7 +1501,10 @@ int net_send_ethernet(const uint8_t dst_mac[6], uint16_t ether_type,
   if (net_driver_kind == NET_DRIVER_RTL8139) {
     uint32_t slot = rtl_tx_cur;
     uint32_t tsd = rtl_read32(RTL_TSD0 + slot * 4U);
-    if (tsd & RTL_TX_OWN) {
+    rtl_last_tsd_before = tsd;
+    /* RTL8139 reports OWN/TOK when the host may reuse the TX slot. */
+    if (!(tsd & (RTL_TX_OWN | RTL_TX_TOK))) {
+      rtl_tx_errors++;
       return -1;
     }
 
@@ -1427,9 +1523,14 @@ int net_send_ethernet(const uint8_t dst_mac[6], uint16_t ether_type,
       frame_len = 60;
     }
 
-    rtl_write32(RTL_TSAD0 + slot * 4U, (uint32_t)net_phys_addr(frame));
+    rtl_last_tx_phys = (uint32_t)net_phys_addr(frame);
+    rtl_last_tx_len = (uint32_t)frame_len;
+    rtl_write32(RTL_TSAD0 + slot * 4U, rtl_last_tx_phys);
+    net_io_barrier();
     rtl_write32(RTL_TSD0 + slot * 4U, (uint32_t)frame_len);
+    rtl_last_tsd_after = rtl_read32(RTL_TSD0 + slot * 4U);
     rtl_tx_cur = (rtl_tx_cur + 1) % RTL8139_TX_DESC_COUNT;
+    rtl_tx_packets++;
     return (int)frame_len;
   }
 
@@ -1502,6 +1603,8 @@ int net_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
     uint16_t status = *(uint16_t *)(rtl_rx_buf + offset);
     uint16_t length = *(uint16_t *)(rtl_rx_buf + offset + 2);
     int result = -1;
+    rtl_last_rx_status = status;
+    rtl_last_rx_len = length;
 
     if ((status & 0x01) && length >= 18) {
       uint8_t *frame = rtl_rx_buf + offset + 4;
@@ -1513,7 +1616,10 @@ int net_recv_ethernet(uint8_t src_mac[6], uint16_t *ether_type,
         *ether_type = ((uint16_t)frame[12] << 8) | frame[13];
         memcpy(payload, frame + 14, payload_len);
         result = (int)payload_len;
+        rtl_rx_packets++;
       }
+    } else {
+      rtl_rx_errors++;
     }
 
     offset = (offset + length + 4 + 3) & ~3U;

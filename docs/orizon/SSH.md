@@ -42,8 +42,9 @@ anti-bruteforce puis la sauvegardent; `ssh auth default` remet `3` essais et
 `ssh audit` affiche le meme rapport d'audit depuis la console locale que la
 commande distante `audit`.
 `ssh hostkey` affiche l'identite hote, `ssh hostkey reload` recharge
-`/system/ssh_host_rsa.key`, et `ssh hostkey reset` recree le fichier depuis le
-materiel RSA de bootstrap.
+`/system/ssh_host_rsa.key`, et `ssh hostkey reset` regenere une cle RSA locale
+persistante pour l'installation courante. La cle de bootstrap compilee ne sert
+plus que de secours si la generation ou la persistence echoue.
 Apres connexion OpenSSH, les commandes admin utiles peuvent aussi etre lancees
 directement avec `ssh orizon@<ip> "ssh auth max 4"`, `ssh orizon@<ip> "ssh
 lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
@@ -63,9 +64,9 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   empreintes SHA-256 dans `ssh algorithms`.
 - Signature hote: Orizon construit un blob `ssh-rsa`, signe le hash d'echange
   avec `rsa-sha2-256`, puis envoie `SSH_MSG_KEX_ECDH_REPLY`.
-- Cle hote: Orizon persiste maintenant le materiel RSA CRT dans
-  `/system/ssh_host_rsa.key`, le recharge au demarrage du service SSH et expose
-  le fingerprint via `ssh hostkey` / `ssh algorithms`.
+- Cle hote: Orizon genere une cle RSA 1024 bits par installation, la persiste
+  dans `/system/ssh_host_rsa.key`, la recharge au demarrage du service SSH et
+  expose le fingerprint via `ssh hostkey` / `ssh algorithms`.
 - Transport chiffre: Orizon derive IV, cles AES-128-CTR et cles HMAC-SHA256,
   echange `SSH_MSG_NEWKEYS`, lit le premier `SERVICE_REQUEST` chiffre et
   repond par `SERVICE_ACCEPT`.
@@ -77,9 +78,12 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
-  `ps`, `pkg`, `storage`, `free`, `timer`, `bootguard`, `audit`, `sync`,
-  `status`, `auth`, `hostkey`, `whoami`, `uname`, `pwd`, `uptime` et `exit`, puis ferme
-  proprement avec `exit-status`.
+  `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `storage`, `free`, `timer`,
+  `bootguard`, `audit`, `sync`, `status`, `auth`, `hostkey`, `whoami`,
+  `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
+  Le mode shell PTY accepte les fins de ligne
+  CR/LF d'OpenSSH, echo les caracteres saisis, et peut enchainer plusieurs
+  commandes dans une meme session interactive.
 - Audit: `audit` affiche le cumul des sessions, auth reussies/echouees,
   commandes `exec`, commandes shell, fermetures de canal, recoveries listener,
   temps idle, derniere commande et les derniers evenements recents; les
@@ -132,8 +136,6 @@ derivees, l'etat auth et l'etat canal.
 
 Pour transformer ce listener en acces distant complet, il reste a ajouter:
 
-- remplacer la cle hote RSA de developpement par une cle persistante par
-  installation, generee par Orizon au lieu d'etre derivee du bootstrap compile
 - durcir encore l'authentification: rotation du hash, permissions du fichier
   config et journalisation plus detaillee par IP
 - brancher le shell SSH sur une vraie pseudo-console Orizon partageant toutes

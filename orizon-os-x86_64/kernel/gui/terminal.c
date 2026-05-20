@@ -51,6 +51,8 @@ static const uint32_t term_colors[16] = {
 #define TERM_SCROLLBACK_LINES 256
 #define TERM_HISTORY_MAX 32
 #define TERM_HISTORY_PATH "/workspace/.orizon/history"
+#define TERM_WIFI_LOG_PATH "/logs/wifi.log"
+#define TERM_WIFI_LAST_PATH "/workspace/.orizon/wifi-validation"
 
 /* Terminal state */
 typedef struct terminal {
@@ -2165,7 +2167,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   if (default_view) {
     term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
     term_puts_t(term,
-                "Use: logs boot | logs network | logs ssh | logs update | logs install | logs all\n");
+                "Use: logs boot | logs network | logs wifi | logs ssh | logs update | logs install | logs all\n");
     if (vfs_exists(KLOG_BOOT_PATH)) {
       term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
     } else {
@@ -2178,6 +2180,9 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     }
     if (vfs_exists(netstack_log_path())) {
       term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 1024);
+    }
+    if (vfs_exists(TERM_WIFI_LOG_PATH)) {
+      term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 1024);
     }
     if (vfs_exists(ORIZON_SSH_LOG_PATH)) {
       term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 1024);
@@ -2202,6 +2207,11 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 8192);
     return;
   }
+  if (term_command_is(args, "wifi")) {
+    term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 8192);
+    term_print_file_tail(term, TERM_WIFI_LAST_PATH, TERM_WIFI_LAST_PATH, 2048);
+    return;
+  }
   if (term_command_is(args, "ssh")) {
     term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 8192);
     return;
@@ -2220,6 +2230,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, "/workspace/.orizon/update.log",
                          "/workspace/.orizon/update.log", 4096);
     term_print_file_tail(term, netstack_log_path(), netstack_log_path(), 4096);
+    term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 4096);
     term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 4096);
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 4096);
@@ -2398,6 +2409,43 @@ static void term_update_progress(const char *line, void *ctx) {
   term_puts_t(term, "\n");
   term_render(term);
   fb_swap_buffers();
+}
+
+static void term_wifi_log_line(const char *line) {
+  file_t *f;
+
+  if (!line || !line[0]) {
+    return;
+  }
+  vfs_mkdir("/logs");
+  f = vfs_open(TERM_WIFI_LOG_PATH, O_CREAT | O_WRONLY | O_APPEND);
+  if (!f) {
+    return;
+  }
+  vfs_write(f, line, strlen(line));
+  if (line[strlen(line) - 1] != '\n') {
+    vfs_write(f, "\n", 1);
+  }
+  vfs_close(f);
+}
+
+static void term_wifi_write_last(const char *line) {
+  file_t *f;
+
+  if (!line || !line[0]) {
+    return;
+  }
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  f = vfs_open(TERM_WIFI_LAST_PATH, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return;
+  }
+  vfs_write(f, line, strlen(line));
+  if (line[strlen(line) - 1] != '\n') {
+    vfs_write(f, "\n", 1);
+  }
+  vfs_close(f);
 }
 
 static void term_run_update(terminal_t *term) {
@@ -2921,6 +2969,127 @@ static void term_run_net(terminal_t *term, const char *cmd) {
   term_print_net_status(term);
 }
 
+static int term_wifi_online_probe(terminal_t *term, const char *label,
+                                  const char *ssid, const char *password) {
+  char line[8192];
+  char ip_s[24];
+  char evidence[512];
+  const wifi_status_t *wifi_status;
+  uint32_t ip = 0;
+  size_t tls_len = 0;
+
+  if (!term || !ssid || !ssid[0]) {
+    return -1;
+  }
+
+  snprintf(evidence, sizeof(evidence),
+           "%s: START ssid=\"%s\" stages=wpa2/ccmp,dhcp,dns,tls",
+           label, ssid);
+  term_wifi_log_line(evidence);
+  term_wifi_write_last(evidence);
+
+  term_puts_t(term, label);
+  term_puts_t(term, ": joining guarded WPA2/CCMP link...\n");
+  if (wifi_join(ssid, password, line, sizeof(line)) != 0) {
+    term_puts_t(term, line);
+    snprintf(evidence, sizeof(evidence),
+             "%s: FAIL stage=join ssid=\"%s\"", label, ssid);
+    term_wifi_log_line(evidence);
+    term_wifi_write_last(evidence);
+    vfs_persist_save();
+    return -1;
+  }
+  term_puts_t(term, line);
+  if (!wifi_data_link_ready()) {
+    term_puts_t(term, label);
+    term_puts_t(term,
+                ": Wi-Fi link is associated but not CCMP-ready\n");
+    snprintf(evidence, sizeof(evidence),
+             "%s: FAIL stage=ccmp-ready ssid=\"%s\"", label, ssid);
+    term_wifi_log_line(evidence);
+    term_wifi_write_last(evidence);
+    vfs_persist_save();
+    return -1;
+  }
+  wifi_status = wifi_get_status();
+  snprintf(evidence, sizeof(evidence),
+           "%s: OK stage=ccmp-ready ssid=\"%s\" bssid=%02x:%02x:%02x:%02x:%02x:%02x rx-ccmp=%lu",
+           label, ssid, wifi_status->connect_bssid[0],
+           wifi_status->connect_bssid[1], wifi_status->connect_bssid[2],
+           wifi_status->connect_bssid[3], wifi_status->connect_bssid[4],
+           wifi_status->connect_bssid[5],
+           (unsigned long)wifi_status->ccmp_rx_packets);
+  term_wifi_log_line(evidence);
+
+  term_puts_t(term, label);
+  term_puts_t(term, ": requesting DHCP over CCMP...\n");
+  netstack_reset();
+  if (netstack_configure_ipv4_dhcp() != 0) {
+    term_puts_t(term, label);
+    term_puts_t(term, ": DHCP failed\n");
+    netstack_format_status(line, sizeof(line));
+    term_puts_t(term, line);
+    term_puts_t(term, "\n");
+    snprintf(evidence, sizeof(evidence),
+             "%s: FAIL stage=dhcp ssid=\"%s\"", label, ssid);
+    term_wifi_log_line(evidence);
+    term_wifi_write_last(evidence);
+    vfs_persist_save();
+    return -1;
+  }
+  netstack_format_status(line, sizeof(line));
+  term_puts_t(term, line);
+  term_puts_t(term, "\n");
+  snprintf(evidence, sizeof(evidence), "%s: OK stage=dhcp %s", label, line);
+  term_wifi_log_line(evidence);
+
+  if (netstack_resolve_a("raw.githubusercontent.com", &ip) != 0) {
+    term_puts_t(term, label);
+    term_puts_t(term, ": DNS probe failed\n");
+    snprintf(evidence, sizeof(evidence),
+             "%s: FAIL stage=dns host=raw.githubusercontent.com", label);
+    term_wifi_log_line(evidence);
+    term_wifi_write_last(evidence);
+    vfs_persist_save();
+    return -1;
+  }
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  term_puts_t(term, label);
+  term_puts_t(term, ": DNS raw.githubusercontent.com -> ");
+  term_puts_t(term, ip_s);
+  term_puts_t(term, "\n");
+  snprintf(evidence, sizeof(evidence),
+           "%s: OK stage=dns host=raw.githubusercontent.com ip=%s",
+           label, ip_s);
+  term_wifi_log_line(evidence);
+
+  line[0] = '\0';
+  if (netstack_github_tls_probe(line, sizeof(line), &tls_len) != 0) {
+    term_puts_t(term, label);
+    term_puts_t(term, ": GitHub TLS probe failed\n");
+    if (line[0]) {
+      term_puts_t(term, line);
+    }
+    snprintf(evidence, sizeof(evidence),
+             "%s: FAIL stage=tls host=raw.githubusercontent.com", label);
+    term_wifi_log_line(evidence);
+    term_wifi_write_last(evidence);
+    vfs_persist_save();
+    return -1;
+  }
+  snprintf(line, sizeof(line),
+           "%s: GitHub TLS probe ok bytes=%lu\n",
+           label, (unsigned long)tls_len);
+  term_puts_t(term, line);
+  snprintf(evidence, sizeof(evidence),
+           "%s: PASS ssid=\"%s\" ccmp=yes dhcp=yes dns=yes tls=yes tls-bytes=%lu",
+           label, ssid, (unsigned long)tls_len);
+  term_wifi_log_line(evidence);
+  term_wifi_write_last(evidence);
+  vfs_persist_save();
+  return 0;
+}
+
 static void term_run_wifi(terminal_t *term, const char *cmd) {
   const char *args = term_skip_spaces(cmd + 4);
   char line[8192];
@@ -3205,8 +3374,52 @@ static void term_run_wifi(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "online")) {
+    rest = term_skip_spaces(args + 6);
+    rest = term_read_token(rest, ssid, sizeof(ssid));
+    if (!rest) {
+      term_puts_t(term, "usage: wifi online <ssid> [password]\n");
+      return;
+    }
+    password[0] = '\0';
+    if (*rest) {
+      term_read_token(rest, password, sizeof(password));
+    }
+
+    if (term_wifi_online_probe(term, "wifi online", ssid, password) == 0) {
+      term_puts_t(term,
+                  "wifi online: update path ready; run `update` to use Wi-Fi\n");
+    }
+    return;
+  }
+
+  if (term_command_is(args, "update")) {
+    rest = term_skip_spaces(args + 6);
+    rest = term_read_token(rest, ssid, sizeof(ssid));
+    if (!rest) {
+      term_puts_t(term, "usage: wifi update <ssid> [password]\n");
+      return;
+    }
+    password[0] = '\0';
+    if (*rest) {
+      term_read_token(rest, password, sizeof(password));
+    }
+    if (term_wifi_online_probe(term, "wifi update", ssid, password) != 0) {
+      return;
+    }
+    if (!term_install_already_complete()) {
+      term_puts_t(term,
+                  "wifi update: network is ready, but update requires an installed Orizon disk\n");
+      return;
+    }
+    term_puts_t(term,
+                "wifi update: GitHub reachable over Wi-Fi; launching update...\n");
+    term_run_update(term);
+    return;
+  }
+
   term_puts_t(term,
-              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|join <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
+              "usage: wifi [status|hw|apm|firmware|load|upload [arm|all [arm]]|boot [arm]|alive|queues [arm]|context [arm]|scheduler [arm]|rx [poll]|command [arm]|nvm [arm]|nvm-info [arm]|bringup|crypto|wpa|key [pairwise|gtk] [arm]|data|bind [arm]|scan [arm|poll]|connect <ssid> [password]|join <ssid> [password]|online <ssid> [password]|update <ssid> [password]|tx [auth|assoc|m2|m4|data|all]|txcmd [auth|assoc|m2|m4|data] [arm]]\n");
 }
 
 static void term_run_dns(terminal_t *term, const char *cmd) {
@@ -4016,6 +4229,10 @@ void term_execute(terminal_t *term, const char *cmd) {
                 "  wifi connect - Prepare Wi-Fi auth/association frames\n");
     term_puts_t(term,
                 "  wifi join <ssid> [password] - Auto Wi-Fi bringup/connect/WPA\n");
+    term_puts_t(term,
+                "  wifi online <ssid> [password] - Join, DHCP, DNS and GitHub TLS probe\n");
+    term_puts_t(term,
+                "  wifi update <ssid> [password] - Validate Wi-Fi path then run update\n");
     term_puts_t(term,
                 "  wifi wpa - Show WPA M1/M2/M3/M4 diagnostic state\n");
     term_puts_t(term,

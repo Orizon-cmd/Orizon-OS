@@ -49,5 +49,9 @@ int orizon_install_update_esp_with_rollback(
     const char *limine_conf, size_t limine_conf_size,
     const char *update_text, size_t update_text_size, char *report,
     size_t report_size);
+int orizon_install_update_limine_config(const char *limine_conf,
+                                        size_t limine_conf_size,
+                                        char *report,
+                                        size_t report_size);
 
 #endif /* _INSTALL_H */
