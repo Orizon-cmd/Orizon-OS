@@ -16,17 +16,23 @@ https://github.com/Orizon-cmd/Orizon-Packages
 pkg help
 pkg list
 pkg status
+pkg update
 pkg info orizon-hello
+pkg history
 pkg sample
 pkg hash /workspace/packages/orizon-hello.opkg
+pkg verify /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg remove orizon-hello
 ```
 
-`pkg install` and `pkg remove` are available only after Orizon OS has been
-installed to disk. Live boot can inspect, create and hash package files, but it
-refuses persistent package changes because the live ISO is not the installed
-system.
+`pkg update`, `pkg install` and `pkg remove` are available only after Orizon OS
+has been installed to disk. Live boot can inspect, create, hash and verify
+package files, but it refuses persistent package changes because the live ISO
+is not the installed system. `pkg update` is intentionally a thin wrapper around
+the signed system `update` flow: the package index is authenticated by the
+signed OS manifest, pinned package repository commit, and pinned package-index
+SHA-256.
 
 ## Package Format
 
@@ -36,6 +42,7 @@ A package is one text file:
 orizon-package 1
 name orizon-hello
 version 0.1.0
+depends orizon-core core-x86_64
 sha256 <sha256 of every byte after the payload line>
 payload:
 file /system/share/orizon-hello.txt
@@ -48,7 +55,8 @@ end-post-install
 
 The hash covers the raw payload bytes after `payload:`. That keeps the header
 editable while still proving that the files and post-install actions were not
-changed.
+changed. Optional `depends <name> <version|*>` lines are checked before install;
+missing dependencies block `pkg install` and show as warnings in `pkg verify`.
 
 ## Payload Features
 
@@ -107,11 +115,13 @@ packages/x86_64/<name>.opkg
 `.opkg` files, verifies their SHA-256 from the index, and then lets `pkg`
 verify the internal payload SHA-256 before installation.
 
-`pkg info <name>` shows stored package metadata and the files owned by an
-installed package. `pkg remove <name>` removes files declared by the stored
-manifest, deletes the package metadata, refreshes `/system/installed`, and
-persists the package database.
+`pkg info <name>` shows stored package metadata, dependencies and the files
+owned by an installed package. `pkg remove <name>` removes files declared by the
+stored manifest, deletes the package metadata, refreshes `/system/installed`,
+and persists the package database.
 
-The next package-manager upgrade is package rollback metadata, so a package
-update can restore its previous file set automatically if a post-install step
-or later boot check fails.
+Package install now keeps a previous package manifest in memory while applying
+an upgrade. If payload replay or metadata update fails, Orizon removes the
+partial new payload and restores the previous package payload/metadata when it
+exists. This is still a local package transaction guard, not a full boot-level
+package rollback.

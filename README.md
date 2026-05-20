@@ -415,17 +415,23 @@ Commandes disponibles:
 ```text
 pkg list
 pkg status
+pkg update
 pkg info orizon-hello
+pkg history
 pkg sample
 pkg hash /workspace/packages/orizon-hello.opkg
+pkg verify /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg remove orizon-hello
 ```
 
-`pkg install` et `pkg remove` sont reserves a un OS installe sur disque. Les
-paquets installes sont stockes dans `/workspace/.orizon/pkgdb`, puis rejoues
-au boot pour restaurer les fichiers systeme en RAM comme `/system/share/...`.
-`pkg info <name>` affiche les metadonnees et fichiers possedes par un paquet.
+`pkg update`, `pkg install` et `pkg remove` sont reserves a un OS installe sur
+disque. Les paquets installes sont stockes dans `/workspace/.orizon/pkgdb`,
+puis rejoues au boot pour restaurer les fichiers systeme en RAM comme
+`/system/share/...`. `pkg verify` controle le hash payload et les dependances
+simples `depends`; `pkg install` restaure l'ancien paquet si l'installation
+echoue avant la fin. `pkg info <name>` affiche les metadonnees, dependances et
+fichiers possedes par un paquet.
 
 Le depot officiel de paquets est:
 

@@ -286,25 +286,52 @@ def main() -> int:
       )
       print(update_out)
       expect(update_out, "Update complete", "update")
-      if "already current" in update_out:
+      if "Boot payload already current" in update_out:
           transcript.append("update: boot payload already current")
       if "Rollback ready" in update_out:
           transcript.append("update: rollback slot armed")
+          ip = wait_for_installed_ssh(
+              client,
+              sudo_password,
+              cfg,
+              args.password,
+              args.boot_timeout,
+              args.ssh_timeout,
+              start_vm=False,
+          )
 
       post_update = [
           ("update status", "manifest: present"),
           ("update status", "manifest.sig: present"),
           ("update status", "signature-manifest-match: yes"),
           ("update status", "tls-root-trust: embedded root trust"),
+          ("update status", "package-index-auth: signed-manifest-sha256-pinned"),
           ("update status", "resume-cache:"),
           ("logs update", "Update complete"),
           ("bootguard", "Orizon boot guard"),
+          ("pkg status", "remote-index-auth signed-update-manifest-sha256-pinned"),
+          ("pkg info orizon-welcome", "orizon-welcome"),
       ]
       for command, needle in post_update:
           print(f"--- {command} ---")
           out = run_guest_ssh(client, ip, args.password, command, args.ssh_timeout)
           print(out)
           expect(out, needle, command)
+
+      package_checks = [
+          ("pkg sample", "Sample package written"),
+          ("pkg verify /workspace/packages/orizon-hello.opkg", "package verify: OK"),
+          ("pkg install /workspace/packages/orizon-hello.opkg", "Installed orizon-hello"),
+          ("pkg info orizon-hello", "dependencies:"),
+          ("pkg remove orizon-hello", "Removed orizon-hello"),
+          ("pkg history", "removed orizon-hello"),
+      ]
+      for command, needle in package_checks:
+          print(f"--- {command} ---")
+          out = run_guest_ssh(client, ip, args.password, command, args.ssh_timeout)
+          print(out)
+          expect(out, needle, command)
+      transcript.append("pkg: sample verify install info remove history PASS")
 
       print("--- rollback ---")
       rollback_out = run_guest_ssh(
@@ -340,13 +367,21 @@ def main() -> int:
       )
       for command, needle in (
           ("update status", "boot-mode: installed"),
-          ("rollback-status", "currently-booted-payload"),
           ("selftest", "summary:"),
       ):
           print(f"--- post-reboot {command} ---")
           out = run_guest_ssh(client, ip, args.password, command, args.ssh_timeout)
           print(out)
           expect(out, needle, f"post-reboot {command}")
+
+      print("--- post-reboot rollback-status ---")
+      out = run_guest_ssh(client, ip, args.password, "rollback-status", args.ssh_timeout)
+      print(out)
+      if (
+          "currently-booted-payload" not in out
+          and "rollback-info: No such file" not in out
+      ):
+          raise RuntimeError("post-reboot rollback-status: unexpected state")
 
       if not args.leave_running:
           print("--- shutdown dedicated VM ---")

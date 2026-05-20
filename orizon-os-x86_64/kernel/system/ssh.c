@@ -2695,16 +2695,85 @@ static void ssh_shell_print_storage(const char *args) {
   ssh_shell_prompt();
 }
 
+static int ssh_install_already_complete(void) {
+  return vfs_exists("/workspace/.orizon/installed");
+}
+
 static void ssh_shell_print_pkg(const char *args) {
-  static char out[880];
+  static char out[SSH_CHANNEL_TEXT_BUF];
+  static char path[MAX_PATH];
+  char token[96];
   const char *sub = ssh_shell_skip_spaces(args);
 
+  out[0] = '\0';
   if (*sub == '\0' || ssh_shell_command_is(sub, "status")) {
     orizon_pkg_status(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "help")) {
+    snprintf(out, sizeof(out),
+             "Orizon packages\r\n"
+             "  pkg status             show package manager state\r\n"
+             "  pkg list               list builtin/installed packages\r\n"
+             "  pkg info <name>        show package metadata/files\r\n"
+             "  pkg history            show install/remove history\r\n"
+             "  pkg sample             create /workspace/packages/orizon-hello.opkg\r\n"
+             "  pkg hash <file>        print package payload sha256\r\n"
+             "  pkg verify <file>      verify package hash/dependencies\r\n"
+             "  pkg update             run signed package refresh through update\r\n"
+             "  pkg install <file>     install a verified package after disk install\r\n"
+             "  pkg remove <name>      remove an installed package\r\n");
   } else if (ssh_shell_command_is(sub, "list")) {
     orizon_pkg_list(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "info")) {
+    if (!ssh_shell_read_token(sub + 4, token, sizeof(token))) {
+      snprintf(out, sizeof(out), "usage: pkg info <name>\r\n");
+    } else {
+      orizon_pkg_info(token, out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "history")) {
+    orizon_pkg_history(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "sample")) {
+    orizon_pkg_write_sample(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "hash")) {
+    if (ssh_shell_resolve_path(sub + 4, path, sizeof(path)) < 0) {
+      snprintf(out, sizeof(out), "usage: pkg hash <file>\r\n");
+    } else {
+      orizon_pkg_hash_file(path, out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "verify")) {
+    if (ssh_shell_resolve_path(sub + 6, path, sizeof(path)) < 0) {
+      snprintf(out, sizeof(out), "usage: pkg verify <file>\r\n");
+    } else {
+      orizon_pkg_verify_file(path, out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "update")) {
+    if (!ssh_install_already_complete()) {
+      snprintf(out, sizeof(out),
+               "pkg update: unavailable in live boot. Install Orizon OS first.\r\n");
+    } else {
+      snprintf(out, sizeof(out),
+               "pkg update: using signed system manifest/package index via update\r\n");
+      orizon_update_full_upgrade(out + strlen(out), sizeof(out) - strlen(out));
+    }
+  } else if (ssh_shell_command_is(sub, "install")) {
+    if (!ssh_install_already_complete()) {
+      snprintf(out, sizeof(out),
+               "pkg install: unavailable in live boot. Install Orizon OS first.\r\n");
+    } else if (ssh_shell_resolve_path(sub + 7, path, sizeof(path)) < 0) {
+      snprintf(out, sizeof(out), "usage: pkg install <file>\r\n");
+    } else {
+      orizon_pkg_install_file(path, out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "remove")) {
+    if (!ssh_install_already_complete()) {
+      snprintf(out, sizeof(out),
+               "pkg remove: unavailable in live boot. Install Orizon OS first.\r\n");
+    } else if (!ssh_shell_read_token(sub + 6, token, sizeof(token))) {
+      snprintf(out, sizeof(out), "usage: pkg remove <name>\r\n");
+    } else {
+      orizon_pkg_remove(token, out, sizeof(out));
+    }
   } else {
-    snprintf(out, sizeof(out), "pkg: remote supports 'pkg status' and 'pkg list'\r\n");
+    snprintf(out, sizeof(out), "pkg: unknown command. Try 'pkg help'.\r\n");
   }
   if (strlen(out) + 2 < sizeof(out)) {
     strcat(out, "\r\n");
@@ -3559,7 +3628,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  usb|usb rescan       show USB diagnostics\r\n"
         "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
         "  usb rescan           rescan USB root ports\r\n"
-        "  ps|pkg|update        show system/update state\r\n"
+        "  ps|pkg|update        show system/update/package state\r\n"
+        "  pkg help             show package install/verify/update commands\r\n"
         "  storage|storage diag show storage and disk detection state\r\n"
         "  disk identify        show read-only disk/NVMe identity\r\n"
         "  disk read-test [lba|last] read one sector without writing\r\n"

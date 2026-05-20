@@ -2789,12 +2789,17 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg list          - List installed packages\n");
   term_puts_t(term, "  pkg status        - Show package manager state\n");
   term_puts_t(term, "  pkg info <name>   - Show package metadata/files\n");
+  term_puts_t(term, "  pkg history       - Show package install/remove history\n");
   term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
   term_puts_t(term, "  pkg hash <file>   - Print package payload sha256\n");
+  term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
   if (term_install_already_complete()) {
+    term_puts_t(term, "  pkg update        - Run signed update package refresh\n");
     term_puts_t(term, "  pkg install <file> - Install a verified local package\n");
     term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
   } else {
+    term_puts_t(term,
+                "  pkg update        - Available after disk install only\n");
     term_puts_t(term,
                 "  pkg install <file> - Available after disk install only\n");
     term_puts_t(term,
@@ -2840,6 +2845,12 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "history")) {
+    orizon_pkg_history(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
   if (term_command_is(args, "sample")) {
     orizon_pkg_write_sample(report, sizeof(report));
     term_puts_t(term, report);
@@ -2858,6 +2869,35 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     orizon_pkg_hash_file(path, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "verify")) {
+    char path[MAX_PATH];
+    const char *requested = term_skip_spaces(args + 6);
+    if (*requested == '\0') {
+      term_puts_t(term, "usage: pkg verify <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "pkg verify: invalid path\n");
+      return;
+    }
+    orizon_pkg_verify_file(path, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "update")) {
+    if (!term_install_already_complete()) {
+      term_puts_t(term,
+                  "pkg update: unavailable in live boot. Install Orizon OS first.\n");
+      return;
+    }
+    term_puts_t(term,
+                "pkg update: using signed system manifest/package index via update\n");
+    orizon_update_full_upgrade(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -4585,9 +4625,12 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\033[33mPackages:\033[0m\n");
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
+    term_puts_t(term, "  pkg history    - Show package transaction history\n");
     term_puts_t(term, "  pkg sample      - Create a sample .opkg package\n");
     term_puts_t(term, "  pkg hash <file> - Print package payload sha256\n");
+    term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
     if (term_install_already_complete()) {
+      term_puts_t(term, "  pkg update      - Refresh packages through signed update\n");
       term_puts_t(term, "  pkg install <file> - Install a verified package\n");
       term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
     }

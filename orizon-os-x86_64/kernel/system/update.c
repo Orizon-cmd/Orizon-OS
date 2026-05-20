@@ -2189,6 +2189,16 @@ void orizon_update_format_status(char *out, size_t out_size) {
       snprintf(line, sizeof(line), "  iso-sha256: %s", value);
       update_status_append(out, out_size, line);
     }
+    if (manifest_copy_value(manifest, "package-commit", value,
+                            sizeof(value)) == 0) {
+      snprintf(line, sizeof(line), "  package-commit: %s", value);
+      update_status_append(out, out_size, line);
+    }
+    if (manifest_copy_value(manifest, "package-index-sha256", value,
+                            sizeof(value)) == 0) {
+      snprintf(line, sizeof(line), "  package-index-sha256: %s", value);
+      update_status_append(out, out_size, line);
+    }
   }
 
   if (sig_ok) {
@@ -2209,6 +2219,9 @@ void orizon_update_format_status(char *out, size_t out_size) {
   update_status_append(
       out, out_size,
       "  tls-root-trust: embedded root trust used by HTTPS/TLS probe");
+  update_status_append(
+      out, out_size,
+      "  package-index-auth: signed-manifest-sha256-pinned");
   snprintf(line, sizeof(line), "  retry-https: retries=%lu range-cache=yes",
            (unsigned long)UPDATE_RANGE_RETRIES);
   update_status_append(out, out_size, line);

@@ -76,6 +76,26 @@ logs update
 
 `update` is installed-disk only. Live ISO boot intentionally blocks it.
 
+## Packages
+
+```text
+pkg status
+pkg list
+pkg update
+pkg info <name>
+pkg history
+pkg sample
+pkg hash /workspace/packages/orizon-hello.opkg
+pkg verify /workspace/packages/orizon-hello.opkg
+pkg install /workspace/packages/orizon-hello.opkg
+pkg remove orizon-hello
+```
+
+`pkg update`, `pkg install`, and `pkg remove` are installed-disk only. `pkg
+sample`, `pkg hash`, and `pkg verify` are safe in the live ISO and over SSH.
+The remote package index is authenticated through the signed system manifest,
+package repository commit pin, and package-index SHA-256 pin.
+
 ## SSH
 
 ```text

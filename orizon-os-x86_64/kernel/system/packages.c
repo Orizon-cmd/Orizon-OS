@@ -31,6 +31,7 @@
 #define PKG_SYSTEM_LIST "/system/packages"
 #define PKG_SYSTEM_INSTALLED "/system/installed"
 #define PKG_STATUS_PATH "/system/package-status"
+#define PKG_MAX_DEPENDS 8U
 
 typedef struct {
   const char *name;
@@ -47,7 +48,14 @@ typedef struct {
 typedef struct {
   char name[64];
   char version[64];
+} pkg_dependency_t;
+
+typedef struct {
+  char name[64];
+  char version[64];
   char sha256[SHA256_HEX_SIZE];
+  pkg_dependency_t depends[PKG_MAX_DEPENDS];
+  size_t depends_count;
   const char *payload;
   size_t payload_size;
 } pkg_manifest_t;
@@ -68,6 +76,8 @@ static const builtin_package_t builtin_packages[] = {
 };
 
 static char pkg_buf[PKG_MAX_BYTES + 1] __attribute__((aligned(4096)));
+static char pkg_rollback_buf[PKG_MAX_BYTES + 1] __attribute__((aligned(4096)));
+static char pkg_rollback_meta[1024];
 static const char *pkg_status_text = "package manager ready";
 static int pkg_initialized = 0;
 
@@ -117,6 +127,50 @@ static int pkg_name_safe(const char *name) {
     return 0;
   }
   return seen;
+}
+
+static int pkg_version_safe(const char *version) {
+  int seen = 0;
+  if (!version) {
+    return 0;
+  }
+  while (*version) {
+    char c = *version++;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
+        c == '+' || c == ':' || c == '*') {
+      seen = 1;
+      continue;
+    }
+    return 0;
+  }
+  return seen;
+}
+
+static const char *pkg_copy_token(const char *p, char *out, size_t out_size) {
+  size_t len = 0;
+
+  if (!p || !out || out_size == 0) {
+    return NULL;
+  }
+  while (*p == ' ' || *p == '\t') {
+    p++;
+  }
+  while (p[len] && p[len] != ' ' && p[len] != '\t' && p[len] != '\r' &&
+         p[len] != '\n') {
+    len++;
+  }
+  if (len == 0 || len >= out_size) {
+    return NULL;
+  }
+  memcpy(out, p, len);
+  out[len] = '\0';
+  return p + len;
+}
+
+static int pkg_version_matches(const char *wanted, const char *actual) {
+  return wanted && actual &&
+         (strcmp(wanted, "*") == 0 || strcmp(wanted, actual) == 0);
 }
 
 static const builtin_package_t *find_builtin_package(const char *name) {
@@ -388,13 +442,27 @@ static int parse_manifest(const char *buf, size_t size, pkg_manifest_t *pkg,
       copy_value(pkg->name, sizeof(pkg->name), line + 5);
     } else if (pkg_starts_with(line, "version ")) {
       copy_value(pkg->version, sizeof(pkg->version), line + 8);
+    } else if (pkg_starts_with(line, "depends ")) {
+      const char *p;
+      if (pkg->depends_count >= PKG_MAX_DEPENDS) {
+        return -1;
+      }
+      p = pkg_copy_token(line + 8, pkg->depends[pkg->depends_count].name,
+                         sizeof(pkg->depends[pkg->depends_count].name));
+      p = pkg_copy_token(p, pkg->depends[pkg->depends_count].version,
+                         sizeof(pkg->depends[pkg->depends_count].version));
+      if (!p || !pkg_name_safe(pkg->depends[pkg->depends_count].name) ||
+          !pkg_version_safe(pkg->depends[pkg->depends_count].version)) {
+        return -1;
+      }
+      pkg->depends_count++;
     } else if (pkg_starts_with(line, "sha256 ")) {
       copy_value(pkg->sha256, sizeof(pkg->sha256), line + 7);
     }
   }
 
   if (!saw_magic || !saw_payload || !pkg_name_safe(pkg->name) ||
-      pkg->version[0] == '\0' || !hex_is_valid(pkg->sha256) ||
+      !pkg_version_safe(pkg->version) || !hex_is_valid(pkg->sha256) ||
       !pkg->payload || pkg->payload_size == 0) {
     return -1;
   }
@@ -606,6 +674,78 @@ static int meta_value(const char *text, const char *key, char *out,
   return -1;
 }
 
+static int package_dependency_satisfied(const pkg_dependency_t *dep) {
+  const builtin_package_t *builtin;
+  char manifest_path[MAX_PATH];
+  char meta_path[MAX_PATH];
+  char meta[512];
+  char version[64];
+
+  if (!dep || !pkg_name_safe(dep->name) || !pkg_version_safe(dep->version)) {
+    return 0;
+  }
+  builtin = find_builtin_package(dep->name);
+  if (builtin && pkg_version_matches(dep->version, builtin->version)) {
+    return 1;
+  }
+  if (package_store_paths(dep->name, manifest_path, sizeof(manifest_path),
+                          meta_path, sizeof(meta_path)) < 0 ||
+      pkg_read_file(meta_path, meta, sizeof(meta), NULL) < 0 ||
+      meta_value(meta, "version", version, sizeof(version)) < 0) {
+    return 0;
+  }
+  return pkg_version_matches(dep->version, version);
+}
+
+static int check_package_dependencies(const pkg_manifest_t *pkg, char *report,
+                                      size_t report_size) {
+  char line[192];
+  int missing = 0;
+
+  if (!pkg) {
+    return -1;
+  }
+  if (pkg->depends_count == 0) {
+    pkg_append_line(report, report_size, "Dependencies: none");
+    return 0;
+  }
+  for (size_t i = 0; i < pkg->depends_count; i++) {
+    const pkg_dependency_t *dep = &pkg->depends[i];
+    if (package_dependency_satisfied(dep)) {
+      snprintf(line, sizeof(line), "Dependency OK: %s %s", dep->name,
+               dep->version);
+      pkg_append_line(report, report_size, line);
+      continue;
+    }
+    snprintf(line, sizeof(line), "pkg: missing dependency %s %s", dep->name,
+             dep->version);
+    pkg_append_line(report, report_size, line);
+    missing = 1;
+  }
+  return missing ? -1 : 0;
+}
+
+static void append_package_dependencies(const pkg_manifest_t *pkg, char *out,
+                                        size_t out_size) {
+  char line[192];
+
+  if (!pkg || !out || out_size == 0) {
+    return;
+  }
+  if (pkg->depends_count == 0) {
+    pkg_append_line(out, out_size, "dependencies: none");
+    return;
+  }
+  pkg_append_line(out, out_size, "dependencies:");
+  for (size_t i = 0; i < pkg->depends_count; i++) {
+    snprintf(line, sizeof(line), "  %s %s %s", pkg->depends[i].name,
+             pkg->depends[i].version,
+             package_dependency_satisfied(&pkg->depends[i]) ? "ok"
+                                                            : "missing");
+    pkg_append_line(out, out_size, line);
+  }
+}
+
 static void append_payload_files(const pkg_manifest_t *pkg, char *out,
                                  size_t out_size) {
   line_reader_t reader;
@@ -810,9 +950,16 @@ int orizon_pkg_init(void) {
 static int pkg_install_loaded(const char *source_name, const char *data,
                               size_t size, char *report, size_t report_size) {
   pkg_manifest_t pkg;
+  pkg_manifest_t old_pkg;
   char actual_hash[SHA256_HEX_SIZE];
+  char old_hash[SHA256_HEX_SIZE];
+  char manifest_path[MAX_PATH];
+  char meta_path[MAX_PATH];
   char line[256];
   int result;
+  int had_old = 0;
+  size_t old_size = 0;
+  size_t old_meta_size = 0;
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -838,14 +985,53 @@ static int pkg_install_loaded(const char *source_name, const char *data,
   pkg_append_line(report, report_size, line);
   snprintf(line, sizeof(line), "Verified sha256 %s", actual_hash);
   pkg_append_line(report, report_size, line);
+  if (check_package_dependencies(&pkg, report, report_size) < 0) {
+    return -4;
+  }
+
+  if (package_store_paths(pkg.name, manifest_path, sizeof(manifest_path),
+                          meta_path, sizeof(meta_path)) < 0) {
+    pkg_append_line(report, report_size, "pkg: invalid package store path");
+    return -4;
+  }
+  if (pkg_read_file(manifest_path, pkg_rollback_buf, sizeof(pkg_rollback_buf),
+                    &old_size) == 0 &&
+      parse_manifest(pkg_rollback_buf, old_size, &old_pkg, old_hash) == 0) {
+    had_old = 1;
+    pkg_read_file(meta_path, pkg_rollback_meta, sizeof(pkg_rollback_meta),
+                  &old_meta_size);
+  }
 
   if (replay_payload(&pkg, 1, report, report_size) < 0) {
     pkg_append_line(report, report_size, "pkg: payload install failed");
-    return -4;
+    remove_payload_files(&pkg, report, report_size);
+    if (had_old) {
+      replay_payload(&old_pkg, 0, NULL, 0);
+      pkg_append_line(report, report_size,
+                      "pkg: rollback restored previous package payload");
+    }
+    return -5;
   }
   if (store_installed_package(source_name, &pkg, actual_hash, data, size) < 0) {
     pkg_append_line(report, report_size, "pkg: cannot update installed db");
-    return -5;
+    remove_payload_files(&pkg, report, report_size);
+    if (had_old) {
+      pkg_write_blob_internal(manifest_path, pkg_rollback_buf, old_size);
+      if (old_meta_size > 0) {
+        pkg_write_blob_internal(meta_path, pkg_rollback_meta, old_meta_size);
+      }
+      replay_payload(&old_pkg, 0, NULL, 0);
+      pkg_append_line(report, report_size,
+                      "pkg: rollback restored previous installed metadata");
+    } else {
+      vfs_delete(meta_path);
+      vfs_delete(manifest_path);
+    }
+    return -6;
+  }
+  if (had_old) {
+    snprintf(line, sizeof(line), "Replaced previous version %s", old_pkg.version);
+    pkg_append_line(report, report_size, line);
   }
   pkg_status_text = "package installed";
   orizon_pkg_refresh_database();
@@ -931,6 +1117,10 @@ int orizon_pkg_status(char *out, size_t out_size) {
   snprintf(line, sizeof(line), "installed-packages %d", installed_count);
   pkg_append_line(out, out_size, line);
   pkg_append_line(out, out_size, "format orizon-package 1");
+  pkg_append_line(out, out_size, "dependencies depends <name> <version|*>");
+  pkg_append_line(out, out_size, "rollback install-restores-previous-payload");
+  pkg_append_line(out, out_size,
+                  "remote-index-auth signed-update-manifest-sha256-pinned");
   pkg_append_line(out, out_size, "db " PKG_DB_ROOT);
   return 0;
 }
@@ -984,6 +1174,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
   if (parse_manifest(pkg_buf, size, &pkg, actual_hash) == 0) {
     snprintf(line, sizeof(line), "stored-sha256 %s", actual_hash);
     pkg_append_line(out, out_size, line);
+    append_package_dependencies(&pkg, out, out_size);
     append_payload_files(&pkg, out, out_size);
   } else {
     pkg_append_line(out, out_size, "stored-manifest invalid");
@@ -1088,6 +1279,60 @@ int orizon_pkg_hash_file(const char *path, char *out, size_t out_size) {
   return 0;
 }
 
+int orizon_pkg_verify_file(const char *path, char *out, size_t out_size) {
+  pkg_manifest_t pkg;
+  char actual_hash[SHA256_HEX_SIZE];
+  char line[192];
+  size_t size = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  if (pkg_read_file(path, pkg_buf, sizeof(pkg_buf), &size) < 0 || size == 0) {
+    pkg_append_line(out, out_size, "pkg verify: cannot read package file");
+    return -1;
+  }
+  if (parse_manifest(pkg_buf, size, &pkg, actual_hash) != 0) {
+    pkg_append_line(out, out_size, "pkg verify: invalid package or sha256");
+    return -2;
+  }
+  snprintf(line, sizeof(line), "name %s", pkg.name);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "version %s", pkg.version);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "payload-sha256 %s", actual_hash);
+  pkg_append_line(out, out_size, line);
+  append_package_dependencies(&pkg, out, out_size);
+  append_payload_files(&pkg, out, out_size);
+  if (check_package_dependencies(&pkg, out, out_size) == 0) {
+    pkg_append_line(out, out_size, "package verify: OK");
+    return 0;
+  }
+  pkg_append_line(out, out_size, "package verify: WARN dependencies missing");
+  return 1;
+}
+
+int orizon_pkg_history(char *out, size_t out_size) {
+  size_t size = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  if (pkg_read_file(PKG_DB_HISTORY, out, out_size, &size) < 0 || size == 0) {
+    pkg_append_line(out, out_size, "pkg history: empty");
+    return 1;
+  }
+  return 0;
+}
+
 int orizon_pkg_write_sample(char *report, size_t report_size) {
   static const char sample_payload[] =
       "file /system/share/orizon-hello.txt\n"
@@ -1114,6 +1359,7 @@ int orizon_pkg_write_sample(char *report, size_t report_size) {
            "orizon-package 1\n"
            "name orizon-hello\n"
            "version 0.1.0\n"
+           "depends orizon-core core-x86_64\n"
            "sha256 %s\n"
            "payload:\n",
            hash);

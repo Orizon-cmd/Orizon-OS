@@ -29,6 +29,10 @@ $commands = @(
   "free",
   "ps",
   "pkg status",
+  "pkg help",
+  "pkg sample",
+  "pkg verify /workspace/packages/orizon-hello.opkg",
+  "pkg install /workspace/packages/orizon-hello.opkg",
   "update status",
   "storage",
   "storage diag",
@@ -160,6 +164,18 @@ run_cmd() {
       ;;
     "update status")
       grep -q "update status:" "`$OUT" || { echo "missing update status"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg help")
+      grep -q "pkg verify" "`$OUT" || { echo "missing pkg help output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg sample")
+      grep -q "Sample package written" "`$OUT" || { echo "missing pkg sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg verify /workspace/packages/orizon-hello.opkg")
+      grep -q "package verify: OK" "`$OUT" || { echo "missing pkg verify output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg install /workspace/packages/orizon-hello.opkg")
+      grep -q "unavailable in live boot" "`$OUT" || { echo "pkg install did not return live-boot guard"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pci bars")
       grep -q "PCI devices:" "`$OUT" || { echo "missing PCI diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

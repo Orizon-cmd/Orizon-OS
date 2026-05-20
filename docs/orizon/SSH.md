@@ -153,8 +153,10 @@ peuvent etre changees avec `-ZimaHost`, `-VmIp`, ou les variables
 Le client doit atteindre Orizon, voir le logiciel distant `OrizonSSH_0.1`,
 recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Apres
 authentification password, OpenSSH peut ouvrir un canal `session`; `exec` et le
-mini-shell interactif fonctionnent deja pour les diagnostics de base et les
-commandes admin listees plus haut. `ssh status` et `ssh algorithms` affichent
+mini-shell interactif fonctionnent deja pour les diagnostics de base, les
+commandes admin listees plus haut, et les commandes `pkg status/list/info`,
+`pkg sample`, `pkg hash`, `pkg verify`, `pkg update`, `pkg install`, `pkg
+remove` et `pkg history`. `ssh status` et `ssh algorithms` affichent
 la banniere client, la negociation
 choisie, les empreintes X25519, le hash d'echange, la signature, les cles
 derivees, l'etat auth et l'etat canal.
@@ -165,7 +167,7 @@ Pour transformer ce listener en acces distant complet, il reste a ajouter:
 
 - durcir encore l'authentification: rotation du hash, permissions du fichier
   config et journalisation plus detaillee par IP
-- brancher le shell SSH sur une vraie pseudo-console Orizon partageant toutes
-  les commandes locales; le sous-ensemble distant couvre deja les diagnostics
-  importants mais pas encore toute la console
+- brancher le shell SSH sur une vraie pseudo-console Orizon partageant toute
+  l'ergonomie locale; le sous-ensemble distant couvre deja les diagnostics,
+  update/rollback et le flux paquet principal
 - rotation/rechargement propre des cles hote dans `/system/ssh.conf`
