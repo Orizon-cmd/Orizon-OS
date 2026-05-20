@@ -30,6 +30,8 @@ $commands = @(
   "ps",
   "pkg status",
   "storage",
+  "storage diag",
+  "pci bars",
   "timer",
   "usb",
   "usb rescan",
@@ -111,6 +113,12 @@ run_cmd() {
       ;;
     "bootguard")
       grep -q "Orizon boot guard" "`$OUT" || { echo "missing bootguard output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "storage diag")
+      grep -q "storage diagnostics:" "`$OUT" || { echo "missing storage diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pci bars")
+      grep -q "PCI devices:" "`$OUT" || { echo "missing PCI diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "rollback-status")
       ! grep -q "command not found" "`$OUT" || { echo "rollback-status is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

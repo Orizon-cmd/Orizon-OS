@@ -2260,7 +2260,7 @@ static void term_print_diagnostic_hints(terminal_t *term) {
       any = 1;
     }
     term_puts_t(term,
-                "  - No AHCI/NVMe disk is ready; install/update need writable storage.\n");
+                "  - No writable disk is ready; run `storage diag` before install/update.\n");
   }
   if (!net_link_up()) {
     if (!any) {
@@ -3737,7 +3737,10 @@ static void term_print_disks(terminal_t *term) {
   char capacity[64];
 
   if (count <= 0) {
-    term_puts_t(term, "No AHCI/NVMe disks detected.\n");
+    static char diag[1536];
+    term_puts_t(term, "No writable AHCI/NVMe disks detected.\n");
+    storage_format_diagnostics(diag, sizeof(diag));
+    term_puts_t(term, diag);
     return;
   }
 
@@ -4398,6 +4401,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  disks     - List detected install disks\n");
     term_puts_t(term, "  partitions - List GPT partitions on selected disk\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");
+    term_puts_t(term, "  storage diag - Explain storage/NVMe/eMMC detection\n");
     term_puts_t(term, "  net       - Show ethernet/IP status\n");
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
     term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
@@ -4885,6 +4889,12 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_print_disks(term);
       return;
     }
+    if (term_command_is(args, "diag") || term_command_is(args, "diagnostics")) {
+      static char diag[2048];
+      storage_format_diagnostics(diag, sizeof(diag));
+      term_puts_t(term, diag);
+      return;
+    }
     if (term_command_is(args, "detail") || term_command_is(args, "list")) {
       term_puts_t(term, "\033[1;36mStorage detail\033[0m\n");
       term_print_disks(term);
@@ -4892,7 +4902,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     storage_format_capacity(capacity, sizeof(capacity));
     term_puts_t(term, "Disk: ");
     term_puts_t(term, storage_available() ? storage_status()
-                                          : "no writable AHCI/NVMe disk");
+                                          : "no writable detected disk");
     term_puts_t(term, " (");
     term_puts_t(term, capacity);
     term_puts_t(term, ")\n");

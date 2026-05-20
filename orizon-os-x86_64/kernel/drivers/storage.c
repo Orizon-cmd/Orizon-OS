@@ -160,6 +160,7 @@ static int storage_scanned = 0;
 static int storage_device_total = 0;
 static int storage_selected_index = -1;
 static char selected_status[96] = "storage: not initialized";
+static char storage_blocker[192] = "";
 static storage_device_t storage_devices[ORIZON_STORAGE_MAX_DEVICES];
 
 static ahci_cmd_header_t cmd_list[32] __attribute__((aligned(1024)));
@@ -170,6 +171,7 @@ static volatile uint8_t *nvme_mmio = NULL;
 static uint32_t nvme_db_stride = 4;
 static uint32_t nvme_namespace_id = 1;
 static uint32_t nvme_lba_size = ORIZON_SECTOR_SIZE;
+static uint32_t nvme_lba_scale = 1;
 static uint16_t nvme_next_cid = 1;
 static uint16_t nvme_admin_sq_tail = 0;
 static uint16_t nvme_admin_cq_head = 0;
@@ -187,6 +189,7 @@ static nvme_cmd_t nvme_io_sq[NVME_IO_QUEUE_DEPTH]
 static nvme_cqe_t nvme_io_cq[NVME_IO_QUEUE_DEPTH]
     __attribute__((aligned(4096)));
 static uint8_t nvme_identify_buf[4096] __attribute__((aligned(4096)));
+static uint8_t nvme_lba_scratch[4096] __attribute__((aligned(4096)));
 static char nvme_model[64] = "NVMe namespace 1";
 
 static uint64_t storage_phys_addr(const void *ptr) {
@@ -205,6 +208,75 @@ static void set_status(const char *status) {
   serial_puts("[storage] ");
   serial_puts(status);
   serial_puts("\n");
+}
+
+static void storage_set_blocker(const pci_device_info_t *dev,
+                                const char *reason) {
+  if (storage_blocker[0] || !dev || !reason) {
+    return;
+  }
+  snprintf(storage_blocker, sizeof(storage_blocker),
+           "storage: %s at %02x:%02x.%u vendor=%04x device=%04x "
+           "class=%02x/%02x/%02x",
+           reason, dev->bus, dev->device, dev->function, dev->vendor_id,
+           dev->device_id, dev->class_code, dev->subclass, dev->prog_if);
+}
+
+static const char *storage_candidate_hint(const pci_device_info_t *dev) {
+  if (!dev) {
+    return "unknown";
+  }
+  if (dev->class_code == 0x01 && dev->subclass == 0x08) {
+    return dev->prog_if == 0x02 ? "nvme-supported" : "nvme-unusual-prog-if";
+  }
+  if (dev->class_code == 0x01 && dev->subclass == 0x06) {
+    return dev->prog_if == 0x01 ? "ahci-supported" : "sata-non-ahci";
+  }
+  if (dev->class_code == 0x01 && dev->subclass == 0x04) {
+    return dev->vendor_id == 0x8086 ? "intel-rst-vmd-unsupported"
+                                    : "raid-unsupported";
+  }
+  if (dev->class_code == 0x08 && dev->subclass == 0x05) {
+    return "sdhci-emmc-unsupported";
+  }
+  if (dev->class_code == 0x01) {
+    return "mass-storage-unsupported";
+  }
+  return "not-storage";
+}
+
+static int storage_is_candidate(const pci_device_info_t *dev) {
+  if (!dev) {
+    return 0;
+  }
+  return dev->class_code == 0x01 ||
+         (dev->class_code == 0x08 && dev->subclass == 0x05);
+}
+
+static void storage_detect_blockers(void) {
+  pci_device_info_t devs[96];
+  int total = pci_scan_all(devs, 96);
+
+  for (int i = 0; i < total && i < 96; i++) {
+    const pci_device_info_t *dev = &devs[i];
+    if (dev->class_code == 0x01 && dev->subclass == 0x04 &&
+        dev->vendor_id == 0x8086) {
+      storage_set_blocker(dev, "Intel RST/VMD mode hides the NVMe disk");
+      return;
+    }
+    if (dev->class_code == 0x08 && dev->subclass == 0x05) {
+      storage_set_blocker(dev, "SDHCI/eMMC storage needs an eMMC driver");
+      return;
+    }
+  }
+
+  for (int i = 0; i < total && i < 96; i++) {
+    const pci_device_info_t *dev = &devs[i];
+    if (storage_is_candidate(dev)) {
+      storage_set_blocker(dev, storage_candidate_hint(dev));
+      return;
+    }
+  }
 }
 
 static const char *driver_name(storage_driver_t driver) {
@@ -366,6 +438,7 @@ static int nvme_create_io_queues(void) {
 
 static int nvme_identify_namespace(void) {
   nvme_cmd_t cmd;
+  uint64_t native_lbas;
   memset(nvme_identify_buf, 0, sizeof(nvme_identify_buf));
   memset(&cmd, 0, sizeof(cmd));
   cmd.opcode = NVME_ADMIN_IDENTIFY;
@@ -385,12 +458,14 @@ static int nvme_identify_namespace(void) {
     return -1;
   }
   nvme_lba_size = 1U << lba_shift;
-  if (nvme_lba_size != ORIZON_SECTOR_SIZE) {
-    set_status("storage: NVMe namespace is not 512-byte LBA yet");
+  if (nvme_lba_size != ORIZON_SECTOR_SIZE && nvme_lba_size != 4096U) {
+    set_status("storage: NVMe namespace LBA size is unsupported");
     return -1;
   }
+  nvme_lba_scale = nvme_lba_size / ORIZON_SECTOR_SIZE;
 
-  disk_sectors = nvme_le64(nvme_identify_buf);
+  native_lbas = nvme_le64(nvme_identify_buf);
+  disk_sectors = native_lbas * nvme_lba_scale;
   return disk_sectors > 0 ? 0 : -1;
 }
 
@@ -438,6 +513,23 @@ static void nvme_identify_controller(void) {
   }
 }
 
+static int nvme_io_native(uint64_t lba, void *buf, int write) {
+  nvme_cmd_t cmd;
+  uint64_t phys = storage_phys_addr(buf);
+
+  memset(&cmd, 0, sizeof(cmd));
+  cmd.opcode = write ? NVME_CMD_WRITE : NVME_CMD_READ;
+  cmd.nsid = nvme_namespace_id;
+  cmd.prp1 = phys;
+  if ((phys & 0xFFFU) + nvme_lba_size > 4096U) {
+    cmd.prp2 = (phys & ~0xFFFULL) + 4096U;
+  }
+  cmd.cdw10 = (uint32_t)lba;
+  cmd.cdw11 = (uint32_t)(lba >> 32);
+  cmd.cdw12 = 0; /* One logical block, zero based. */
+  return nvme_io_cmd(&cmd);
+}
+
 static int nvme_io(uint64_t lba, void *buf, uint32_t sectors, int write) {
   if (!disk_ready || storage_driver != STORAGE_DRIVER_NVME || sectors == 0) {
     return disk_ready ? 0 : -1;
@@ -445,34 +537,51 @@ static int nvme_io(uint64_t lba, void *buf, uint32_t sectors, int write) {
 
   uint8_t *bytes = (uint8_t *)buf;
   for (uint32_t i = 0; i < sectors; i++) {
-    nvme_cmd_t cmd;
-    uint64_t phys = storage_phys_addr(bytes + (uint64_t)i * ORIZON_SECTOR_SIZE);
-
-    memset(&cmd, 0, sizeof(cmd));
-    cmd.opcode = write ? NVME_CMD_WRITE : NVME_CMD_READ;
-    cmd.nsid = nvme_namespace_id;
-    cmd.prp1 = phys;
-    if ((phys & 0xFFFU) + ORIZON_SECTOR_SIZE > 4096U) {
-      cmd.prp2 = (phys & ~0xFFFULL) + 4096U;
+    uint8_t *sector = bytes + (uint64_t)i * ORIZON_SECTOR_SIZE;
+    if (nvme_lba_size == ORIZON_SECTOR_SIZE) {
+      if (nvme_io_native(lba + i, sector, write) != 0) {
+        return -1;
+      }
+      continue;
     }
-    cmd.cdw10 = (uint32_t)(lba + i);
-    cmd.cdw11 = (uint32_t)((lba + i) >> 32);
-    cmd.cdw12 = 0; /* One logical block, zero based. */
-    if (nvme_io_cmd(&cmd) != 0) {
+
+    uint64_t native_lba = (lba + i) / nvme_lba_scale;
+    uint32_t offset =
+        (uint32_t)(((lba + i) % nvme_lba_scale) * ORIZON_SECTOR_SIZE);
+    if (nvme_lba_size > sizeof(nvme_lba_scratch)) {
       return -1;
+    }
+    if (nvme_io_native(native_lba, nvme_lba_scratch, 0) != 0) {
+      return -1;
+    }
+    if (write) {
+      memcpy(nvme_lba_scratch + offset, sector, ORIZON_SECTOR_SIZE);
+      if (nvme_io_native(native_lba, nvme_lba_scratch, 1) != 0) {
+        return -1;
+      }
+    } else {
+      memcpy(sector, nvme_lba_scratch + offset, ORIZON_SECTOR_SIZE);
     }
   }
   return 0;
 }
 
-static int nvme_init_controller(void) {
-  pci_device_info_t devs[4];
-  int count = pci_scan_class(0x01, 0x08, 0x02, devs, 4);
-  if (count <= 0) {
+static int nvme_find_namespace(void) {
+  for (uint32_t nsid = 1; nsid <= 32; nsid++) {
+    nvme_namespace_id = nsid;
+    if (nvme_identify_namespace() == 0) {
+      return 0;
+    }
+  }
+  set_status("storage: NVMe namespace identify failed");
+  return -1;
+}
+
+static int nvme_init_one_controller(const pci_device_info_t *dev) {
+  if (!dev) {
     return -1;
   }
 
-  pci_device_info_t *dev = &devs[0];
   uint32_t cmd_reg = pci_read32(dev->bus, dev->device, dev->function, 0x04);
   cmd_reg |= (1U << 2) | (1U << 1);
   pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd_reg);
@@ -524,6 +633,8 @@ static int nvme_init_controller(void) {
   nvme_io_sq_tail = 0;
   nvme_io_cq_head = 0;
   nvme_io_cq_phase = 1;
+  nvme_lba_size = ORIZON_SECTOR_SIZE;
+  nvme_lba_scale = 1;
 
   nvme_write32(NVME_REG_AQA, (NVME_ADMIN_QUEUE_DEPTH - 1U) |
                                   ((NVME_ADMIN_QUEUE_DEPTH - 1U) << 16));
@@ -539,16 +650,36 @@ static int nvme_init_controller(void) {
   }
 
   if (nvme_create_io_queues() != 0) {
+    set_status("storage: NVMe IO queue creation failed");
     return -1;
   }
   nvme_identify_controller();
-  if (nvme_identify_namespace() != 0) {
+  if (nvme_find_namespace() != 0) {
     return -1;
   }
 
   storage_add_device(STORAGE_DRIVER_NVME, NULL, disk_sectors, nvme_model);
-  set_status("storage: NVMe namespace detected");
+  set_status(nvme_lba_size == ORIZON_SECTOR_SIZE
+                 ? "storage: NVMe namespace detected"
+                 : "storage: NVMe 4K namespace detected through 512B shim");
   return 0;
+}
+
+static int nvme_init_controller(void) {
+  pci_device_info_t devs[8];
+  int count = pci_scan_class(0x01, 0x08, 0x02, devs, 8);
+  if (count <= 0) {
+    count = pci_scan_class(0x01, 0x08, 0xFF, devs, 8);
+  }
+  if (count <= 0) {
+    return -1;
+  }
+  for (int i = 0; i < count && i < 8; i++) {
+    if (nvme_init_one_controller(&devs[i]) == 0) {
+      return 0;
+    }
+  }
+  return -1;
 }
 
 static int ahci_port_has_disk(ahci_port_t *port) {
@@ -778,65 +909,67 @@ static void identify_model_string(const uint16_t *id, char *out,
 }
 
 static int ahci_scan_controller(void) {
-  pci_device_info_t devs[4];
-  int count = pci_scan_class(0x01, 0x06, 0x01, devs, 4);
+  pci_device_info_t devs[8];
+  int count = pci_scan_class(0x01, 0x06, 0x01, devs, 8);
   int found = 0;
 
   if (count <= 0) {
-    count = pci_scan_class(0x01, 0x06, 0xFF, devs, 4);
+    count = pci_scan_class(0x01, 0x06, 0xFF, devs, 8);
   }
   if (count <= 0) {
     set_status("storage: no AHCI controller");
     return -1;
   }
 
-  pci_device_info_t *dev = &devs[0];
-  uint32_t cmd = pci_read32(dev->bus, dev->device, dev->function, 0x04);
-  cmd |= (1U << 2) | (1U << 1);
-  pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd);
+  for (int dev_index = 0; dev_index < count && dev_index < 8; dev_index++) {
+    pci_device_info_t *dev = &devs[dev_index];
+    uint32_t cmd = pci_read32(dev->bus, dev->device, dev->function, 0x04);
+    cmd |= (1U << 2) | (1U << 1);
+    pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd);
 
-  uint32_t bar5 = dev->bar[5];
-  if ((bar5 & 0x01) != 0) {
-    set_status("storage: AHCI BAR is not MMIO");
-    return -1;
-  }
-
-  uint64_t abar_phys = (uint64_t)(bar5 & ~0x0FULL);
-  if (!abar_phys) {
-    set_status("storage: AHCI BAR missing");
-    return -1;
-  }
-
-  uint64_t abar = mmio_map_range(abar_phys, 0x2000);
-  if (!abar) {
-    set_status("storage: AHCI MMIO map failed");
-    return -1;
-  }
-
-  hba = (ahci_mem_t *)(uintptr_t)abar;
-  hba->ghc |= AHCI_GHC_AE;
-
-  uint32_t implemented = hba->pi;
-  for (int i = 0; i < 32; i++) {
-    if ((implemented & (1U << i)) == 0) {
+    uint32_t bar5 = dev->bar[5];
+    if ((bar5 & 0x01) != 0) {
+      set_status("storage: AHCI BAR is not MMIO");
       continue;
     }
-    if (!ahci_port_has_disk(&hba->ports[i])) {
+
+    uint64_t abar_phys = (uint64_t)(bar5 & ~0x0FULL);
+    if (!abar_phys) {
+      set_status("storage: AHCI BAR missing");
       continue;
     }
-    if (ahci_setup_port(&hba->ports[i]) == 0) {
-      static uint16_t identify_words[256] __attribute__((aligned(4096)));
-      char model[64];
-      uint64_t sectors = 0;
-      model[0] = '\0';
-      if (ahci_identify(&hba->ports[i], identify_words) == 0) {
-        sectors = identify_sector_count(identify_words);
-        identify_model_string(identify_words, model, sizeof(model));
+
+    uint64_t abar = mmio_map_range(abar_phys, 0x2000);
+    if (!abar) {
+      set_status("storage: AHCI MMIO map failed");
+      continue;
+    }
+
+    hba = (ahci_mem_t *)(uintptr_t)abar;
+    hba->ghc |= AHCI_GHC_AE;
+
+    uint32_t implemented = hba->pi;
+    for (int i = 0; i < 32; i++) {
+      if ((implemented & (1U << i)) == 0) {
+        continue;
       }
-      if (sectors > 0) {
-        storage_add_device(STORAGE_DRIVER_AHCI, (void *)&hba->ports[i],
-                           sectors, model);
-        found++;
+      if (!ahci_port_has_disk(&hba->ports[i])) {
+        continue;
+      }
+      if (ahci_setup_port(&hba->ports[i]) == 0) {
+        static uint16_t identify_words[256] __attribute__((aligned(4096)));
+        char model[64];
+        uint64_t sectors = 0;
+        model[0] = '\0';
+        if (ahci_identify(&hba->ports[i], identify_words) == 0) {
+          sectors = identify_sector_count(identify_words);
+          identify_model_string(identify_words, model, sizeof(model));
+        }
+        if (sectors > 0) {
+          storage_add_device(STORAGE_DRIVER_AHCI, (void *)&hba->ports[i],
+                             sectors, model);
+          found++;
+        }
       }
     }
   }
@@ -867,13 +1000,16 @@ int storage_init(void) {
   storage_driver = STORAGE_DRIVER_NONE;
   disk_port = NULL;
   disk_sectors = 0;
+  storage_blocker[0] = '\0';
   snprintf(nvme_model, sizeof(nvme_model), "NVMe namespace 1");
 
   nvme_init_controller();
   ahci_scan_controller();
 
   if (storage_device_total <= 0) {
-    set_status("storage: no AHCI/NVMe disk");
+    storage_detect_blockers();
+    set_status(storage_blocker[0] ? storage_blocker
+                                  : "storage: no AHCI/NVMe/eMMC disk");
     return -1;
   }
   return storage_select_device(0);
@@ -915,6 +1051,74 @@ void storage_format_size(uint64_t sectors, char *out, size_t out_size) {
 
 void storage_format_capacity(char *out, size_t out_size) {
   storage_format_size(storage_sector_count(), out, out_size);
+}
+
+static void storage_diag_append(char *out, size_t out_size, size_t *used,
+                                const char *text) {
+  size_t len;
+  if (!out || !used || !text || *used >= out_size) {
+    return;
+  }
+  len = strlen(text);
+  if (*used + len >= out_size) {
+    len = out_size - *used - 1;
+  }
+  memcpy(out + *used, text, len);
+  *used += len;
+  out[*used] = '\0';
+}
+
+void storage_format_diagnostics(char *out, size_t out_size) {
+  pci_device_info_t devs[96];
+  char line[256];
+  size_t used = 0;
+  int candidates = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!storage_scanned) {
+    storage_init();
+  }
+
+  snprintf(line, sizeof(line),
+           "storage diagnostics:\n"
+           "  status: %s\n"
+           "  selected: %d\n"
+           "  devices: %d\n"
+           "  nvme: nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n",
+           storage_status(), storage_selected_index + 1, storage_device_total,
+           (unsigned long)nvme_namespace_id, (unsigned long)nvme_lba_size,
+           (unsigned long)nvme_lba_scale, nvme_model);
+  storage_diag_append(out, out_size, &used, line);
+  if (storage_blocker[0]) {
+    snprintf(line, sizeof(line), "  blocker: %s\n", storage_blocker);
+    storage_diag_append(out, out_size, &used, line);
+  }
+
+  storage_diag_append(out, out_size, &used, "  pci-storage-candidates:\n");
+  int total = pci_scan_all(devs, 96);
+  for (int i = 0; i < total && i < 96; i++) {
+    const pci_device_info_t *dev = &devs[i];
+    if (!storage_is_candidate(dev)) {
+      continue;
+    }
+    candidates++;
+    snprintf(line, sizeof(line),
+             "    %02x:%02x.%u vendor=%04x device=%04x class=%02x/%02x/%02x "
+             "hint=%s bar0=%08lx bar4=%08lx bar5=%08lx\n",
+             dev->bus, dev->device, dev->function, dev->vendor_id,
+             dev->device_id, dev->class_code, dev->subclass, dev->prog_if,
+             storage_candidate_hint(dev), (unsigned long)dev->bar[0],
+             (unsigned long)dev->bar[4], (unsigned long)dev->bar[5]);
+    storage_diag_append(out, out_size, &used, line);
+  }
+  if (candidates == 0) {
+    storage_diag_append(out, out_size, &used,
+                        "    none; firmware may hide the disk behind a "
+                        "non-enumerated controller\n");
+  }
 }
 
 int storage_device_count(void) {

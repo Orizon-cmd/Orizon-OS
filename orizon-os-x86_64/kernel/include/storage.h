@@ -28,6 +28,7 @@ const char *storage_status(void);
 uint64_t storage_sector_count(void);
 void storage_format_capacity(char *out, size_t out_size);
 void storage_format_size(uint64_t sectors, char *out, size_t out_size);
+void storage_format_diagnostics(char *out, size_t out_size);
 
 int storage_device_count(void);
 int storage_selected_device(void);

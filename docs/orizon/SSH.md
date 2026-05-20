@@ -78,8 +78,9 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
-  `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `storage`, `free`, `timer`,
-  `bootguard`, `audit`, `sync`, `status`, `auth`, `hostkey`, `whoami`,
+  `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `storage`, `storage diag`,
+  `pci`, `pci bars`, `free`, `timer`, `bootguard`, `audit`, `sync`, `status`,
+  `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
   Le mode shell PTY accepte les fins de ligne
   CR/LF d'OpenSSH, echo les caracteres saisis, et peut enchainer plusieurs

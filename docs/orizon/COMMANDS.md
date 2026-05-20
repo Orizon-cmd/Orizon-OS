@@ -144,11 +144,15 @@ pci bars
 input
 storage
 disks
+storage diag
 partitions
 mounts
 logs all
 ```
 
 For Lenovo hardware work, capture command output rather than summarizing it from
-memory. The useful files are `/logs/wifi.log`, `/logs/usb.log`,
-`/logs/network.log`, `/logs/ssh.log`, and `/workspace/.orizon/update.log`.
+memory. If the internal disk is missing, run `storage diag` first; it is
+read-only and reports NVMe/AHCI candidates, Intel RST/VMD blockers, and
+SDHCI/eMMC cases without installing or writing to disk. The useful files are
+`/logs/wifi.log`, `/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
+`/workspace/.orizon/update.log`.
