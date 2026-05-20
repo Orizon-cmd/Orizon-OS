@@ -173,6 +173,9 @@ static ahci_cmd_table_t cmd_tables[32] __attribute__((aligned(128)));
 
 static volatile uint8_t *nvme_mmio = NULL;
 static uint32_t nvme_db_stride = 4;
+static int nvme_controller_count = 0;
+static int nvme_controller_seen = 0;
+static int nvme_namespace_ready = 0;
 static uint32_t nvme_namespace_id = 1;
 static uint32_t nvme_lba_size = ORIZON_SECTOR_SIZE;
 static uint32_t nvme_lba_scale = 1;
@@ -578,6 +581,7 @@ static int nvme_identify_namespace(void) {
     return -1;
   }
   nvme_lba_scale = nvme_lba_size / ORIZON_SECTOR_SIZE;
+  nvme_namespace_ready = 1;
 
   native_lbas = nvme_le64(nvme_identify_buf);
   disk_sectors = native_lbas * nvme_lba_scale;
@@ -707,6 +711,7 @@ static int nvme_init_one_controller(const pci_device_info_t *dev) {
   if (!dev) {
     return -1;
   }
+  nvme_controller_seen = 1;
 
   snprintf(line, sizeof(line),
            "storage: probing NVMe %02x:%02x.%u vendor=%04x device=%04x bar0=%08lx",
@@ -816,10 +821,12 @@ static int nvme_init_controller(void) {
   if (count <= 0) {
     count = pci_scan_class(0x01, 0x08, 0xFF, devs, 8);
   }
+  nvme_controller_count = count > 0 ? count : 0;
   if (count <= 0) {
     storage_log_append("storage: no NVMe controller");
     return -1;
   }
+  nvme_controller_seen = 1;
   {
     char line[80];
     snprintf(line, sizeof(line), "storage: NVMe controllers=%d", count);
@@ -1174,10 +1181,22 @@ int storage_init(void) {
   disk_port = NULL;
   disk_sectors = 0;
   storage_blocker[0] = '\0';
+  nvme_controller_count = 0;
+  nvme_controller_seen = 0;
+  nvme_namespace_ready = 0;
+  nvme_namespace_id = 0;
+  nvme_lba_size = 0;
+  nvme_lba_scale = 0;
+  nvme_last_cap = 0;
+  nvme_last_cc = 0;
+  nvme_last_csts = 0;
+  nvme_last_cqe_status = 0;
+  nvme_last_cqe_cid = 0;
+  nvme_last_cmd_cid = 0;
   storage_log_used = 0;
   storage_log[0] = '\0';
   storage_log_append("storage: scan begin (read-only detect)");
-  snprintf(nvme_model, sizeof(nvme_model), "NVMe namespace 1");
+  snprintf(nvme_model, sizeof(nvme_model), "none");
 
   nvme_init_controller();
   ahci_scan_controller();
@@ -1247,7 +1266,7 @@ static void storage_diag_append(char *out, size_t out_size, size_t *used,
 
 void storage_format_diagnostics(char *out, size_t out_size) {
   pci_device_info_t devs[96];
-  char line[256];
+  char line[384];
   size_t used = 0;
   int candidates = 0;
 
@@ -1264,9 +1283,11 @@ void storage_format_diagnostics(char *out, size_t out_size) {
            "  status: %s\n"
            "  selected: %d\n"
            "  devices: %d\n"
-           "  nvme: nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n"
+           "  nvme: controllers=%d detected=%s active=%s nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n"
            "  nvme-regs: CAP=%08lx%08lx CC=%08lx CSTS=%08lx last-cid=%u/%u last-status=%04x\n",
            storage_status(), storage_selected_index + 1, storage_device_total,
+           nvme_controller_count, nvme_controller_seen ? "yes" : "no",
+           nvme_namespace_ready ? "yes" : "no",
            (unsigned long)nvme_namespace_id, (unsigned long)nvme_lba_size,
            (unsigned long)nvme_lba_scale, nvme_model,
            (unsigned long)(nvme_last_cap >> 32),
@@ -1325,7 +1346,7 @@ void storage_format_log(char *out, size_t out_size) {
 }
 
 void storage_format_identify(char *out, size_t out_size) {
-  char line[224];
+  char line[384];
   size_t used = 0;
   int count;
 
@@ -1342,12 +1363,15 @@ void storage_format_identify(char *out, size_t out_size) {
            "  selected: %d\n"
            "  available: %s\n"
            "  status: %s\n"
-           "  nvme: nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n"
+           "  nvme: controllers=%d detected=%s active=%s nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n"
            "  nvme-regs: CAP=%08lx%08lx CC=%08lx CSTS=%08lx last-status=%04x\n",
            storage_selected_index + 1, storage_available() ? "yes" : "no",
-           storage_status(), (unsigned long)nvme_namespace_id,
-           (unsigned long)nvme_lba_size, (unsigned long)nvme_lba_scale,
-           nvme_model, (unsigned long)(nvme_last_cap >> 32),
+           storage_status(), nvme_controller_count,
+           nvme_controller_seen ? "yes" : "no",
+           nvme_namespace_ready ? "yes" : "no",
+           (unsigned long)nvme_namespace_id, (unsigned long)nvme_lba_size,
+           (unsigned long)nvme_lba_scale, nvme_model,
+           (unsigned long)(nvme_last_cap >> 32),
            (unsigned long)(nvme_last_cap & 0xffffffffU),
            (unsigned long)nvme_last_cc, (unsigned long)nvme_last_csts,
            (unsigned)nvme_last_cqe_status);
@@ -1373,6 +1397,7 @@ void storage_format_identify(char *out, size_t out_size) {
 
 int storage_read_test(uint64_t lba, char *out, size_t out_size) {
   char hash[SHA256_HEX_SIZE];
+  const storage_device_t *dev = NULL;
 
   if (!out || out_size == 0) {
     return -1;
@@ -1396,11 +1421,16 @@ int storage_read_test(uint64_t lba, char *out, size_t out_size) {
              (unsigned long)lba, storage_status());
     return -1;
   }
+  if (storage_selected_index >= 0 &&
+      storage_selected_index < storage_device_total) {
+    dev = &storage_devices[storage_selected_index];
+  }
   sha256_buffer_hex(storage_read_test_buf, sizeof(storage_read_test_buf), hash);
   snprintf(out, out_size,
-           "disk read-test: PASS lba=%lu bytes=%lu sha256=%s mode=read-only\n",
-           (unsigned long)lba, (unsigned long)sizeof(storage_read_test_buf),
-           hash);
+           "disk read-test: PASS disk=%s driver=%s lba=%lu sectors=%lu bytes=%lu sha256=%s mode=read-only\n",
+           dev ? dev->name : "none", driver_name(storage_driver),
+           (unsigned long)lba, (unsigned long)storage_sector_count(),
+           (unsigned long)sizeof(storage_read_test_buf), hash);
   return 0;
 }
 

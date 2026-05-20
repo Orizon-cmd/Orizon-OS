@@ -53,12 +53,14 @@ logs storage
 logs pci
 disk identify
 disk read-test
+disk read-test last
 storage select 1
 ```
 
 Those commands are non-destructive. If a real laptop does not show its internal
 disk, do not run `install`; capture `report save`, `storage diag`, `logs
-storage`, `logs pci`, `pci bars`, and `disk identify` first.
+storage`, `logs pci`, `pci bars`, `disk identify`, and `disk read-test last`
+first.
 
 It writes runtime/staging state:
 

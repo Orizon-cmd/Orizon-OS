@@ -298,6 +298,7 @@ logs pci
 storage diag
 disk identify
 disk read-test
+disk read-test last
 gpt scan
 input
 wifi

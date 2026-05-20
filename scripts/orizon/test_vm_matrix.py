@@ -175,6 +175,12 @@ def run_ssh_checks(
         ("pkg status", "Orizon package manager"),
         ("update status", "update:"),
         ("selftest", "summary:"),
+        ("storage", "selected="),
+        ("storage diag", "nvme: controllers="),
+        ("disk identify", "disk identify:"),
+        ("disk read-test", "mode=read-only"),
+        ("disk read-test last", "mode=read-only"),
+        ("gpt scan", "GPT partitions"),
         ("logs storage", "storage log:"),
         ("logs network", "ipv4:"),
         ("report save", "hardware-report.txt"),
@@ -214,6 +220,11 @@ while IFS=$'\\t' read -r cmd needle; do
     cat "$OUT"
     echo "rc=$rc"
     if [ "$rc" -eq 0 ] && grep -qi "$needle" "$OUT"; then
+      if [ "$cmd" = "disk read-test last" ] && grep -q "lba=0 " "$OUT"; then
+        echo "last-sector read-test used LBA 0"
+        rm -f "$ASKPASS" "$PASSFILE" "$OUT"
+        exit 1
+      fi
       break
     fi
     if [ "$attempt" -ge 6 ]; then

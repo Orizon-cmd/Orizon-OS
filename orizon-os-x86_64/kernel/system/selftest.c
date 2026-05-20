@@ -73,6 +73,8 @@ static int selftest_storage(char *out, size_t out_size, size_t *used) {
   char cap[64];
   int count = storage_device_count();
   int rc;
+  int last_rc = 1;
+  uint64_t sectors;
 
   storage_format_capacity(cap, sizeof(cap));
   snprintf(detail, sizeof(detail), "devices=%d selected=%d capacity=%s",
@@ -82,7 +84,16 @@ static int selftest_storage(char *out, size_t out_size, size_t *used) {
   rc = storage_read_test(0, detail, sizeof(detail));
   selftest_line(out, out_size, used, "storage.read-only",
                 rc == 0 ? "PASS" : (rc > 0 ? "WARN" : "FAIL"), detail);
-  return rc < 0 ? -1 : (count > 0 && rc == 0 ? 0 : 1);
+  sectors = storage_sector_count();
+  if (sectors > 0) {
+    last_rc = storage_read_test(sectors - 1, detail, sizeof(detail));
+    selftest_line(out, out_size, used, "storage.read-last",
+                  last_rc == 0 ? "PASS" : "FAIL", detail);
+  }
+  if (rc < 0 || last_rc < 0) {
+    return -1;
+  }
+  return count > 0 && rc == 0 && (sectors == 0 || last_rc == 0) ? 0 : 1;
 }
 
 static int selftest_crypto(char *out, size_t out_size, size_t *used) {

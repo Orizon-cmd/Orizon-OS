@@ -169,6 +169,7 @@ storage diag
 logs storage
 disk identify
 disk read-test
+disk read-test last
 gpt scan
 partitions
 mounts
@@ -178,10 +179,10 @@ logs all
 For Lenovo hardware work, capture command output rather than summarizing it from
 memory. Start with `report save`, then copy `/workspace/hardware-report.txt`.
 If the internal disk is missing, run `storage diag`, `logs storage`, `logs pci`,
-`pci bars`, `disk identify`, and `gpt scan`; they are read-only and report
+`pci bars`, `disk identify`, `disk read-test last`, and `gpt scan`; they are read-only and report
 NVMe/AHCI candidates, Intel RST/VMD blockers, secondary PCI bus hints, NVMe
-CAP/CC/CSTS/admin errors, and SDHCI/eMMC cases without installing or writing to
-disk. The useful files are `/workspace/hardware-report.txt`, `/logs/wifi.log`,
+CAP/CC/CSTS/admin errors, last-sector readability, and SDHCI/eMMC cases without
+installing or writing to disk. The useful files are `/workspace/hardware-report.txt`, `/logs/wifi.log`,
 `/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
 `/workspace/.orizon/update.log`.
 

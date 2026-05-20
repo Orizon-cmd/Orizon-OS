@@ -36,6 +36,7 @@ $commands = @(
   "logs pci",
   "disk identify",
   "disk read-test",
+  "disk read-test last",
   "gpt scan",
   "selftest crypto",
   "selftest ssh",
@@ -127,7 +128,7 @@ run_cmd() {
       grep -q "Orizon boot guard" "`$OUT" || { echo "missing bootguard output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "storage diag")
-      grep -q "storage diagnostics:" "`$OUT" || { echo "missing storage diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "storage diagnostics:" "`$OUT" && grep -q "nvme: controllers=" "`$OUT" || { echo "missing storage diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "logs storage")
       grep -q "storage log:" "`$OUT" || { echo "missing storage log"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -140,6 +141,9 @@ run_cmd() {
       ;;
     "disk read-test")
       grep -Eq "disk read-test: (PASS|WARN|FAIL)" "`$OUT" || { echo "missing disk read-test"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "disk read-test last")
+      grep -Eq "disk read-test: PASS .*mode=read-only" "`$OUT" || { echo "missing last-sector read-test"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "gpt scan")
       ! grep -q "command not found" "`$OUT" || { echo "gpt scan is not exposed over SSH"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

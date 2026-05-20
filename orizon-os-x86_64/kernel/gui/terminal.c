@@ -2726,15 +2726,18 @@ static void term_run_disk(terminal_t *term, const char *cmd) {
   if (term_command_is(args, "read-test") || term_command_is(args, "read")) {
     const char *value = term_skip_spaces(args + (term_command_is(args, "read") ? 4 : 9));
     uint64_t lba = 0;
-    if (*value && term_parse_uint64_allow_zero(value, &lba) < 0) {
-      term_puts_t(term, "usage: disk read-test [lba]\n");
+    if (term_command_is(value, "last") || term_command_is(value, "end")) {
+      uint64_t sectors = storage_sector_count();
+      lba = sectors > 0 ? sectors - 1 : 0;
+    } else if (*value && term_parse_uint64_allow_zero(value, &lba) < 0) {
+      term_puts_t(term, "usage: disk read-test [lba|last]\n");
       return;
     }
     storage_read_test(lba, report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
-  term_puts_t(term, "usage: disk identify | disk read-test [lba]\n");
+  term_puts_t(term, "usage: disk identify | disk read-test [lba|last]\n");
 }
 
 static void term_run_selftest(terminal_t *term, const char *cmd) {
@@ -4510,7 +4513,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  mounts    - Show Orizon data roots\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
-    term_puts_t(term, "  disk identify | disk read-test [lba] - Read-only disk diagnostics\n");
+    term_puts_t(term, "  disk identify | disk read-test [lba|last] - Read-only disk diagnostics\n");
     term_puts_t(term, "  gpt scan  - Read-only GPT partition scan\n");
     term_puts_t(term, "  partitions - List GPT partitions on selected disk\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");

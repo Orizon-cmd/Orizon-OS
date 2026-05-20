@@ -2462,6 +2462,30 @@ static int ssh_shell_parse_uint(const char *s, uint32_t *out) {
   return 0;
 }
 
+static int ssh_shell_parse_uint64(const char *s, uint64_t *out) {
+  uint64_t value = 0;
+  int seen = 0;
+
+  if (!s || !out) {
+    return -1;
+  }
+  s = ssh_shell_skip_spaces(s);
+  while (*s >= '0' && *s <= '9') {
+    uint64_t digit = (uint64_t)(*s - '0');
+    if (value > (0xffffffffffffffffULL - digit) / 10ULL) {
+      return -1;
+    }
+    value = value * 10ULL + digit;
+    seen = 1;
+    s++;
+  }
+  if (!seen) {
+    return -1;
+  }
+  *out = value;
+  return 0;
+}
+
 static const char *ssh_shell_read_token(const char *s, char *out,
                                         size_t out_size) {
   size_t len = 0;
@@ -3053,21 +3077,29 @@ static void ssh_shell_print_disk(const char *args) {
   static char out[2200];
   const char *sub = ssh_shell_skip_spaces(args);
 
+  out[0] = '\0';
   if (*sub == '\0' || ssh_shell_command_is(sub, "identify") ||
       ssh_shell_command_is(sub, "id")) {
     storage_format_identify(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "read-test") ||
              ssh_shell_command_is(sub, "read")) {
-    uint32_t lba = 0;
+    uint64_t lba = 0;
+    int valid = 1;
     const char *value =
         ssh_shell_skip_spaces(sub + (ssh_shell_command_is(sub, "read") ? 4 : 9));
-    if (*value && ssh_shell_parse_uint(value, &lba) < 0) {
-      snprintf(out, sizeof(out), "usage: disk read-test [lba]\r\n");
-    } else {
-      storage_read_test((uint64_t)lba, out, sizeof(out));
+    if (ssh_shell_command_is(value, "last") ||
+        ssh_shell_command_is(value, "end")) {
+      uint64_t sectors = storage_sector_count();
+      lba = sectors > 0 ? sectors - 1 : 0;
+    } else if (*value && ssh_shell_parse_uint64(value, &lba) < 0) {
+      snprintf(out, sizeof(out), "usage: disk read-test [lba|last]\r\n");
+      valid = 0;
+    }
+    if (valid) {
+      storage_read_test(lba, out, sizeof(out));
     }
   } else {
-    snprintf(out, sizeof(out), "usage: disk identify | disk read-test [lba]\r\n");
+    snprintf(out, sizeof(out), "usage: disk identify | disk read-test [lba|last]\r\n");
   }
   if (strlen(out) + 2 < sizeof(out)) {
     strcat(out, "\r\n");
@@ -3319,7 +3351,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, disk, disk read-test last, gpt scan, selftest, pci, report save, free, bootguard, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3380,7 +3412,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  ps|pkg|update        show system/update state\r\n"
         "  storage|storage diag show storage and disk detection state\r\n"
         "  disk identify        show read-only disk/NVMe identity\r\n"
-        "  disk read-test [lba] read one sector without writing\r\n"
+        "  disk read-test [lba|last] read one sector without writing\r\n"
         "  gpt scan             read-only GPT partition scan\r\n"
         "  selftest [scope]     run PASS/WARN/FAIL live checks\r\n"
         "  pci [bars]           list PCI devices for hardware diagnosis\r\n"
@@ -3721,7 +3753,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, free, timer, bootguard, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {
