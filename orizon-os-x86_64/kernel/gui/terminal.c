@@ -22,6 +22,7 @@
 #include "../include/ssh.h"
 #include "../include/storage.h"
 #include "../include/string.h"
+#include "../include/system_state.h"
 #include "../include/terminal.h"
 #include "../include/timer.h"
 #include "../include/update.h"
@@ -728,13 +729,13 @@ static void term_complete_command(terminal_t *term, const char *prefix,
   static const char *commands[] = {
       "about", "append", "boot-check", "bootguard", "cat", "cd", "clear", "cp", "date",
       "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
-      "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
+      "firstboot", "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
       "install", "install-plan", "install-status",
       "input", "keyboard", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
-      "rollback-status", "repair-boot", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
+      "rollback-status", "repair-boot", "rescue", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
-      "write"};
+      "write", "system"};
   const char *matches[16];
   int count = 0;
 
@@ -1849,6 +1850,61 @@ static void term_print_persist(terminal_t *term, const char *cmd) {
   }
   term_puts_t(term,
               "usage: persist [status|slots|save|repair|restore previous|restore slot <n>]\n");
+}
+
+static void term_print_system_state(terminal_t *term, const char *cmd) {
+  static char report[4096];
+  const char *args = term_skip_spaces(cmd + 6);
+
+  if (*args == '\0' || term_command_is(args, "status")) {
+    orizon_system_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "repair")) {
+    orizon_system_repair(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "rescue")) {
+    orizon_system_format_rescue(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "firstboot")) {
+    const char *sub = term_skip_spaces(args + strlen("firstboot"));
+    if (term_command_is(sub, "done") || term_command_is(sub, "confirm")) {
+      orizon_system_mark_firstboot_done(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    orizon_system_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    term_puts_t(term, "usage: system firstboot done\n");
+    return;
+  }
+  term_puts_t(term,
+              "usage: system [status|repair|rescue|firstboot done]\n");
+}
+
+static void term_print_hostname_command(terminal_t *term, const char *cmd) {
+  static char status[160];
+  char host[80];
+  const char *args = term_skip_spaces(cmd + strlen("hostname"));
+
+  if (*args == '\0') {
+    orizon_system_hostname(host, sizeof(host));
+    term_puts_t(term, host);
+    term_puts_t(term, "\n");
+    return;
+  }
+  if (term_command_is(args, "set")) {
+    const char *name = term_skip_spaces(args + strlen("set"));
+    orizon_system_set_hostname(name, status, sizeof(status));
+    term_puts_t(term, status);
+    return;
+  }
+  term_puts_t(term, "usage: hostname [set <name>]\n");
 }
 
 static void term_print_first_line_or(terminal_t *term, const char *label,
@@ -3920,17 +3976,7 @@ static int term_read_text_file_silent(const char *path, char *buf, size_t cap) {
 }
 
 static int term_install_already_complete(void) {
-  char state[256];
-
-  if (vfs_exists("/workspace/.orizon/installed")) {
-    return 1;
-  }
-  if (term_read_text_file_silent("/workspace/.orizon/install-state", state,
-                                 sizeof(state)) > 0 &&
-      strstr(state, "install complete")) {
-    return 1;
-  }
-  return 0;
+  return orizon_system_is_installed();
 }
 
 static void term_run_install_plan(terminal_t *term, const char *cmd) {
@@ -4294,6 +4340,7 @@ static void term_install_write_plan(terminal_t *term) {
       term_write_text_file("/workspace/.orizon/keyboard",
                            term->install_keyboard) < 0 ||
       term_write_text_file("/system/install-state", state) < 0 ||
+      term_write_text_file("/system/hostname", term->install_hostname) < 0 ||
       term_write_text_file("/system/locale", term->install_language) < 0 ||
       term_write_text_file("/system/keyboard", term->install_keyboard) < 0) {
     term_puts_t(term, "\ninstall: failed to write staging files\n");
@@ -4357,6 +4404,7 @@ static void term_install_write_plan(terminal_t *term) {
                          "install complete\nnext shutdown-remove-installer\n");
     term_write_text_file("/workspace/.orizon/keyboard",
                          term->install_keyboard);
+    term_write_text_file("/system/hostname", term->install_hostname);
     term_write_text_file("/system/install-state", "install complete\n");
     term_write_text_file("/system/installed", "1\n");
     klog_persist_boot_if_installed();
@@ -4693,6 +4741,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
+    term_puts_t(term, "  system [status|repair|rescue|firstboot done] - Installed/live state\n");
+    term_puts_t(term, "  rescue    - Non-destructive recovery checklist\n");
     term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
@@ -4778,7 +4828,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  neofetch  - System info\n");
     term_puts_t(term, "  uname     - Show OS info\n");
     term_puts_t(term, "  id        - Show user/group info\n");
-    term_puts_t(term, "  hostname  - Show hostname\n");
+    term_puts_t(term, "  hostname [set <name>] - Show or persist hostname\n");
     term_puts_t(term, "  history [-c] - Show or clear persistent history\n");
     term_puts_t(term, "  free      - Memory usage\n");
     term_puts_t(term, "  ps        - Process list\n");
@@ -4804,6 +4854,23 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_print_klog(term, sizeof(term_diag_buf));
   } else if (term_command_is(cmd, "sysinfo")) {
     term_print_sysinfo(term);
+  } else if (term_command_is(cmd, "system")) {
+    term_print_system_state(term, cmd);
+  } else if (term_command_is(cmd, "rescue")) {
+    static char report[1024];
+    orizon_system_format_rescue(report, sizeof(report));
+    term_puts_t(term, report);
+  } else if (term_command_is(cmd, "firstboot")) {
+    static char report[512];
+    const char *args = term_skip_spaces(cmd + strlen("firstboot"));
+    if (term_command_is(args, "done") || term_command_is(args, "confirm")) {
+      orizon_system_mark_firstboot_done(report, sizeof(report));
+      term_puts_t(term, report);
+    } else {
+      orizon_system_format_status(report, sizeof(report));
+      term_puts_t(term, report);
+      term_puts_t(term, "usage: firstboot done\n");
+    }
   } else if (term_command_is(cmd, "hw")) {
     term_print_hw(term);
   } else if (term_command_is(cmd, "pci")) {
@@ -5469,8 +5536,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "root\n");
   } else if (strncmp(cmd, "id", 2) == 0) {
     term_puts_t(term, "uid=0(root) gid=0(root) groups=0(root)\n");
-  } else if (strncmp(cmd, "hostname", 8) == 0) {
-    term_puts_t(term, "orizon-os\n");
+  } else if (term_command_is(cmd, "hostname")) {
+    term_print_hostname_command(term, cmd);
   } else if (strncmp(cmd, "date", 4) == 0) {
     term_puts_t(term, "Thu Jan 23 00:00:00 UTC 2025\n");
   } else if (strncmp(cmd, "uptime", 6) == 0) {

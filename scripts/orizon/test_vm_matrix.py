@@ -168,6 +168,10 @@ def run_ssh_checks(
     encoded = base64.b64encode(password.encode("utf-8")).decode("ascii")
     commands = [
         ("status", "ssh: enabled="),
+        ("system status", "Orizon system status"),
+        ("rescue", "Orizon rescue mode"),
+        ("hostname", "orizon"),
+        ("system repair", "system repair:"),
         ("net status", "ipv4=yes"),
         ("timer", "source="),
         ("ping 8.8.8.8", "reply from"),
@@ -192,7 +196,7 @@ def run_ssh_checks(
         ("logs storage", "storage log:"),
         ("logs network", "ipv4:"),
         ("report save", "hardware-report.txt"),
-        ("cat /workspace/hardware-report.txt", "Live Kernel Log Tail"),
+        ("cat /workspace/hardware-report.txt", "System State"),
         ("install-plan", "install-plan: wrote"),
         ("cat /workspace/.orizon/install-report.txt", "write-scope: none"),
         ("rollback", "rollback"),

@@ -23,6 +23,7 @@
 #include "../include/sha256.h"
 #include "../include/storage.h"
 #include "../include/string.h"
+#include "../include/system_state.h"
 #include "../include/timer.h"
 #include "../include/update.h"
 #include "../include/usb.h"
@@ -2759,7 +2760,61 @@ static void ssh_shell_print_persist(const char *args) {
 }
 
 static int ssh_install_already_complete(void) {
-  return vfs_exists("/workspace/.orizon/installed");
+  return orizon_system_is_installed();
+}
+
+static void ssh_shell_print_system(const char *args) {
+  static char out[4096];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "status")) {
+    orizon_system_format_status(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "repair")) {
+    orizon_system_repair(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "rescue")) {
+    orizon_system_format_rescue(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "firstboot")) {
+    const char *first = ssh_shell_skip_spaces(sub + strlen("firstboot"));
+    if (ssh_shell_command_is(first, "done") ||
+        ssh_shell_command_is(first, "confirm")) {
+      orizon_system_mark_firstboot_done(out, sizeof(out));
+    } else {
+      orizon_system_format_status(out, sizeof(out));
+      if (strlen(out) + strlen("usage: system firstboot done\r\n") <
+          sizeof(out)) {
+        strcat(out, "usage: system firstboot done\r\n");
+      }
+    }
+  } else {
+    snprintf(out, sizeof(out),
+             "usage: system [status|repair|rescue|firstboot done]\r\n");
+  }
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_hostname(const char *args) {
+  static char out[192];
+  char host[80];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (*sub == '\0') {
+    orizon_system_hostname(host, sizeof(host));
+    snprintf(out, sizeof(out), "%s\r\n", host);
+  } else if (ssh_shell_command_is(sub, "set")) {
+    const char *name = ssh_shell_skip_spaces(sub + strlen("set"));
+    orizon_system_set_hostname(name, out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+  } else {
+    snprintf(out, sizeof(out), "usage: hostname [set <name>]\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
 }
 
 static void ssh_shell_print_pkg(const char *args) {
@@ -3633,7 +3688,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3678,6 +3733,10 @@ static void ssh_remote_shell_execute(const char *line) {
         "  status               show SSH transport state\r\n"
         "  auth                 show SSH auth policy\r\n"
         "  hostkey              show SSH host identity\r\n"
+        "  system status        show live/installed state and first-boot hints\r\n"
+        "  system repair        recreate missing default roots/config safely\r\n"
+        "  rescue               show non-destructive recovery checklist\r\n"
+        "  hostname [set name]  show or persist hostname\r\n"
         "  ls [path]            list files\r\n"
         "  cd <path>            change directory\r\n"
         "  pwd                  show remote cwd\r\n"
@@ -3764,6 +3823,25 @@ static void ssh_remote_shell_execute(const char *line) {
     }
     ssh_queue_channel_text(out);
     ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(line, "system")) {
+    ssh_shell_print_system(line + strlen("system"));
+    return;
+  }
+  if (strcmp(line, "rescue") == 0) {
+    ssh_shell_print_system("rescue");
+    return;
+  }
+  if (ssh_shell_command_is(line, "firstboot")) {
+    static char firstboot_cmd[96];
+    snprintf(firstboot_cmd, sizeof(firstboot_cmd), "firstboot %s",
+             ssh_shell_skip_spaces(line + strlen("firstboot")));
+    ssh_shell_print_system(firstboot_cmd);
+    return;
+  }
+  if (ssh_shell_command_is(line, "hostname")) {
+    ssh_shell_print_hostname(line + strlen("hostname"));
     return;
   }
   if (strcmp(line, "ssh hostkey reload") == 0) {
@@ -4047,7 +4125,18 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+  } else if (ssh_shell_command_is(cmd, "system")) {
+    ssh_shell_print_system(cmd + strlen("system"));
+  } else if (strcmp(cmd, "rescue") == 0) {
+    ssh_shell_print_system("rescue");
+  } else if (ssh_shell_command_is(cmd, "firstboot")) {
+    static char firstboot_cmd[96];
+    snprintf(firstboot_cmd, sizeof(firstboot_cmd), "firstboot %s",
+             ssh_shell_skip_spaces(cmd + strlen("firstboot")));
+    ssh_shell_print_system(firstboot_cmd);
+  } else if (ssh_shell_command_is(cmd, "hostname")) {
+    ssh_shell_print_hostname(cmd + strlen("hostname"));
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {

@@ -84,9 +84,27 @@ It writes runtime/staging state:
 /workspace/.orizon/installed
 /workspace/.orizon/keyboard
 /system/install-state
+/system/hostname
 /system/locale
 /system/keyboard
 ```
+
+After the first installed boot, use the lifecycle commands before doing
+updates:
+
+```text
+system status
+hostname
+firstboot done
+```
+
+`system status` confirms whether the VM is still a live ISO or an installed
+boot, shows the persisted hostname, first-boot marker, required roots, and safe
+next commands. `hostname set <name>` updates `/system/hostname`. If a default
+file is missing, `system repair` recreates only missing `/system`, `/home`,
+`/packages`, `/logs`, and `/workspace/.orizon` defaults and writes
+`/workspace/.orizon/rescue-report.txt`; it never partitions or installs.
+`rescue` prints the non-destructive recovery checklist.
 
 In `dual-boot-data` mode, Orizon does not repartition the disk and does not
 overwrite the UEFI fallback path used by other operating systems. It scans the

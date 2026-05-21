@@ -21,6 +21,7 @@
 #include "../include/selftest.h"
 #include "../include/storage.h"
 #include "../include/string.h"
+#include "../include/system_state.h"
 #include "../include/timer.h"
 #include "../include/update.h"
 #include "../include/usb.h"
@@ -175,6 +176,9 @@ int orizon_report_format(char *out, size_t out_size) {
            vfs_exists("/workspace/.orizon/installed") ? "installed"
                                                        : "live-or-unmarked");
   report_append(out, out_size, &used, line);
+
+  orizon_system_format_status(block, sizeof(block));
+  report_append_block(out, out_size, &used, "System State", block);
 
   timer_format_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "Timer", block);

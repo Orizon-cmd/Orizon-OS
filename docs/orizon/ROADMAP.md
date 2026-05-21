@@ -35,6 +35,10 @@
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
   `sysinfo`, `hw`, `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`,
   and `uptime`.
+- Installed/live lifecycle commands: `system status`, `system repair`,
+  `rescue`, `hostname set <name>`, and `firstboot done` clarify first boot,
+  recreate missing default roots/config non-destructively, and export rescue
+  state through the hardware report.
 - Documentation cleanup: `START_HERE.md` now summarizes the current state,
   guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
   operator command checklist separate from the long-form subsystem notes.

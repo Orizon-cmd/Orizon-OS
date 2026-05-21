@@ -29,6 +29,12 @@ ssh stop
 logs ssh
 report save
 install-plan
+system status
+system repair
+rescue
+hostname
+hostname set orizon-vm
+firstboot done
 selftest ssh
 bootguard
 bootguard confirm
@@ -83,7 +89,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   `lockout-seconds`).
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
-  `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
+  `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
+  `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`, `route`, `dns`,
   `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
@@ -116,6 +123,13 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   /workspace/.orizon/install-report.txt` ou `logs install` pour verifier le
   mode, le disque cible, la portee d'ecriture et la confirmation requise avant
   toute installation.
+- Etat installe/live: `system status` distingue live ISO et boot installe,
+  affiche hostname, first-boot, racines persistantes et fichiers initiaux.
+  `system repair` recree seulement les defaults manquants et ecrit
+  `/workspace/.orizon/rescue-report.txt`; `rescue` affiche la checklist de
+  recuperation sans installation. `hostname set <name>` persiste
+  `/system/hostname`, et `firstboot done` marque la premiere session installee
+  comme revue.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout

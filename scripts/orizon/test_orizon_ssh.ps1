@@ -24,6 +24,10 @@ $commands = @(
   "auth",
   "hostkey",
   "ssh algorithms",
+  "system status",
+  "rescue",
+  "hostname",
+  "system repair",
   "net status",
   "wifi status",
   "free",
@@ -123,6 +127,18 @@ run_cmd() {
       ;;
     "ssh algorithms")
       grep -q "ssh algorithms:" "`$OUT" || { echo "missing algorithms output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "system status")
+      grep -q "Orizon system status" "`$OUT" && grep -q "boot-mode:" "`$OUT" || { echo "missing system status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "rescue")
+      grep -q "Orizon rescue mode" "`$OUT" || { echo "missing rescue checklist"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "hostname")
+      grep -q "orizon" "`$OUT" || { echo "missing hostname output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "system repair")
+      grep -q "system repair:" "`$OUT" && grep -q "rescue-report.txt" "`$OUT" || { echo "missing system repair output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "net status")
       grep -q "ipv4=" "`$OUT" || { echo "net status was not dispatched to the network command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -34,6 +34,12 @@ updates/x86_64/release.txt
 install
 install-plan
 install-status
+system status
+system repair
+rescue
+firstboot done
+hostname
+hostname set orizon-vm
 boot-check
 dualboot-check
 repair-boot
@@ -53,6 +59,16 @@ yet.
 `/workspace/.orizon/install-report.txt` so VM/SSH checks can review the selected
 disk, mode, write scope, confirmation string, and GPT snapshot before any
 installer write happens.
+
+`system status` is the fast installed/live lifecycle view. It prints
+`boot-mode: live` or `boot-mode: installed`, hostname, first-boot state,
+persistent roots, required `/system` files, and safe next commands. `rescue`
+prints the non-destructive recovery checklist. `system repair` recreates only
+missing defaults under `/workspace/.orizon`, `/home/orizon`, `/system`,
+`/packages`, and `/logs`, then writes
+`/workspace/.orizon/rescue-report.txt`. `hostname set <name>` persists
+`/system/hostname`; `firstboot done` marks the installed VM's first boot as
+reviewed.
 
 ## Network And Update
 
@@ -118,6 +134,11 @@ cat /workspace/hardware-report.txt
 head /workspace/hardware-report.txt
 tail /workspace/hardware-report.txt
 selftest ssh
+system status
+system repair
+rescue
+hostname
+hostname set orizon-vm
 reboot
 shutdown
 ```
@@ -206,6 +227,9 @@ persist save
 persist repair
 persist restore previous
 persist restore slot 0
+system status
+rescue
+system repair
 logs all
 ```
 
@@ -230,6 +254,9 @@ valide non actif le plus recent puis le promeut comme nouveau snapshot; `persist
 restore slot <n>` fait la meme chose pour un slot precis. `persist repair`
 reecrit un snapshot propre depuis l'etat VFS courant; ces commandes restent non
 destructives pour le partitionnement et ne servent pas a installer l'OS.
+`system status` et `rescue` sont inclus dans `report save` pour documenter
+l'etat live/installe, le hostname et les commandes de recuperation sans devoir
+lire l'ecran local.
 
 ## Local Console Scrolling
 

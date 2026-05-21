@@ -16,6 +16,10 @@ le developpement noyau:
   `/logs` quand une zone donnees Orizon est disponible, avec snapshots
   alternes, statut `persist status`, inventaire `persist slots`, restauration
   `persist restore previous` et reparation simple `persist repair`
+- etat systeme installe/live lisible avec `system status`, checklist
+  non-destructive `rescue`, reparation des fichiers initiaux via
+  `system repair`, marqueur `firstboot done` et hostname persistant avec
+  `hostname set <nom>`
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
   dual-boot data sur partition choisie, mode ESP seul non destructif,
   verification du boot UEFI, selection explicite du disque/partition cible et
@@ -108,6 +112,21 @@ affiche une consigne de retrait/ejection de l'ISO ou de la cle USB, puis lance
 un shutdown. Au boot suivant, la commande `install` est bloquee pour proteger
 le disque et les donnees.
 
+Au premier boot installe, commence par:
+
+```text
+system status
+firstboot done
+```
+
+`system status` distingue clairement `boot-mode: live` et
+`boot-mode: installed`, affiche le hostname, l'etat first-boot, les racines
+persistantes, les fichiers initiaux et les commandes sures suivantes. Si un
+fichier systeme de base manque dans `/system`, `/home`, `/packages` ou
+`/logs`, `system repair` recree uniquement les defaults manquants et ecrit un
+rapport dans `/workspace/.orizon/rescue-report.txt`; il ne partitionne pas et
+n'installe pas l'OS.
+
 L'installateur verifie maintenant le boot installe avant de marquer le disque
 comme pret: MBR protecteur, GPT, ESP FAT32, label, `EFI/BOOT/BOOTX64.EFI`,
 `boot/kernel.elf` et les configurations Limine. Pour refaire ce diagnostic:
@@ -188,7 +207,8 @@ python scripts/orizon/test_update_rollback_vm.py
 Le build ZimaOS direct rapatrie maintenant aussi `Orizon-OS.iso` a la racine
 apres compilation reussie, sauf avec `--no-publish-root-iso`. La matrice
 provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
-`net status`, `timer`, `ping`, `dns`, `pkg status`, `update status`,
+`system status`, `rescue`, `hostname`, `net status`, `timer`, `ping`, `dns`,
+`pkg status`, `update status`,
 `selftest`, les logs, `report save`, `cat /workspace/hardware-report.txt` et
 `hostkey`. Le mode `--include-lifecycle` capture une screenshot framebuffer,
 declenche `reboot`, reverifie SSH apres redemarrage, puis teste `shutdown`
@@ -227,7 +247,8 @@ desactivee tant que `ssh password <mot-de-passe>` n'a pas ete lance depuis la
 console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
 de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `tail`, `touch`, `mkdir`, `rm`,
-`write`, `append`, `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
+`write`, `append`, `system status`, `system repair`, `rescue`, `hostname`,
+`logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
 `disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
 `audit`, `ssh sessions`, `persist status`, `persist slots`, `persist save`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
