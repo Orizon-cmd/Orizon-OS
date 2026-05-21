@@ -2900,6 +2900,8 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "\033[1;36mOrizon packages\033[0m\n");
   term_puts_t(term, "  pkg list          - List installed packages\n");
   term_puts_t(term, "  pkg status        - Show package manager state\n");
+  term_puts_t(term, "  pkg search <query> - Search builtin/installed/remote packages\n");
+  term_puts_t(term, "  pkg remote        - Show cached signed remote package index\n");
   term_puts_t(term, "  pkg info <name>   - Show package metadata/files\n");
   term_puts_t(term, "  pkg history       - Show package install/remove history\n");
   term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
@@ -2909,6 +2911,7 @@ static void term_pkg_help(terminal_t *term) {
     term_puts_t(term, "  pkg update        - Run signed update package refresh\n");
     term_puts_t(term, "  pkg install <file> - Install a verified local package\n");
     term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
+    term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
   } else {
     term_puts_t(term,
                 "  pkg update        - Available after disk install only\n");
@@ -2916,6 +2919,8 @@ static void term_pkg_help(terminal_t *term) {
                 "  pkg install <file> - Available after disk install only\n");
     term_puts_t(term,
                 "  pkg remove <name> - Available after disk install only\n");
+    term_puts_t(term,
+                "  pkg rollback <name> - Available after disk install only\n");
   }
 }
 
@@ -2942,6 +2947,19 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "status")) {
     orizon_pkg_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "search")) {
+    const char *query = term_skip_spaces(args + 6);
+    orizon_pkg_search(query, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "remote")) {
+    orizon_pkg_remote(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -3047,6 +3065,22 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     orizon_pkg_remove(name, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "rollback")) {
+    const char *name = term_skip_spaces(args + 8);
+    if (!term_install_already_complete()) {
+      term_puts_t(term,
+                  "pkg rollback: unavailable in live boot. Install Orizon OS first.\n");
+      return;
+    }
+    if (*name == '\0') {
+      term_puts_t(term, "usage: pkg rollback <name>\n");
+      return;
+    }
+    orizon_pkg_rollback(name, report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -4729,6 +4763,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  persist [status|slots|save|repair|restore] - Manage data snapshots\n");
     term_puts_t(term, "\033[33mPackages:\033[0m\n");
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
+    term_puts_t(term, "  pkg search <q>  - Search builtin/installed/remote packages\n");
+    term_puts_t(term, "  pkg remote      - Show cached signed remote package index\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
     term_puts_t(term, "  pkg history    - Show package transaction history\n");
     term_puts_t(term, "  pkg sample      - Create a sample .opkg package\n");
@@ -4738,6 +4774,7 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "  pkg update      - Refresh packages through signed update\n");
       term_puts_t(term, "  pkg install <file> - Install a verified package\n");
       term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
+      term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");

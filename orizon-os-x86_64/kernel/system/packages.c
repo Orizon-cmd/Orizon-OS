@@ -26,7 +26,9 @@
 #define PKG_DB_ROOT "/workspace/.orizon/pkgdb"
 #define PKG_DB_INSTALLED "/workspace/.orizon/pkgdb/installed"
 #define PKG_DB_STORE "/workspace/.orizon/pkgdb/packages"
+#define PKG_DB_REMOVED "/workspace/.orizon/pkgdb/removed"
 #define PKG_DB_HISTORY "/workspace/.orizon/pkgdb/history.log"
+#define PKG_REMOTE_INDEX_PATH "/workspace/.orizon/package-index"
 #define PKG_WORKSPACE_LIST "/workspace/.orizon/packages"
 #define PKG_SYSTEM_LIST "/system/packages"
 #define PKG_SYSTEM_INSTALLED "/system/installed"
@@ -59,6 +61,14 @@ typedef struct {
   const char *payload;
   size_t payload_size;
 } pkg_manifest_t;
+
+typedef struct {
+  char name[64];
+  char version[64];
+  char path[160];
+  char sha256[SHA256_HEX_SIZE];
+  size_t size;
+} pkg_remote_entry_t;
 
 static const builtin_package_t builtin_packages[] = {
     {"orizon-core", "core-x86_64", "builtin"},
@@ -216,6 +226,29 @@ static int pkg_path_safe(const char *path) {
       return 0;
     }
     p += len;
+  }
+  return 1;
+}
+
+static int pkg_remote_path_safe(const char *path) {
+  size_t len;
+
+  if (!path || path[0] == '/' ||
+      strncmp(path, "packages/x86_64/", 16) != 0) {
+    return 0;
+  }
+  len = strlen(path);
+  if (len <= 5 || strcmp(path + len - 5, ".opkg") != 0) {
+    return 0;
+  }
+  while (*path) {
+    char c = *path++;
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      return 0;
+    }
+    if (c == '.' && path[0] == '.') {
+      return 0;
+    }
   }
   return 1;
 }
@@ -411,6 +444,70 @@ static int hex_equal(const char *a, const char *b) {
   return 1;
 }
 
+static int pkg_parse_size_value(const char *text, size_t *out) {
+  size_t value = 0;
+  int seen = 0;
+
+  if (!text || !out) {
+    return -1;
+  }
+  while (*text == ' ' || *text == '\t') {
+    text++;
+  }
+  while (*text && *text != ' ' && *text != '\t' && *text != '\r' &&
+         *text != '\n') {
+    if (*text < '0' || *text > '9') {
+      return -1;
+    }
+    value = (value * 10U) + (size_t)(*text - '0');
+    if (value > PKG_MAX_BYTES) {
+      return -1;
+    }
+    seen = 1;
+    text++;
+  }
+  if (!seen || value == 0) {
+    return -1;
+  }
+  *out = value;
+  return 0;
+}
+
+static int parse_remote_index_line(const char *line,
+                                   pkg_remote_entry_t *entry) {
+  const char *p;
+  char size_text[32];
+
+  if (!line || !entry || !pkg_starts_with(line, "package ")) {
+    return -1;
+  }
+  memset(entry, 0, sizeof(*entry));
+  p = line + 8;
+  p = pkg_copy_token(p, entry->name, sizeof(entry->name));
+  if (!p) {
+    return -1;
+  }
+  p = pkg_copy_token(p, entry->version, sizeof(entry->version));
+  if (!p) {
+    return -1;
+  }
+  p = pkg_copy_token(p, entry->path, sizeof(entry->path));
+  if (!p) {
+    return -1;
+  }
+  p = pkg_copy_token(p, size_text, sizeof(size_text));
+  if (!p || pkg_parse_size_value(size_text, &entry->size) < 0) {
+    return -1;
+  }
+  p = pkg_copy_token(p, entry->sha256, sizeof(entry->sha256));
+  if (!p || !pkg_name_safe(entry->name) ||
+      !pkg_version_safe(entry->version) ||
+      !pkg_remote_path_safe(entry->path) || !hex_is_valid(entry->sha256)) {
+    return -1;
+  }
+  return 0;
+}
+
 static int parse_manifest(const char *buf, size_t size, pkg_manifest_t *pkg,
                           char actual_hash[SHA256_HEX_SIZE]) {
   line_reader_t reader;
@@ -544,12 +641,113 @@ static int run_post_install_line(const char *line, char *report,
   return -1;
 }
 
+static int run_payload_script(const pkg_manifest_t *pkg, const char *begin,
+                              const char *end, char *report,
+                              size_t report_size) {
+  line_reader_t reader;
+  char line[PKG_MAX_LINE];
+  int in_file = 0;
+  int in_script = 0;
+  int saw_script = 0;
+
+  if (!pkg || !begin || !end) {
+    return -1;
+  }
+  reader.data = pkg->payload;
+  reader.size = pkg->payload_size;
+  reader.pos = 0;
+
+  while (reader_line(&reader, line, sizeof(line))) {
+    if (in_file) {
+      if (strcmp(line, "content-end") == 0) {
+        in_file = 0;
+      }
+      continue;
+    }
+    if (!in_script && pkg_starts_with(line, "file ")) {
+      in_file = 1;
+      continue;
+    }
+    if (strcmp(line, begin) == 0) {
+      in_script = 1;
+      saw_script = 1;
+      continue;
+    }
+    if (strcmp(line, end) == 0) {
+      if (in_script) {
+        return 0;
+      }
+      continue;
+    }
+    if (in_script && run_post_install_line(line, report, report_size) < 0) {
+      return -2;
+    }
+  }
+  return in_script ? -3 : (saw_script ? 0 : 1);
+}
+
+static void append_package_scripts(const pkg_manifest_t *pkg, char *out,
+                                   size_t out_size) {
+  line_reader_t reader;
+  char line[PKG_MAX_LINE];
+  int in_file = 0;
+  int post_install = 0;
+  int pre_remove = 0;
+  int post_remove = 0;
+  char scripts[128];
+
+  if (!pkg || !out || out_size == 0) {
+    return;
+  }
+  reader.data = pkg->payload;
+  reader.size = pkg->payload_size;
+  reader.pos = 0;
+  while (reader_line(&reader, line, sizeof(line))) {
+    if (in_file) {
+      if (strcmp(line, "content-end") == 0) {
+        in_file = 0;
+      }
+      continue;
+    }
+    if (pkg_starts_with(line, "file ")) {
+      in_file = 1;
+      continue;
+    }
+    if (strcmp(line, "post-install") == 0) {
+      post_install = 1;
+    } else if (strcmp(line, "pre-remove") == 0) {
+      pre_remove = 1;
+    } else if (strcmp(line, "post-remove") == 0) {
+      post_remove = 1;
+    }
+  }
+
+  scripts[0] = '\0';
+  if (post_install) {
+    pkg_append(scripts, sizeof(scripts), " post-install");
+  }
+  if (pre_remove) {
+    pkg_append(scripts, sizeof(scripts), " pre-remove");
+  }
+  if (post_remove) {
+    pkg_append(scripts, sizeof(scripts), " post-remove");
+  }
+  if (scripts[0] == '\0') {
+    pkg_append_line(out, out_size, "scripts: none");
+  } else {
+    char line_out[160];
+    snprintf(line_out, sizeof(line_out), "scripts:%s", scripts);
+    pkg_append_line(out, out_size, line_out);
+  }
+}
+
 static int replay_payload(const pkg_manifest_t *pkg, int run_post,
                           char *report, size_t report_size) {
   line_reader_t reader;
   char line[PKG_MAX_LINE];
   int installed_files = 0;
   int in_post = 0;
+  int in_remove_script = 0;
 
   reader.data = pkg->payload;
   reader.size = pkg->payload_size;
@@ -565,6 +763,19 @@ static int replay_payload(const pkg_manifest_t *pkg, int run_post,
     }
     if (strcmp(line, "end-post-install") == 0) {
       in_post = 0;
+      continue;
+    }
+    if (strcmp(line, "pre-remove") == 0 ||
+        strcmp(line, "post-remove") == 0) {
+      in_remove_script = 1;
+      continue;
+    }
+    if (strcmp(line, "end-pre-remove") == 0 ||
+        strcmp(line, "end-post-remove") == 0) {
+      in_remove_script = 0;
+      continue;
+    }
+    if (in_remove_script) {
       continue;
     }
     if (in_post) {
@@ -622,6 +833,37 @@ static int package_store_paths(const char *name, char *manifest_path,
   snprintf(manifest_path, manifest_path_size, PKG_DB_STORE "/%s.opkg", name);
   snprintf(meta_path, meta_path_size, PKG_DB_INSTALLED "/%s.meta", name);
   return 0;
+}
+
+static int package_removed_paths(const char *name, char *manifest_path,
+                                 size_t manifest_path_size, char *meta_path,
+                                 size_t meta_path_size) {
+  if (!pkg_name_safe(name)) {
+    return -1;
+  }
+  snprintf(manifest_path, manifest_path_size, PKG_DB_REMOVED "/%s.opkg", name);
+  snprintf(meta_path, meta_path_size, PKG_DB_REMOVED "/%s.meta", name);
+  return 0;
+}
+
+static int pkg_count_regular_files(const char *path) {
+  dirent_t entries[64];
+  int count;
+  int files = 0;
+
+  if (!path) {
+    return 0;
+  }
+  count = vfs_readdir(path, entries, 64);
+  if (count <= 0) {
+    return 0;
+  }
+  for (int i = 0; i < count; i++) {
+    if (entries[i].type == 0) {
+      files++;
+    }
+  }
+  return files;
 }
 
 static int store_installed_package(const char *source_path,
@@ -752,6 +994,8 @@ static void append_payload_files(const pkg_manifest_t *pkg, char *out,
   char line[PKG_MAX_LINE];
   int files = 0;
   int in_post = 0;
+  int in_file = 0;
+  int in_remove_script = 0;
 
   if (!pkg || !out || out_size == 0) {
     return;
@@ -761,6 +1005,12 @@ static void append_payload_files(const pkg_manifest_t *pkg, char *out,
   reader.pos = 0;
 
   while (reader_line(&reader, line, sizeof(line))) {
+    if (in_file) {
+      if (strcmp(line, "content-end") == 0) {
+        in_file = 0;
+      }
+      continue;
+    }
     if (strcmp(line, "post-install") == 0) {
       in_post = 1;
       continue;
@@ -769,7 +1019,17 @@ static void append_payload_files(const pkg_manifest_t *pkg, char *out,
       in_post = 0;
       continue;
     }
-    if (in_post || !pkg_starts_with(line, "file ")) {
+    if (strcmp(line, "pre-remove") == 0 ||
+        strcmp(line, "post-remove") == 0) {
+      in_remove_script = 1;
+      continue;
+    }
+    if (strcmp(line, "end-pre-remove") == 0 ||
+        strcmp(line, "end-post-remove") == 0) {
+      in_remove_script = 0;
+      continue;
+    }
+    if (in_post || in_remove_script || !pkg_starts_with(line, "file ")) {
       continue;
     }
     if (files == 0) {
@@ -777,6 +1037,7 @@ static void append_payload_files(const pkg_manifest_t *pkg, char *out,
     }
     pkg_append(out, out_size, "  ");
     pkg_append_line(out, out_size, line + 5);
+    in_file = 1;
     files++;
   }
   if (files == 0) {
@@ -791,6 +1052,8 @@ static int remove_payload_files(const pkg_manifest_t *pkg, char *report,
   int removed = 0;
   int skipped = 0;
   int in_post = 0;
+  int in_file = 0;
+  int in_remove_script = 0;
 
   if (!pkg) {
     return -1;
@@ -800,6 +1063,12 @@ static int remove_payload_files(const pkg_manifest_t *pkg, char *report,
   reader.pos = 0;
 
   while (reader_line(&reader, line, sizeof(line))) {
+    if (in_file) {
+      if (strcmp(line, "content-end") == 0) {
+        in_file = 0;
+      }
+      continue;
+    }
     if (strcmp(line, "post-install") == 0) {
       in_post = 1;
       continue;
@@ -808,13 +1077,24 @@ static int remove_payload_files(const pkg_manifest_t *pkg, char *report,
       in_post = 0;
       continue;
     }
-    if (in_post || !pkg_starts_with(line, "file ")) {
+    if (strcmp(line, "pre-remove") == 0 ||
+        strcmp(line, "post-remove") == 0) {
+      in_remove_script = 1;
+      continue;
+    }
+    if (strcmp(line, "end-pre-remove") == 0 ||
+        strcmp(line, "end-post-remove") == 0) {
+      in_remove_script = 0;
+      continue;
+    }
+    if (in_post || in_remove_script || !pkg_starts_with(line, "file ")) {
       continue;
     }
 
     char path[MAX_PATH];
     int is_dir = 0;
     copy_value(path, sizeof(path), line + 5);
+    in_file = 1;
     if (!pkg_path_safe(path)) {
       skipped++;
       continue;
@@ -908,6 +1188,53 @@ static int replay_stored_packages(void) {
   return 0;
 }
 
+static int pkg_text_matches_query(const char *text, const char *query) {
+  return !query || query[0] == '\0' || (text && strstr(text, query) != NULL);
+}
+
+static int append_remote_index_entries(const char *query, char *out,
+                                       size_t out_size, int *match_count) {
+  line_reader_t reader;
+  char line[PKG_MAX_LINE];
+  char entry_line[320];
+  size_t size = 0;
+  int entries = 0;
+
+  if (match_count) {
+    *match_count = 0;
+  }
+  if (pkg_read_file(PKG_REMOTE_INDEX_PATH, pkg_rollback_buf,
+                    sizeof(pkg_rollback_buf), &size) < 0 ||
+      size == 0) {
+    return -1;
+  }
+  reader.data = pkg_rollback_buf;
+  reader.size = size;
+  reader.pos = 0;
+  while (reader_line(&reader, line, sizeof(line))) {
+    pkg_remote_entry_t entry;
+    if (!pkg_starts_with(line, "package ") ||
+        parse_remote_index_line(line, &entry) < 0) {
+      continue;
+    }
+    if (!pkg_text_matches_query(entry.name, query) &&
+        !pkg_text_matches_query(entry.version, query) &&
+        !pkg_text_matches_query(entry.path, query)) {
+      continue;
+    }
+    snprintf(entry_line, sizeof(entry_line),
+             "remote %s %s size=%lu sha256=%s path=%s", entry.name,
+             entry.version, (unsigned long)entry.size, entry.sha256,
+             entry.path);
+    pkg_append_line(out, out_size, entry_line);
+    entries++;
+  }
+  if (match_count) {
+    *match_count = entries;
+  }
+  return 0;
+}
+
 int orizon_pkg_refresh_database(void) {
   static char list[8192];
   static char installed[8192];
@@ -933,6 +1260,7 @@ int orizon_pkg_init(void) {
   pkg_ensure_dir(PKG_DB_ROOT);
   pkg_ensure_dir(PKG_DB_INSTALLED);
   pkg_ensure_dir(PKG_DB_STORE);
+  pkg_ensure_dir(PKG_DB_REMOVED);
   pkg_ensure_dir("/system");
   pkg_ensure_dir("/system/share");
   pkg_ensure_dir("/home");
@@ -1091,6 +1419,9 @@ int orizon_pkg_list(char *out, size_t out_size) {
 int orizon_pkg_status(char *out, size_t out_size) {
   char line[160];
   int installed_count = 0;
+  int removed_count = 0;
+  int cached_count = 0;
+  int remote_cached = 0;
   dirent_t entries[64];
   int count;
 
@@ -1109,6 +1440,9 @@ int orizon_pkg_status(char *out, size_t out_size) {
       }
     }
   }
+  removed_count = pkg_count_regular_files(PKG_DB_REMOVED);
+  cached_count = pkg_count_regular_files(PKG_DB_STORE);
+  remote_cached = vfs_stat(PKG_REMOTE_INDEX_PATH, NULL, NULL) == 0;
   pkg_append_line(out, out_size, "Orizon package manager");
   pkg_append_line(out, out_size, pkg_status_text);
   snprintf(line, sizeof(line), "builtin-packages %lu",
@@ -1116,13 +1450,131 @@ int orizon_pkg_status(char *out, size_t out_size) {
   pkg_append_line(out, out_size, line);
   snprintf(line, sizeof(line), "installed-packages %d", installed_count);
   pkg_append_line(out, out_size, line);
-  pkg_append_line(out, out_size, "format orizon-package 1");
+  snprintf(line, sizeof(line), "cached-packages %d", cached_count);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "remove-rollback-snapshots %d",
+           removed_count / 2);
+  pkg_append_line(out, out_size, line);
+  pkg_append_line(out, out_size, "format orizon-package 1 manager-v2=yes");
   pkg_append_line(out, out_size, "dependencies depends <name> <version|*>");
-  pkg_append_line(out, out_size, "rollback install-restores-previous-payload");
+  pkg_append_line(out, out_size,
+                  "scripts post-install pre-remove post-remove");
+  pkg_append_line(out, out_size,
+                  "rollback install-restores-previous-payload remove-cache="
+                  PKG_DB_REMOVED);
   pkg_append_line(out, out_size,
                   "remote-index-auth signed-update-manifest-sha256-pinned");
+  snprintf(line, sizeof(line), "remote-index cached=%s path=%s",
+           remote_cached ? "yes" : "no", PKG_REMOTE_INDEX_PATH);
+  pkg_append_line(out, out_size, line);
+  pkg_append_line(out, out_size,
+                  "commands pkg search <query>, pkg remote, pkg rollback <name>");
   pkg_append_line(out, out_size, "db " PKG_DB_ROOT);
   return 0;
+}
+
+int orizon_pkg_remote(char *out, size_t out_size) {
+  int remote_matches = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  pkg_append_line(out, out_size, "package remote:");
+  pkg_append_line(out, out_size,
+                  "auth signed-update-manifest-sha256-pinned");
+  pkg_append_line(out, out_size, "path " PKG_REMOTE_INDEX_PATH);
+  if (append_remote_index_entries(NULL, out, out_size, &remote_matches) < 0) {
+    pkg_append_line(out, out_size, "cached-index=no");
+    pkg_append_line(out, out_size,
+                    "hint: run pkg update after disk install to refresh it");
+    return 1;
+  }
+  pkg_append_line(out, out_size, "cached-index=yes");
+  if (remote_matches == 0) {
+    pkg_append_line(out, out_size, "remote packages: none");
+  }
+  return 0;
+}
+
+int orizon_pkg_search(const char *query, char *out, size_t out_size) {
+  dirent_t entries[64];
+  int count;
+  int matches = 0;
+  int remote_matches = 0;
+  char line[256];
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+
+  snprintf(line, sizeof(line), "pkg search: %s",
+           (query && query[0]) ? query : "<all>");
+  pkg_append_line(out, out_size, line);
+  for (size_t i = 0;
+       i < sizeof(builtin_packages) / sizeof(builtin_packages[0]); i++) {
+    if (!pkg_text_matches_query(builtin_packages[i].name, query) &&
+        !pkg_text_matches_query(builtin_packages[i].version, query) &&
+        !pkg_text_matches_query(builtin_packages[i].state, query)) {
+      continue;
+    }
+    snprintf(line, sizeof(line), "builtin %s %s %s",
+             builtin_packages[i].name, builtin_packages[i].version,
+             builtin_packages[i].state);
+    pkg_append_line(out, out_size, line);
+    matches++;
+  }
+
+  count = vfs_readdir(PKG_DB_INSTALLED, entries, 64);
+  if (count > 0) {
+    for (int i = 0; i < count; i++) {
+      char meta_path[MAX_PATH];
+      char name[64];
+      char version[64];
+      char source[96];
+      if (entries[i].type != 0) {
+        continue;
+      }
+      snprintf(meta_path, sizeof(meta_path), PKG_DB_INSTALLED "/%s",
+               entries[i].name);
+      if (pkg_read_file(meta_path, pkg_buf, sizeof(pkg_buf), NULL) < 0 ||
+          meta_value(pkg_buf, "name", name, sizeof(name)) < 0 ||
+          meta_value(pkg_buf, "version", version, sizeof(version)) < 0) {
+        continue;
+      }
+      if (!pkg_text_matches_query(name, query) &&
+          !pkg_text_matches_query(version, query) &&
+          !pkg_text_matches_query(pkg_buf, query)) {
+        continue;
+      }
+      if (meta_value(pkg_buf, "source", source, sizeof(source)) < 0) {
+        strcpy(source, "unknown");
+      }
+      snprintf(line, sizeof(line), "installed %s %s source=%s", name,
+               version, source);
+      pkg_append_line(out, out_size, line);
+      matches++;
+    }
+  }
+
+  if (append_remote_index_entries(query, out, out_size, &remote_matches) == 0) {
+    matches += remote_matches;
+  } else {
+    pkg_append_line(out, out_size, "remote-index cached=no");
+  }
+  snprintf(line, sizeof(line), "matches %d", matches);
+  pkg_append_line(out, out_size, line);
+  if (matches == 0) {
+    pkg_append_line(out, out_size, "pkg search: no match");
+  }
+  return matches > 0 ? 0 : 1;
 }
 
 int orizon_pkg_info(const char *name, char *out, size_t out_size) {
@@ -1175,6 +1627,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     snprintf(line, sizeof(line), "stored-sha256 %s", actual_hash);
     pkg_append_line(out, out_size, line);
     append_package_dependencies(&pkg, out, out_size);
+    append_package_scripts(&pkg, out, out_size);
     append_payload_files(&pkg, out, out_size);
   } else {
     pkg_append_line(out, out_size, "stored-manifest invalid");
@@ -1186,10 +1639,14 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
   const builtin_package_t *builtin;
   char manifest_path[MAX_PATH];
   char meta_path[MAX_PATH];
+  char removed_manifest_path[MAX_PATH];
+  char removed_meta_path[MAX_PATH];
   char actual_hash[SHA256_HEX_SIZE];
   char line[192];
   pkg_manifest_t pkg;
   size_t size = 0;
+  size_t meta_size = 0;
+  int post_remove_result;
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -1214,22 +1671,133 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
     pkg_append_line(report, report_size, "pkg remove: package not installed");
     return -3;
   }
+  if (pkg_read_file(meta_path, pkg_rollback_meta, sizeof(pkg_rollback_meta),
+                    &meta_size) < 0) {
+    meta_size = 0;
+  }
+  if (package_removed_paths(name, removed_manifest_path,
+                            sizeof(removed_manifest_path), removed_meta_path,
+                            sizeof(removed_meta_path)) < 0 ||
+      pkg_write_blob_internal(removed_manifest_path, pkg_buf, size) < 0 ||
+      (meta_size > 0 &&
+       pkg_write_blob_internal(removed_meta_path, pkg_rollback_meta,
+                               meta_size) < 0)) {
+    pkg_append_line(report, report_size,
+                    "pkg remove: cannot prepare rollback snapshot");
+    return -4;
+  }
 
   snprintf(line, sizeof(line), "Removing %s %s", pkg.name, pkg.version);
   pkg_append_line(report, report_size, line);
+  pkg_append_line(report, report_size,
+                  "pkg: rollback snapshot saved for pkg rollback <name>");
+  if (run_payload_script(&pkg, "pre-remove", "end-pre-remove", report,
+                         report_size) < 0) {
+    vfs_delete(removed_manifest_path);
+    vfs_delete(removed_meta_path);
+    pkg_append_line(report, report_size,
+                    "pkg remove: pre-remove failed, package left installed");
+    return -5;
+  }
   if (remove_payload_files(&pkg, report, report_size) < 0) {
     pkg_append_line(report, report_size, "pkg remove: payload cleanup failed");
-    return -4;
+    replay_payload(&pkg, 0, NULL, 0);
+    vfs_delete(removed_manifest_path);
+    vfs_delete(removed_meta_path);
+    return -6;
   }
-  vfs_delete(meta_path);
-  vfs_delete(manifest_path);
-  snprintf(line, sizeof(line), "removed %s %s", pkg.name, pkg.version);
+  if (vfs_delete(meta_path) < 0 || vfs_delete(manifest_path) < 0) {
+    replay_payload(&pkg, 0, NULL, 0);
+    if (meta_size > 0) {
+      pkg_write_blob_internal(meta_path, pkg_rollback_meta, meta_size);
+    }
+    pkg_write_blob_internal(manifest_path, pkg_buf, size);
+    vfs_delete(removed_manifest_path);
+    vfs_delete(removed_meta_path);
+    pkg_append_line(report, report_size,
+                    "pkg remove: database cleanup failed, package restored");
+    return -7;
+  }
+  post_remove_result = run_payload_script(&pkg, "post-remove",
+                                          "end-post-remove", report,
+                                          report_size);
+  if (post_remove_result < 0) {
+    pkg_append_line(report, report_size,
+                    "pkg remove: WARN post-remove script failed");
+  }
+  snprintf(line, sizeof(line), "removed %s %s rollback=available", pkg.name,
+           pkg.version);
   pkg_append_text_internal(PKG_DB_HISTORY, line);
   pkg_append_text_internal(PKG_DB_HISTORY, "\n");
-  pkg_status_text = "package removed";
+  pkg_status_text = "package removed; rollback available";
   orizon_pkg_refresh_database();
   vfs_persist_save();
   snprintf(line, sizeof(line), "Removed %s %s", pkg.name, pkg.version);
+  pkg_append_line(report, report_size, line);
+  pkg_append_line(report, report_size, "Rollback: pkg rollback <name>");
+  return 0;
+}
+
+int orizon_pkg_rollback(const char *name, char *report, size_t report_size) {
+  char manifest_path[MAX_PATH];
+  char meta_path[MAX_PATH];
+  char removed_manifest_path[MAX_PATH];
+  char removed_meta_path[MAX_PATH];
+  char actual_hash[SHA256_HEX_SIZE];
+  char line[192];
+  pkg_manifest_t pkg;
+  size_t size = 0;
+  int rc;
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  if (!pkg_name_safe(name)) {
+    pkg_append_line(report, report_size, "pkg rollback: invalid package name");
+    return -1;
+  }
+  if (package_store_paths(name, manifest_path, sizeof(manifest_path),
+                          meta_path, sizeof(meta_path)) < 0 ||
+      package_removed_paths(name, removed_manifest_path,
+                            sizeof(removed_manifest_path), removed_meta_path,
+                            sizeof(removed_meta_path)) < 0) {
+    pkg_append_line(report, report_size, "pkg rollback: invalid paths");
+    return -1;
+  }
+  if (vfs_stat(meta_path, NULL, NULL) == 0) {
+    pkg_append_line(report, report_size,
+                    "pkg rollback: package is already installed");
+    return -2;
+  }
+  if (pkg_read_file(removed_manifest_path, pkg_rollback_buf,
+                    sizeof(pkg_rollback_buf), &size) < 0 ||
+      parse_manifest(pkg_rollback_buf, size, &pkg, actual_hash) < 0 ||
+      strcmp(pkg.name, name) != 0) {
+    pkg_append_line(report, report_size,
+                    "pkg rollback: no valid remove snapshot");
+    return -3;
+  }
+
+  rc = pkg_install_loaded(removed_manifest_path, pkg_rollback_buf, size,
+                          report, report_size);
+  if (rc != 0) {
+    pkg_append_line(report, report_size,
+                    "pkg rollback: restore failed, snapshot kept");
+    return rc;
+  }
+  vfs_delete(removed_manifest_path);
+  vfs_delete(removed_meta_path);
+  snprintf(line, sizeof(line), "rollback %s %s restored", pkg.name,
+           pkg.version);
+  pkg_append_text_internal(PKG_DB_HISTORY, line);
+  pkg_append_text_internal(PKG_DB_HISTORY, "\n");
+  pkg_status_text = "package rollback restored";
+  orizon_pkg_refresh_database();
+  vfs_persist_save();
+  snprintf(line, sizeof(line), "Restored %s %s", pkg.name, pkg.version);
   pkg_append_line(report, report_size, line);
   return 0;
 }
@@ -1307,6 +1875,7 @@ int orizon_pkg_verify_file(const char *path, char *out, size_t out_size) {
   snprintf(line, sizeof(line), "payload-sha256 %s", actual_hash);
   pkg_append_line(out, out_size, line);
   append_package_dependencies(&pkg, out, out_size);
+  append_package_scripts(&pkg, out, out_size);
   append_payload_files(&pkg, out, out_size);
   if (check_package_dependencies(&pkg, out, out_size) == 0) {
     pkg_append_line(out, out_size, "package verify: OK");
@@ -1343,7 +1912,14 @@ int orizon_pkg_write_sample(char *report, size_t report_size) {
       "mkdir /workspace/packages\n"
       "append /workspace/packages/history.log orizon-hello 0.1.0 installed\n"
       "echo post-install: wrote /workspace/packages/history.log\n"
-      "end-post-install\n";
+      "end-post-install\n"
+      "pre-remove\n"
+      "echo pre-remove: orizon-hello cleanup starting\n"
+      "end-pre-remove\n"
+      "post-remove\n"
+      "append /workspace/packages/history.log orizon-hello 0.1.0 removed\n"
+      "echo post-remove: wrote /workspace/packages/history.log\n"
+      "end-post-remove\n";
   char hash[SHA256_HEX_SIZE];
   char header[256];
   char path[] = "/workspace/packages/orizon-hello.opkg";

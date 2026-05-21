@@ -34,6 +34,8 @@ $commands = @(
   "ps",
   "pkg status",
   "pkg help",
+  "pkg search orizon",
+  "pkg remote",
   "pkg sample",
   "pkg verify /workspace/packages/orizon-hello.opkg",
   "pkg install /workspace/packages/orizon-hello.opkg",
@@ -199,6 +201,12 @@ run_cmd() {
       ;;
     "pkg help")
       grep -q "pkg verify" "`$OUT" || { echo "missing pkg help output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg search orizon")
+      grep -q "pkg search:" "`$OUT" && grep -q "builtin orizon-core" "`$OUT" || { echo "missing pkg search output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg remote")
+      grep -q "package remote:" "`$OUT" || { echo "missing pkg remote output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg sample")
       grep -q "Sample package written" "`$OUT" || { echo "missing pkg sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

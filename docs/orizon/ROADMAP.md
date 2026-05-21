@@ -30,8 +30,11 @@
   validation once the refreshed kernel reaches the shell, `bootguard`
   diagnostics, and automatic main-slot restore when the rollback boot entry is
   selected during a pending update.
-- Minimal package manager with `pkg list`, `pkg status`, `pkg info`,
-  `pkg sample`, `pkg hash`, `pkg install`, and `pkg remove`.
+- Package manager v2 foundation with `pkg list`, `pkg status`, `pkg search`,
+  `pkg remote`, `pkg info`, `pkg sample`, `pkg hash`, `pkg verify`,
+  installed-only `pkg update/install/remove`, signed package-index cache
+  inspection, `pre-remove`/`post-remove` scripts, and local
+  `pkg rollback <name>` for the last removed package snapshot.
 - Console basics: scrollback, persistent history, simple autocomplete, editor,
   `sysinfo`, `hw`, `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`,
   and `uptime`.

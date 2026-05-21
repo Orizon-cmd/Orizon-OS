@@ -16,6 +16,8 @@ https://github.com/Orizon-cmd/Orizon-Packages
 pkg help
 pkg list
 pkg status
+pkg search orizon
+pkg remote
 pkg update
 pkg info orizon-hello
 pkg history
@@ -24,15 +26,17 @@ pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg remove orizon-hello
+pkg rollback orizon-hello
 ```
 
-`pkg update`, `pkg install` and `pkg remove` are available only after Orizon OS
-has been installed to disk. Live boot can inspect, create, hash and verify
-package files, but it refuses persistent package changes because the live ISO
-is not the installed system. `pkg update` is intentionally a thin wrapper around
-the signed system `update` flow: the package index is authenticated by the
-signed OS manifest, pinned package repository commit, and pinned package-index
-SHA-256.
+`pkg update`, `pkg install`, `pkg remove`, and `pkg rollback` are available only
+after Orizon OS has been installed to disk. Live boot can inspect, search,
+create, hash and verify package files, but it refuses persistent package
+changes because the live ISO is not the installed system. `pkg update` is
+intentionally a thin wrapper around the signed system `update` flow: the package
+index is authenticated by the signed OS manifest, pinned package repository
+commit, and pinned package-index SHA-256. `pkg remote` shows the cached signed
+index once an installed system has refreshed it.
 
 ## Package Format
 
@@ -51,6 +55,12 @@ content-end
 post-install
 append /workspace/packages/history.log orizon-hello 0.1.0 installed
 end-post-install
+pre-remove
+echo pre-remove: orizon-hello cleanup starting
+end-pre-remove
+post-remove
+append /workspace/packages/history.log orizon-hello 0.1.0 removed
+end-post-remove
 ```
 
 The hash covers the raw payload bytes after `payload:`. That keeps the header
@@ -64,8 +74,10 @@ Supported payload entries:
 
 - `file <absolute-path>` followed by file contents and `content-end`
 - `post-install` followed by script lines and `end-post-install`
+- `pre-remove` followed by script lines and `end-pre-remove`
+- `post-remove` followed by script lines and `end-post-remove`
 
-Supported post-install commands:
+Supported script commands:
 
 - `mkdir <path>`
 - `touch <path>`
@@ -86,6 +98,8 @@ Installed package state is stored under:
 /workspace/.orizon/pkgdb
 /workspace/.orizon/pkgdb/installed
 /workspace/.orizon/pkgdb/packages
+/workspace/.orizon/pkgdb/removed
+/workspace/.orizon/package-index
 ```
 
 The current VFS still stores real persistence through `/workspace`. Because of
@@ -115,13 +129,21 @@ packages/x86_64/<name>.opkg
 `.opkg` files, verifies their SHA-256 from the index, and then lets `pkg`
 verify the internal payload SHA-256 before installation.
 
-`pkg info <name>` shows stored package metadata, dependencies and the files
-owned by an installed package. `pkg remove <name>` removes files declared by the
-stored manifest, deletes the package metadata, refreshes `/system/installed`,
-and persists the package database.
+`pkg search <query>` searches builtin, installed and cached remote package
+metadata. `pkg remote` prints the cached signed package index and makes clear
+when it is not available yet. `pkg info <name>` shows stored package metadata,
+dependencies, scripts and the files owned by an installed package.
+
+`pkg remove <name>` saves a rollback snapshot in
+`/workspace/.orizon/pkgdb/removed`, runs an optional `pre-remove` script,
+removes files declared by the stored manifest, runs an optional `post-remove`
+script, deletes installed metadata, refreshes `/system/installed`, and persists
+the package database. `pkg rollback <name>` restores the last removed snapshot
+if the package is not already installed.
 
 Package install now keeps a previous package manifest in memory while applying
 an upgrade. If payload replay or metadata update fails, Orizon removes the
 partial new payload and restores the previous package payload/metadata when it
-exists. This is still a local package transaction guard, not a full boot-level
-package rollback.
+exists. Remove rollback is persistent across reboots through the package
+database, but it is still a local package transaction guard, not a full
+boot-level package rollback.

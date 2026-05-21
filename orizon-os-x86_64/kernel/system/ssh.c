@@ -2831,6 +2831,8 @@ static void ssh_shell_print_pkg(const char *args) {
              "Orizon packages\r\n"
              "  pkg status             show package manager state\r\n"
              "  pkg list               list builtin/installed packages\r\n"
+             "  pkg search <query>     search builtin/installed/remote packages\r\n"
+             "  pkg remote             show cached signed remote package index\r\n"
              "  pkg info <name>        show package metadata/files\r\n"
              "  pkg history            show install/remove history\r\n"
              "  pkg sample             create /workspace/packages/orizon-hello.opkg\r\n"
@@ -2838,9 +2840,15 @@ static void ssh_shell_print_pkg(const char *args) {
              "  pkg verify <file>      verify package hash/dependencies\r\n"
              "  pkg update             run signed package refresh through update\r\n"
              "  pkg install <file>     install a verified package after disk install\r\n"
-             "  pkg remove <name>      remove an installed package\r\n");
+             "  pkg remove <name>      remove an installed package\r\n"
+             "  pkg rollback <name>    restore last removed package snapshot\r\n");
   } else if (ssh_shell_command_is(sub, "list")) {
     orizon_pkg_list(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "search")) {
+    const char *query = ssh_shell_skip_spaces(sub + 6);
+    orizon_pkg_search(query, out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "remote")) {
+    orizon_pkg_remote(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "info")) {
     if (!ssh_shell_read_token(sub + 4, token, sizeof(token))) {
       snprintf(out, sizeof(out), "usage: pkg info <name>\r\n");
@@ -2889,6 +2897,15 @@ static void ssh_shell_print_pkg(const char *args) {
       snprintf(out, sizeof(out), "usage: pkg remove <name>\r\n");
     } else {
       orizon_pkg_remove(token, out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "rollback")) {
+    if (!ssh_install_already_complete()) {
+      snprintf(out, sizeof(out),
+               "pkg rollback: unavailable in live boot. Install Orizon OS first.\r\n");
+    } else if (!ssh_shell_read_token(sub + 8, token, sizeof(token))) {
+      snprintf(out, sizeof(out), "usage: pkg rollback <name>\r\n");
+    } else {
+      orizon_pkg_rollback(token, out, sizeof(out));
     }
   } else {
     snprintf(out, sizeof(out), "pkg: unknown command. Try 'pkg help'.\r\n");
@@ -3751,7 +3768,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
         "  usb rescan           rescan USB root ports\r\n"
         "  ps|pkg|update        show system/update/package state\r\n"
-        "  pkg help             show package install/verify/update commands\r\n"
+        "  pkg help             show package search/verify/install/update commands\r\n"
+        "  pkg search|remote    inspect local and signed remote package metadata\r\n"
         "  storage|storage diag show storage and disk detection state\r\n"
         "  persist status|slots|save|repair inspect or rewrite data snapshots\r\n"
         "  persist restore previous|slot <n> restore and promote a snapshot\r\n"

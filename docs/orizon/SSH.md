@@ -173,8 +173,9 @@ recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Apres
 authentification password, OpenSSH peut ouvrir un canal `session`; `exec` et le
 mini-shell interactif fonctionnent deja pour les diagnostics de base, les
 commandes admin listees plus haut, et les commandes `pkg status/list/info`,
-`pkg sample`, `pkg hash`, `pkg verify`, `pkg update`, `pkg install`, `pkg
-remove` et `pkg history`. `ssh status` et `ssh algorithms` affichent
+`pkg search`, `pkg remote`, `pkg sample`, `pkg hash`, `pkg verify`, `pkg
+update`, `pkg install`, `pkg remove`, `pkg rollback` et `pkg history`.
+`ssh status` et `ssh algorithms` affichent
 la banniere client, la negociation
 choisie, les empreintes X25519, le hash d'echange, la signature, les cles
 derivees, l'etat auth et l'etat canal.

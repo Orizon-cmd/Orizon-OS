@@ -312,6 +312,8 @@ def main() -> int:
           ("logs update", "Update complete"),
           ("bootguard", "Orizon boot guard"),
           ("pkg status", "remote-index-auth signed-update-manifest-sha256-pinned"),
+          ("pkg remote", "cached-index=yes"),
+          ("pkg search orizon", "pkg search:"),
           ("pkg info orizon-welcome", "orizon-welcome"),
       ]
       for command, needle in post_update:
@@ -327,13 +329,15 @@ def main() -> int:
           ("pkg info orizon-hello", "dependencies:"),
           ("pkg remove orizon-hello", "Removed orizon-hello"),
           ("pkg history", "removed orizon-hello"),
+          ("pkg rollback orizon-hello", "Restored orizon-hello"),
+          ("pkg history", "rollback orizon-hello"),
       ]
       for command, needle in package_checks:
           print(f"--- {command} ---")
           out = run_guest_ssh(client, ip, args.password, command, args.ssh_timeout)
           print(out)
           expect(out, needle, command)
-      transcript.append("pkg: sample verify install info remove history PASS")
+      transcript.append("pkg: sample verify install info remove rollback history PASS")
 
       print("--- rollback ---")
       rollback_out = run_guest_ssh(

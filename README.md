@@ -431,13 +431,17 @@ Details:
 Orizon OS contient maintenant une premiere base de gestionnaire de paquets.
 Le format est volontairement simple: un fichier texte `.opkg` contient `name`,
 `version`, un `sha256` du payload, des blocs `file` a installer, puis un
-bloc `post-install` minimal.
+bloc `post-install` minimal. La couche v2 ajoute recherche, index distant
+signe en cache, scripts `pre-remove`/`post-remove`, et rollback local apres
+suppression.
 
 Commandes disponibles:
 
 ```text
 pkg list
 pkg status
+pkg search orizon
+pkg remote
 pkg update
 pkg info orizon-hello
 pkg history
@@ -446,15 +450,18 @@ pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg remove orizon-hello
+pkg rollback orizon-hello
 ```
 
-`pkg update`, `pkg install` et `pkg remove` sont reserves a un OS installe sur
-disque. Les paquets installes sont stockes dans `/workspace/.orizon/pkgdb`,
-puis rejoues au boot pour restaurer les fichiers systeme en RAM comme
-`/system/share/...`. `pkg verify` controle le hash payload et les dependances
-simples `depends`; `pkg install` restaure l'ancien paquet si l'installation
-echoue avant la fin. `pkg info <name>` affiche les metadonnees, dependances et
-fichiers possedes par un paquet.
+`pkg update`, `pkg install`, `pkg remove` et `pkg rollback` sont reserves a un
+OS installe sur disque. Les paquets installes sont stockes dans
+`/workspace/.orizon/pkgdb`, puis rejoues au boot pour restaurer les fichiers
+systeme en RAM comme `/system/share/...`. `pkg verify` controle le hash payload
+et les dependances simples `depends`; `pkg install` restaure l'ancien paquet si
+l'installation echoue avant la fin. `pkg remove` conserve un snapshot dans
+`/workspace/.orizon/pkgdb/removed`, que `pkg rollback <name>` peut restaurer.
+`pkg info <name>` affiche les metadonnees, dependances, scripts et fichiers
+possedes par un paquet.
 
 Le depot officiel de paquets est:
 

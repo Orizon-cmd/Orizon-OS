@@ -178,6 +178,8 @@ def run_ssh_checks(
         ("dns raw.githubusercontent.com", " -> "),
         ("pkg status", "Orizon package manager"),
         ("pkg help", "pkg verify"),
+        ("pkg search orizon", "pkg search:"),
+        ("pkg remote", "package remote:"),
         ("pkg sample", "Sample package written"),
         ("pkg verify /workspace/packages/orizon-hello.opkg", "package verify: OK"),
         ("pkg install /workspace/packages/orizon-hello.opkg", "install"),

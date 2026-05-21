@@ -214,6 +214,8 @@ package commands remain:
 ```text
 pkg list
 pkg status
+pkg search <query>
+pkg remote
 pkg update
 pkg info <name>
 pkg history
@@ -222,6 +224,7 @@ pkg hash <file.opkg>
 pkg verify <file.opkg>
 pkg install <file.opkg>
 pkg remove <name>
+pkg rollback <name>
 ```
 
 Installed package metadata lives in:
@@ -235,9 +238,11 @@ Installed package metadata lives in:
 
 The boot rollback system remains responsible for kernel and UEFI loader
 changes. Package removal now uses the stored package manifest to delete files
-owned by a package. Local package install has a transaction guard: if replaying
-the new payload or updating package metadata fails, Orizon removes the partial
-new payload and restores the previous package payload/metadata when one exists.
+owned by a package and stores a persistent remove snapshot for
+`pkg rollback <name>`. Local package install has a transaction guard: if
+replaying the new payload or updating package metadata fails, Orizon removes the
+partial new payload and restores the previous package payload/metadata when one
+exists.
 This is not yet a full boot-level package rollback.
 
 ## Live Boot Behavior
