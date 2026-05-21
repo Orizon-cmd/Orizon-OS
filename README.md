@@ -41,8 +41,9 @@ le developpement noyau:
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
   installer des composants separes du kernel
-- console avec scrollback, defilement clavier `z`/`s`, support molette souris
-  PS/2, `edit` ameliore et navigation historique `Up/Down`
+- console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
+  en plein ecran, support molette souris PS/2, `edit` ameliore et navigation
+  historique `Up/Down`
 - diagnostics `sysinfo`, `hw`, `mounts`, `report`, `report save` et `selftest`
   pour voir CPU, memoire, stockage, racines data, reseau, USB/PS2, installation,
   update et principaux peripheriques PCI

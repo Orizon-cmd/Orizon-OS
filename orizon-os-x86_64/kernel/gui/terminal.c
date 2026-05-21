@@ -54,6 +54,8 @@ static const uint32_t term_colors[16] = {
 #define TERM_SCROLLBACK_LINES 256
 #define TERM_KEY_SCROLL_LINES 3
 #define TERM_HISTORY_MAX 32
+#define TERM_PAGER_MAX 32768
+#define TERM_PAGER_PAGE_LINES (TERM_ROWS - 2)
 #define TERM_HISTORY_PATH "/workspace/.orizon/history"
 #define TERM_WIFI_LOG_PATH "/logs/wifi.log"
 #define TERM_WIFI_LAST_PATH "/workspace/.orizon/wifi-validation"
@@ -92,6 +94,14 @@ typedef struct terminal {
   char edit_buf[TERM_EDIT_MAX];
   size_t edit_len;
 
+  /* Full-screen pager */
+  int pager_mode;
+  char pager_title[MAX_PATH];
+  size_t pager_size;
+  int pager_top_line;
+  int pager_total_lines;
+  int pager_truncated;
+
   /* Guided disk installer */
   int install_mode;
   int install_step;
@@ -114,6 +124,7 @@ typedef struct terminal {
 
 static terminal_t *active_term = NULL;
 static char term_diag_buf[32768];
+static char term_pager_buf[TERM_PAGER_MAX + 1];
 
 static int term_install_already_complete(void);
 static int term_read_text_file_silent(const char *path, char *buf, size_t cap);
@@ -255,6 +266,44 @@ static void term_clear_line(terminal_t *term, int row) {
     term->chars[idx] = ' ';
     term->fg_colors[idx] = term->current_fg;
     term->bg_colors[idx] = term->current_bg;
+  }
+}
+
+static void term_clear_screen(terminal_t *term) {
+  if (!term) {
+    return;
+  }
+  for (int row = 0; row < TERM_ROWS; row++) {
+    term_clear_line(term, row);
+  }
+  term->cursor_x = 0;
+  term->cursor_y = 0;
+  term->scroll_offset = 0;
+}
+
+static void term_write_screen_line(terminal_t *term, int row,
+                                   const char *text, size_t text_len,
+                                   uint8_t fg, uint8_t bg) {
+  size_t len = text_len;
+
+  if (!term || row < 0 || row >= TERM_ROWS) {
+    return;
+  }
+  if (len > TERM_COLS) {
+    len = TERM_COLS;
+  }
+  for (int col = 0; col < TERM_COLS; col++) {
+    int idx = row * TERM_COLS + col;
+    char ch = ' ';
+    if ((size_t)col < len && text) {
+      ch = text[col];
+      if (ch < 32 || ch > 126) {
+        ch = (ch == '\t') ? ' ' : '.';
+      }
+    }
+    term->chars[idx] = ch;
+    term->fg_colors[idx] = fg;
+    term->bg_colors[idx] = bg;
   }
 }
 
@@ -731,7 +780,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
       "firstboot", "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
       "install", "install-plan", "install-status",
-      "input", "keyboard", "ls", "mkdir", "mounts", "mv", "persist",
+      "input", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
       "rollback-status", "repair-boot", "rescue", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
@@ -2166,6 +2215,213 @@ static int term_read_regular_file(terminal_t *term, const char *display,
   vfs_close(f);
   buf[used] = '\0';
   return n < 0 ? -1 : (int)used;
+}
+
+static int term_pager_count_visual_lines(size_t size) {
+  const char *p = term_pager_buf;
+  const char *end = term_pager_buf + size;
+  int lines = 0;
+
+  if (size == 0) {
+    return 1;
+  }
+  while (p < end) {
+    const char *line = p;
+    size_t len = 0;
+    while (line + len < end && line[len] != '\n') {
+      len++;
+    }
+    if (len == 0) {
+      lines++;
+    } else {
+      lines += (int)((len + TERM_COLS - 1) / TERM_COLS);
+    }
+    p = line + len;
+    if (p < end && *p == '\n') {
+      p++;
+    }
+  }
+  return lines > 0 ? lines : 1;
+}
+
+static int term_pager_get_visual_line(terminal_t *term, int wanted,
+                                      const char **start, size_t *len) {
+  const char *p = term_pager_buf;
+  const char *end;
+  int visual = 0;
+
+  if (!term || !start || !len || wanted < 0) {
+    return -1;
+  }
+  end = term_pager_buf + term->pager_size;
+  if (term->pager_size == 0) {
+    *start = "";
+    *len = 0;
+    return wanted == 0 ? 0 : -1;
+  }
+  while (p < end) {
+    const char *line = p;
+    size_t line_len = 0;
+    size_t off = 0;
+    while (line + line_len < end && line[line_len] != '\n') {
+      line_len++;
+    }
+    if (line_len == 0) {
+      if (visual == wanted) {
+        *start = line;
+        *len = 0;
+        return 0;
+      }
+      visual++;
+    }
+    while (off < line_len) {
+      size_t chunk = line_len - off;
+      if (chunk > TERM_COLS) {
+        chunk = TERM_COLS;
+      }
+      if (visual == wanted) {
+        *start = line + off;
+        *len = chunk;
+        return 0;
+      }
+      visual++;
+      off += chunk;
+    }
+    p = line + line_len;
+    if (p < end && *p == '\n') {
+      p++;
+    }
+  }
+  return -1;
+}
+
+static void term_pager_render(terminal_t *term) {
+  char header[160];
+  char footer[160];
+  int max_top;
+  int first;
+  int last;
+
+  if (!term || !term->pager_mode) {
+    return;
+  }
+  if (term->pager_total_lines <= 0) {
+    term->pager_total_lines = 1;
+  }
+  max_top = term->pager_total_lines - TERM_PAGER_PAGE_LINES;
+  if (max_top < 0) {
+    max_top = 0;
+  }
+  if (term->pager_top_line < 0) {
+    term->pager_top_line = 0;
+  }
+  if (term->pager_top_line > max_top) {
+    term->pager_top_line = max_top;
+  }
+
+  term_clear_screen(term);
+  snprintf(header, sizeof(header), " less: %s", term->pager_title);
+  term_write_screen_line(term, 0, header, strlen(header), 15, 4);
+
+  for (int row = 0; row < TERM_PAGER_PAGE_LINES; row++) {
+    const char *line = NULL;
+    size_t len = 0;
+    if (term_pager_get_visual_line(term, term->pager_top_line + row, &line,
+                                   &len) == 0) {
+      term_write_screen_line(term, row + 1, line, len, 7, 0);
+    }
+  }
+
+  first = term->pager_top_line + 1;
+  last = term->pager_top_line + TERM_PAGER_PAGE_LINES;
+  if (last > term->pager_total_lines) {
+    last = term->pager_total_lines;
+  }
+  snprintf(footer, sizeof(footer),
+           " z/up back  s/down next  space page  g/G top/end  q quit  %d-%d/%d%s",
+           first, last, term->pager_total_lines,
+           term->pager_truncated ? " truncated" : "");
+  term_write_screen_line(term, TERM_ROWS - 1, footer, strlen(footer), 0, 6);
+  term->cursor_x = 0;
+  term->cursor_y = TERM_ROWS - 1;
+}
+
+static void term_pager_close(terminal_t *term) {
+  if (!term) {
+    return;
+  }
+  term->pager_mode = 0;
+  term_clear_screen(term);
+  term_puts_t(term, "less: closed\n");
+  term_prompt_prefix(term);
+  term_prepare_input(term);
+}
+
+static int term_handle_pager_key(terminal_t *term, int key) {
+  int page = TERM_PAGER_PAGE_LINES;
+  int max_top;
+
+  if (!term || !term->pager_mode) {
+    return 0;
+  }
+  max_top = term->pager_total_lines - TERM_PAGER_PAGE_LINES;
+  if (max_top < 0) {
+    max_top = 0;
+  }
+  if (key == 'q' || key == 'Q' || key == KEY_ESC) {
+    term_pager_close(term);
+    return 1;
+  }
+  if (key == 'g') {
+    term->pager_top_line = 0;
+  } else if (key == 'G') {
+    term->pager_top_line = max_top;
+  } else if (key == 'z' || key == KEY_UP) {
+    term->pager_top_line--;
+  } else if (key == 'Z' || key == 'b' || key == 'B') {
+    term->pager_top_line -= page;
+  } else if (key == 's' || key == KEY_DOWN || key == '\n' || key == '\r') {
+    term->pager_top_line++;
+  } else if (key == 'S' || key == ' ') {
+    term->pager_top_line += page;
+  } else {
+    return 1;
+  }
+  term_pager_render(term);
+  return 1;
+}
+
+static void term_start_pager(terminal_t *term, const char *display,
+                             const char *path) {
+  size_t file_size = 0;
+  int is_dir = 0;
+  int n;
+
+  if (vfs_stat(path, &file_size, &is_dir) < 0) {
+    term_puts_t(term, "less: ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": No such file\n");
+    return;
+  }
+  if (is_dir) {
+    term_puts_t(term, "less: ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": Is a directory\n");
+    return;
+  }
+  n = term_read_regular_file(term, display, path, term_pager_buf,
+                             sizeof(term_pager_buf), "less");
+  if (n < 0) {
+    return;
+  }
+  term_pager_buf[n] = '\0';
+  term->pager_mode = 1;
+  term->pager_size = (size_t)n;
+  term->pager_top_line = 0;
+  term->pager_total_lines = term_pager_count_visual_lines(term->pager_size);
+  term->pager_truncated = file_size > TERM_PAGER_MAX;
+  snprintf(term->pager_title, sizeof(term->pager_title), "%s", display);
+  term_pager_render(term);
 }
 
 static void term_print_head(terminal_t *term, const char *display,
@@ -4722,7 +4978,7 @@ void term_render(terminal_t *term) {
   /* Cursor */
   static int blink = 0;
   blink++;
-  if (term->scroll_offset == 0 && (blink / 15) % 2 == 0) {
+  if (!term->pager_mode && term->scroll_offset == 0 && (blink / 15) % 2 == 0) {
     int cx = base_x + term->cursor_x * TERM_CHAR_W;
     int cy = base_y + term->cursor_y * TERM_CHAR_H;
     fb_fill_rect(cx, cy + TERM_CHAR_H - 2, TERM_CHAR_W, 2, term_colors[7]);
@@ -4746,6 +5002,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  cd <dir>  - Change directory\n");
     term_puts_t(term, "  pwd       - Print working directory\n");
     term_puts_t(term, "  cat <f>   - Display file contents\n");
+    term_puts_t(term, "  less <f>  - Page a file (z/s, arrows, space, q)\n");
     term_puts_t(term, "  head [-n] <f> - Show first lines\n");
     term_puts_t(term, "  grep <text> <f> - Search file text\n");
     term_puts_t(term, "  find [p] [text] - Find entries\n");
@@ -4874,12 +5131,10 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\n");
     term_puts_t(term, "This build intentionally starts from a minimal core shell.\n");
     term_puts_t(term, "Tip: Tab completes commands/files; Up/Down browse saved history.\n");
+    term_puts_t(term, "Tip: empty prompt z/s scrolls output; less uses z/s/space/q.\n");
     term_puts_t(term, "Add new tools only when they belong in Orizon OS.\n");
   } else if (strncmp(cmd, "clear", 5) == 0) {
-    for (int row = 0; row < TERM_ROWS; row++) term_clear_line(term, row);
-    term->cursor_x = 0;
-    term->cursor_y = 0;
-    term->scroll_offset = 0;
+    term_clear_screen(term);
   } else if (term_command_is(cmd, "about")) {
     term_print_about(term);
   } else if (term_command_is(cmd, "version")) {
@@ -4986,6 +5241,19 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, path);
       term_puts_t(term, "\n");
     }
+  } else if (term_command_is(cmd, "less") || term_command_is(cmd, "more")) {
+    const char *filename = term_skip_spaces(cmd + 4);
+    char path[MAX_PATH];
+
+    if (*filename == '\0') {
+      term_puts_t(term, "usage: less <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "less: invalid path\n");
+      return;
+    }
+    term_start_pager(term, filename, path);
   } else if (strncmp(cmd, "cat", 3) == 0 &&
              (cmd[3] == '\0' || cmd[3] == ' ')) {
     const char *filename = cmd + 3;
@@ -5600,6 +5868,11 @@ void term_prompt(terminal_t *term) {
 void term_handle_key(terminal_t *term, int key) {
   if (!term) return;
 
+  if (term->pager_mode) {
+    term_handle_pager_key(term, key);
+    return;
+  }
+
   if (!term->edit_mode && !term->install_mode) {
     if (term_handle_scrollback_key(term, key)) {
       return;
@@ -5659,7 +5932,7 @@ void term_handle_key(terminal_t *term, int key) {
       term_execute(term, term->input_buf);
     }
     term->input_len = 0;
-    if (!term->edit_mode && !term->install_mode) {
+    if (!term->edit_mode && !term->install_mode && !term->pager_mode) {
       term_prompt(term);
     }
   } else if (key == '\b' || key == 127) {

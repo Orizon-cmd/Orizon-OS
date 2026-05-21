@@ -269,3 +269,15 @@ empty prompt to scroll up and `s` to scroll back down. Uppercase `Z` and `S`
 move by a larger half-screen step. The shortcut only steals `s` while the view
 is already scrolled, so commands such as `storage`, `selftest`, and `ssh` still
 type normally at the bottom prompt.
+
+For files and reports, use the local pager:
+
+```text
+less /workspace/hardware-report.txt
+less /logs/boot.log
+```
+
+Inside `less`, `z` or the up arrow moves one visual line up, `s` or the down
+arrow moves one visual line down, `Z`/`S` or space move by a page, `g` and `G`
+jump to the top/end, and `q` returns to the shell prompt. The pager is local to
+the framebuffer console; SSH should keep using `cat`, `head`, and `tail`.

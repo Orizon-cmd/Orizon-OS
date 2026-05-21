@@ -35,9 +35,9 @@
   installed-only `pkg update/install/remove`, signed package-index cache
   inspection, `pre-remove`/`post-remove` scripts, and local
   `pkg rollback <name>` for the last removed package snapshot.
-- Console basics: scrollback, persistent history, simple autocomplete, editor,
-  `sysinfo`, `hw`, `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`,
-  and `uptime`.
+- Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
+  pager, persistent history, simple autocomplete, editor, `sysinfo`, `hw`,
+  `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`, and `uptime`.
 - Installed/live lifecycle commands: `system status`, `system repair`,
   `rescue`, `hostname set <name>`, and `firstboot done` clarify first boot,
   recreate missing default roots/config non-destructively, and export rescue

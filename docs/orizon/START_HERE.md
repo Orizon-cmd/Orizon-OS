@@ -27,8 +27,9 @@ design note.
   checklist, `hostname set <name>` persists `/system/hostname`, and
   `firstboot done` marks the installed first boot as reviewed.
 - The local framebuffer console can scroll long outputs with `z` up and `s`
-  down on an empty prompt; SSH `cat /workspace/hardware-report.txt` is preferred
-  for copying the full report.
+  down on an empty prompt. Use `less <file>` for full-screen local paging with
+  `z/s`, arrows, space, `g/G`, and `q`; SSH `cat /workspace/hardware-report.txt`
+  is still preferred for copying the full report.
 - Wired VM networking supports e1000/e1000e, RTL8139, and VirtIO-net. The
   ZimaOS NAT smoke cases for those NICs have passed before; do not rerun the
   full matrix unless that is the explicit task.
