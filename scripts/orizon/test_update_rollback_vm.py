@@ -237,6 +237,8 @@ def main() -> int:
           ("update status", "boot-mode: installed"),
           ("update status", "manifest:"),
           ("bootguard", "Orizon boot guard"),
+          ("persist status", "ready=yes"),
+          ("persist save", "persistence save: ok"),
           ("selftest update", "update.status"),
       ]
       for command, needle in checks:
@@ -367,6 +369,7 @@ def main() -> int:
       )
       for command, needle in (
           ("update status", "boot-mode: installed"),
+          ("persist status", "mode=persistent"),
           ("selftest", "summary:"),
       ):
           print(f"--- post-reboot {command} ---")

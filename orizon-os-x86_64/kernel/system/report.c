@@ -199,6 +199,8 @@ int orizon_report_format(char *out, size_t out_size) {
            storage_available() ? storage_status() : "unavailable", cap,
            vfs_persist_status());
   report_append_block(out, out_size, &used, "Storage", block);
+  vfs_persist_format_status(block, sizeof(block));
+  report_append_block(out, out_size, &used, "Persistence", block);
   storage_format_diagnostics(block, sizeof(block));
   report_append_block(out, out_size, &used, "Storage Diagnostics", block);
 

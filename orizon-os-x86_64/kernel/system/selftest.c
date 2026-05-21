@@ -14,6 +14,7 @@
 #include "../include/storage.h"
 #include "../include/string.h"
 #include "../include/update.h"
+#include "../include/vfs.h"
 #include "../include/wifi.h"
 
 static void selftest_append(char *out, size_t out_size, size_t *used,
@@ -90,10 +91,18 @@ static int selftest_storage(char *out, size_t out_size, size_t *used) {
     selftest_line(out, out_size, used, "storage.read-last",
                   last_rc == 0 ? "PASS" : "FAIL", detail);
   }
+  snprintf(detail, sizeof(detail), "mode=%s status=%s",
+           vfs_persist_available() ? "persistent" : "memory",
+           vfs_persist_status());
+  selftest_line(out, out_size, used, "storage.persistence",
+                vfs_persist_available() ? "PASS" : "WARN", detail);
   if (rc < 0 || last_rc < 0) {
     return -1;
   }
-  return count > 0 && rc == 0 && (sectors == 0 || last_rc == 0) ? 0 : 1;
+  return count > 0 && rc == 0 && (sectors == 0 || last_rc == 0) &&
+                 vfs_persist_available()
+             ? 0
+             : 1;
 }
 
 static int selftest_crypto(char *out, size_t out_size, size_t *used) {

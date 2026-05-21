@@ -36,6 +36,8 @@ $commands = @(
   "update status",
   "storage",
   "storage diag",
+  "persist status",
+  "persist save",
   "logs storage",
   "logs pci",
   "disk identify",
@@ -137,6 +139,12 @@ run_cmd() {
       ;;
     "storage diag")
       grep -q "storage diagnostics:" "`$OUT" && grep -q "nvme: controllers=" "`$OUT" || { echo "missing storage diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "persist status")
+      grep -q "persistence:" "`$OUT" && grep -q "roots=/workspace,/home,/system,/packages,/logs" "`$OUT" || { echo "missing persistence status"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "persist save")
+      grep -q "persistence save:" "`$OUT" || { echo "missing persist save output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "logs storage")
       grep -q "storage log:" "`$OUT" || { echo "missing storage log"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -730,7 +730,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
       "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id",
       "install", "install-plan", "install-status",
-      "input", "keyboard", "ls", "mkdir", "mounts", "mv",
+      "input", "keyboard", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
       "rollback-status", "repair-boot", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
@@ -1793,6 +1793,33 @@ static void term_print_mounts(terminal_t *term) {
   term_puts_t(term, "status      ");
   term_puts_t(term, vfs_persist_status());
   term_puts_t(term, "\n");
+}
+
+static void term_print_persist(terminal_t *term, const char *cmd) {
+  static char report[768];
+  const char *args = term_skip_spaces(cmd + 7);
+
+  if (*args == '\0' || term_command_is(args, "status")) {
+    vfs_persist_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "save") || term_command_is(args, "sync")) {
+    if (vfs_persist_save() == 0) {
+      term_puts_t(term, "persistence save: ok\n");
+    } else {
+      term_puts_t(term, "persistence save: failed or not installed\n");
+    }
+    vfs_persist_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "repair")) {
+    vfs_persist_repair(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  term_puts_t(term, "usage: persist [status|save|repair]\n");
 }
 
 static void term_print_first_line_or(terminal_t *term, const char *label,
@@ -4621,7 +4648,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  append <f> <text> - Append file text\n");
     term_puts_t(term, "  mkdir <d> - Create directory\n");
     term_puts_t(term, "  rm <f>    - Remove file\n");
-    term_puts_t(term, "  sync      - Save /workspace to disk\n");
+    term_puts_t(term, "  sync      - Save Orizon data roots to disk\n");
+    term_puts_t(term, "  persist [status|save|repair] - Inspect or repair data snapshots\n");
     term_puts_t(term, "\033[33mPackages:\033[0m\n");
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
@@ -5133,6 +5161,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     } else {
       term_puts_t(term, "sync: persistence unavailable\n");
     }
+  } else if (term_command_is(cmd, "persist")) {
+    term_print_persist(term, cmd);
   } else if (term_command_is(cmd, "disks")) {
     term_puts_t(term, "\033[1;36mDetected disks\033[0m\n");
     term_print_disks(term);

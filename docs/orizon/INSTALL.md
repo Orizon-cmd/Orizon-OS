@@ -183,6 +183,21 @@ Files and directories created during the live boot in those roots are saved
 after the Orizon GPT/data layout exists, so they survive the full-disk install
 path without touching unrelated dual-boot partitions.
 
+The persistent data area now uses a small two-slot snapshot format when the
+data partition has enough space. Orizon accepts either the Orizon data GUID or
+the exact GPT partition name `orizon-data`, loads the newest valid slot by
+sequence, keeps compatibility with the older single-slot v1 snapshot, and
+exposes:
+
+```text
+persist status
+persist save
+persist repair
+```
+
+`persist repair` rewrites the current in-memory roots to the next snapshot slot;
+it does not repartition, format, or install anything.
+
 Before the disk is marked installed, the installer runs the same boot validator
 exposed as:
 

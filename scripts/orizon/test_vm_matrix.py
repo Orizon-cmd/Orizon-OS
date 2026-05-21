@@ -176,11 +176,13 @@ def run_ssh_checks(
         ("pkg help", "pkg verify"),
         ("pkg sample", "Sample package written"),
         ("pkg verify /workspace/packages/orizon-hello.opkg", "package verify: OK"),
-        ("pkg install /workspace/packages/orizon-hello.opkg", "unavailable in live boot"),
+        ("pkg install /workspace/packages/orizon-hello.opkg", "install"),
         ("update status", "update:"),
         ("selftest", "summary:"),
         ("storage", "selected="),
         ("storage diag", "nvme: controllers="),
+        ("persist status", "persistence:"),
+        ("persist save", "persistence save: ok"),
         ("disk identify", "disk identify:"),
         ("disk read-test", "mode=read-only"),
         ("disk read-test last", "mode=read-only"),
@@ -191,7 +193,7 @@ def run_ssh_checks(
         ("cat /workspace/hardware-report.txt", "Live Kernel Log Tail"),
         ("install-plan", "install-plan: wrote"),
         ("cat /workspace/.orizon/install-report.txt", "write-scope: none"),
-        ("rollback", "unavailable in live boot"),
+        ("rollback", "rollback"),
         ("hostkey", "fingerprint-sha256"),
     ]
     if include_update:

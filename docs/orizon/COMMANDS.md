@@ -200,6 +200,9 @@ disk read-test last
 gpt scan
 partitions
 mounts
+persist status
+persist save
+persist repair
 logs all
 ```
 
@@ -212,6 +215,15 @@ CAP/CC/CSTS/admin errors, last-sector readability, and SDHCI/eMMC cases without
 installing or writing to disk. The useful files are `/workspace/hardware-report.txt`, `/logs/wifi.log`,
 `/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
 `/workspace/.orizon/update.log`.
+
+`persist status` affiche l'etat detecte des racines data, le LBA de la
+partition Orizon detectee par GUID Orizon ou nom GPT exact `orizon-data`, le
+nombre de slots disponibles, le slot actif, la sequence du dernier snapshot, le
+nombre d'entrees et le mode `persistent` ou `memory`.
+`persist save` force une sauvegarde des racines `/workspace`, `/home`,
+`/system`, `/packages` et `/logs`. `persist repair` reecrit un snapshot propre
+depuis l'etat VFS courant; il reste non destructif pour le partitionnement et ne
+sert pas a installer l'OS.
 
 ## Local Console Scrolling
 

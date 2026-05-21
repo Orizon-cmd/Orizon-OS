@@ -8,11 +8,14 @@
 #include "../include/string.h"
 
 #define PERSIST_MAGIC "ORZPFS1"
-#define PERSIST_VERSION 1U
+#define PERSIST_VERSION 2U
+#define PERSIST_LEGACY_VERSION 1U
 #define PERSIST_BYTES (1024U * 1024U)
 #define PERSIST_SECTORS (PERSIST_BYTES / ORIZON_SECTOR_SIZE)
+#define PERSIST_SLOT_COUNT 2U
 #define PERSIST_HEADER_SIZE ORIZON_SECTOR_SIZE
 #define PERSIST_IO_MAX_SECTORS 128U
+#define PERSIST_SEQUENCE_OFFSET 24U
 
 /* Inode structure */
 typedef struct inode {
@@ -25,6 +28,16 @@ typedef struct inode {
   int parent;         /* Parent inode index, -1 for root */
 } inode_t;
 
+typedef struct persist_snapshot_meta {
+  int valid;
+  uint32_t version;
+  uint32_t entry_count;
+  uint32_t payload_size;
+  uint32_t checksum;
+  uint32_t sequence;
+  uint32_t slot;
+} persist_snapshot_meta_t;
+
 /* Filesystem state */
 static inode_t inodes[MAX_FILES];
 static int inode_count = 0;
@@ -34,8 +47,17 @@ static int persist_ready = 0;
 static int persist_loading = 0;
 static const char *persist_status = "Orizon data persistence not loaded";
 static uint64_t persist_lba = ORIZON_PERSIST_LBA;
+static uint64_t persist_data_sectors = 0;
+static uint32_t persist_slots_available = 0;
+static uint32_t persist_sequence = 0;
+static uint32_t persist_last_entry_count = 0;
+static uint32_t persist_last_payload_size = 0;
+static uint32_t persist_last_checksum = 0;
+static uint32_t persist_last_version = 0;
+static int persist_active_slot = -1;
 static uint8_t persist_buf[PERSIST_BYTES] __attribute__((aligned(4096)));
 static uint8_t persist_sector[ORIZON_SECTOR_SIZE] __attribute__((aligned(4096)));
+static char persist_status_buf[192];
 
 static int create_inode(const char *path, int type);
 static void persist_set_status(const char *status);
@@ -139,6 +161,26 @@ static uint64_t persist_get_u64(const uint8_t *p) {
          ((uint64_t)persist_get_u32(p + 4) << 32);
 }
 
+static int persist_gpt_name_is_orizon_data(const uint8_t *entry) {
+  static const char name[] = "orizon-data";
+
+  if (!entry) {
+    return 0;
+  }
+  for (size_t i = 0; i < sizeof(name) - 1; i++) {
+    uint8_t ch = entry[56 + i * 2];
+    uint8_t hi = entry[56 + i * 2 + 1];
+    if (ch >= 'A' && ch <= 'Z') {
+      ch = (uint8_t)(ch - 'A' + 'a');
+    }
+    if (hi != 0 || ch != (uint8_t)name[i]) {
+      return 0;
+    }
+  }
+  return entry[56 + (sizeof(name) - 1) * 2] == 0 &&
+         entry[56 + (sizeof(name) - 1) * 2 + 1] == 0;
+}
+
 static int persist_orizon_data_partition_present(void) {
   static const uint8_t data_type[16] = {
       0x4f, 0x52, 0x5a, 0x44, 0x41, 0x54, 0x41, 0x00,
@@ -148,6 +190,8 @@ static int persist_orizon_data_partition_present(void) {
   uint32_t entry_size;
   uint32_t scan_count;
 
+  persist_slots_available = 0;
+  persist_data_sectors = 0;
   if (!storage_available()) {
     return 0;
   }
@@ -173,11 +217,21 @@ static int persist_orizon_data_partition_present(void) {
       return 0;
     }
     entry = persist_sector + off;
-    if (memcmp(entry, data_type, sizeof(data_type)) == 0) {
+    if (memcmp(entry, data_type, sizeof(data_type)) == 0 ||
+        persist_gpt_name_is_orizon_data(entry)) {
       uint64_t first_lba = persist_get_u64(entry + 32);
       uint64_t last_lba = persist_get_u64(entry + 40);
-      if (first_lba >= 34 && last_lba >= first_lba + PERSIST_SECTORS) {
+      if (first_lba >= 34 && last_lba >= first_lba) {
+        uint64_t sectors = last_lba - first_lba + 1;
+        if (sectors < PERSIST_SECTORS) {
+          continue;
+        }
         persist_lba = first_lba;
+        persist_data_sectors = sectors;
+        persist_slots_available =
+            sectors >= (uint64_t)PERSIST_SECTORS * PERSIST_SLOT_COUNT
+                ? PERSIST_SLOT_COUNT
+                : 1U;
         return 1;
       }
     }
@@ -186,18 +240,28 @@ static int persist_orizon_data_partition_present(void) {
 }
 
 static void persist_format_status_active(void) {
-  static char status[96];
-  snprintf(status, sizeof(status), "Orizon data persistence active at LBA %lu",
-           (unsigned long)persist_lba);
+  char status[192];
+  snprintf(status, sizeof(status),
+           "Orizon data persistence active at LBA %lu slot=%d/%lu seq=%lu entries=%lu bytes=%lu",
+           (unsigned long)persist_lba, persist_active_slot,
+           (unsigned long)persist_slots_available,
+           (unsigned long)persist_sequence,
+           (unsigned long)persist_last_entry_count,
+           (unsigned long)persist_last_payload_size);
   persist_set_status(status);
 }
 
 static void persist_format_status_initialized(void) {
-  static char status[104];
+  char status[160];
   snprintf(status, sizeof(status),
-           "Orizon data persistence initialized at LBA %lu",
-           (unsigned long)persist_lba);
+           "Orizon data persistence initialized at LBA %lu slots=%lu",
+           (unsigned long)persist_lba,
+           (unsigned long)persist_slots_available);
   persist_set_status(status);
+}
+
+static uint64_t persist_slot_lba(uint32_t slot) {
+  return persist_lba + (uint64_t)slot * PERSIST_SECTORS;
 }
 
 static int append_path_component(char *path, size_t size, const char *component,
@@ -255,6 +319,66 @@ static uint32_t persist_checksum(const uint8_t *buf, size_t size) {
   return sum;
 }
 
+static int persist_snapshot_validate(const uint8_t *buf,
+                                     persist_snapshot_meta_t *meta,
+                                     uint32_t slot) {
+  uint32_t version;
+  uint32_t entry_count;
+  uint32_t payload_size;
+  uint32_t checksum;
+
+  if (!buf || !meta) {
+    return -1;
+  }
+  memset(meta, 0, sizeof(*meta));
+  meta->slot = slot;
+
+  if (memcmp(buf, PERSIST_MAGIC, 7) != 0) {
+    return -1;
+  }
+  version = get_u32(buf + 8);
+  if (version != PERSIST_VERSION && version != PERSIST_LEGACY_VERSION) {
+    return -1;
+  }
+
+  entry_count = get_u32(buf + 12);
+  payload_size = get_u32(buf + 16);
+  checksum = get_u32(buf + 20);
+  if (entry_count > MAX_FILES ||
+      payload_size > PERSIST_BYTES - PERSIST_HEADER_SIZE) {
+    return -1;
+  }
+  if (checksum != persist_checksum(buf + PERSIST_HEADER_SIZE, payload_size)) {
+    return -1;
+  }
+
+  meta->valid = 1;
+  meta->version = version;
+  meta->entry_count = entry_count;
+  meta->payload_size = payload_size;
+  meta->checksum = checksum;
+  meta->sequence =
+      version >= PERSIST_VERSION ? get_u32(buf + PERSIST_SEQUENCE_OFFSET) : 0;
+  return 0;
+}
+
+static int persist_snapshot_is_newer(const persist_snapshot_meta_t *candidate,
+                                     const persist_snapshot_meta_t *best) {
+  if (!candidate || !candidate->valid) {
+    return 0;
+  }
+  if (!best || !best->valid) {
+    return 1;
+  }
+  if (candidate->version != best->version) {
+    return candidate->version > best->version;
+  }
+  if (candidate->sequence != best->sequence) {
+    return candidate->sequence > best->sequence;
+  }
+  return candidate->slot < best->slot;
+}
+
 static int persist_append_entry(size_t *offset, uint32_t *entry_count,
                                 const inode_t *node) {
   size_t path_len = strlen(node->path);
@@ -283,7 +407,11 @@ static int persist_append_entry(size_t *offset, uint32_t *entry_count,
 }
 
 static void persist_set_status(const char *status) {
-  persist_status = status;
+  if (!status) {
+    status = "Orizon data persistence status unavailable";
+  }
+  snprintf(persist_status_buf, sizeof(persist_status_buf), "%s", status);
+  persist_status = persist_status_buf;
 }
 
 static int persist_storage_read(uint64_t lba, void *buf, uint32_t sectors) {
@@ -559,6 +687,8 @@ void vfs_seed_content(void) {
 }
 
 int vfs_persist_save(void) {
+  uint32_t target_slot;
+  uint32_t next_sequence;
   if (!persist_ready || persist_loading) {
     return -EINVAL;
   }
@@ -572,9 +702,20 @@ int vfs_persist_save(void) {
     return -EIO;
   }
 
+  target_slot = 0;
+  if (persist_slots_available > 1U && persist_active_slot >= 0) {
+    target_slot = (uint32_t)((persist_active_slot + 1) %
+                             (int)persist_slots_available);
+  }
+  next_sequence = persist_sequence + 1U;
+  if (next_sequence == 0) {
+    next_sequence = 1U;
+  }
+
   memset(persist_buf, 0, sizeof(persist_buf));
   memcpy(persist_buf, PERSIST_MAGIC, 7);
   put_u32(persist_buf + 8, PERSIST_VERSION);
+  put_u32(persist_buf + PERSIST_SEQUENCE_OFFSET, next_sequence);
 
   size_t offset = PERSIST_HEADER_SIZE;
   uint32_t entry_count = 0;
@@ -599,26 +740,40 @@ int vfs_persist_save(void) {
   }
 
   uint32_t payload_size = (uint32_t)(offset - PERSIST_HEADER_SIZE);
+  uint32_t checksum = persist_checksum(persist_buf + PERSIST_HEADER_SIZE,
+                                       payload_size);
   put_u32(persist_buf + 12, entry_count);
   put_u32(persist_buf + 16, payload_size);
-  put_u32(persist_buf + 20,
-          persist_checksum(persist_buf + PERSIST_HEADER_SIZE, payload_size));
+  put_u32(persist_buf + 20, checksum);
 
   uint32_t sectors = (uint32_t)((offset + ORIZON_SECTOR_SIZE - 1) /
                                 ORIZON_SECTOR_SIZE);
   if (sectors == 0) {
     sectors = 1;
   }
-  if (persist_storage_write(persist_lba, persist_buf, sectors) < 0) {
+  if (persist_storage_write(persist_slot_lba(target_slot), persist_buf,
+                            sectors) < 0) {
     persist_set_status("Orizon data persistence write failed");
     return -EIO;
   }
 
+  persist_active_slot = (int)target_slot;
+  persist_sequence = next_sequence;
+  persist_last_entry_count = entry_count;
+  persist_last_payload_size = payload_size;
+  persist_last_checksum = checksum;
+  persist_last_version = PERSIST_VERSION;
   persist_format_status_active();
   return 0;
 }
 
 void vfs_persist_load(void) {
+  persist_snapshot_meta_t best;
+  persist_snapshot_meta_t meta;
+  uint32_t slots;
+  int read_error = 0;
+  int loaded_legacy = 0;
+
   if (!vfs_initialized) {
     vfs_init();
   }
@@ -634,34 +789,59 @@ void vfs_persist_load(void) {
     return;
   }
 
-  if (persist_storage_read(persist_lba, persist_buf, PERSIST_SECTORS) < 0) {
-    persist_ready = 0;
-    persist_set_status("Orizon data persistence read failed");
-    return;
-  }
-
   persist_loading = 1;
   persist_ready = 1;
+  memset(&best, 0, sizeof(best));
 
-  if (memcmp(persist_buf, PERSIST_MAGIC, 7) != 0 ||
-      get_u32(persist_buf + 8) != PERSIST_VERSION) {
+  slots = persist_slots_available;
+  if (slots == 0 || slots > PERSIST_SLOT_COUNT) {
+    slots = 1;
+  }
+  for (uint32_t slot = 0; slot < slots; slot++) {
+    if (persist_storage_read(persist_slot_lba(slot), persist_buf,
+                             PERSIST_SECTORS) < 0) {
+      read_error = 1;
+      continue;
+    }
+    if (persist_snapshot_validate(persist_buf, &meta, slot) == 0 &&
+        persist_snapshot_is_newer(&meta, &best)) {
+      best = meta;
+    }
+  }
+
+  if (!best.valid) {
+    persist_active_slot = -1;
+    persist_sequence = 0;
+    persist_last_entry_count = 0;
+    persist_last_payload_size = 0;
+    persist_last_checksum = 0;
+    persist_last_version = 0;
     persist_loading = 0;
-    persist_format_status_initialized();
+    if (read_error) {
+      persist_set_status(
+          "Orizon data persistence read failed; initialized fresh snapshot");
+    } else {
+      persist_format_status_initialized();
+    }
     vfs_persist_save();
     return;
   }
 
-  uint32_t entry_count = get_u32(persist_buf + 12);
-  uint32_t payload_size = get_u32(persist_buf + 16);
-  uint32_t checksum = get_u32(persist_buf + 20);
-
-  if (payload_size > PERSIST_BYTES - PERSIST_HEADER_SIZE ||
-      checksum != persist_checksum(persist_buf + PERSIST_HEADER_SIZE,
-                                   payload_size)) {
+  if (persist_storage_read(persist_slot_lba(best.slot), persist_buf,
+                           PERSIST_SECTORS) < 0 ||
+      persist_snapshot_validate(persist_buf, &meta, best.slot) < 0) {
     persist_loading = 0;
-    persist_set_status("Orizon data persistence checksum failed");
+    persist_set_status("Orizon data persistence selected snapshot reread failed");
     return;
   }
+  best = meta;
+  persist_active_slot = (int)best.slot;
+  persist_sequence = best.sequence;
+  persist_last_entry_count = best.entry_count;
+  persist_last_payload_size = best.payload_size;
+  persist_last_checksum = best.checksum;
+  persist_last_version = best.version;
+  loaded_legacy = best.version == PERSIST_LEGACY_VERSION;
 
   clear_directory_contents("/workspace");
   clear_directory_contents("/home");
@@ -670,8 +850,8 @@ void vfs_persist_load(void) {
   clear_directory_contents("/logs");
 
   size_t offset = PERSIST_HEADER_SIZE;
-  for (uint32_t entry = 0; entry < entry_count; entry++) {
-    if (offset + 7 > PERSIST_HEADER_SIZE + payload_size) {
+  for (uint32_t entry = 0; entry < best.entry_count; entry++) {
+    if (offset + 7 > PERSIST_HEADER_SIZE + best.payload_size) {
       break;
     }
 
@@ -681,7 +861,8 @@ void vfs_persist_load(void) {
     offset += 7;
 
     if (path_len == 0 || path_len >= MAX_PATH ||
-        offset + path_len + data_size > PERSIST_HEADER_SIZE + payload_size) {
+        offset + path_len + data_size >
+            PERSIST_HEADER_SIZE + best.payload_size) {
       break;
     }
 
@@ -730,6 +911,9 @@ void vfs_persist_load(void) {
 
   persist_loading = 0;
   persist_format_status_active();
+  if (loaded_legacy) {
+    vfs_persist_save();
+  }
 }
 
 int vfs_persist_enable_installed(void) {
@@ -748,6 +932,7 @@ int vfs_persist_enable_installed(void) {
   }
   persist_loading = 0;
   persist_ready = 1;
+  persist_active_slot = -1;
   persist_format_status_initialized();
   return 0;
 }
@@ -758,6 +943,76 @@ int vfs_persist_available(void) {
 
 const char *vfs_persist_status(void) {
   return persist_status;
+}
+
+void vfs_persist_format_status(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "persistence:\n"
+           "  ready=%s storage=%s loading=%s\n"
+           "  lba=%lu data-sectors=%lu slot-size=%lu slots=%lu active-slot=%d\n"
+           "  version=%lu sequence=%lu entries=%lu payload-bytes=%lu checksum=0x%08x\n"
+           "  roots=/workspace,/home,/system,/packages,/logs\n"
+           "  mode=%s\n"
+           "  status=%s\n",
+           persist_ready ? "yes" : "no",
+           storage_available() ? "yes" : "no",
+           persist_loading ? "yes" : "no",
+           (unsigned long)persist_lba,
+           (unsigned long)persist_data_sectors,
+           (unsigned long)PERSIST_BYTES,
+           (unsigned long)persist_slots_available,
+           persist_active_slot,
+           (unsigned long)persist_last_version,
+           (unsigned long)persist_sequence,
+           (unsigned long)persist_last_entry_count,
+           (unsigned long)persist_last_payload_size,
+           persist_last_checksum,
+           vfs_persist_available() ? "persistent" : "memory",
+           vfs_persist_status());
+}
+
+int vfs_persist_repair(char *out, size_t out_size) {
+  int rc;
+
+  if (!vfs_initialized) {
+    vfs_init();
+  }
+  if (!storage_available()) {
+    persist_ready = 0;
+    persist_set_status("Orizon data persistence unavailable");
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence repair: FAIL\nreason=storage unavailable\n");
+    }
+    return -EIO;
+  }
+  if (!persist_orizon_data_partition_present()) {
+    persist_ready = 0;
+    persist_set_status(
+        "Orizon data persistence disabled: no Orizon data partition");
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence repair: FAIL\nreason=no Orizon data partition\n");
+    }
+    return -EIO;
+  }
+
+  persist_ready = 1;
+  persist_loading = 0;
+  rc = vfs_persist_save();
+  if (out && out_size) {
+    size_t used = 0;
+    snprintf(out, out_size, "persistence repair: %s\n",
+             rc == 0 ? "PASS" : "FAIL");
+    used = strlen(out);
+    if (used < out_size) {
+      vfs_persist_format_status(out + used, out_size - used);
+    }
+  }
+  return rc;
 }
 
 /* Open file */
