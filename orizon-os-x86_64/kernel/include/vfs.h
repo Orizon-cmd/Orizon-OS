@@ -74,7 +74,10 @@ int vfs_persist_save(void);
 int vfs_persist_available(void);
 const char *vfs_persist_status(void);
 void vfs_persist_format_status(char *out, size_t out_size);
+void vfs_persist_format_slots(char *out, size_t out_size);
 int vfs_persist_repair(char *out, size_t out_size);
+int vfs_persist_restore_slot(int slot, char *out, size_t out_size);
+int vfs_persist_restore_previous(char *out, size_t out_size);
 
 /* File operations */
 file_t *vfs_open(const char *path, int flags);

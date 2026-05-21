@@ -201,8 +201,11 @@ gpt scan
 partitions
 mounts
 persist status
+persist slots
 persist save
 persist repair
+persist restore previous
+persist restore slot 0
 logs all
 ```
 
@@ -220,10 +223,13 @@ installing or writing to disk. The useful files are `/workspace/hardware-report.
 partition Orizon detectee par GUID Orizon ou nom GPT exact `orizon-data`, le
 nombre de slots disponibles, le slot actif, la sequence du dernier snapshot, le
 nombre d'entrees et le mode `persistent` ou `memory`.
-`persist save` force une sauvegarde des racines `/workspace`, `/home`,
-`/system`, `/packages` et `/logs`. `persist repair` reecrit un snapshot propre
-depuis l'etat VFS courant; il reste non destructif pour le partitionnement et ne
-sert pas a installer l'OS.
+`persist slots` liste les snapshots lisibles avec version, sequence, payload et
+checksum. `persist save` force une sauvegarde des racines `/workspace`, `/home`,
+`/system`, `/packages` et `/logs`. `persist restore previous` restaure le slot
+valide non actif le plus recent puis le promeut comme nouveau snapshot; `persist
+restore slot <n>` fait la meme chose pour un slot precis. `persist repair`
+reecrit un snapshot propre depuis l'etat VFS courant; ces commandes restent non
+destructives pour le partitionnement et ne servent pas a installer l'OS.
 
 ## Local Console Scrolling
 

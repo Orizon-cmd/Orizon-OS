@@ -2705,6 +2705,12 @@ static void ssh_shell_print_persist(const char *args) {
     ssh_shell_prompt();
     return;
   }
+  if (ssh_shell_command_is(sub, "slots")) {
+    vfs_persist_format_slots(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
   if (ssh_shell_command_is(sub, "save") || ssh_shell_command_is(sub, "sync")) {
     ssh_queue_channel_text(vfs_persist_save() == 0
                                ? "persistence save: ok\r\n"
@@ -2714,13 +2720,41 @@ static void ssh_shell_print_persist(const char *args) {
     ssh_shell_prompt();
     return;
   }
+  if (ssh_shell_command_is(sub, "restore")) {
+    const char *restore = ssh_shell_skip_spaces(sub + strlen("restore"));
+    if (ssh_shell_command_is(restore, "previous") ||
+        ssh_shell_command_is(restore, "prev")) {
+      vfs_persist_restore_previous(out, sizeof(out));
+      ssh_queue_channel_text(out);
+      ssh_shell_prompt();
+      return;
+    }
+    if (ssh_shell_command_is(restore, "slot")) {
+      uint32_t slot = 0;
+      restore = ssh_shell_skip_spaces(restore + strlen("slot"));
+      if (ssh_shell_parse_uint(restore, &slot) < 0) {
+        ssh_queue_channel_text("usage: persist restore slot <0..n>\r\n");
+        ssh_shell_prompt();
+        return;
+      }
+      vfs_persist_restore_slot((int)slot, out, sizeof(out));
+      ssh_queue_channel_text(out);
+      ssh_shell_prompt();
+      return;
+    }
+    ssh_queue_channel_text(
+        "usage: persist restore previous | persist restore slot <n>\r\n");
+    ssh_shell_prompt();
+    return;
+  }
   if (ssh_shell_command_is(sub, "repair")) {
     vfs_persist_repair(out, sizeof(out));
     ssh_queue_channel_text(out);
     ssh_shell_prompt();
     return;
   }
-  ssh_queue_channel_text("usage: persist [status|save|repair]\r\n");
+  ssh_queue_channel_text(
+      "usage: persist [status|slots|save|repair|restore previous|restore slot <n>]\r\n");
   ssh_shell_prompt();
 }
 
@@ -3599,7 +3633,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, persist status, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3660,7 +3694,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  ps|pkg|update        show system/update/package state\r\n"
         "  pkg help             show package install/verify/update commands\r\n"
         "  storage|storage diag show storage and disk detection state\r\n"
-        "  persist status|save|repair inspect or rewrite data snapshots\r\n"
+        "  persist status|slots|save|repair inspect or rewrite data snapshots\r\n"
+        "  persist restore previous|slot <n> restore and promote a snapshot\r\n"
         "  disk identify        show read-only disk/NVMe identity\r\n"
         "  disk read-test [lba|last] read one sector without writing\r\n"
         "  gpt scan             read-only GPT partition scan\r\n"
@@ -4012,7 +4047,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist save, persist repair, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "ls")) {
     ssh_shell_print_ls(ssh_shell_skip_spaces(cmd + 2));
   } else if (ssh_shell_command_is(cmd, "cat")) {

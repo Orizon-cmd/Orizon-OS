@@ -1804,6 +1804,11 @@ static void term_print_persist(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "slots")) {
+    vfs_persist_format_slots(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "save") || term_command_is(args, "sync")) {
     if (vfs_persist_save() == 0) {
       term_puts_t(term, "persistence save: ok\n");
@@ -1814,12 +1819,36 @@ static void term_print_persist(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "restore")) {
+    const char *restore = term_skip_spaces(args + 7);
+    if (term_command_is(restore, "previous") ||
+        term_command_is(restore, "prev")) {
+      vfs_persist_restore_previous(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(restore, "slot")) {
+      uint64_t slot = 0;
+      restore = term_skip_spaces(restore + 4);
+      if (term_parse_uint64_allow_zero(restore, &slot) < 0 ||
+          slot > 2147483647ULL) {
+        term_puts_t(term, "usage: persist restore slot <0..n>\n");
+        return;
+      }
+      vfs_persist_restore_slot((int)slot, report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    term_puts_t(term, "usage: persist restore previous | persist restore slot <n>\n");
+    return;
+  }
   if (term_command_is(args, "repair")) {
     vfs_persist_repair(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
-  term_puts_t(term, "usage: persist [status|save|repair]\n");
+  term_puts_t(term,
+              "usage: persist [status|slots|save|repair|restore previous|restore slot <n>]\n");
 }
 
 static void term_print_first_line_or(terminal_t *term, const char *label,
@@ -4649,7 +4678,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  mkdir <d> - Create directory\n");
     term_puts_t(term, "  rm <f>    - Remove file\n");
     term_puts_t(term, "  sync      - Save Orizon data roots to disk\n");
-    term_puts_t(term, "  persist [status|save|repair] - Inspect or repair data snapshots\n");
+    term_puts_t(term, "  persist [status|slots|save|repair|restore] - Manage data snapshots\n");
     term_puts_t(term, "\033[33mPackages:\033[0m\n");
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");

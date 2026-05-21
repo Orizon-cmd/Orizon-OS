@@ -191,12 +191,16 @@ exposes:
 
 ```text
 persist status
+persist slots
 persist save
+persist restore previous
 persist repair
 ```
 
-`persist repair` rewrites the current in-memory roots to the next snapshot slot;
-it does not repartition, format, or install anything.
+`persist restore previous` restores the newest valid non-active slot and
+promotes it as the next snapshot. `persist repair` rewrites the current
+in-memory roots to the next snapshot slot; neither command repartitions,
+formats, or installs anything.
 
 Before the disk is marked installed, the installer runs the same boot validator
 exposed as:

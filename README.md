@@ -14,7 +14,8 @@ le developpement noyau:
 - une seule console centrale avec historique persistant et autocompletion simple
 - racines data persistantes `/workspace`, `/home`, `/system`, `/packages` et
   `/logs` quand une zone donnees Orizon est disponible, avec snapshots
-  alternes, statut `persist status` et reparation simple `persist repair`
+  alternes, statut `persist status`, inventaire `persist slots`, restauration
+  `persist restore previous` et reparation simple `persist repair`
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
   dual-boot data sur partition choisie, mode ESP seul non destructif,
   verification du boot UEFI, selection explicite du disque/partition cible et
@@ -229,7 +230,7 @@ de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `tail`, `touch`, `mkdir`, `rm`
 `write`, `append`, `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
 `disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
-`audit`, `ssh sessions`, `persist status`, `persist save`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
+`audit`, `ssh sessions`, `persist status`, `persist slots`, `persist save`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
 `whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`,
 `ssh lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
 commande distante directe. Le service remet l'ecoute TCP en etat apres une

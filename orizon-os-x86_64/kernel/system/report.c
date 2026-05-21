@@ -201,6 +201,8 @@ int orizon_report_format(char *out, size_t out_size) {
   report_append_block(out, out_size, &used, "Storage", block);
   vfs_persist_format_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "Persistence", block);
+  vfs_persist_format_slots(block, sizeof(block));
+  report_append_block(out, out_size, &used, "Persistence Slots", block);
   storage_format_diagnostics(block, sizeof(block));
   report_append_block(out, out_size, &used, "Storage Diagnostics", block);
 

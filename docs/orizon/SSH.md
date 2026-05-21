@@ -85,7 +85,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `logs`, `net`, `route`, `dns`,
   `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
-  `storage diag`, `persist status`, `persist save`, `persist repair`,
+  `storage diag`, `persist status`, `persist slots`, `persist save`,
+  `persist restore previous`, `persist repair`,
   `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`, `pci bars`, `report save`,
   `install-plan`, `free`, `timer`, `bootguard`, `bootguard confirm`,
@@ -121,7 +122,8 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
   `write`/`append`/`touch`/`mkdir`/`rm`, lancer les diagnostics non destructifs
   `selftest`, `disk identify`, `disk read-test`, `disk read-test last`,
-  `gpt scan`, `persist status`, `persist save`, `persist repair`,
+  `gpt scan`, `persist status`, `persist slots`, `persist save`,
+  `persist restore previous`, `persist repair`,
   `bootguard confirm`, `rollback`, et sauvegarder avec `sync`. En VM, `reboot` et `shutdown` persistent d'abord les racines Orizon
   puis planifient le redemarrage ou l'extinction.
 - Robustesse: le chemin SSH utilise des buffers statiques pour les gros

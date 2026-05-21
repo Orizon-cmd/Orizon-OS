@@ -61,6 +61,7 @@ static char persist_status_buf[192];
 
 static int create_inode(const char *path, int type);
 static void persist_set_status(const char *status);
+static int persist_storage_read(uint64_t lba, void *buf, uint32_t sectors);
 
 /* String helpers */
 static int str_eq(const char *a, const char *b) {
@@ -379,6 +380,34 @@ static int persist_snapshot_is_newer(const persist_snapshot_meta_t *candidate,
   return candidate->slot < best->slot;
 }
 
+static void persist_append_text(char *out, size_t out_size, size_t *used,
+                                const char *text) {
+  size_t len;
+
+  if (!out || !used || !text || *used >= out_size) {
+    return;
+  }
+  len = strlen(text);
+  if (*used + len >= out_size) {
+    len = out_size - *used - 1;
+  }
+  if (len > 0) {
+    memcpy(out + *used, text, len);
+    *used += len;
+  }
+  out[*used] = '\0';
+}
+
+static int persist_read_slot_meta(uint32_t slot,
+                                  persist_snapshot_meta_t *meta) {
+  if (!meta || slot >= persist_slots_available ||
+      persist_storage_read(persist_slot_lba(slot), persist_buf,
+                           PERSIST_SECTORS) < 0) {
+    return -1;
+  }
+  return persist_snapshot_validate(persist_buf, meta, slot);
+}
+
 static int persist_append_entry(size_t *offset, uint32_t *entry_count,
                                 const inode_t *node) {
   size_t path_len = strlen(node->path);
@@ -686,6 +715,101 @@ void vfs_seed_content(void) {
                          "Persistent boot, install and update logs.\n");
 }
 
+static void persist_write_default_data_files(void) {
+  vfs_ensure_data_roots();
+  vfs_write_default_file(
+      "/system/data-layout",
+      "version 1\nroots /system /home /packages /logs /workspace\n");
+  vfs_mkdir("/system/firmware");
+  vfs_write_default_file("/system/hostname", "orizon-os");
+  vfs_write_default_file("/system/version", "core-x86_64");
+  vfs_write_default_file("/system/profile", "minimal-development\n");
+  vfs_write_default_file("/system/network.conf", "mode dhcp\n");
+  vfs_write_default_file("/home/orizon/README.txt",
+                         "Home directory for Orizon OS user files.\n");
+  vfs_write_default_file(
+      "/packages/README.txt",
+      "Local package cache and installed package metadata.\n");
+  vfs_write_default_file("/logs/README.txt",
+                         "Persistent boot, install and update logs.\n");
+}
+
+static void persist_set_loaded_meta(const persist_snapshot_meta_t *meta) {
+  if (!meta || !meta->valid) {
+    return;
+  }
+  persist_active_slot = (int)meta->slot;
+  persist_sequence = meta->sequence;
+  persist_last_entry_count = meta->entry_count;
+  persist_last_payload_size = meta->payload_size;
+  persist_last_checksum = meta->checksum;
+  persist_last_version = meta->version;
+}
+
+static int persist_apply_snapshot_entries(const persist_snapshot_meta_t *meta) {
+  int malformed = 0;
+
+  if (!meta || !meta->valid) {
+    return -EINVAL;
+  }
+
+  clear_directory_contents("/workspace");
+  clear_directory_contents("/home");
+  clear_directory_contents("/system");
+  clear_directory_contents("/packages");
+  clear_directory_contents("/logs");
+
+  size_t offset = PERSIST_HEADER_SIZE;
+  for (uint32_t entry = 0; entry < meta->entry_count; entry++) {
+    if (offset + 7 > PERSIST_HEADER_SIZE + meta->payload_size) {
+      malformed = 1;
+      break;
+    }
+
+    int type = persist_buf[offset];
+    uint16_t path_len = get_u16(persist_buf + offset + 1);
+    uint32_t data_size = get_u32(persist_buf + offset + 3);
+    offset += 7;
+
+    if (path_len == 0 || path_len >= MAX_PATH ||
+        offset + path_len + data_size >
+            PERSIST_HEADER_SIZE + meta->payload_size) {
+      malformed = 1;
+      break;
+    }
+
+    char path[MAX_PATH];
+    memcpy(path, persist_buf + offset, path_len);
+    path[path_len] = '\0';
+    offset += path_len;
+
+    if (!path_should_persist(path) || path_is_persistent_root(path)) {
+      offset += data_size;
+      continue;
+    }
+
+    ensure_parent_dirs(path);
+
+    if (type == 1) {
+      if (find_inode(path) < 0) {
+        create_inode(path, 1);
+      }
+    } else if (type == 0) {
+      file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
+      if (f) {
+        vfs_write(f, persist_buf + offset, data_size);
+        vfs_close(f);
+      }
+    } else {
+      malformed = 1;
+    }
+    offset += data_size;
+  }
+
+  persist_write_default_data_files();
+  return malformed ? -EINVAL : 0;
+}
+
 int vfs_persist_save(void) {
   uint32_t target_slot;
   uint32_t next_sequence;
@@ -835,80 +959,13 @@ void vfs_persist_load(void) {
     return;
   }
   best = meta;
-  persist_active_slot = (int)best.slot;
-  persist_sequence = best.sequence;
-  persist_last_entry_count = best.entry_count;
-  persist_last_payload_size = best.payload_size;
-  persist_last_checksum = best.checksum;
-  persist_last_version = best.version;
+  persist_set_loaded_meta(&best);
   loaded_legacy = best.version == PERSIST_LEGACY_VERSION;
 
-  clear_directory_contents("/workspace");
-  clear_directory_contents("/home");
-  clear_directory_contents("/system");
-  clear_directory_contents("/packages");
-  clear_directory_contents("/logs");
-
-  size_t offset = PERSIST_HEADER_SIZE;
-  for (uint32_t entry = 0; entry < best.entry_count; entry++) {
-    if (offset + 7 > PERSIST_HEADER_SIZE + best.payload_size) {
-      break;
-    }
-
-    int type = persist_buf[offset];
-    uint16_t path_len = get_u16(persist_buf + offset + 1);
-    uint32_t data_size = get_u32(persist_buf + offset + 3);
-    offset += 7;
-
-    if (path_len == 0 || path_len >= MAX_PATH ||
-        offset + path_len + data_size >
-            PERSIST_HEADER_SIZE + best.payload_size) {
-      break;
-    }
-
-    char path[MAX_PATH];
-    memcpy(path, persist_buf + offset, path_len);
-    path[path_len] = '\0';
-    offset += path_len;
-
-    if (!path_should_persist(path) || path_is_persistent_root(path)) {
-      offset += data_size;
-      continue;
-    }
-
-    ensure_parent_dirs(path);
-
-    if (type == 1) {
-      if (find_inode(path) < 0) {
-        create_inode(path, 1);
-      }
-    } else {
-      file_t *f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
-      if (f) {
-        vfs_write(f, persist_buf + offset, data_size);
-        vfs_close(f);
-      }
-    }
-    offset += data_size;
+  if (persist_apply_snapshot_entries(&best) < 0) {
+    persist_set_status(
+        "Orizon data persistence snapshot restored with malformed entries skipped");
   }
-
-  vfs_ensure_data_roots();
-  vfs_write_default_file(
-      "/system/data-layout",
-      "version 1\nroots /system /home /packages /logs /workspace\n");
-  vfs_mkdir("/system/firmware");
-  vfs_write_default_file("/system/hostname", "orizon-os");
-  vfs_write_default_file("/system/version", "core-x86_64");
-  vfs_write_default_file("/system/profile", "minimal-development\n");
-  vfs_write_default_file("/system/network.conf", "mode dhcp\n");
-  vfs_write_default_file("/home/orizon/README.txt",
-                         "Home directory for Orizon OS user files.\n");
-  vfs_write_default_file(
-      "/packages/README.txt",
-      "Local package cache and installed package metadata.\n");
-  vfs_write_default_file("/logs/README.txt",
-                         "Persistent boot, install and update logs.\n");
-
   persist_loading = 0;
   persist_format_status_active();
   if (loaded_legacy) {
@@ -972,6 +1029,167 @@ void vfs_persist_format_status(char *out, size_t out_size) {
            persist_last_checksum,
            vfs_persist_available() ? "persistent" : "memory",
            vfs_persist_status());
+}
+
+void vfs_persist_format_slots(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[192];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (storage_available()) {
+    persist_orizon_data_partition_present();
+  }
+  snprintf(line, sizeof(line),
+           "persistence slots: lba=%lu slots=%lu active=%d\n",
+           (unsigned long)persist_lba,
+           (unsigned long)persist_slots_available,
+           persist_active_slot);
+  persist_append_text(out, out_size, &used, line);
+
+  if (!storage_available()) {
+    persist_append_text(out, out_size, &used,
+                        "  storage unavailable; no slots readable\n");
+    return;
+  }
+  if (persist_slots_available == 0) {
+    persist_append_text(out, out_size, &used,
+                        "  no Orizon data partition detected\n");
+    return;
+  }
+  for (uint32_t slot = 0; slot < persist_slots_available; slot++) {
+    persist_snapshot_meta_t meta;
+    if (persist_read_slot_meta(slot, &meta) == 0) {
+      snprintf(line, sizeof(line),
+               "  slot %lu: valid=yes active=%s version=%lu seq=%lu entries=%lu payload=%lu checksum=0x%08x lba=%lu\n",
+               (unsigned long)slot,
+               (persist_active_slot == (int)slot) ? "yes" : "no",
+               (unsigned long)meta.version,
+               (unsigned long)meta.sequence,
+               (unsigned long)meta.entry_count,
+               (unsigned long)meta.payload_size,
+               meta.checksum,
+               (unsigned long)persist_slot_lba(slot));
+    } else {
+      snprintf(line, sizeof(line),
+               "  slot %lu: valid=no active=%s lba=%lu\n",
+               (unsigned long)slot,
+               (persist_active_slot == (int)slot) ? "yes" : "no",
+               (unsigned long)persist_slot_lba(slot));
+    }
+    persist_append_text(out, out_size, &used, line);
+  }
+  persist_append_text(out, out_size, &used,
+                      "  restore: persist restore previous | persist restore slot <n>\n");
+}
+
+int vfs_persist_restore_slot(int slot, char *out, size_t out_size) {
+  persist_snapshot_meta_t meta;
+  int apply_rc;
+  int save_rc;
+
+  if (!vfs_initialized) {
+    vfs_init();
+  }
+  if (!storage_available()) {
+    persist_ready = 0;
+    persist_set_status("Orizon data persistence unavailable");
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=storage unavailable\n");
+    }
+    return -EIO;
+  }
+  if (!persist_orizon_data_partition_present()) {
+    persist_ready = 0;
+    persist_set_status(
+        "Orizon data persistence disabled: no Orizon data partition");
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=no Orizon data partition\n");
+    }
+    return -EIO;
+  }
+  if (slot < 0 || (uint32_t)slot >= persist_slots_available) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=slot out of range slots=%lu\n",
+               (unsigned long)persist_slots_available);
+    }
+    return -EINVAL;
+  }
+  if (persist_read_slot_meta((uint32_t)slot, &meta) < 0) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=slot %d is not a valid snapshot\n",
+               slot);
+    }
+    return -EIO;
+  }
+
+  persist_ready = 1;
+  persist_loading = 1;
+  persist_set_loaded_meta(&meta);
+  apply_rc = persist_apply_snapshot_entries(&meta);
+  persist_loading = 0;
+  if (apply_rc < 0) {
+    persist_set_status(
+        "Orizon data persistence restore failed: malformed snapshot entries");
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=malformed snapshot entries slot=%d\n",
+               slot);
+    }
+    return apply_rc;
+  }
+
+  save_rc = vfs_persist_save();
+  if (out && out_size) {
+    size_t used = 0;
+    snprintf(out, out_size,
+             "persistence restore: %s\nrestored-slot=%d restored-seq=%lu promoted=%s\n",
+             save_rc == 0 ? "PASS" : "WARN", slot,
+             (unsigned long)meta.sequence,
+             save_rc == 0 ? "yes" : "no");
+    used = strlen(out);
+    if (used < out_size) {
+      vfs_persist_format_status(out + used, out_size - used);
+    }
+  }
+  return save_rc;
+}
+
+int vfs_persist_restore_previous(char *out, size_t out_size) {
+  persist_snapshot_meta_t previous;
+
+  if (!storage_available() || !persist_orizon_data_partition_present()) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=no readable Orizon data slots\n");
+    }
+    return -EIO;
+  }
+  memset(&previous, 0, sizeof(previous));
+  for (uint32_t slot = 0; slot < persist_slots_available; slot++) {
+    persist_snapshot_meta_t meta;
+    if (persist_active_slot == (int)slot) {
+      continue;
+    }
+    if (persist_read_slot_meta(slot, &meta) == 0 &&
+        persist_snapshot_is_newer(&meta, &previous)) {
+      previous = meta;
+    }
+  }
+  if (!previous.valid) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "persistence restore: FAIL\nreason=no previous valid snapshot\n");
+    }
+    return -ENOENT;
+  }
+  return vfs_persist_restore_slot((int)previous.slot, out, out_size);
 }
 
 int vfs_persist_repair(char *out, size_t out_size) {
