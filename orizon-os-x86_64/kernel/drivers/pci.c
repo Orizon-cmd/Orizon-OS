@@ -160,6 +160,14 @@ static const char *pci_storage_hint(const pci_device_info_t *dev) {
   if (!dev) {
     return "unknown";
   }
+  if (dev->vendor_id == 0x1AF4 &&
+      (dev->device_id == 0x1001 || dev->device_id == 0x1042)) {
+    return "virtio-blk-storage";
+  }
+  if (dev->vendor_id == 0x1AF4 &&
+      (dev->device_id == 0x1004 || dev->device_id == 0x1048)) {
+    return "virtio-scsi-driver-needed";
+  }
   if (dev->class_code == 0x01 && dev->subclass == 0x08) {
     return dev->prog_if == 0x02 ? "nvme-controller" : "nvme-unusual-prog-if";
   }
@@ -201,7 +209,11 @@ void pci_format_diagnostics(char *out, size_t out_size) {
   pci_diag_append(out, out_size, &used, line);
   for (int i = 0; i < total && i < 128; i++) {
     const pci_device_info_t *dev = &devs[i];
-    int is_storage = dev->class_code == 0x01 ||
+    int is_virtio_storage =
+        dev->vendor_id == 0x1AF4 &&
+        (dev->device_id == 0x1001 || dev->device_id == 0x1042 ||
+         dev->device_id == 0x1004 || dev->device_id == 0x1048);
+    int is_storage = is_virtio_storage || dev->class_code == 0x01 ||
                      (dev->class_code == 0x08 &&
                       (dev->subclass == 0x05 || dev->subclass == 0x07 ||
                        dev->subclass == 0x80));

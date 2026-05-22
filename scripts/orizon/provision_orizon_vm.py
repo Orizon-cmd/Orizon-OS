@@ -20,6 +20,8 @@ def build_domain_xml(config: dict) -> str:
     title = config.get("title", name)
     disk_path = config["remote_disk_path"]
     disk_format = config.get("disk_format", "raw")
+    disk_bus = config.get("disk_bus", "sata")
+    disk_target = config.get("disk_target_dev") or ("vda" if disk_bus == "virtio" else "sda")
     memory_kib = int(config.get("memory_mib", 4096)) * 1024
     vcpu_count = int(config.get("vcpu_count", 4))
     bridge_device = config.get("bridge_device", "eth0")
@@ -83,7 +85,7 @@ def build_domain_xml(config: dict) -> str:
     <disk type='file' device='disk'>
       <driver name='qemu' type='{disk_format}'/>
       <source file='{disk_path}'/>
-      <target dev='sda' bus='sata'/>
+      <target dev='{disk_target}' bus='{disk_bus}'/>
       <boot order='1'/>
     </disk>
     <controller type='usb' index='0' model='qemu-xhci'/>

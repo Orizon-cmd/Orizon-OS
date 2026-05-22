@@ -37,6 +37,18 @@ def matrix_config(base: dict, case_name: str, overrides: dict) -> dict:
     return cfg
 
 
+def apply_storage_profile(cfg: dict, disk_bus: str) -> dict:
+    if disk_bus == "sata":
+        return cfg
+    updated = dict(cfg)
+    updated["name"] = f"{cfg['name']}-{disk_bus}"
+    updated["title"] = f"{cfg.get('title', cfg['name'])} {disk_bus}"
+    updated["remote_disk_path"] = f"/DATA/VM/{updated['name']}.img"
+    updated["disk_bus"] = disk_bus
+    updated["disk_target_dev"] = "vda" if disk_bus == "virtio" else "sda"
+    return updated
+
+
 def define_vm(client, sudo_password: str, cfg: dict) -> None:
     xml_text = build_domain_xml(cfg)
     remote_xml = f"/tmp/{cfg['name']}.xml"
@@ -78,17 +90,24 @@ def send_console_text(client, sudo_password: str, vm_name: str, text: str) -> No
 
 
 def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) -> None:
-    time.sleep(12)
-    for cmd in (
+    # Console input is sent blind through libvirt. Give the framebuffer shell
+    # time to appear, then replay the idempotent setup once to avoid losing the
+    # password/start commands during slower boots.
+    commands = (
         "keyboard us",
         "net dhcp",
         f"ssh password {password}",
         "ssh auth max 3",
         "ssh auth lockout 30",
         "ssh start",
-    ):
-        send_console_text(client, sudo_password, vm_name, cmd + "\n")
-        time.sleep(2)
+    )
+    time.sleep(20)
+    for round_index in range(2):
+        for cmd in commands:
+            send_console_text(client, sudo_password, vm_name, cmd + "\n")
+            time.sleep(1.5)
+        if round_index == 0:
+            time.sleep(5)
 
 
 def find_nat_ip(client, sudo_password: str, mac: str, network_name: str, timeout: int) -> str:
@@ -439,6 +458,12 @@ def main() -> int:
     parser.add_argument("--ssh-timeout", type=int, default=40)
     parser.add_argument("--include-update", action="store_true")
     parser.add_argument(
+        "--disk-bus",
+        choices=("sata", "virtio"),
+        default="sata",
+        help="Disk bus profile for storage smoke tests. Default keeps the AHCI/SATA path.",
+    )
+    parser.add_argument(
         "--include-lifecycle",
         action="store_true",
         help="Also verify framebuffer screenshot, SSH reboot, post-reboot SSH, and SSH shutdown.",
@@ -468,8 +493,13 @@ def main() -> int:
         for case_name in cases:
             if case_name not in MATRIX_CASES:
                 raise ValueError(f"Unknown matrix case: {case_name}")
-            cfg = matrix_config(base_config, case_name, MATRIX_CASES[case_name])
-            print(f"=== {case_name} ({cfg['network_model']} / {cfg['network_name'] or 'bridge'}) ===")
+            cfg = apply_storage_profile(
+                matrix_config(base_config, case_name, MATRIX_CASES[case_name]),
+                args.disk_bus,
+            )
+            print(
+                f"=== {case_name} ({cfg['network_model']} / {cfg['network_name'] or 'bridge'} / disk={args.disk_bus}) ==="
+            )
             define_vm(client, sudo_password, cfg)
             state, _vnc = deploy_remote_tree(
                 client=client,

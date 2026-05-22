@@ -1006,7 +1006,7 @@ static int gpt_find_esp(gpt_partition_t *out, char *report,
   }
   memset(out, 0, sizeof(*out));
   if (!storage_available()) {
-    append_check_line(report, report_size, "writable AHCI/NVMe disk", 0);
+    append_check_line(report, report_size, "writable AHCI/NVMe/VirtIO disk", 0);
     return -1;
   }
   if (read_sector(1, sector_buf) < 0 ||
@@ -1405,7 +1405,7 @@ static int installed_gpt_layout_valid(char *report, size_t report_size,
 
   if (!storage_available()) {
     if (verbose) {
-      append_check_line(report, report_size, "writable AHCI/NVMe disk", 0);
+      append_check_line(report, report_size, "writable AHCI/NVMe/VirtIO disk", 0);
     }
     return 0;
   }
@@ -2413,7 +2413,8 @@ int orizon_install_run(const orizon_install_config_t *config, char *report,
     return -1;
   }
   if (!storage_available()) {
-    append_report(report, report_size, "install: no writable AHCI/NVMe disk");
+    append_report(report, report_size,
+                  "install: no writable AHCI/NVMe/VirtIO disk");
     return -2;
   }
   storage_format_capacity(capacity, sizeof(capacity));
@@ -2502,7 +2503,8 @@ static int orizon_install_update_esp_payload(
     return -1;
   }
   if (!storage_available()) {
-    append_report(report, report_size, "update: no writable AHCI/NVMe disk");
+    append_report(report, report_size,
+                  "update: no writable AHCI/NVMe/VirtIO disk");
     return -2;
   }
 

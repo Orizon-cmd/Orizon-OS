@@ -64,8 +64,8 @@
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
   families, persistent `/logs/usb.log` capture with family/support/blocker
   fields, xHCI CDC-ECM raw Ethernet and Realtek RTL815x packet paths,
-  AHCI/NVMe storage probes, read-only `disk identify` / `disk read-test` /
-  `gpt scan`, Intel VMD/RST/eMMC blocker diagnostics with PCI BAR and
+  AHCI/NVMe/VirtIO-blk storage probes, read-only `disk identify` /
+  `disk read-test` / `gpt scan`, Intel VMD/RST/eMMC blocker diagnostics with PCI BAR and
   secondary-bus capture, Intel e1000/e1000e, RTL8139,
   VirtIO-net Ethernet, and staged Intel Wi-Fi
   detection, firmware discovery, APM wake, CPU-release firmware loading, FH DMA
@@ -84,9 +84,10 @@
   network snapshots in `/logs/wifi.log` and
   `/workspace/.orizon/wifi-validation` for Lenovo AP testing.
 - Repeatable ZimaOS VM smoke matrix: dedicated libvirt VMs can validate boot,
-  DHCP, SSH, ping, DNS, package status, update status, and host-key state across
-  NAT NIC models. Recent NAT smoke passes cover e1000e, VirtIO-net, and RTL8139;
-  this does not imply validation on Lenovo or any other physical PC.
+  DHCP, SSH, ping, DNS, package status, update status, storage persistence, and
+  host-key state across NAT NIC models. Recent NAT smoke passes cover e1000e,
+  VirtIO-net, RTL8139, and a targeted modern VirtIO-blk disk profile; this does
+  not imply validation on Lenovo or any other physical PC.
 
 ## Next Stability Track
 
@@ -129,7 +130,8 @@
 8. Implement true Intel VMD remapping if the Lenovo capture confirms the NVMe is
    hidden behind VMD/RST, then harden NVMe and AHCI writes with more error
    reporting and timeout handling.
-9. Add more VirtIO devices used by Proxmox/QEMU, especially block storage.
+9. Extend VirtIO storage beyond VirtIO-blk by adding VirtIO-scsi and more
+   install/write stress coverage in VM.
 10. Extend the VM test matrix beyond the current NAT smoke path: bridge cases,
    AHCI/NVMe storage permutations, USB Ethernet cases, and at least one
    non-ZimaOS host.

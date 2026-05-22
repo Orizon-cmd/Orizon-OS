@@ -32,7 +32,8 @@ le developpement noyau:
   verification du boot UEFI, selection explicite du disque/partition cible et
   reparation de l'ESP
 - layout clavier persistant `fr-azerty` ou `us-qwerty` applique au boot
-- pilotes materiel elargis: clavier USB HID plus propre, stockage AHCI/NVMe,
+- pilotes materiel elargis: clavier USB HID plus propre, stockage
+  AHCI/NVMe/VirtIO-blk,
   Ethernet Intel e1000/e1000e, Realtek RTL8139, VirtIO-net pour Proxmox/QEMU,
   chemin paquet USB Ethernet xHCI pour CDC-ECM brut et Realtek RTL815x,
   diagnostics persistants `/logs/usb.log` pour CDC-NCM/ASIX/SMSC/RNDIS, et
@@ -203,7 +204,7 @@ La configuration est sauvegardee dans `/system/network.conf` et les journaux
 reseau/USB dans `/logs/network.log` et `/logs/usb.log`, donc une machine Proxmox en bridge sans NAT
 peut rester connectee a GitHub si son LAN autorise la passerelle et le DNS.
 En cas de machine Proxmox configuree en VirtIO moderne-only, choisir le modele
-`Intel E1000` reste un fallback compatible.
+reseau `Intel E1000` reste un fallback compatible.
 
 Details: [docs/orizon/NETWORK.md](docs/orizon/NETWORK.md).
 
@@ -213,6 +214,7 @@ Pour lancer la matrice reseau VM depuis le labo ZimaOS:
 python scripts/orizon/build_x86_64_on_zimaos.py
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl8139
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
+python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --disk-bus virtio --include-lifecycle
 python scripts/orizon/test_update_rollback_vm.py
 ```
 

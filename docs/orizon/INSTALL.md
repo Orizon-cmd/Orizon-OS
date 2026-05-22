@@ -76,7 +76,8 @@ storage select 1
 Those commands are non-destructive. If a real laptop does not show its internal
 disk, do not run `install`; capture `report save`, `storage diag`, `logs
 storage`, `logs pci`, `pci bars`, `disk identify`, and `disk read-test last`
-first.
+first. In VM, AHCI and modern VirtIO-blk are both valid storage profiles for
+installer preflight and persistence checks; VirtIO-scsi remains diagnostic-only.
 
 It writes runtime/staging state:
 

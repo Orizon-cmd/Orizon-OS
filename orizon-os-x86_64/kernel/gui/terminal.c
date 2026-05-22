@@ -4407,7 +4407,7 @@ static void term_print_disks(terminal_t *term) {
 
   if (count <= 0) {
     static char diag[1536];
-    term_puts_t(term, "No writable AHCI/NVMe disks detected.\n");
+    term_puts_t(term, "No writable AHCI/NVMe/VirtIO disks detected.\n");
     storage_format_diagnostics(diag, sizeof(diag));
     term_puts_t(term, diag);
     return;
@@ -4430,7 +4430,7 @@ static void term_print_partitions(terminal_t *term) {
   static char partitions_report[4096];
 
   if (!storage_available()) {
-    term_puts_t(term, "No selected writable AHCI/NVMe disk.\n");
+    term_puts_t(term, "No selected writable AHCI/NVMe/VirtIO disk.\n");
     return;
   }
   if (orizon_install_format_partitions(partitions_report,

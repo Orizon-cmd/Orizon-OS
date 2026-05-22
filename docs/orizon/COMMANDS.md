@@ -296,8 +296,9 @@ memory. Start with `report next` to see the safe capture plan, then run
 If the internal disk is missing, run `storage diag`, `logs storage`, `logs pci`,
 `pci bars`, `disk identify`, `disk read-test last`, and `gpt scan`; they are
 read-only and report NVMe/AHCI candidates, Intel RST/VMD blockers, secondary
-PCI bus hints, NVMe CAP/CC/CSTS/admin errors, last-sector readability, and
-SDHCI/eMMC cases without installing or writing to disk. The useful files are
+PCI bus hints, modern/legacy VirtIO-blk state, NVMe CAP/CC/CSTS/admin errors,
+last-sector readability, and SDHCI/eMMC cases without installing or writing to
+disk. The useful files are
 `/workspace/hardware-report.txt`, `/logs/wifi.log`, `/logs/usb.log`,
 `/logs/network.log`, `/logs/ssh.log`, and
 `/workspace/.orizon/update.log`.

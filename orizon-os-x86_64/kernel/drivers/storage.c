@@ -1,8 +1,9 @@
 /*
- * Orizon OS x86_64 - Minimal AHCI/NVMe block storage
+ * Orizon OS x86_64 - Minimal AHCI/NVMe/VirtIO block storage
  *
  * This keeps the storage surface small while the OS is still young: AHCI for
- * the current VM path, plus a first NVMe namespace path for modern machines.
+ * the current VM path, a first NVMe namespace path for modern machines, and
+ * legacy plus modern VirtIO-blk queues for VM storage profiles.
  */
 
 #include "../include/storage.h"
@@ -47,12 +48,63 @@
 #define NVME_ADMIN_IDENTIFY 0x06
 #define NVME_CMD_WRITE 0x01
 #define NVME_CMD_READ 0x02
+#define VIRTIO_PCI_VENDOR 0x1AF4
+#define VIRTIO_PCI_DEVICE_BLK_LEGACY 0x1001
+#define VIRTIO_PCI_DEVICE_SCSI_LEGACY 0x1004
+#define VIRTIO_PCI_DEVICE_BLK_MODERN 0x1042
+#define VIRTIO_PCI_DEVICE_SCSI_MODERN 0x1048
+#define VIRTIO_PCI_HOST_FEATURES 0x00
+#define VIRTIO_PCI_GUEST_FEATURES 0x04
+#define VIRTIO_PCI_QUEUE_PFN 0x08
+#define VIRTIO_PCI_QUEUE_NUM 0x0C
+#define VIRTIO_PCI_QUEUE_SEL 0x0E
+#define VIRTIO_PCI_QUEUE_NOTIFY 0x10
+#define VIRTIO_PCI_STATUS 0x12
+#define VIRTIO_PCI_ISR 0x13
+#define VIRTIO_PCI_CONFIG_NO_MSIX 0x14
+#define VIRTIO_PCI_CONFIG_MSIX 0x18
+#define VIRTIO_STATUS_ACKNOWLEDGE 0x01
+#define VIRTIO_STATUS_DRIVER 0x02
+#define VIRTIO_STATUS_DRIVER_OK 0x04
+#define VIRTIO_STATUS_FEATURES_OK 0x08
+#define VIRTIO_STATUS_FAILED 0x80
+#define VIRTIO_MSI_NO_VECTOR 0xFFFFU
+#define VIRTIO_PCI_CAP_COMMON_CFG 1
+#define VIRTIO_PCI_CAP_NOTIFY_CFG 2
+#define VIRTIO_PCI_CAP_ISR_CFG 3
+#define VIRTIO_PCI_CAP_DEVICE_CFG 4
+#define VIRTIO_F_VERSION_1_HIGH 0x00000001U
+#define VIRTIO_COMMON_DEVICE_FEATURE_SELECT 0x00
+#define VIRTIO_COMMON_DEVICE_FEATURE 0x04
+#define VIRTIO_COMMON_DRIVER_FEATURE_SELECT 0x08
+#define VIRTIO_COMMON_DRIVER_FEATURE 0x0C
+#define VIRTIO_COMMON_MSIX_CONFIG 0x10
+#define VIRTIO_COMMON_NUM_QUEUES 0x12
+#define VIRTIO_COMMON_DEVICE_STATUS 0x14
+#define VIRTIO_COMMON_CONFIG_GENERATION 0x15
+#define VIRTIO_COMMON_QUEUE_SELECT 0x16
+#define VIRTIO_COMMON_QUEUE_SIZE 0x18
+#define VIRTIO_COMMON_QUEUE_MSIX_VECTOR 0x1A
+#define VIRTIO_COMMON_QUEUE_ENABLE 0x1C
+#define VIRTIO_COMMON_QUEUE_NOTIFY_OFF 0x1E
+#define VIRTIO_COMMON_QUEUE_DESC 0x20
+#define VIRTIO_COMMON_QUEUE_DRIVER 0x28
+#define VIRTIO_COMMON_QUEUE_DEVICE 0x30
+#define VIRTIO_BLK_F_RO (1U << 5)
+#define VIRTIO_BLK_T_IN 0U
+#define VIRTIO_BLK_T_OUT 1U
+#define VIRTIO_BLK_S_OK 0U
+#define VIRTIO_QUEUE_MAX 128U
+#define VIRTQ_DESC_F_NEXT 1U
+#define VIRTQ_DESC_F_WRITE 2U
+#define PCI_CAP_ID_MSIX 0x11
 #define STORAGE_LOG_SIZE 4096
 
 typedef enum {
   STORAGE_DRIVER_NONE = 0,
   STORAGE_DRIVER_AHCI,
   STORAGE_DRIVER_NVME,
+  STORAGE_DRIVER_VIRTIO_BLK,
 } storage_driver_t;
 
 typedef struct {
@@ -152,6 +204,37 @@ typedef struct {
   uint16_t status;
 } __attribute__((packed)) nvme_cqe_t;
 
+typedef struct {
+  uint64_t addr;
+  uint32_t len;
+  uint16_t flags;
+  uint16_t next;
+} __attribute__((packed)) virtq_desc_t;
+
+typedef struct {
+  uint32_t id;
+  uint32_t len;
+} __attribute__((packed)) virtq_used_elem_t;
+
+typedef struct {
+  uint16_t flags;
+  uint16_t idx;
+  virtq_used_elem_t ring[VIRTIO_QUEUE_MAX];
+} __attribute__((packed)) virtq_used_t;
+
+typedef struct {
+  uint32_t type;
+  uint32_t reserved;
+  uint64_t sector;
+} __attribute__((packed)) virtio_blk_req_header_t;
+
+typedef struct {
+  uint8_t bar;
+  uint32_t offset;
+  uint32_t length;
+  uint32_t notify_multiplier;
+} virtio_pci_cap_info_t;
+
 static ahci_mem_t *hba = NULL;
 static ahci_port_t *disk_port = NULL;
 static storage_driver_t storage_driver = STORAGE_DRIVER_NONE;
@@ -207,6 +290,33 @@ static uint16_t nvme_last_cmd_cid = 0;
 static uint8_t storage_read_test_buf[ORIZON_SECTOR_SIZE]
     __attribute__((aligned(4096)));
 
+static uint16_t virtio_blk_io_base = 0;
+static uint16_t virtio_blk_queue_size = 0;
+static uint16_t virtio_blk_avail_idx = 0;
+static uint16_t virtio_blk_used_idx = 0;
+static uint16_t virtio_blk_used_offset = 0;
+static uint32_t virtio_blk_features = 0;
+static uint64_t virtio_blk_capacity = 0;
+static int virtio_blk_count = 0;
+static int virtio_blk_seen = 0;
+static int virtio_blk_ready = 0;
+static int virtio_blk_writable = 1;
+static int virtio_blk_modern_only = 0;
+static int virtio_blk_modern = 0;
+static int virtio_scsi_count = 0;
+static uint8_t virtio_blk_last_status = 0;
+static uint8_t virtio_blk_last_req_status = 0xFF;
+static char virtio_blk_model[64] = "VirtIO block device";
+static volatile uint8_t *virtio_blk_common_mmio = NULL;
+static volatile uint8_t *virtio_blk_notify_mmio = NULL;
+static volatile uint8_t *virtio_blk_device_mmio = NULL;
+static uint32_t virtio_blk_notify_multiplier = 0;
+static uint16_t virtio_blk_queue_notify_off = 0;
+static uint8_t virtio_blk_queue[8192] __attribute__((aligned(4096)));
+static virtio_blk_req_header_t virtio_blk_req_header
+    __attribute__((aligned(16)));
+static uint8_t virtio_blk_req_status __attribute__((aligned(16)));
+
 static void storage_log_append(const char *text) {
   size_t len;
 
@@ -255,6 +365,40 @@ static void set_status(const char *status) {
   serial_puts("\n");
 }
 
+static inline void outb(uint16_t port, uint8_t val) {
+  __asm__ volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline void outw(uint16_t port, uint16_t val) {
+  __asm__ volatile("outw %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline void outl(uint16_t port, uint32_t val) {
+  __asm__ volatile("outl %0, %1" : : "a"(val), "Nd"(port));
+}
+
+static inline uint8_t inb(uint16_t port) {
+  uint8_t ret;
+  __asm__ volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
+
+static inline uint16_t inw(uint16_t port) {
+  uint16_t ret;
+  __asm__ volatile("inw %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
+
+static inline uint32_t inl(uint16_t port) {
+  uint32_t ret;
+  __asm__ volatile("inl %1, %0" : "=a"(ret) : "Nd"(port));
+  return ret;
+}
+
+static void io_barrier(void) {
+  __asm__ volatile("" ::: "memory");
+}
+
 static void storage_set_blocker(const pci_device_info_t *dev,
                                 const char *reason) {
   if (storage_blocker[0] || !dev || !reason) {
@@ -282,9 +426,28 @@ static int storage_is_intel_vmd_rst(const pci_device_info_t *dev) {
   return 0;
 }
 
+static int storage_is_virtio_blk(const pci_device_info_t *dev) {
+  return dev && dev->vendor_id == VIRTIO_PCI_VENDOR &&
+         (dev->device_id == VIRTIO_PCI_DEVICE_BLK_LEGACY ||
+          dev->device_id == VIRTIO_PCI_DEVICE_BLK_MODERN);
+}
+
+static int storage_is_virtio_scsi(const pci_device_info_t *dev) {
+  return dev && dev->vendor_id == VIRTIO_PCI_VENDOR &&
+         (dev->device_id == VIRTIO_PCI_DEVICE_SCSI_LEGACY ||
+          dev->device_id == VIRTIO_PCI_DEVICE_SCSI_MODERN);
+}
+
 static const char *storage_candidate_hint(const pci_device_info_t *dev) {
   if (!dev) {
     return "unknown";
+  }
+  if (storage_is_virtio_blk(dev)) {
+    return (dev->bar[0] & 0x01) ? "virtio-blk-legacy-supported"
+                                : "virtio-blk-modern-supported";
+  }
+  if (storage_is_virtio_scsi(dev)) {
+    return "virtio-scsi-diagnostic-only";
   }
   if (dev->class_code == 0x01 && dev->subclass == 0x08) {
     return dev->prog_if == 0x02 ? "nvme-supported" : "nvme-unusual-prog-if";
@@ -312,7 +475,8 @@ static int storage_is_candidate(const pci_device_info_t *dev) {
   if (!dev) {
     return 0;
   }
-  return dev->class_code == 0x01 || storage_is_intel_vmd_rst(dev) ||
+  return storage_is_virtio_blk(dev) || storage_is_virtio_scsi(dev) ||
+         dev->class_code == 0x01 || storage_is_intel_vmd_rst(dev) ||
          (dev->class_code == 0x08 && dev->subclass == 0x05);
 }
 
@@ -350,6 +514,9 @@ static const char *driver_name(storage_driver_t driver) {
   if (driver == STORAGE_DRIVER_AHCI) {
     return "AHCI";
   }
+  if (driver == STORAGE_DRIVER_VIRTIO_BLK) {
+    return "VirtIO-blk";
+  }
   return "none";
 }
 
@@ -368,7 +535,8 @@ static int storage_add_device(storage_driver_t driver, void *ahci_port,
   dev->driver = driver;
   dev->ahci_port = ahci_port;
   dev->sectors = sectors;
-  dev->writable = 1;
+  dev->writable =
+      driver == STORAGE_DRIVER_VIRTIO_BLK ? virtio_blk_writable : 1;
   snprintf(dev->name, sizeof(dev->name), "disk%d", index);
   snprintf(dev->model, sizeof(dev->model), "%s",
            model && model[0] ? model : driver_name(driver));
@@ -394,6 +562,559 @@ static void select_status_from_device(const storage_device_t *dev) {
   serial_puts(" ");
   serial_puts(capacity);
   serial_puts("\n");
+}
+
+static uint8_t storage_pci_read8(const pci_device_info_t *dev, uint8_t offset) {
+  uint32_t val = pci_read32(dev->bus, dev->device, dev->function, offset);
+  return (uint8_t)((val >> ((offset & 3) * 8)) & 0xFF);
+}
+
+static int storage_pci_has_cap(const pci_device_info_t *dev, uint8_t cap_id) {
+  uint32_t status = pci_read32(dev->bus, dev->device, dev->function, 0x04);
+  uint8_t cap = storage_pci_read8(dev, 0x34) & 0xFC;
+
+  if ((status & (1U << 20)) == 0) {
+    return 0;
+  }
+  for (int i = 0; i < 32 && cap >= 0x40; i++) {
+    uint8_t id = storage_pci_read8(dev, cap);
+    uint8_t next = storage_pci_read8(dev, cap + 1) & 0xFC;
+    if (id == cap_id) {
+      return 1;
+    }
+    if (next == cap) {
+      break;
+    }
+    cap = next;
+  }
+  return 0;
+}
+
+static uint64_t storage_pci_bar_base(const pci_device_info_t *dev, uint8_t bar) {
+  uint32_t raw;
+  uint64_t base;
+
+  if (!dev || bar >= 6) {
+    return 0;
+  }
+  raw = dev->bar[bar];
+  if (raw & 0x01) {
+    return raw & ~0x3ULL;
+  }
+  base = raw & ~0xFULL;
+  if ((raw & 0x06) == 0x04 && bar + 1 < 6) {
+    base |= (uint64_t)dev->bar[bar + 1] << 32;
+  }
+  return base;
+}
+
+static int virtio_find_pci_cap(const pci_device_info_t *dev, uint8_t cfg_type,
+                               virtio_pci_cap_info_t *out) {
+  uint32_t status = pci_read32(dev->bus, dev->device, dev->function, 0x04);
+  uint8_t cap = storage_pci_read8(dev, 0x34) & 0xFC;
+
+  if (!out || (status & (1U << 20)) == 0) {
+    return -1;
+  }
+  memset(out, 0, sizeof(*out));
+  for (int i = 0; i < 48 && cap >= 0x40; i++) {
+    uint8_t id = storage_pci_read8(dev, cap);
+    uint8_t next = storage_pci_read8(dev, cap + 1) & 0xFC;
+    uint8_t len = storage_pci_read8(dev, cap + 2);
+    uint8_t type = storage_pci_read8(dev, cap + 3);
+    if (id == 0x09 && type == cfg_type && len >= 16) {
+      out->bar = storage_pci_read8(dev, cap + 4);
+      out->offset = pci_read32(dev->bus, dev->device, dev->function, cap + 8);
+      out->length = pci_read32(dev->bus, dev->device, dev->function, cap + 12);
+      if (cfg_type == VIRTIO_PCI_CAP_NOTIFY_CFG && len >= 20) {
+        out->notify_multiplier =
+            pci_read32(dev->bus, dev->device, dev->function, cap + 16);
+      }
+      return 0;
+    }
+    if (next == cap) {
+      break;
+    }
+    cap = next;
+  }
+  return -1;
+}
+
+static uint8_t mmio_read8(volatile uint8_t *base, uint32_t off) {
+  return *(volatile uint8_t *)(base + off);
+}
+
+static uint16_t mmio_read16(volatile uint8_t *base, uint32_t off) {
+  return *(volatile uint16_t *)(base + off);
+}
+
+static uint32_t mmio_read32(volatile uint8_t *base, uint32_t off) {
+  return *(volatile uint32_t *)(base + off);
+}
+
+static uint64_t mmio_read64(volatile uint8_t *base, uint32_t off) {
+  uint64_t lo = mmio_read32(base, off);
+  uint64_t hi = mmio_read32(base, off + 4);
+  return lo | (hi << 32);
+}
+
+static void mmio_write8(volatile uint8_t *base, uint32_t off, uint8_t value) {
+  *(volatile uint8_t *)(base + off) = value;
+}
+
+static void mmio_write16(volatile uint8_t *base, uint32_t off, uint16_t value) {
+  *(volatile uint16_t *)(base + off) = value;
+}
+
+static void mmio_write32(volatile uint8_t *base, uint32_t off, uint32_t value) {
+  *(volatile uint32_t *)(base + off) = value;
+}
+
+static void mmio_write64(volatile uint8_t *base, uint32_t off, uint64_t value) {
+  mmio_write32(base, off, (uint32_t)value);
+  mmio_write32(base, off + 4, (uint32_t)(value >> 32));
+}
+
+static virtq_desc_t *virtio_desc(void) {
+  return (virtq_desc_t *)virtio_blk_queue;
+}
+
+static volatile uint16_t *virtio_avail(void) {
+  return (volatile uint16_t *)(virtio_blk_queue +
+                               sizeof(virtq_desc_t) * virtio_blk_queue_size);
+}
+
+static volatile virtq_used_t *virtio_used(void) {
+  return (volatile virtq_used_t *)(virtio_blk_queue + virtio_blk_used_offset);
+}
+
+static uint32_t virtio_align4096(uint32_t value) {
+  return (value + 4095U) & ~4095U;
+}
+
+static int virtio_queue_layout_ok(uint16_t qnum) {
+  uint32_t desc_bytes;
+  uint32_t avail_bytes;
+  uint32_t used_bytes;
+  uint32_t used_offset;
+
+  if (qnum < 3 || qnum > VIRTIO_QUEUE_MAX) {
+    return 0;
+  }
+  desc_bytes = (uint32_t)sizeof(virtq_desc_t) * qnum;
+  avail_bytes = 4U + 2U * qnum;
+  used_offset = virtio_align4096(desc_bytes + avail_bytes);
+  used_bytes = 4U + (uint32_t)sizeof(virtq_used_elem_t) * qnum;
+  if (used_offset + used_bytes > sizeof(virtio_blk_queue)) {
+    return 0;
+  }
+  virtio_blk_used_offset = (uint16_t)used_offset;
+  return 1;
+}
+
+static uint8_t virtio_read_status(void) {
+  return inb((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_STATUS));
+}
+
+static void virtio_write_status(uint8_t status) {
+  outb((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_STATUS), status);
+  virtio_blk_last_status = status;
+}
+
+static uint8_t virtio_modern_read_status(void) {
+  if (!virtio_blk_common_mmio) {
+    return 0;
+  }
+  return mmio_read8(virtio_blk_common_mmio, VIRTIO_COMMON_DEVICE_STATUS);
+}
+
+static void virtio_modern_write_status(uint8_t status) {
+  if (!virtio_blk_common_mmio) {
+    return;
+  }
+  mmio_write8(virtio_blk_common_mmio, VIRTIO_COMMON_DEVICE_STATUS, status);
+  virtio_blk_last_status = status;
+}
+
+static void virtio_notify_queue(void) {
+  if (virtio_blk_modern) {
+    uint32_t off = (uint32_t)virtio_blk_queue_notify_off *
+                   virtio_blk_notify_multiplier;
+    if (virtio_blk_notify_mmio) {
+      mmio_write16(virtio_blk_notify_mmio + off, 0, 0);
+    }
+    return;
+  }
+  outw((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_QUEUE_NOTIFY), 0);
+}
+
+static int virtio_blk_io(uint64_t lba, void *buf, uint32_t sectors,
+                         int write) {
+  virtq_desc_t *desc;
+  volatile uint16_t *avail;
+  volatile virtq_used_t *used;
+
+  if (!disk_ready || storage_driver != STORAGE_DRIVER_VIRTIO_BLK ||
+      sectors == 0 || !virtio_blk_ready) {
+    return disk_ready ? 0 : -1;
+  }
+
+  for (uint32_t i = 0; i < sectors; i++) {
+    uint8_t *sector = (uint8_t *)buf + (uint64_t)i * ORIZON_SECTOR_SIZE;
+    uint16_t used_before;
+    uint16_t slot;
+
+    desc = virtio_desc();
+    avail = virtio_avail();
+    used = virtio_used();
+    memset(desc, 0, sizeof(virtq_desc_t) * virtio_blk_queue_size);
+
+    virtio_blk_req_header.type = write ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
+    virtio_blk_req_header.reserved = 0;
+    virtio_blk_req_header.sector = lba + i;
+    virtio_blk_req_status = 0xFF;
+    virtio_blk_last_req_status = 0xFF;
+
+    desc[0].addr = storage_phys_addr(&virtio_blk_req_header);
+    desc[0].len = sizeof(virtio_blk_req_header);
+    desc[0].flags = VIRTQ_DESC_F_NEXT;
+    desc[0].next = 1;
+
+    desc[1].addr = storage_phys_addr(sector);
+    desc[1].len = ORIZON_SECTOR_SIZE;
+    desc[1].flags = VIRTQ_DESC_F_NEXT | (write ? 0 : VIRTQ_DESC_F_WRITE);
+    desc[1].next = 2;
+
+    desc[2].addr = storage_phys_addr(&virtio_blk_req_status);
+    desc[2].len = 1;
+    desc[2].flags = VIRTQ_DESC_F_WRITE;
+    desc[2].next = 0;
+
+    slot = (uint16_t)(virtio_blk_avail_idx % virtio_blk_queue_size);
+    used_before = used->idx;
+    avail[2 + slot] = 0;
+    io_barrier();
+    virtio_blk_avail_idx++;
+    avail[1] = virtio_blk_avail_idx;
+    io_barrier();
+    virtio_notify_queue();
+
+    for (int spin = 0; spin < 10000000; spin++) {
+      if (used->idx != used_before) {
+        virtio_blk_used_idx = used->idx;
+        virtio_blk_last_req_status = virtio_blk_req_status;
+        if (virtio_blk_req_status != VIRTIO_BLK_S_OK) {
+          char line[120];
+          snprintf(line, sizeof(line),
+                   "storage: VirtIO-blk request failed status=%u lba=%lu write=%s",
+                   (unsigned)virtio_blk_req_status, (unsigned long)(lba + i),
+                   write ? "yes" : "no");
+          storage_log_append(line);
+          return -1;
+        }
+        break;
+      }
+      __asm__ volatile("pause");
+      if (spin == 9999999) {
+        storage_log_append("storage: VirtIO-blk request timeout");
+        return -1;
+      }
+    }
+  }
+  return 0;
+}
+
+static int virtio_blk_init_modern(const pci_device_info_t *dev) {
+  virtio_pci_cap_info_t common;
+  virtio_pci_cap_info_t notify;
+  virtio_pci_cap_info_t device;
+  uint64_t common_phys;
+  uint64_t notify_phys;
+  uint64_t device_phys;
+  uint32_t features_low;
+  uint32_t features_high;
+  uint32_t driver_features_low;
+  uint16_t qmax;
+  uint16_t qnum;
+  uint8_t status;
+  char line[224];
+
+  if (!dev) {
+    return -1;
+  }
+
+  if (virtio_find_pci_cap(dev, VIRTIO_PCI_CAP_COMMON_CFG, &common) != 0 ||
+      virtio_find_pci_cap(dev, VIRTIO_PCI_CAP_NOTIFY_CFG, &notify) != 0 ||
+      virtio_find_pci_cap(dev, VIRTIO_PCI_CAP_DEVICE_CFG, &device) != 0) {
+    set_status("storage: VirtIO-blk modern PCI caps incomplete");
+    return -1;
+  }
+
+  common_phys = storage_pci_bar_base(dev, common.bar);
+  notify_phys = storage_pci_bar_base(dev, notify.bar);
+  device_phys = storage_pci_bar_base(dev, device.bar);
+  if (!common_phys || !notify_phys || !device_phys || common.bar >= 6 ||
+      notify.bar >= 6 || device.bar >= 6) {
+    set_status("storage: VirtIO-blk modern BAR mapping unavailable");
+    return -1;
+  }
+  common_phys += common.offset;
+  notify_phys += notify.offset;
+  device_phys += device.offset;
+
+  {
+    uint32_t cmd = pci_read32(dev->bus, dev->device, dev->function, 0x04);
+    cmd |= (1U << 1) | (1U << 2);
+    pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd);
+  }
+
+  virtio_blk_common_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(
+      common_phys, common.length ? common.length : 0x100);
+  virtio_blk_notify_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(
+      notify_phys, notify.length ? notify.length : 0x1000);
+  virtio_blk_device_mmio = (volatile uint8_t *)(uintptr_t)mmio_map_range(
+      device_phys, device.length ? device.length : 0x100);
+  if (!virtio_blk_common_mmio || !virtio_blk_notify_mmio ||
+      !virtio_blk_device_mmio) {
+    set_status("storage: VirtIO-blk modern MMIO map failed");
+    return -1;
+  }
+
+  virtio_blk_modern = 1;
+  virtio_blk_io_base = 0;
+  virtio_blk_notify_multiplier = notify.notify_multiplier;
+  virtio_modern_write_status(0);
+  for (int spin = 0; spin < 100000; spin++) {
+    if (virtio_modern_read_status() == 0) {
+      break;
+    }
+    __asm__ volatile("pause");
+  }
+
+  status = VIRTIO_STATUS_ACKNOWLEDGE;
+  virtio_modern_write_status(status);
+  status |= VIRTIO_STATUS_DRIVER;
+  virtio_modern_write_status(status);
+
+  mmio_write32(virtio_blk_common_mmio,
+               VIRTIO_COMMON_DEVICE_FEATURE_SELECT, 0);
+  features_low =
+      mmio_read32(virtio_blk_common_mmio, VIRTIO_COMMON_DEVICE_FEATURE);
+  mmio_write32(virtio_blk_common_mmio,
+               VIRTIO_COMMON_DEVICE_FEATURE_SELECT, 1);
+  features_high =
+      mmio_read32(virtio_blk_common_mmio, VIRTIO_COMMON_DEVICE_FEATURE);
+  if ((features_high & VIRTIO_F_VERSION_1_HIGH) == 0) {
+    virtio_modern_write_status(VIRTIO_STATUS_FAILED);
+    set_status("storage: VirtIO-blk modern device missing VERSION_1");
+    return -1;
+  }
+
+  driver_features_low = features_low & VIRTIO_BLK_F_RO;
+  mmio_write32(virtio_blk_common_mmio,
+               VIRTIO_COMMON_DRIVER_FEATURE_SELECT, 0);
+  mmio_write32(virtio_blk_common_mmio,
+               VIRTIO_COMMON_DRIVER_FEATURE, driver_features_low);
+  mmio_write32(virtio_blk_common_mmio,
+               VIRTIO_COMMON_DRIVER_FEATURE_SELECT, 1);
+  mmio_write32(virtio_blk_common_mmio,
+               VIRTIO_COMMON_DRIVER_FEATURE, VIRTIO_F_VERSION_1_HIGH);
+
+  status |= VIRTIO_STATUS_FEATURES_OK;
+  virtio_modern_write_status(status);
+  if ((virtio_modern_read_status() & VIRTIO_STATUS_FEATURES_OK) == 0) {
+    virtio_modern_write_status(VIRTIO_STATUS_FAILED);
+    set_status("storage: VirtIO-blk feature negotiation rejected");
+    return -1;
+  }
+
+  mmio_write16(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_SELECT, 0);
+  qmax = mmio_read16(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_SIZE);
+  qnum = qmax > VIRTIO_QUEUE_MAX ? VIRTIO_QUEUE_MAX : qmax;
+  if (!virtio_queue_layout_ok(qnum)) {
+    virtio_modern_write_status(VIRTIO_STATUS_FAILED);
+    snprintf(line, sizeof(line),
+             "storage: VirtIO-blk modern queue unsupported qmax=%lu max=%lu",
+             (unsigned long)qmax, (unsigned long)VIRTIO_QUEUE_MAX);
+    set_status(line);
+    return -1;
+  }
+
+  virtio_blk_queue_size = qnum;
+  memset(virtio_blk_queue, 0, sizeof(virtio_blk_queue));
+  virtio_blk_avail_idx = 0;
+  virtio_blk_used_idx = 0;
+  virtio_blk_queue_notify_off =
+      mmio_read16(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_NOTIFY_OFF);
+  mmio_write16(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_SIZE, qnum);
+  mmio_write16(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_MSIX_VECTOR,
+               VIRTIO_MSI_NO_VECTOR);
+  mmio_write64(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_DESC,
+               storage_phys_addr(virtio_desc()));
+  mmio_write64(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_DRIVER,
+               storage_phys_addr((const void *)virtio_avail()));
+  mmio_write64(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_DEVICE,
+               storage_phys_addr((const void *)virtio_used()));
+  mmio_write16(virtio_blk_common_mmio, VIRTIO_COMMON_QUEUE_ENABLE, 1);
+
+  status |= VIRTIO_STATUS_DRIVER_OK;
+  virtio_modern_write_status(status);
+  virtio_blk_last_status = virtio_modern_read_status();
+  virtio_blk_capacity = mmio_read64(virtio_blk_device_mmio, 0);
+  if (virtio_blk_capacity == 0) {
+    virtio_modern_write_status(VIRTIO_STATUS_FAILED);
+    set_status("storage: VirtIO-blk modern capacity is zero");
+    return -1;
+  }
+
+  virtio_blk_features = features_low;
+  virtio_blk_writable = (features_low & VIRTIO_BLK_F_RO) ? 0 : 1;
+  snprintf(virtio_blk_model, sizeof(virtio_blk_model),
+           "VirtIO block modern q=%lu notify=%lu",
+           (unsigned long)virtio_blk_queue_size,
+           (unsigned long)virtio_blk_queue_notify_off);
+  storage_add_device(STORAGE_DRIVER_VIRTIO_BLK, NULL, virtio_blk_capacity,
+                     virtio_blk_model);
+  virtio_blk_ready = 1;
+  virtio_blk_modern_only = 0;
+  snprintf(line, sizeof(line),
+           "storage: VirtIO-blk modern ready sectors=%lu qnum=%lu writable=%s features=%08lx status=%02x notify-off=%lu multiplier=%lu",
+           (unsigned long)virtio_blk_capacity,
+           (unsigned long)virtio_blk_queue_size,
+           virtio_blk_writable ? "yes" : "no",
+           (unsigned long)virtio_blk_features,
+           (unsigned)virtio_blk_last_status,
+           (unsigned long)virtio_blk_queue_notify_off,
+           (unsigned long)virtio_blk_notify_multiplier);
+  storage_log_append(line);
+  set_status("storage: VirtIO-blk modern disk detected");
+  return 0;
+}
+
+static int virtio_blk_init_one(const pci_device_info_t *dev) {
+  char line[192];
+  uint16_t qnum;
+  uint8_t status;
+  uint16_t config_offset;
+  uint32_t cap_lo;
+  uint32_t cap_hi;
+
+  if (!dev) {
+    return -1;
+  }
+  virtio_blk_seen = 1;
+  virtio_blk_count++;
+  snprintf(line, sizeof(line),
+           "storage: probing VirtIO-blk %02x:%02x.%u vendor=%04x device=%04x bar0=%08lx",
+           dev->bus, dev->device, dev->function, dev->vendor_id,
+           dev->device_id, (unsigned long)dev->bar[0]);
+  storage_log_append(line);
+
+  if ((dev->bar[0] & 0x01) == 0) {
+    virtio_blk_modern_only = 1;
+    return virtio_blk_init_modern(dev);
+  }
+
+  virtio_blk_modern = 0;
+  virtio_blk_io_base = (uint16_t)(dev->bar[0] & ~0x3U);
+  {
+    uint32_t cmd = pci_read32(dev->bus, dev->device, dev->function, 0x04);
+    cmd |= (1U << 0) | (1U << 2);
+    pci_write32(dev->bus, dev->device, dev->function, 0x04, cmd);
+  }
+
+  virtio_write_status(0);
+  virtio_write_status(VIRTIO_STATUS_ACKNOWLEDGE);
+  virtio_write_status(VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
+
+  virtio_blk_features =
+      inl((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_HOST_FEATURES));
+  virtio_blk_writable = (virtio_blk_features & VIRTIO_BLK_F_RO) ? 0 : 1;
+  outl((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_GUEST_FEATURES),
+       virtio_blk_features & VIRTIO_BLK_F_RO);
+
+  outw((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_QUEUE_SEL), 0);
+  qnum = inw((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_QUEUE_NUM));
+  if (!virtio_queue_layout_ok(qnum)) {
+    virtio_write_status(VIRTIO_STATUS_FAILED);
+    snprintf(line, sizeof(line),
+             "storage: VirtIO-blk queue unsupported qnum=%lu max=%lu",
+             (unsigned long)qnum, (unsigned long)VIRTIO_QUEUE_MAX);
+    set_status(line);
+    return -1;
+  }
+  virtio_blk_queue_size = qnum;
+  memset(virtio_blk_queue, 0, sizeof(virtio_blk_queue));
+  virtio_blk_avail_idx = 0;
+  virtio_blk_used_idx = 0;
+  outl((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_QUEUE_PFN),
+       (uint32_t)(storage_phys_addr(virtio_blk_queue) >> 12));
+
+  status = VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER |
+           VIRTIO_STATUS_DRIVER_OK;
+  virtio_write_status(status);
+  virtio_blk_last_status = virtio_read_status();
+
+  config_offset = storage_pci_has_cap(dev, PCI_CAP_ID_MSIX)
+                      ? VIRTIO_PCI_CONFIG_MSIX
+                      : VIRTIO_PCI_CONFIG_NO_MSIX;
+  cap_lo = inl((uint16_t)(virtio_blk_io_base + config_offset));
+  cap_hi = inl((uint16_t)(virtio_blk_io_base + config_offset + 4));
+  virtio_blk_capacity = ((uint64_t)cap_hi << 32) | cap_lo;
+  if (virtio_blk_capacity == 0 && config_offset == VIRTIO_PCI_CONFIG_MSIX) {
+    cap_lo = inl((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_CONFIG_NO_MSIX));
+    cap_hi =
+        inl((uint16_t)(virtio_blk_io_base + VIRTIO_PCI_CONFIG_NO_MSIX + 4));
+    virtio_blk_capacity = ((uint64_t)cap_hi << 32) | cap_lo;
+  }
+  if (virtio_blk_capacity == 0) {
+    virtio_write_status(VIRTIO_STATUS_FAILED);
+    set_status("storage: VirtIO-blk capacity is zero");
+    return -1;
+  }
+
+  snprintf(virtio_blk_model, sizeof(virtio_blk_model),
+           "VirtIO block q=%lu io=0x%lx", (unsigned long)virtio_blk_queue_size,
+           (unsigned long)virtio_blk_io_base);
+  storage_add_device(STORAGE_DRIVER_VIRTIO_BLK, NULL, virtio_blk_capacity,
+                     virtio_blk_model);
+  virtio_blk_ready = 1;
+  snprintf(line, sizeof(line),
+           "storage: VirtIO-blk ready sectors=%lu qnum=%lu writable=%s features=%08lx status=%02x",
+           (unsigned long)virtio_blk_capacity,
+           (unsigned long)virtio_blk_queue_size,
+           virtio_blk_writable ? "yes" : "no",
+           (unsigned long)virtio_blk_features, (unsigned)virtio_blk_last_status);
+  storage_log_append(line);
+  set_status("storage: VirtIO-blk disk detected");
+  return 0;
+}
+
+static int virtio_blk_scan_controller(void) {
+  pci_device_info_t devs[96];
+  int total = pci_scan_all(devs, 96);
+  int found = 0;
+
+  virtio_blk_count = 0;
+  virtio_scsi_count = 0;
+  for (int i = 0; i < total && i < 96; i++) {
+    if (storage_is_virtio_scsi(&devs[i])) {
+      virtio_scsi_count++;
+      storage_log_append("storage: VirtIO-scsi visible but driver is diagnostic-only");
+      continue;
+    }
+    if (!storage_is_virtio_blk(&devs[i])) {
+      continue;
+    }
+    if (virtio_blk_init_one(&devs[i]) == 0) {
+      found++;
+    }
+  }
+  if (found <= 0) {
+    storage_log_append("storage: no usable VirtIO-blk disk");
+    return -1;
+  }
+  return 0;
 }
 
 static uint32_t nvme_read32(uint32_t reg) {
@@ -1193,18 +1914,41 @@ int storage_init(void) {
   nvme_last_cqe_status = 0;
   nvme_last_cqe_cid = 0;
   nvme_last_cmd_cid = 0;
+  virtio_blk_io_base = 0;
+  virtio_blk_queue_size = 0;
+  virtio_blk_avail_idx = 0;
+  virtio_blk_used_idx = 0;
+  virtio_blk_used_offset = 0;
+  virtio_blk_features = 0;
+  virtio_blk_capacity = 0;
+  virtio_blk_count = 0;
+  virtio_blk_seen = 0;
+  virtio_blk_ready = 0;
+  virtio_blk_writable = 1;
+  virtio_blk_modern_only = 0;
+  virtio_blk_modern = 0;
+  virtio_scsi_count = 0;
+  virtio_blk_last_status = 0;
+  virtio_blk_last_req_status = 0xFF;
+  virtio_blk_common_mmio = NULL;
+  virtio_blk_notify_mmio = NULL;
+  virtio_blk_device_mmio = NULL;
+  virtio_blk_notify_multiplier = 0;
+  virtio_blk_queue_notify_off = 0;
   storage_log_used = 0;
   storage_log[0] = '\0';
   storage_log_append("storage: scan begin (read-only detect)");
   snprintf(nvme_model, sizeof(nvme_model), "none");
+  snprintf(virtio_blk_model, sizeof(virtio_blk_model), "none");
 
   nvme_init_controller();
   ahci_scan_controller();
+  virtio_blk_scan_controller();
 
   if (storage_device_total <= 0) {
     storage_detect_blockers();
     set_status(storage_blocker[0] ? storage_blocker
-                                  : "storage: no AHCI/NVMe/eMMC disk");
+                                  : "storage: no AHCI/NVMe/VirtIO/eMMC disk");
     return -1;
   }
   storage_log_append("storage: scan complete");
@@ -1296,6 +2040,24 @@ void storage_format_diagnostics(char *out, size_t out_size) {
            (unsigned)nvme_last_cmd_cid, (unsigned)nvme_last_cqe_cid,
            (unsigned)nvme_last_cqe_status);
   storage_diag_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "  virtio-blk: controllers=%d detected=%s active=%s modern=%s modern-only=%s io=0x%lx qnum=%lu sectors=%lu writable=%s features=%08lx status=%02x req-status=%u notify=%lu/%lu model=\"%s\"\n"
+           "  virtio-scsi: controllers=%d true-driver=not-implemented fallback=diagnostic-only\n",
+           virtio_blk_count, virtio_blk_seen ? "yes" : "no",
+           virtio_blk_ready ? "yes" : "no",
+           virtio_blk_modern ? "yes" : "no",
+           virtio_blk_modern_only ? "yes" : "no",
+           (unsigned long)virtio_blk_io_base,
+           (unsigned long)virtio_blk_queue_size,
+           (unsigned long)virtio_blk_capacity,
+           virtio_blk_writable ? "yes" : "no",
+           (unsigned long)virtio_blk_features,
+           (unsigned)virtio_blk_last_status,
+           (unsigned)virtio_blk_last_req_status,
+           (unsigned long)virtio_blk_queue_notify_off,
+           (unsigned long)virtio_blk_notify_multiplier, virtio_blk_model,
+           virtio_scsi_count);
+  storage_diag_append(out, out_size, &used, line);
   if (storage_blocker[0]) {
     snprintf(line, sizeof(line), "  blocker: %s\n", storage_blocker);
     storage_diag_append(out, out_size, &used, line);
@@ -1315,11 +2077,12 @@ void storage_format_diagnostics(char *out, size_t out_size) {
     candidates++;
     snprintf(line, sizeof(line),
              "    %02x:%02x.%u vendor=%04x device=%04x class=%02x/%02x/%02x "
-             "hint=%s bar0=%08lx bar4=%08lx bar5=%08lx\n",
+             "hint=%s bar0=%08lx bar1=%08lx bar4=%08lx bar5=%08lx\n",
              dev->bus, dev->device, dev->function, dev->vendor_id,
              dev->device_id, dev->class_code, dev->subclass, dev->prog_if,
              storage_candidate_hint(dev), (unsigned long)dev->bar[0],
-             (unsigned long)dev->bar[4], (unsigned long)dev->bar[5]);
+             (unsigned long)dev->bar[1], (unsigned long)dev->bar[4],
+             (unsigned long)dev->bar[5]);
     storage_diag_append(out, out_size, &used, line);
   }
   if (candidates == 0) {
@@ -1341,6 +2104,11 @@ void storage_format_diagnostics(char *out, size_t out_size) {
                         "  next-action: NVMe controller visible but no "
                         "namespace active; capture CAP/CC/CSTS, last-cid and "
                         "last-status from this report\n");
+  } else if (virtio_blk_seen && !virtio_blk_ready) {
+    storage_diag_append(out, out_size, &used,
+                        "  next-action: VirtIO-blk visible but inactive; "
+                        "capture modern/io/qnum/status/features/notify and "
+                        "the PCI cap BAR lines from this report\n");
   } else if (candidates > 0) {
     storage_diag_append(out, out_size, &used,
                         "  next-action: unsupported storage candidate; "
@@ -1369,7 +2137,7 @@ void storage_format_log(char *out, size_t out_size) {
 }
 
 void storage_format_identify(char *out, size_t out_size) {
-  char line[384];
+  char line[768];
   size_t used = 0;
   int count;
 
@@ -1387,7 +2155,8 @@ void storage_format_identify(char *out, size_t out_size) {
            "  available: %s\n"
            "  status: %s\n"
            "  nvme: controllers=%d detected=%s active=%s nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n"
-           "  nvme-regs: CAP=%08lx%08lx CC=%08lx CSTS=%08lx last-status=%04x\n",
+           "  nvme-regs: CAP=%08lx%08lx CC=%08lx CSTS=%08lx last-status=%04x\n"
+           "  virtio-blk: controllers=%d detected=%s active=%s modern=%s io=0x%lx qnum=%lu sectors=%lu writable=%s req-status=%u model=\"%s\"\n",
            storage_selected_index + 1, storage_available() ? "yes" : "no",
            storage_status(), nvme_controller_count,
            nvme_controller_seen ? "yes" : "no",
@@ -1397,7 +2166,15 @@ void storage_format_identify(char *out, size_t out_size) {
            (unsigned long)(nvme_last_cap >> 32),
            (unsigned long)(nvme_last_cap & 0xffffffffU),
            (unsigned long)nvme_last_cc, (unsigned long)nvme_last_csts,
-           (unsigned)nvme_last_cqe_status);
+           (unsigned)nvme_last_cqe_status, virtio_blk_count,
+           virtio_blk_seen ? "yes" : "no",
+           virtio_blk_ready ? "yes" : "no",
+           virtio_blk_modern ? "yes" : "no",
+           (unsigned long)virtio_blk_io_base,
+           (unsigned long)virtio_blk_queue_size,
+           (unsigned long)virtio_blk_capacity,
+           virtio_blk_writable ? "yes" : "no",
+           (unsigned)virtio_blk_last_req_status, virtio_blk_model);
   storage_diag_append(out, out_size, &used, line);
   for (int i = 0; i < count && i < ORIZON_STORAGE_MAX_DEVICES; i++) {
     storage_device_info_t info;
@@ -1428,7 +2205,7 @@ int storage_read_test(uint64_t lba, char *out, size_t out_size) {
   out[0] = '\0';
   if (!storage_available()) {
     snprintf(out, out_size,
-             "disk read-test: WARN no selected AHCI/NVMe disk; non-destructive read skipped\n");
+             "disk read-test: WARN no selected AHCI/NVMe/VirtIO disk; non-destructive read skipped\n");
     return 1;
   }
   if (lba >= storage_sector_count()) {
@@ -1522,15 +2299,30 @@ int storage_read(uint64_t lba, void *buf, uint32_t sector_count) {
   if (storage_driver == STORAGE_DRIVER_NVME) {
     return nvme_io(lba, buf, sector_count, 0);
   }
+  if (storage_driver == STORAGE_DRIVER_VIRTIO_BLK) {
+    return virtio_blk_io(lba, buf, sector_count, 0);
+  }
   return ahci_io(lba, buf, sector_count, 0);
 }
 
 int storage_write(uint64_t lba, const void *buf, uint32_t sector_count) {
+  storage_device_t *dev = NULL;
   if (!storage_available()) {
+    return -1;
+  }
+  if (storage_selected_index >= 0 &&
+      storage_selected_index < storage_device_total) {
+    dev = &storage_devices[storage_selected_index];
+  }
+  if (dev && !dev->writable) {
+    storage_log_append("storage: write blocked; selected disk is read-only");
     return -1;
   }
   if (storage_driver == STORAGE_DRIVER_NVME) {
     return nvme_io(lba, (void *)buf, sector_count, 1);
+  }
+  if (storage_driver == STORAGE_DRIVER_VIRTIO_BLK) {
+    return virtio_blk_io(lba, (void *)buf, sector_count, 1);
   }
   return ahci_io(lba, (void *)buf, sector_count, 1);
 }
