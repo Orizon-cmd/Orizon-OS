@@ -24,6 +24,7 @@ $commands = @(
   "auth",
   "hostkey",
   "ssh algorithms",
+  "security",
   "system status",
   "rescue",
   "hostname",
@@ -130,6 +131,9 @@ run_cmd() {
       ;;
     "ssh algorithms")
       grep -q "ssh algorithms:" "`$OUT" || { echo "missing algorithms output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "security")
+      grep -q "Orizon security status" "`$OUT" && grep -q "ssh.file-policy:" "`$OUT" || { echo "missing security output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system status")
       grep -q "Orizon system status" "`$OUT" && grep -q "boot-mode:" "`$OUT" || { echo "missing system status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -2417,6 +2417,58 @@ static void ssh_shell_append_file_text(char *out, size_t out_size,
   }
 }
 
+static int ssh_shell_path_has_prefix(const char *path, const char *prefix) {
+  size_t len;
+
+  if (!path || !prefix) {
+    return 0;
+  }
+  len = strlen(prefix);
+  return strncmp(path, prefix, len) == 0 &&
+         (path[len] == '\0' || path[len] == '/');
+}
+
+static int ssh_shell_path_is_sensitive(const char *path) {
+  if (!path) {
+    return 0;
+  }
+  return strcmp(path, ORIZON_SSH_CONFIG_PATH) == 0 ||
+         strcmp(path, ORIZON_SSH_HOSTKEY_PATH) == 0 ||
+         strstr(path, "/ssh_host_") != NULL ||
+         strstr(path, "password") != NULL ||
+         strstr(path, "private") != NULL ||
+         strstr(path, "secret") != NULL ||
+         strstr(path, "token") != NULL;
+}
+
+static int ssh_shell_path_write_allowed(const char *path) {
+  if (!path || ssh_shell_path_is_sensitive(path)) {
+    return 0;
+  }
+  return ssh_shell_path_has_prefix(path, "/workspace") ||
+         ssh_shell_path_has_prefix(path, "/home") ||
+         ssh_shell_path_has_prefix(path, "/logs") ||
+         ssh_shell_path_has_prefix(path, "/packages");
+}
+
+static int ssh_shell_path_is_remote_root(const char *path) {
+  return path && (strcmp(path, "/workspace") == 0 ||
+                  strcmp(path, "/home") == 0 ||
+                  strcmp(path, "/logs") == 0 ||
+                  strcmp(path, "/packages") == 0);
+}
+
+static void ssh_shell_policy_denied(const char *op, const char *hint) {
+  char out[192];
+
+  ssh_channel_exit_code = 13;
+  ssh_audit_event("remote file policy denied");
+  snprintf(out, sizeof(out), "%s: access denied by SSH file policy%s%s\r\n",
+           op ? op : "file", hint ? "; " : "", hint ? hint : "");
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
 static int ssh_shell_split_path_text(const char *args, char *path,
                                      size_t path_size, const char **text) {
   const char *p = ssh_shell_skip_spaces(args);
@@ -2575,6 +2627,12 @@ static void ssh_shell_print_file(const char *arg, size_t max_bytes, int tail) {
   if (ssh_shell_resolve_path(arg, path, sizeof(path)) < 0) {
     ssh_queue_channel_text("cat: invalid path\r\n");
     ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_path_is_sensitive(path)) {
+    ssh_shell_policy_denied("cat",
+                            "use 'ssh auth', 'ssh hostkey' or 'security' "
+                            "instead of reading secret material");
     return;
   }
   if (vfs_stat(path, &file_size, &is_dir) < 0 || is_dir) {
@@ -3144,6 +3202,16 @@ static void ssh_shell_mutate_path(const char *arg, const char *op) {
     ssh_shell_prompt();
     return;
   }
+  if (!ssh_shell_path_write_allowed(path)) {
+    ssh_shell_policy_denied(op,
+                            "generic remote writes are limited to "
+                            "/workspace, /home, /logs and /packages");
+    return;
+  }
+  if (strcmp(op, "rm") == 0 && ssh_shell_path_is_remote_root(path)) {
+    ssh_shell_policy_denied(op, "remote root deletion is blocked");
+    return;
+  }
   if (strcmp(op, "touch") == 0) {
     rc = vfs_create(path);
   } else if (strcmp(op, "mkdir") == 0) {
@@ -3167,6 +3235,12 @@ static void ssh_shell_write_text(const char *args, int append) {
     ssh_queue_channel_text(append ? "usage: append <file> <text>\r\n"
                                   : "usage: write <file> <text>\r\n");
     ssh_shell_prompt();
+    return;
+  }
+  if (!ssh_shell_path_write_allowed(path)) {
+    ssh_shell_policy_denied(append ? "append" : "write",
+                            "generic remote writes are limited to "
+                            "/workspace, /home, /logs and /packages");
     return;
   }
   f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
@@ -3784,7 +3858,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3813,7 +3887,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
 }
 
 static void ssh_remote_shell_execute(const char *line) {
-  static char out[880];
+  static char out[1600];
   const char *args;
 
   if (!line || line[0] == '\0') {
@@ -3829,6 +3903,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  status               show SSH transport state\r\n"
         "  auth                 show SSH auth policy\r\n"
         "  hostkey              show SSH host identity\r\n"
+        "  security             show base hardening and known limits\r\n"
         "  system status        show live/installed state and first-boot hints\r\n"
         "  system repair        recreate missing default roots/config safely\r\n"
         "  rescue               show non-destructive recovery checklist\r\n"
@@ -3916,6 +3991,16 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (strcmp(line, "hostkey") == 0 || strcmp(line, "ssh hostkey") == 0) {
     ssh_format_hostkey(out, sizeof(out));
+    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (strcmp(line, "security") == 0 ||
+      strcmp(line, "security status") == 0) {
+    ssh_format_security(out, sizeof(out));
     if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
       strcat(out, "\r\n");
     }
@@ -4206,7 +4291,7 @@ static void ssh_remote_shell_execute(const char *line) {
 static void ssh_remote_exec_execute(const uint8_t *command,
                                     size_t command_len) {
   static char cmd[160];
-  static char out[768];
+  static char out[1600];
   size_t copy = command_len;
 
   if (copy >= sizeof(cmd)) {
@@ -4221,7 +4306,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "rescue") == 0) {
@@ -4354,6 +4439,13 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_print_algorithms();
   } else if (strcmp(cmd, "hostkey") == 0 || strcmp(cmd, "ssh hostkey") == 0) {
     ssh_format_hostkey(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+  } else if (strcmp(cmd, "security") == 0 ||
+             strcmp(cmd, "security status") == 0) {
+    ssh_format_security(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
@@ -5237,6 +5329,46 @@ void ssh_format_hostkey(char *buf, size_t size) {
            ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256 : "none",
            ssh_status.hostkey_status[0] ? ssh_status.hostkey_status
                                         : "ssh: host key not loaded");
+}
+
+void ssh_format_security(char *buf, size_t size) {
+  uint64_t lockout;
+
+  if (!buf || size == 0) {
+    return;
+  }
+  ssh_ensure_hostkey();
+  lockout = ssh_lockout_remaining();
+  snprintf(buf, size,
+           "Orizon security status\n"
+           "mode: single-user admin shell; command-scoped hardening active\n"
+           "remote-user: orizon\n"
+           "ssh.auth: %s max-attempts=%lu lockout-seconds=%lu "
+           "failures=%lu lockout-remaining=%lus\n"
+           "ssh.hostkey: %s bootstrap=%s path=%s fingerprint-sha256=%s\n"
+           "ssh.audit: sessions=%lu auth-success=%lu auth-failure=%lu "
+           "last=%s\n"
+           "ssh.file-policy: sensitive-read=blocked sensitive-write=blocked "
+           "generic-write-roots=/workspace,/home,/logs,/packages\n"
+           "update.manifest-policy: required manifest.sig "
+           "rsa-pkcs1-sha256 key=orizon-update-root-2026-05 state=\"%s\"\n"
+           "packages.remote-index: signed-manifest-sha256-pinned\n"
+           "protected-files: %s, %s\n"
+           "limits: no Unix uid/gid/ACL, no sudo split, no SecureBoot/TPM "
+           "attestation yet\n",
+           ssh_status.auth_configured ? "password-enabled" : "password-disabled",
+           (unsigned long)ssh_status.max_auth_attempts,
+           (unsigned long)ssh_status.auth_lockout_seconds,
+           (unsigned long)ssh_status.auth_failures, (unsigned long)lockout,
+           ssh_status.hostkey_persistent ? "persistent" : "compiled-fallback",
+           ssh_status.hostkey_bootstrap ? "yes" : "no",
+           ORIZON_SSH_HOSTKEY_PATH,
+           ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256 : "none",
+           (unsigned long)ssh_status.sessions,
+           (unsigned long)ssh_auth_success_total,
+           (unsigned long)ssh_auth_failure_total, ssh_last_audit,
+           orizon_update_status(), ORIZON_SSH_CONFIG_PATH,
+           ORIZON_SSH_HOSTKEY_PATH);
 }
 
 void ssh_format_report(char *buf, size_t size) {

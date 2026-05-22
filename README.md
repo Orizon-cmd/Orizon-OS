@@ -234,6 +234,7 @@ ssh auth max <essais>
 ssh auth lockout <secondes>
 ssh auth default
 ssh hostkey
+security
 ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
@@ -252,7 +253,7 @@ console; ensuite OpenSSH peut se connecter avec `ssh orizon@<ip-orizon>`.
 Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
 de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `tail`, `touch`, `mkdir`, `rm`,
 `write`, `append`, `system status`, `system repair`, `rescue`, `hostname`,
-`logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
+`logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`, `security`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
 `disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
 `audit`, `ssh sessions`, `persist status`, `persist slots`, `persist save`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
@@ -271,8 +272,15 @@ journaux quand ils deviennent longs. Les commandes `exec` inconnues renvoient
 maintenant un `exit-status` non nul pour mieux fonctionner avec les scripts.
 `ssh hostkey` affiche l'identite hote RSA generee pour
 l'installation et stockee dans `/system/ssh_host_rsa.key`.
+`security` resume la politique active: auth/lockout SSH, host key persistante,
+manifest signe obligatoire, index paquet epingle et garde-fous du shell SSH.
+Les commandes generiques `cat/head/tail/write/append/touch/mkdir/rm` ne peuvent
+plus lire ou modifier `/system/ssh.conf`, `/system/ssh_host_rsa.key` ni les
+noms sensibles; les ecritures generiques SSH sont limitees a `/workspace`,
+`/home`, `/logs` et `/packages`.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
+Securite: [docs/orizon/SECURITY.md](docs/orizon/SECURITY.md).
 
 La premiere version cible le cas le plus utile pour le labo et les machines
 UEFI simples: un disque AHCI/SATA ou NVMe 512-byte LBA. Le mode dual boot

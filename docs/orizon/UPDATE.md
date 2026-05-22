@@ -63,6 +63,9 @@ whether the cached manifest/signature are present, whether `manifest.sig`
 metadata matches the manifest SHA-256, the embedded TLS/root-trust posture,
 HTTPS retry/resume cache state, bootguard pending state, rollback readiness,
 and the live-ISO vs installed-system difference.
+It also states the mandatory signature policy: `manifest.sig` must verify with
+`rsa-pkcs1-sha256` and the embedded `orizon-update-root-2026-05` key before any
+payload is accepted.
 
 After success, reboot to start the refreshed boot payload.
 

@@ -2218,6 +2218,9 @@ void orizon_update_format_status(char *out, size_t out_size) {
 
   update_status_append(
       out, out_size,
+      "  manifest-signature-policy: required rsa-pkcs1-sha256 key=orizon-update-root-2026-05");
+  update_status_append(
+      out, out_size,
       "  tls-root-trust: embedded root trust used by HTTPS/TLS probe");
   update_status_append(
       out, out_size,

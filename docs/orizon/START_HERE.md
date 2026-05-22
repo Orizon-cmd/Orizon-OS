@@ -26,6 +26,10 @@ design note.
   recreates only missing default roots/config, `rescue` prints the safe recovery
   checklist, `hostname set <name>` persists `/system/hostname`, and
   `firstboot done` marks the installed first boot as reviewed.
+- Base security is visible with `security`. SSH has password auth disabled until
+  configured, lockout/audit enabled, a persistent host key, generic remote file
+  writes limited to `/workspace`, `/home`, `/logs`, and `/packages`, and signed
+  update manifests are mandatory.
 - The local framebuffer console can scroll long outputs with `z` up and `s`
   down on an empty prompt. Use `less <file>` for full-screen local paging with
   `z/s`, arrows, space, `g/G`, and `q`; SSH `cat /workspace/hardware-report.txt`
@@ -66,7 +70,7 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 
 - ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `system status`,
   `rescue`, `pkg status`, `update status`, `report save`, `install-plan`,
-  `selftest crypto`, and `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT
+  `security`, `selftest crypto`, and `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT
   first.
 - ZimaOS VM lifecycle smoke, when requested: `python scripts/orizon/test_vm_matrix.py
   --cases nat-e1000e --include-lifecycle` adds framebuffer screenshot,
@@ -92,6 +96,7 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 - [docs/orizon/ROADMAP.md](ROADMAP.md)
 - [docs/orizon/UPDATE.md](UPDATE.md)
 - [docs/orizon/NETWORK.md](NETWORK.md)
+- [docs/orizon/SECURITY.md](SECURITY.md)
 - [docs/orizon/LAPTOP_HARDWARE.md](LAPTOP_HARDWARE.md)
 - [docs/orizon/ZIMAOS_LAB.md](ZIMAOS_LAB.md)
 

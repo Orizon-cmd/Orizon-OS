@@ -131,6 +131,7 @@ ssh start
 ssh status
 ssh audit
 ssh sessions
+security
 net check
 net tls
 ssh auth
@@ -159,6 +160,24 @@ shutdown
 Use SSH for ZimaOS/VM diagnostics and remote admin commands. Keep long soak and
 multi-client tests separate from quick build checks. Unknown remote `exec`
 commands return a non-zero status so automation can fail fast.
+
+`security` summarizes base hardening: SSH auth/lockout, persistent host key,
+remote file policy, signed manifest requirement, package index pinning and known
+limits. Generic SSH file writes are limited to `/workspace`, `/home`, `/logs`
+and `/packages`; sensitive files such as `/system/ssh.conf` and
+`/system/ssh_host_rsa.key` are not readable through `cat/head/tail`.
+
+## Security
+
+```text
+security
+ssh auth
+ssh audit
+ssh hostkey
+update status
+```
+
+See [SECURITY.md](SECURITY.md) for the current implemented policy and limits.
 
 ## USB Ethernet
 

@@ -18,6 +18,7 @@ ssh auth max <essais>
 ssh auth lockout <secondes>
 ssh auth default
 ssh hostkey
+security
 ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
@@ -96,8 +97,8 @@ console locale.
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
   `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
-  `net check`, `net tls`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`, `pkg`,
-  `update`, `update status`, `storage`,
+  `net check`, `net tls`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
+  `security`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `logs storage`, `logs pci`, `disk identify`,
@@ -140,8 +141,9 @@ console locale.
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
-  `write`/`append`/`touch`/`mkdir`/`rm`, lancer les diagnostics non destructifs
-  `selftest`, `disk identify`, `disk read-test`, `disk read-test last`,
+  `write`/`append`/`touch`/`mkdir`/`rm` uniquement dans les racines autorisees
+  `/workspace`, `/home`, `/logs` et `/packages`, lancer les diagnostics non destructifs
+  `security`, `selftest`, `disk identify`, `disk read-test`, `disk read-test last`,
   `gpt scan`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `bootguard confirm`, `rollback`, et sauvegarder avec `sync`. En VM, `reboot` et `shutdown` persistent d'abord les racines Orizon
@@ -155,7 +157,12 @@ console locale.
   (`%-Ns`), ce qui evite les corruptions d'arguments dans les sorties comme
   `ps`.
 - Securite: aucun mot de passe par defaut ni backdoor n'est cree; sans
-  `ssh password`, l'auth reste desactivee.
+  `ssh password`, l'auth reste desactivee. Les fichiers sensibles
+  `/system/ssh.conf` et `/system/ssh_host_rsa.key`, ainsi que les chemins avec
+  noms `private`, `secret`, `token` ou `password`, sont bloques par les
+  commandes generiques `cat/head/tail/write/append/touch/mkdir/rm`. Utiliser
+  `ssh auth`, `ssh hostkey`, `security`, `hostname set` ou `net config` pour les
+  operations encadrees.
 
 Depuis un autre PC du meme reseau:
 
@@ -179,7 +186,7 @@ recevoir `KEXINIT`, `ECDH_REPLY`, `NEWKEYS`, puis `SERVICE_ACCEPT`. Apres
 authentification password, OpenSSH peut ouvrir un canal `session`; `exec` et le
 mini-shell interactif fonctionnent deja pour les diagnostics de base, les
 commandes admin listees plus haut, et les commandes `pkg status/list/info`,
-`pkg search`, `pkg remote`, `pkg sample`, `pkg hash`, `pkg verify`, `pkg
+`security`, `pkg search`, `pkg remote`, `pkg sample`, `pkg hash`, `pkg verify`, `pkg
 update`, `pkg install`, `pkg remove`, `pkg rollback` et `pkg history`.
 `ssh status` et `ssh algorithms` affichent
 la banniere client, la negociation
@@ -190,8 +197,7 @@ derivees, l'etat auth et l'etat canal.
 
 Pour transformer ce listener en acces distant complet, il reste a ajouter:
 
-- durcir encore l'authentification: rotation du hash, permissions du fichier
-  config et journalisation plus detaillee par IP
+- ajouter une vraie separation user/admin au-dela du shell admin `orizon`
 - brancher le shell SSH sur une vraie pseudo-console Orizon partageant toute
   l'ergonomie locale; le sous-ensemble distant couvre deja les diagnostics,
   update/rollback et le flux paquet principal

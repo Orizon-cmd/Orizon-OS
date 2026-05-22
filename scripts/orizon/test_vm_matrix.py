@@ -169,6 +169,7 @@ def run_ssh_checks(
     commands = [
         ("status", "ssh: enabled="),
         ("system status", "Orizon system status"),
+        ("security", "Orizon security status"),
         ("rescue", "Orizon rescue mode"),
         ("hostname", "orizon"),
         ("system repair", "system repair:"),

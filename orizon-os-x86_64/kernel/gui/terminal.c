@@ -782,7 +782,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "install", "install-plan", "install-status",
       "input", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
-      "rollback-status", "repair-boot", "rescue", "rm", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
+      "rollback-status", "repair-boot", "rescue", "rm", "security", "selftest", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write", "system"};
   const char *matches[16];
@@ -5081,6 +5081,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  report save - Write /workspace/hardware-report.txt\n");
     term_puts_t(term, "  selftest [network|storage|crypto|ssh|update] - Non-destructive checks\n");
+    term_puts_t(term, "  security  - Show base hardening policy and known limits\n");
     term_puts_t(term, "  mounts    - Show Orizon data roots\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
@@ -5796,6 +5797,10 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_run_pkg(term, cmd);
   } else if (term_command_is(cmd, "selftest")) {
     term_run_selftest(term, cmd);
+  } else if (term_command_is(cmd, "security")) {
+    static char security_report[1600];
+    ssh_format_security(security_report, sizeof(security_report));
+    term_puts_t(term, security_report);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");
