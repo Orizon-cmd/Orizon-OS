@@ -20,6 +20,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Run quick checks
+        run: |
+          mkdir -p artifacts
+          python scripts/orizon/quick_check.py --log artifacts/quick-check.log
+
+      - name: Upload quick-check log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orizon-release-quick-check-log
+          path: artifacts/quick-check.log
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -52,6 +66,9 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout metadata
+        uses: actions/checkout@v4
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
@@ -69,16 +86,7 @@ jobs:
 
       - name: Write release notes
         run: |
-          cat > release_notes.md << 'EOF'
-          # Orizon OS
-
-          Minimal x86_64 development release.
-
-          Included artifacts:
-          - `orizon-os-core-x86_64.elf`
-          - `orizon-os-core-x86_64.iso`
-          - `SHA256SUMS`
-          EOF
+          python scripts/orizon/release_notes.py --output release_notes.md
 
       - name: Create release
         uses: softprops/action-gh-release@v1

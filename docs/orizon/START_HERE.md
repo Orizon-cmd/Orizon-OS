@@ -14,8 +14,10 @@ design note.
 - Release packaging is guarded: `Orizon-OS.iso`, `updates/x86_64/kernel.elf`,
   `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig`, and
   `release.txt` are generated and cross-checked by
-  `scripts/orizon/orizon_update.py`, including manifest/release size and
-  SHA-256 consistency for the current ISO.
+  `scripts/orizon/orizon_update.py --mode validate-release`, including
+  manifest/release size and SHA-256 consistency for the current ISO.
+- Developer checks are unified in `scripts/orizon/quick_check.py`; CI uploads
+  the same combined quick-check log so failed builds are easier to inspect.
 - Hardware capture is exportable with `report save`, which writes the
   non-destructive `/workspace/hardware-report.txt` bundle containing storage,
   PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
@@ -62,8 +64,7 @@ powershell -File scripts/orizon/open_orizon_vnc.ps1
 Quick checks before a commit:
 
 ```powershell
-git diff --check
-python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py scripts/orizon/test_update_rollback_vm.py
+python scripts/orizon/quick_check.py
 ```
 
 ## What To Capture Next
@@ -109,4 +110,5 @@ python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64
 - Do not run the full VM matrix unless the current task explicitly asks for it.
 - Do not publish a release commit that updates `kernel.elf` without also checking
   whether `Orizon-OS.iso`, `manifest.txt`, `manifest.sig`, and `release.txt`
-  need to move with it.
+  need to move with it. Use `python scripts/orizon/quick_check.py` before the
+  commit.

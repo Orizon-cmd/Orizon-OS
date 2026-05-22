@@ -768,7 +768,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--mode",
-        choices=("github-iso", "local-iso", "zimaos-iso", "zimaos-vm"),
+        choices=(
+            "github-iso",
+            "local-iso",
+            "zimaos-iso",
+            "zimaos-vm",
+            "validate-release",
+        ),
         default="local-iso",
         help="Update backend to run.",
     )
@@ -877,6 +883,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    output_iso = REPO_ROOT / args.output_iso
+    update_dir = REPO_ROOT / args.update_dir
+    root_iso_repo_path = repo_relative_path(output_iso)
+
+    if args.mode == "validate-release":
+        validate_release_bundle(
+            update_dir=update_dir,
+            root_iso_path=output_iso if not args.no_publish_root_iso else None,
+            root_iso_repo_path=root_iso_repo_path,
+        )
+        return 0
+
     maybe_sync_git(args.sync_git)
     if args.from_github and args.mode != "github-iso":
         sync_from_github(
@@ -884,12 +902,9 @@ def main() -> int:
         )
 
     source_dir = REPO_ROOT / args.source_dir
-    output_iso = REPO_ROOT / args.output_iso
     publish = not args.no_publish_root_iso
     publish_payloads = not args.no_publish_update_payloads
-    update_dir = REPO_ROOT / args.update_dir
     signing_key_path = REPO_ROOT / args.manifest_signing_key
-    root_iso_repo_path = repo_relative_path(output_iso)
 
     if args.mode == "github-iso":
         download_github_iso(

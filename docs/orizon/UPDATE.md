@@ -287,6 +287,26 @@ current `manifest.txt`; when the root ISO is published, its size and SHA-256
 must match the signed `iso-*` fields. The release validator also checks that
 `kernel.elf`, `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig`, and
 `release.txt` all describe the current artifacts instead of a stale build.
+Run the same validator without rebuilding:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode validate-release
+```
+
+For the normal pre-commit gate, use:
+
+```powershell
+python scripts/orizon/quick_check.py
+```
+
+It combines whitespace checks, Python syntax checks, optional PowerShell syntax
+checks, and release validation. GitHub CI stores this output as a quick-check
+artifact. Release notes for GitHub are generated from `release.txt`,
+`manifest.txt`, and `CHANGELOG.md`:
+
+```powershell
+python scripts/orizon/release_notes.py --output release_notes.md
+```
 
 ## ZimaOS VM Validation
 

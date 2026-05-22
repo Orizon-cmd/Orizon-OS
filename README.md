@@ -640,6 +640,18 @@ pour eviter d'oublier un artefact release dans le commit. La validation release
 refuse aussi un manifeste ou un `release.txt` dont les tailles/SHA-256 de
 `kernel.elf`, `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig` ou
 `Orizon-OS.iso` ne correspondent pas aux artefacts courants.
+Pour verifier les artefacts sans rebuild, utilisez:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode validate-release
+```
+
+Le garde-fou rapide local/CI regroupe `git diff --check`, syntaxe Python,
+syntaxe PowerShell quand disponible et validation release:
+
+```powershell
+python scripts/orizon/quick_check.py
+```
 
 Backends disponibles:
 
@@ -647,6 +659,8 @@ Backends disponibles:
 - `local-iso`: build local portable, pour toute machine avec clang/lld/xorriso
 - `zimaos-iso`: build via Docker sur le serveur ZimaOS, puis recupere l'ISO
 - `zimaos-vm`: build via ZimaOS, deploie sur la VM `orizon-dev`, puis recupere l'ISO
+- `validate-release`: verifie `Orizon-OS.iso`, le manifeste signe et
+  `updates/x86_64/release.txt` sans compiler
 
 ## Boucle De Travail VM
 

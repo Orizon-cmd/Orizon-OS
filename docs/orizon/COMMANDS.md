@@ -10,11 +10,17 @@ docs.
 python scripts/orizon/orizon_update.py --mode zimaos-iso
 python scripts/orizon/orizon_update.py --mode zimaos-vm
 python scripts/orizon/orizon_update.py --mode github-iso
+python scripts/orizon/orizon_update.py --mode validate-release
+python scripts/orizon/quick_check.py
+python scripts/orizon/release_notes.py --output release_notes.md
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
 python scripts/orizon/test_update_rollback_vm.py
-git diff --check
-python -m py_compile scripts/orizon/orizon_update.py scripts/orizon/build_x86_64_on_zimaos.py scripts/orizon/test_vm_matrix.py scripts/orizon/test_update_rollback_vm.py
 ```
+
+`quick_check.py` runs `git diff --check`, Python syntax checks for all
+`scripts/orizon/*.py`, PowerShell syntax checks when PowerShell is available,
+and the strict release-artifact validator. Use `--log artifacts/quick-check.log`
+when a CI or ZimaOS run should keep the combined output.
 
 Expected release artifacts:
 
