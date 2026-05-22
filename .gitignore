@@ -23,3 +23,4 @@ config/hosts/*.local.json
 config/vm/*.local.json
 config/keys/*.private.pem
 logs/
+artifacts/

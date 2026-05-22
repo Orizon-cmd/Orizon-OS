@@ -15,17 +15,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run quick checks
+      - name: Run quick checks, release validation, and secret scan
         run: |
           mkdir -p artifacts
           python scripts/orizon/quick_check.py --log artifacts/quick-check.log
 
-      - name: Upload quick-check log
+      - name: Generate release notes preview
+        run: |
+          mkdir -p artifacts
+          python scripts/orizon/release_notes.py --output artifacts/release-notes.md
+
+      - name: Upload CI diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: orizon-quick-check-log
-          path: artifacts/quick-check.log
+          name: orizon-ci-diagnostics
+          path: |
+            artifacts/quick-check.log
+            artifacts/release-notes.md
           if-no-files-found: ignore
           retention-days: 7
 

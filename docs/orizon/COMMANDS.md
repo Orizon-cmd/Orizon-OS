@@ -30,9 +30,10 @@ boot/framebuffer smoke and report `boot-only` instead of silently pretending
 that SSH was tested.
 
 `quick_check.py` runs `git diff --check`, Python syntax checks for all
-`scripts/orizon/*.py`, PowerShell syntax checks when PowerShell is available,
-and the strict release-artifact validator. Use `--log artifacts/quick-check.log`
-when a CI or ZimaOS run should keep the combined output.
+`scripts/orizon/*.py`, the tracked-secret scan, PowerShell syntax checks when
+PowerShell is available, and the strict release-artifact validator. Use
+`--log artifacts/quick-check.log` when a CI or ZimaOS run should keep the
+combined output.
 
 Expected release artifacts:
 

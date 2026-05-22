@@ -165,6 +165,11 @@ def main() -> int:
         ],
     )
 
+    runner.run(
+        "secret scan",
+        [sys.executable, "scripts/orizon/check_no_secrets.py"],
+    )
+
     if args.skip_powershell:
         runner.skip("PowerShell syntax", "--skip-powershell requested")
     else:

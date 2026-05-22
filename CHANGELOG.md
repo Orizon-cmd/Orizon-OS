@@ -11,3 +11,4 @@
 - Added developer release guardrails: quick checks, release artifact validation, generated release notes, and CI log artifacts.
 - Added a central status/limits page documenting VM-ready features, prepared hardware paths, known non-implemented work, and the no-real-hardware-validation boundary.
 - Improved VM matrix reporting for bridge profiles by probing ARP/neigh IP discovery and marking unreachable bridge guests as boot/framebuffer-only instead of ambiguous SSH skips.
+- Added a tracked-secret CI gate and release-notes preview artifact to the GitHub workflows.
