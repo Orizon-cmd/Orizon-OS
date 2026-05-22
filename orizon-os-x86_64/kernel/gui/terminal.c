@@ -2742,7 +2742,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   if (default_view) {
     term_puts_t(term, "\033[1;36mRecent Orizon logs\033[0m\n");
     term_puts_t(term,
-                "Use: logs boot | logs storage | logs pci | logs network | logs usb | logs wifi | logs ssh | logs update | logs install | logs all\n");
+                "Use: logs boot | logs storage | logs pci | logs network | logs usb | logs wifi | logs ssh | logs security | logs update | logs install | logs all\n");
     if (vfs_exists(KLOG_BOOT_PATH)) {
       term_print_file_tail(term, KLOG_BOOT_PATH, KLOG_BOOT_PATH, 1024);
     } else {
@@ -2764,6 +2764,10 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     }
     if (vfs_exists(ORIZON_SSH_LOG_PATH)) {
       term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 1024);
+    }
+    if (vfs_exists(ORIZON_SECURITY_LOG_PATH)) {
+      term_print_file_tail(term, ORIZON_SECURITY_LOG_PATH,
+                           ORIZON_SECURITY_LOG_PATH, 1024);
     }
     return;
   }
@@ -2814,6 +2818,11 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 8192);
     return;
   }
+  if (term_command_is(args, "security")) {
+    term_print_file_tail(term, ORIZON_SECURITY_LOG_PATH,
+                         ORIZON_SECURITY_LOG_PATH, 8192);
+    return;
+  }
   if (term_command_is(args, "install")) {
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 8192);
@@ -2835,6 +2844,8 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
     term_print_file_tail(term, usb_log_path(), usb_log_path(), 4096);
     term_print_file_tail(term, TERM_WIFI_LOG_PATH, TERM_WIFI_LOG_PATH, 4096);
     term_print_file_tail(term, ORIZON_SSH_LOG_PATH, ORIZON_SSH_LOG_PATH, 4096);
+    term_print_file_tail(term, ORIZON_SECURITY_LOG_PATH,
+                         ORIZON_SECURITY_LOG_PATH, 4096);
     term_print_file_tail(term, "/workspace/.orizon/install-log",
                          "/workspace/.orizon/install-log", 4096);
     term_print_file_tail(term, "/workspace/.orizon/rollback-info",
@@ -2843,7 +2854,7 @@ static void term_print_log_summary(terminal_t *term, const char *cmd) {
   }
 
   term_puts_t(term,
-              "usage: logs [boot|storage|pci|network|usb|wifi|ssh|update|install|all]\n");
+              "usage: logs [boot|storage|pci|network|usb|wifi|ssh|security|update|install|all]\n");
 }
 
 static void term_print_diagnostic_hints(terminal_t *term) {
@@ -5750,7 +5761,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
     term_puts_t(term, "  usb [rescan] - Show USB/HID/USB-Ethernet diagnostics\n");
     term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
-    term_puts_t(term, "  logs [name] - Read boot/storage/pci/network/usb/wifi/update logs\n");
+    term_puts_t(term, "  logs [name] - Read boot/storage/pci/network/usb/wifi/ssh/security/update logs\n");
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  report save - Write /workspace/hardware-report.txt\n");
     term_puts_t(term, "  selftest [network|storage|crypto|ssh|update] - Non-destructive checks\n");

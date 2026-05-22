@@ -98,6 +98,11 @@ Supported script commands:
 Package writes are limited to safe Orizon paths: `/system`, `/home`,
 `/packages`, `/logs`, `/tmp`, and `/workspace`. Packages cannot write inside
 `/workspace/.orizon`; that area belongs to the package database and installer.
+Payloads and scripts also reject common secret-bearing targets such as
+`/system/ssh.conf`, `/system/ssh_host_rsa.key`, `.env`, `.key`,
+`.private.pem`, `.ssh`, private, secret, token, credential, `id_rsa` and
+`id_ed25519` paths. This is a conservative guardrail for VM work, not a full
+package sandbox.
 
 ## Installed Database
 

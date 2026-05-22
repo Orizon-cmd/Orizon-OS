@@ -181,6 +181,7 @@ ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
 logs ssh
+logs security
 hw next
 report next
 report save
@@ -204,8 +205,11 @@ commands return a non-zero status so automation can fail fast.
 `security` summarizes base hardening: SSH auth/lockout, persistent host key,
 remote file policy, signed manifest requirement, package index pinning and known
 limits. Generic SSH file writes are limited to `/workspace`, `/home`, `/logs`
-and `/packages`; sensitive files such as `/system/ssh.conf` and
-`/system/ssh_host_rsa.key` are not readable through `cat/head/tail`.
+and `/packages`, while `/workspace/.orizon` remains internal OS state.
+Sensitive files such as `/system/ssh.conf`, `/system/ssh_host_rsa.key`, `.env`,
+`.key`, `.pem`, `.ssh`, private, secret, token and credential paths are not
+readable through `cat/head/tail`. `logs security` tails the persistent security
+audit mirror.
 
 ## Security
 
@@ -214,6 +218,7 @@ security
 ssh auth
 ssh audit
 ssh hostkey
+logs security
 update status
 ```
 
@@ -319,7 +324,7 @@ PCI bus hints, modern/legacy VirtIO-blk state, NVMe CAP/CC/CSTS/admin errors,
 last-sector readability, and SDHCI/eMMC cases without installing or writing to
 disk. The useful files are
 `/workspace/hardware-report.txt`, `/logs/wifi.log`, `/logs/usb.log`,
-`/logs/network.log`, `/logs/ssh.log`, and
+`/logs/network.log`, `/logs/ssh.log`, `/logs/security.log`, and
 `/workspace/.orizon/update.log`.
 
 `persist status` affiche l'etat detecte des racines data, le LBA de la

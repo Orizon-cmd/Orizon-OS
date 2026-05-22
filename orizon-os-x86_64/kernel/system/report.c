@@ -290,6 +290,8 @@ int orizon_report_format(char *out, size_t out_size) {
 
   ssh_format_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "SSH", block);
+  ssh_format_security(block, sizeof(block));
+  report_append_block(out, out_size, &used, "Security", block);
   orizon_update_boot_guard_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "Boot Guard", block);
   orizon_update_format_status(block, sizeof(block));
@@ -313,6 +315,8 @@ int orizon_report_format(char *out, size_t out_size) {
                           REPORT_LOG_TAIL_BYTES);
   report_append_file_tail(out, out_size, &used, "SSH Log", ORIZON_SSH_LOG_PATH,
                           REPORT_LOG_TAIL_BYTES);
+  report_append_file_tail(out, out_size, &used, "Security Log",
+                          ORIZON_SECURITY_LOG_PATH, REPORT_LOG_TAIL_BYTES);
   report_append_file_tail(out, out_size, &used, "Update Log",
                           "/workspace/.orizon/update.log",
                           REPORT_LOG_TAIL_BYTES);

@@ -329,20 +329,28 @@ static void ssh_install_bootstrap_hostkey(void);
 static void ssh_reset_negotiation(void);
 static void ssh_refresh_state(void);
 
-static void ssh_log_line(const char *line) {
+static void ssh_append_log_line(const char *path, const char *line) {
   file_t *f;
 
-  if (!line) {
+  if (!path || !line) {
     return;
   }
   vfs_mkdir("/logs");
-  f = vfs_open(ORIZON_SSH_LOG_PATH, O_CREAT | O_WRONLY | O_APPEND);
+  f = vfs_open(path, O_CREAT | O_WRONLY | O_APPEND);
   if (!f) {
     return;
   }
   vfs_write(f, line, strlen(line));
   vfs_write(f, "\n", 1);
   vfs_close(f);
+}
+
+static void ssh_log_line(const char *line) {
+  ssh_append_log_line(ORIZON_SSH_LOG_PATH, line);
+}
+
+static void ssh_security_log_line(const char *line) {
+  ssh_append_log_line(ORIZON_SECURITY_LOG_PATH, line);
 }
 
 static void ssh_set_status(const char *status) {
@@ -374,6 +382,7 @@ static void ssh_audit_event(const char *event) {
     ssh_audit_recent_count++;
   }
   ssh_log_line(line);
+  ssh_security_log_line(line);
 }
 
 static void ssh_record_command(const char *kind, const char *command) {
@@ -595,6 +604,7 @@ int ssh_set_password(const char *password, char *report, size_t report_size) {
   ssh_status.auth_failures = 0;
   ssh_status.auth_lockout_until = 0;
   ssh_write_config();
+  ssh_security_log_line("security: ssh password auth enabled user=orizon");
   if (report && report_size > 0) {
     snprintf(report, report_size,
              "ssh: password auth enabled for user 'orizon'.\n"
@@ -610,6 +620,7 @@ int ssh_disable_password(char *report, size_t report_size) {
   ssh_status.auth_failures = 0;
   ssh_status.auth_lockout_until = 0;
   ssh_write_config();
+  ssh_security_log_line("security: ssh password auth disabled user=orizon");
   if (report && report_size > 0) {
     snprintf(report, report_size,
              "ssh: password auth disabled; existing sessions remain until closed.\n");
@@ -619,6 +630,7 @@ int ssh_disable_password(char *report, size_t report_size) {
 
 int ssh_reload_config(char *report, size_t report_size) {
   ssh_load_config();
+  ssh_security_log_line("security: ssh config reloaded");
   if (report && report_size > 0) {
     snprintf(report, report_size,
              "ssh: config reloaded from %s; auth=%s max-attempts=%lu lockout=%lus\n",
@@ -633,6 +645,7 @@ int ssh_reload_config(char *report, size_t report_size) {
 int ssh_clear_lockout(char *report, size_t report_size) {
   ssh_status.auth_failures = 0;
   ssh_status.auth_lockout_until = 0;
+  ssh_security_log_line("security: ssh lockout cleared");
   if (report && report_size > 0) {
     snprintf(report, report_size, "ssh: auth lockout cleared.\n");
   }
@@ -641,6 +654,8 @@ int ssh_clear_lockout(char *report, size_t report_size) {
 
 int ssh_set_auth_policy(uint32_t max_attempts, uint32_t lockout_seconds,
                         char *report, size_t report_size) {
+  char line[128];
+
   if (max_attempts < 1 || max_attempts > SSH_AUTH_MAX_ATTEMPTS_LIMIT ||
       lockout_seconds < 1 ||
       lockout_seconds > SSH_AUTH_LOCKOUT_SECONDS_LIMIT) {
@@ -657,6 +672,11 @@ int ssh_set_auth_policy(uint32_t max_attempts, uint32_t lockout_seconds,
   ssh_status.auth_failures = 0;
   ssh_status.auth_lockout_until = 0;
   ssh_write_config();
+  snprintf(line, sizeof(line),
+           "security: ssh auth policy changed max-attempts=%lu lockout=%lus",
+           (unsigned long)ssh_status.max_auth_attempts,
+           (unsigned long)ssh_status.auth_lockout_seconds);
+  ssh_security_log_line(line);
   if (report && report_size > 0) {
     snprintf(report, report_size,
              "ssh: auth policy saved; max-attempts=%lu lockout=%lus.\n",
@@ -674,6 +694,7 @@ int ssh_reset_auth_policy(char *report, size_t report_size) {
 
 int ssh_reload_hostkey(char *report, size_t report_size) {
   if (ssh_load_hostkey_file() != 0) {
+    ssh_security_log_line("security: ssh hostkey reload failed");
     if (report && report_size > 0) {
       snprintf(report, report_size,
                "ssh: host key reload failed; run 'ssh hostkey reset' to recreate %s.\n",
@@ -689,17 +710,20 @@ int ssh_reload_hostkey(char *report, size_t report_size) {
              ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256
                                           : "none");
   }
+  ssh_security_log_line("security: ssh hostkey reloaded");
   return 0;
 }
 
 int ssh_reset_hostkey(char *report, size_t report_size) {
   char gen_report[160];
+  char line[160];
 
   vfs_delete(ORIZON_SSH_HOSTKEY_PATH);
   if (ssh_generate_install_hostkey(gen_report, sizeof(gen_report)) != 0) {
     ssh_install_bootstrap_hostkey();
   }
   if (ssh_write_hostkey_file() != 0) {
+    ssh_security_log_line("security: ssh hostkey reset failed");
     if (report && report_size > 0) {
       snprintf(report, report_size,
                "ssh: host key reset failed; could not write %s.\n",
@@ -715,6 +739,9 @@ int ssh_reset_hostkey(char *report, size_t report_size) {
              ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256
                                           : "none");
   }
+  snprintf(line, sizeof(line), "security: ssh hostkey reset fingerprint=%s",
+           ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256 : "none");
+  ssh_security_log_line(line);
   return 0;
 }
 
@@ -2428,21 +2455,87 @@ static int ssh_shell_path_has_prefix(const char *path, const char *prefix) {
          (path[len] == '\0' || path[len] == '/');
 }
 
+static char ssh_ascii_lower(char c) {
+  if (c >= 'A' && c <= 'Z') {
+    return (char)(c - 'A' + 'a');
+  }
+  return c;
+}
+
+static int ssh_shell_path_contains_ci(const char *path, const char *needle) {
+  size_t path_len;
+  size_t needle_len;
+
+  if (!path || !needle) {
+    return 0;
+  }
+  path_len = strlen(path);
+  needle_len = strlen(needle);
+  if (needle_len == 0 || path_len < needle_len) {
+    return 0;
+  }
+  for (size_t i = 0; i + needle_len <= path_len; i++) {
+    size_t j = 0;
+    while (j < needle_len &&
+           ssh_ascii_lower(path[i + j]) == ssh_ascii_lower(needle[j])) {
+      j++;
+    }
+    if (j == needle_len) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int ssh_shell_path_suffix_ci(const char *path, const char *suffix) {
+  size_t path_len;
+  size_t suffix_len;
+
+  if (!path || !suffix) {
+    return 0;
+  }
+  path_len = strlen(path);
+  suffix_len = strlen(suffix);
+  if (suffix_len == 0 || path_len < suffix_len) {
+    return 0;
+  }
+  return ssh_shell_path_contains_ci(path + path_len - suffix_len, suffix);
+}
+
 static int ssh_shell_path_is_sensitive(const char *path) {
+  static const char *const needles[] = {
+      "/.ssh/",        "/config/keys/", "ssh_host_",     "password",
+      "passwd",        "private",       "secret",        "token",
+      "credential",    "api_key",       "apikey",        "id_rsa",
+      "id_ed25519",    "authorized_keys"};
+  static const char *const suffixes[] = {
+      ".env", ".key", ".pem", ".p12", ".pfx"};
+
   if (!path) {
     return 0;
   }
-  return strcmp(path, ORIZON_SSH_CONFIG_PATH) == 0 ||
-         strcmp(path, ORIZON_SSH_HOSTKEY_PATH) == 0 ||
-         strstr(path, "/ssh_host_") != NULL ||
-         strstr(path, "password") != NULL ||
-         strstr(path, "private") != NULL ||
-         strstr(path, "secret") != NULL ||
-         strstr(path, "token") != NULL;
+  if (strcmp(path, ORIZON_SSH_CONFIG_PATH) == 0 ||
+      strcmp(path, ORIZON_SSH_HOSTKEY_PATH) == 0) {
+    return 1;
+  }
+  for (size_t i = 0; i < sizeof(needles) / sizeof(needles[0]); i++) {
+    if (ssh_shell_path_contains_ci(path, needles[i])) {
+      return 1;
+    }
+  }
+  for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++) {
+    if (ssh_shell_path_suffix_ci(path, suffixes[i])) {
+      return 1;
+    }
+  }
+  return 0;
 }
 
 static int ssh_shell_path_write_allowed(const char *path) {
   if (!path || ssh_shell_path_is_sensitive(path)) {
+    return 0;
+  }
+  if (ssh_shell_path_has_prefix(path, "/workspace/.orizon")) {
     return 0;
   }
   return ssh_shell_path_has_prefix(path, "/workspace") ||
@@ -3409,6 +3502,8 @@ static void ssh_shell_set_auth_policy_remote(const char *args) {
 static void ssh_shell_print_log(const char *which) {
   if (ssh_shell_command_is(which, "ssh")) {
     ssh_shell_print_file(ORIZON_SSH_LOG_PATH, 1800, 1);
+  } else if (ssh_shell_command_is(which, "security")) {
+    ssh_shell_print_file(ORIZON_SECURITY_LOG_PATH, 1800, 1);
   } else if (ssh_shell_command_is(which, "storage")) {
     static char out[1800];
     storage_format_log(out, sizeof(out));
@@ -4043,7 +4138,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  tail <file>          print the end of a file preview\r\n"
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
-        "  logs [name]          show boot/storage/pci/network/usb/wifi/ssh/update logs\r\n"
+        "  logs [name]          show boot/storage/pci/network/usb/wifi/ssh/security/update logs\r\n"
         "  net check|tcp|tls|diag show daily network/TCP/HTTPS diagnostics\r\n"
         "  net|route|dns|ping   show network status and probes\r\n"
         "  usb|usb rescan       show USB diagnostics\r\n"
@@ -5494,18 +5589,29 @@ void ssh_format_security(char *buf, size_t size) {
   lockout = ssh_lockout_remaining();
   snprintf(buf, size,
            "Orizon security status\n"
-           "mode: single-user admin shell; command-scoped hardening active\n"
+           "mode: single-user admin shell; command-scoped hardening active; "
+           "user-admin-split=planned\n"
            "remote-user: orizon\n"
+           "vfs.permissions: simple path policy; persistent-roots="
+           "/workspace,/home,/system,/packages,/logs; no uid/gid/acl yet\n"
            "ssh.auth: %s max-attempts=%lu lockout-seconds=%lu "
            "failures=%lu lockout-remaining=%lus\n"
            "ssh.hostkey: %s bootstrap=%s path=%s fingerprint-sha256=%s\n"
            "ssh.audit: sessions=%lu auth-success=%lu auth-failure=%lu "
            "last=%s\n"
+           "security.audit-log: %s mirrored-from=ssh-audit "
+           "policy-changes=yes\n"
            "ssh.file-policy: sensitive-read=blocked sensitive-write=blocked "
-           "generic-write-roots=/workspace,/home,/logs,/packages\n"
+           "generic-write-roots=/workspace,/home,/logs,/packages "
+           "internal-state-write=/workspace/.orizon:blocked\n"
            "update.manifest-policy: required manifest.sig "
            "rsa-pkcs1-sha256 key=orizon-update-root-2026-05 state=\"%s\"\n"
            "packages.remote-index: signed-manifest-sha256-pinned\n"
+           "packages.script-policy: safe-paths=/system,/home,/packages,"
+           "/logs,/tmp,/workspace sensitive-paths=blocked "
+           "internal-state=/workspace/.orizon:blocked\n"
+           "secrets.release-policy: tracked-secret-scan=yes "
+           "private-keys/env/local-host-files=blocked\n"
            "protected-files: %s, %s\n"
            "limits: no Unix uid/gid/ACL, no sudo split, no SecureBoot/TPM "
            "attestation yet\n",
@@ -5520,7 +5626,7 @@ void ssh_format_security(char *buf, size_t size) {
            (unsigned long)ssh_status.sessions,
            (unsigned long)ssh_auth_success_total,
            (unsigned long)ssh_auth_failure_total, ssh_last_audit,
-           orizon_update_status(), ORIZON_SSH_CONFIG_PATH,
+           ORIZON_SECURITY_LOG_PATH, orizon_update_status(), ORIZON_SSH_CONFIG_PATH,
            ORIZON_SSH_HOSTKEY_PATH);
 }
 

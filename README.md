@@ -259,6 +259,7 @@ ssh algorithms
 ssh reload
 ssh lockout clear
 logs ssh
+logs security
 ```
 
 La commande configure IPv4 si besoin, ouvre TCP/22, ecrit la configuration
@@ -286,7 +287,7 @@ derniers evenements et fermetures de canal. `report save` ecrit
 Les longues sorties SSH sont segmentees en plusieurs paquets pour eviter les
 coupures sur `report show`, `cat /workspace/hardware-report.txt` ou `logs`;
 un meme transport SSH peut aussi rouvrir un canal `exec` apres une commande.
-Les commandes `tail`, `logs ssh` et `logs boot` montrent la fin des fichiers ou
+Les commandes `tail`, `logs ssh`, `logs security` et `logs boot` montrent la fin des fichiers ou
 journaux quand ils deviennent longs. Les commandes `exec` inconnues renvoient
 maintenant un `exit-status` non nul pour mieux fonctionner avec les scripts.
 `ssh hostkey` affiche l'identite hote RSA generee pour
@@ -295,8 +296,11 @@ l'installation et stockee dans `/system/ssh_host_rsa.key`.
 manifest signe obligatoire, index paquet epingle et garde-fous du shell SSH.
 Les commandes generiques `cat/head/tail/write/append/touch/mkdir/rm` ne peuvent
 plus lire ou modifier `/system/ssh.conf`, `/system/ssh_host_rsa.key` ni les
-noms sensibles; les ecritures generiques SSH sont limitees a `/workspace`,
-`/home`, `/logs` et `/packages`.
+noms sensibles (`.env`, `.key`, `.pem`, `.ssh`, private, secret, token,
+credential, id_rsa, id_ed25519). Les ecritures generiques SSH sont limitees a
+`/workspace`, `/home`, `/logs` et `/packages`, avec `/workspace/.orizon`
+reserve comme etat interne. `logs security` lit le miroir persistant
+`/logs/security.log` sans exposer les mots de passe.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 Securite: [docs/orizon/SECURITY.md](docs/orizon/SECURITY.md).

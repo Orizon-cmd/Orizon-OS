@@ -130,6 +130,82 @@ static int pkg_path_inside(const char *path, const char *prefix) {
          (path[len] == '\0' || path[len] == '/');
 }
 
+static char pkg_ascii_lower(char c) {
+  if (c >= 'A' && c <= 'Z') {
+    return (char)(c - 'A' + 'a');
+  }
+  return c;
+}
+
+static int pkg_path_contains_ci(const char *path, const char *needle) {
+  size_t path_len;
+  size_t needle_len;
+
+  if (!path || !needle) {
+    return 0;
+  }
+  path_len = strlen(path);
+  needle_len = strlen(needle);
+  if (needle_len == 0 || path_len < needle_len) {
+    return 0;
+  }
+  for (size_t i = 0; i + needle_len <= path_len; i++) {
+    size_t j = 0;
+    while (j < needle_len &&
+           pkg_ascii_lower(path[i + j]) == pkg_ascii_lower(needle[j])) {
+      j++;
+    }
+    if (j == needle_len) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int pkg_path_suffix_ci(const char *path, const char *suffix) {
+  size_t path_len;
+  size_t suffix_len;
+
+  if (!path || !suffix) {
+    return 0;
+  }
+  path_len = strlen(path);
+  suffix_len = strlen(suffix);
+  if (suffix_len == 0 || path_len < suffix_len) {
+    return 0;
+  }
+  return pkg_path_contains_ci(path + path_len - suffix_len, suffix);
+}
+
+static int pkg_path_sensitive(const char *path) {
+  static const char *const needles[] = {
+      "/.ssh/",     "ssh_host_",      "password",  "passwd",
+      "private",   "secret",         "token",     "credential",
+      "api_key",   "apikey",         "id_rsa",    "id_ed25519",
+      "authorized_keys"};
+  static const char *const suffixes[] = {
+      ".env", ".key", ".private.pem", ".p12", ".pfx"};
+
+  if (!path) {
+    return 0;
+  }
+  if (strcmp(path, "/system/ssh.conf") == 0 ||
+      strcmp(path, "/system/ssh_host_rsa.key") == 0) {
+    return 1;
+  }
+  for (size_t i = 0; i < sizeof(needles) / sizeof(needles[0]); i++) {
+    if (pkg_path_contains_ci(path, needles[i])) {
+      return 1;
+    }
+  }
+  for (size_t i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++) {
+    if (pkg_path_suffix_ci(path, suffixes[i])) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static int pkg_component_is_parent(const char *component, size_t len) {
   return len == 2 && component[0] == '.' && component[1] == '.';
 }
@@ -215,6 +291,9 @@ static int pkg_path_safe(const char *path) {
     return 0;
   }
   if (pkg_path_inside(path, "/workspace/.orizon")) {
+    return 0;
+  }
+  if (pkg_path_sensitive(path)) {
     return 0;
   }
   if (!(pkg_path_inside(path, "/system") || pkg_path_inside(path, "/home") ||
@@ -1668,7 +1747,8 @@ int orizon_pkg_status(char *out, size_t out_size) {
                   "scripts post-install pre-remove post-remove");
   pkg_append_line(out, out_size,
                   "script-policy allow=mkdir,touch,write,append,echo,sync "
-                  "safe-paths=/system,/home,/packages,/logs,/tmp,/workspace");
+                  "safe-paths=/system,/home,/packages,/logs,/tmp,/workspace "
+                  "sensitive-paths=blocked internal-state=/workspace/.orizon:blocked");
   pkg_append_line(out, out_size,
                   "rollback install-restores-previous-payload remove-cache="
                   PKG_DB_REMOVED);

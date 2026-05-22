@@ -32,6 +32,7 @@ ssh password off
 ssh poll
 ssh stop
 logs ssh
+logs security
 report save
 install-plan
 system status
@@ -119,10 +120,13 @@ console locale.
   commandes `exec`, commandes shell, fermetures de canal, recoveries listener,
   temps idle, derniere commande et les derniers evenements recents; les
   evenements sont aussi journalises dans `/logs/ssh.log` avec le mot de passe
-  masque. Le meme rapport est disponible localement avec `ssh audit`.
-- Journaux: `logs ssh`, `logs boot`, `logs storage` et `logs pci` affichent les
-  etats utiles sans action destructive; storage/PCI sont des snapshots
-  diagnostiques quand aucun vrai fichier journal persistant n'existe encore.
+  masque et miroitent dans `/logs/security.log`. Les changements de politique
+  auth, lockout et hostkey ajoutent aussi une entree non secrete dans
+  `logs security`. Le meme rapport est disponible localement avec `ssh audit`.
+- Journaux: `logs ssh`, `logs security`, `logs boot`, `logs storage` et
+  `logs pci` affichent les etats utiles sans action destructive; storage/PCI
+  sont des snapshots diagnostiques quand aucun vrai fichier journal persistant
+  n'existe encore.
 - Rapport materiel: `report next` / `hw next` affiche le plan de capture
   materielle future sans rien ecrire. `report save` ecrit
   `/workspace/hardware-report.txt` depuis SSH pour capturer storage, PCI BARs,
@@ -151,7 +155,9 @@ console locale.
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout
   clear`, recharger/reinitialiser la cle hote, editer des fichiers avec
   `write`/`append`/`touch`/`mkdir`/`rm` uniquement dans les racines autorisees
-  `/workspace`, `/home`, `/logs` et `/packages`, lancer les diagnostics non destructifs
+  `/workspace`, `/home`, `/logs` et `/packages`, sans pouvoir ecrire
+  `/workspace/.orizon` ni les noms sensibles (`.env`, `.key`, `.pem`, `.ssh`,
+  private, secret, token, credential, `id_rsa`, `id_ed25519`), lancer les diagnostics non destructifs
   `security`, `selftest`, `disk identify`, `disk read-test`, `disk read-test last`,
   `gpt scan`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,

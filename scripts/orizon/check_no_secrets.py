@@ -21,8 +21,13 @@ BINARY_SUFFIXES = {
 DENIED_PATH_PATTERNS = [
     re.compile(r"(^|/)config/keys/"),
     re.compile(r"(^|/)config/hosts/.*\.local\.(env|json)$"),
+    re.compile(r"(^|/)\.ssh(/|$)"),
+    re.compile(r"(^|/)secrets?(/|$)"),
     re.compile(r"(^|/)[^/]+\.local\.(env|json)$"),
-    re.compile(r"(^|/)[^/]+\.private\.pem$"),
+    re.compile(r"(^|/)(id_rsa|id_ed25519)(\.|$)"),
+    re.compile(r"(^|/)[^/]+\.private\.(key|pem)$"),
+    re.compile(r"(^|/)[^/]+\.secret\.(env|json|txt|key)$"),
+    re.compile(r"(^|/)[^/]*credentials[^/]*\.(env|json|txt|key)$"),
     re.compile(r"(^|/)\.env$"),
 ]
 
@@ -30,7 +35,11 @@ SECRET_CONTENT_PATTERNS = [
     ("private key block", re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")),
     ("github token", re.compile(r"\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{30,}\b")),
     ("github fine-grained token", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{40,}\b")),
+    ("openai api key", re.compile(r"\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{32,}\b")),
     ("aws access key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("google api key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b")),
+    ("pypi token", re.compile(r"\bpypi-[A-Za-z0-9_-]{40,}\b")),
+    ("npm token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     ("slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b")),
 ]
 

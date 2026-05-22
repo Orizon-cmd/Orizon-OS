@@ -248,6 +248,7 @@ def run_ssh_checks(
         ("system doctor", "summary:"),
         ("system init", "system init:"),
         ("security", "Orizon security status"),
+        ("logs security", "security:"),
         ("rescue", "Orizon rescue mode"),
         ("hostname", "orizon"),
         ("system repair", "system repair:"),

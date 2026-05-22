@@ -40,7 +40,12 @@ work.
   `grep/head/tail/less` are available locally.
 - SSH admin: password auth is opt-in, lockout/audit are visible, host keys are
   persistent per install when storage is available, long outputs are segmented,
-  and diagnostic commands are usable through OpenSSH.
+  diagnostics are usable through OpenSSH, and `/logs/security.log` mirrors SSH
+  audit plus policy changes without recording passwords.
+- Security guardrails: generic SSH writes are path-scoped, `/workspace/.orizon`
+  remains internal OS state, common secret-bearing names are blocked for SSH and
+  package payloads, signed update manifests are mandatory, package indexes are
+  pinned by the signed manifest, and release checks run a tracked-secret scan.
 - Wired VM networking: e1000/e1000e, RTL8139, and VirtIO-net are the current
   daily VM NIC paths. NAT smoke tests are the normal quick gate. `net check`,
   `net tcp <host> [port]`, `net tls`, and `net diag` split daily failures into
@@ -91,7 +96,7 @@ work.
 - UEFI Runtime Services `BootNext` writing, A/B slots, or firmware-level
   rollback before the refreshed kernel starts.
 - Secure Boot, TPM attestation, disk encryption, Unix users/groups/ACLs, sudo,
-  or a full MAC policy.
+  user/admin separation, or a full MAC policy.
 - Automatic Windows BCD/UEFI boot entry creation for dual boot.
 - In-OS partition shrink/create assistant for making free space beside an
   existing OS.

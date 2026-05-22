@@ -11,6 +11,7 @@
 #define ORIZON_SSH_CONFIG_PATH "/system/ssh.conf"
 #define ORIZON_SSH_HOSTKEY_PATH "/system/ssh_host_rsa.key"
 #define ORIZON_SSH_LOG_PATH "/logs/ssh.log"
+#define ORIZON_SECURITY_LOG_PATH "/logs/security.log"
 
 typedef struct {
   int enabled;
