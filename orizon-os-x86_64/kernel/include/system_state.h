@@ -16,6 +16,9 @@ int orizon_system_set_hostname(const char *name, char *status,
                                size_t status_size);
 void orizon_system_format_status(char *out, size_t out_size);
 void orizon_system_format_rescue(char *out, size_t out_size);
+void orizon_system_format_services(char *out, size_t out_size);
+void orizon_system_format_doctor(char *out, size_t out_size);
+int orizon_system_run_boot_tasks(char *out, size_t out_size);
 int orizon_system_mark_firstboot_done(char *out, size_t out_size);
 int orizon_system_repair(char *out, size_t out_size);
 

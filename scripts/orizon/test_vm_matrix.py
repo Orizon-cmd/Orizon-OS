@@ -244,6 +244,9 @@ def run_ssh_checks(
     commands = [
         ("status", "ssh: enabled="),
         ("system status", "Orizon system status"),
+        ("system services", "Orizon init/services"),
+        ("system doctor", "summary:"),
+        ("system init", "system init:"),
         ("security", "Orizon security status"),
         ("rescue", "Orizon rescue mode"),
         ("hostname", "orizon"),

@@ -38,10 +38,11 @@
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, persistent history, simple autocomplete, editor, `sysinfo`, `hw`,
   `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`, and `uptime`.
-- Installed/live lifecycle commands: `system status`, `system repair`,
-  `rescue`, `hostname set <name>`, and `firstboot done` clarify first boot,
-  recreate missing default roots/config non-destructively, and export rescue
-  state through the hardware report.
+- Installed/live lifecycle commands: `system status`, `system init`,
+  `system services`, `system doctor`, `system repair`, `rescue`,
+  `hostname set <name>`, and `firstboot done` clarify first boot, record
+  boot/init state, recreate missing default roots/config non-destructively, and
+  export rescue state through the hardware report.
 - Documentation cleanup: `START_HERE.md` now summarizes the current state,
   guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
   operator command checklist separate from the long-form subsystem notes.
@@ -141,7 +142,7 @@
 1. Split more features into packages so update can refresh components without
    replacing the whole kernel payload.
 2. Add `pkg upgrade` once package rollback exists.
-3. Add a small service/init registry for boot tasks that should not live in the
-   terminal command path.
+3. Grow the small service/init registry into real configurable boot services
+   once the installed VM path has more long-running daemons.
 4. Improve the editor with save confirmation, file size warnings, and simple
    search.

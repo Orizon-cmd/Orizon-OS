@@ -138,12 +138,14 @@ console locale.
   mode, le disque cible, la portee d'ecriture et la confirmation requise avant
   toute installation.
 - Etat installe/live: `system status` distingue live ISO et boot installe,
-  affiche hostname, first-boot, racines persistantes et fichiers initiaux.
-  `system repair` recree seulement les defaults manquants et ecrit
-  `/workspace/.orizon/rescue-report.txt`; `rescue` affiche la checklist de
-  recuperation sans installation. `hostname set <name>` persiste
-  `/system/hostname`, et `firstboot done` marque la premiere session installee
-  comme revue.
+  affiche hostname, first-boot, racines persistantes, fichiers initiaux et
+  etat init/logs. `system services` montre la petite politique services,
+  `system doctor` audite sans ecrire, et `system init` rafraichit
+  `/system/boot-state` plus `/logs/init.log`. `system repair` recree seulement
+  les defaults manquants et ecrit `/workspace/.orizon/rescue-report.txt`;
+  `rescue` affiche la checklist de recuperation sans installation.
+  `hostname set <name>` persiste `/system/hostname`, et `firstboot done`
+  marque la premiere session installee comme revue.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec
   `ssh auth max`, `ssh auth lockout`, `ssh auth default`, changer ou couper le
   mot de passe avec `ssh password`, nettoyer le lockout avec `ssh lockout

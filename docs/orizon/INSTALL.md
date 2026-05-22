@@ -98,15 +98,20 @@ updates:
 
 ```text
 system status
+system services
+system doctor
 hostname
 firstboot done
 ```
 
 `system status` confirms whether the VM is still a live ISO or an installed
 boot, shows the persisted hostname, first-boot marker, required roots, and safe
-next commands. `hostname set <name>` updates `/system/hostname`. If a default
-file is missing, `system repair` recreates only missing `/system`, `/home`,
-`/packages`, `/logs`, and `/workspace/.orizon` defaults and writes
+next commands. `system services` shows the simple init/service policy, and
+`system doctor` audits roots/config/init state without changing disk layout.
+`system init` can be rerun safely to refresh `/system/boot-state` and
+`/logs/init.log`. `hostname set <name>` updates `/system/hostname`. If a
+default file is missing, `system repair` recreates only missing `/system`,
+`/home`, `/packages`, `/logs`, and `/workspace/.orizon` defaults and writes
 `/workspace/.orizon/rescue-report.txt`; it never partitions or installs.
 `rescue` prints the non-destructive recovery checklist.
 

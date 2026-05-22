@@ -29,10 +29,13 @@ design note.
 - Installer preflight is exportable with `install-plan`, which writes the
   non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
   review before any disk write.
-- Installed/live lifecycle is visible with `system status`; `system repair`
-  recreates only missing default roots/config, `rescue` prints the safe recovery
-  checklist, `hostname set <name>` persists `/system/hostname`, and
-  `firstboot done` marks the installed first boot as reviewed.
+- Installed/live lifecycle is visible with `system status`; `system init`
+  records `/system/boot-state` and `/logs/init.log`, `system services` shows
+  the simple service policy, `system doctor` audits roots/config/init state,
+  `system repair` recreates only missing default roots/config, `rescue` prints
+  the safe recovery checklist, `hostname set <name>` persists
+  `/system/hostname`, and `firstboot done` marks the installed first boot as
+  reviewed.
 - Base security is visible with `security`. SSH has password auth disabled until
   configured, lockout/audit enabled, a persistent host key, generic remote file
   writes limited to `/workspace`, `/home`, `/logs`, and `/packages`, and signed

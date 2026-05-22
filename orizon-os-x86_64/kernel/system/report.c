@@ -221,6 +221,10 @@ int orizon_report_format(char *out, size_t out_size) {
 
   orizon_system_format_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "System State", block);
+  orizon_system_format_services(block, sizeof(block));
+  report_append_block(out, out_size, &used, "Init Services", block);
+  orizon_system_format_doctor(block, sizeof(block));
+  report_append_block(out, out_size, &used, "System Doctor", block);
   orizon_report_format_hardware_next(block, sizeof(block));
   report_append_block(out, out_size, &used, "Hardware Return Plan", block);
 
@@ -294,6 +298,8 @@ int orizon_report_format(char *out, size_t out_size) {
   report_append_block(out, out_size, &used, "Selftest", block);
 
   report_append_file_tail(out, out_size, &used, "Boot Log", KLOG_BOOT_PATH,
+                          REPORT_LOG_TAIL_BYTES);
+  report_append_file_tail(out, out_size, &used, "Init Log", "/logs/init.log",
                           REPORT_LOG_TAIL_BYTES);
   storage_format_log(block, sizeof(block));
   report_append_block(out, out_size, &used, "Storage Log", block);

@@ -18,6 +18,7 @@
 #include "../include/sched.h"
 #include "../include/ssh.h"
 #include "../include/string.h"
+#include "../include/system_state.h"
 #include "../include/terminal.h"
 #include "../include/timer.h"
 #include "../include/update.h"
@@ -395,6 +396,8 @@ static void gui_run_deferred_core_services(void) {
       !boot_cmdline_has("orizon.minimal=1")) {
     gui_show_boot_stage("Loading persistent workspace from disk...");
     vfs_persist_load();
+    gui_show_boot_stage("Running installed/live init tasks...");
+    orizon_system_run_boot_tasks(NULL, 0);
     gui_show_boot_stage("Preparing package and keyboard state...");
     orizon_pkg_init();
     input_load_keyboard_layout_from_vfs();

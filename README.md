@@ -25,8 +25,9 @@ le developpement noyau:
   `persist restore previous` et reparation simple `persist repair`
 - etat systeme installe/live lisible avec `system status`, checklist
   non-destructive `rescue`, reparation des fichiers initiaux via
-  `system repair`, marqueur `firstboot done` et hostname persistant avec
-  `hostname set <nom>`
+  `system repair`, mini-init via `system init`, audit `system doctor`,
+  politique services via `system services`, marqueur `firstboot done` et
+  hostname persistant avec `hostname set <nom>`
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
   dual-boot data sur partition choisie, mode ESP seul non destructif,
   verification du boot UEFI, selection explicite du disque/partition cible et

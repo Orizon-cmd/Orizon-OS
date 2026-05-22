@@ -21,9 +21,11 @@ work.
   use a two-slot snapshot format when an Orizon data partition is present.
   Operators can inspect and recover with `persist status`, `persist slots`,
   `persist save`, `persist restore previous`, and `persist repair`.
-- Installed/live lifecycle: `system status`, `system repair`, `rescue`,
-  `hostname set <name>`, and `firstboot done` document first boot and recreate
-  missing defaults without partitioning or installing.
+- Installed/live lifecycle: `system status`, `system init`,
+  `system services`, `system doctor`, `system repair`, `rescue`,
+  `hostname set <name>`, and `firstboot done` document first boot, record
+  `/system/boot-state`, write `/logs/init.log`, expose a small service policy,
+  and recreate missing defaults without partitioning or installing.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.

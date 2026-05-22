@@ -2829,6 +2829,14 @@ static void ssh_shell_print_system(const char *args) {
     orizon_system_format_status(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "repair")) {
     orizon_system_repair(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "init") ||
+             ssh_shell_command_is(sub, "boot")) {
+    orizon_system_run_boot_tasks(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "services")) {
+    orizon_system_format_services(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "doctor") ||
+             ssh_shell_command_is(sub, "check")) {
+    orizon_system_format_doctor(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "rescue")) {
     orizon_system_format_rescue(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "firstboot")) {
@@ -2845,7 +2853,7 @@ static void ssh_shell_print_system(const char *args) {
     }
   } else {
     snprintf(out, sizeof(out),
-             "usage: system [status|repair|rescue|firstboot done]\r\n");
+             "usage: system [status|init|services|doctor|repair|rescue|firstboot done]\r\n");
   }
   if (strlen(out) + 2 < sizeof(out)) {
     strcat(out, "\r\n");
@@ -3884,7 +3892,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, system status, system services, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3931,6 +3939,9 @@ static void ssh_remote_shell_execute(const char *line) {
         "  hostkey              show SSH host identity\r\n"
         "  security             show base hardening and known limits\r\n"
         "  system status        show live/installed state and first-boot hints\r\n"
+        "  system services      show init/service policy and runtime state\r\n"
+        "  system doctor        audit roots/config/init state without writes\r\n"
+        "  system init          run idempotent boot tasks and write init log\r\n"
         "  system repair        recreate missing default roots/config safely\r\n"
         "  rescue               show non-destructive recovery checklist\r\n"
         "  hostname [set name]  show or persist hostname\r\n"
@@ -4037,6 +4048,18 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (ssh_shell_command_is(line, "system")) {
     ssh_shell_print_system(line + strlen("system"));
+    return;
+  }
+  if (strcmp(line, "services") == 0) {
+    ssh_shell_print_system("services");
+    return;
+  }
+  if (strcmp(line, "doctor") == 0) {
+    ssh_shell_print_system("doctor");
+    return;
+  }
+  if (strcmp(line, "init") == 0) {
+    ssh_shell_print_system("init");
     return;
   }
   if (strcmp(line, "rescue") == 0) {
@@ -4337,9 +4360,15 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, system status, system services, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
+  } else if (strcmp(cmd, "services") == 0) {
+    ssh_shell_print_system("services");
+  } else if (strcmp(cmd, "doctor") == 0) {
+    ssh_shell_print_system("doctor");
+  } else if (strcmp(cmd, "init") == 0) {
+    ssh_shell_print_system("init");
   } else if (strcmp(cmd, "rescue") == 0) {
     ssh_shell_print_system("rescue");
   } else if (ssh_shell_command_is(cmd, "firstboot")) {
