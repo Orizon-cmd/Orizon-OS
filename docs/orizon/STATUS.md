@@ -42,7 +42,9 @@ work.
   persistent per install when storage is available, long outputs are segmented,
   and diagnostic commands are usable through OpenSSH.
 - Wired VM networking: e1000/e1000e, RTL8139, and VirtIO-net are the current
-  daily VM NIC paths. NAT smoke tests are the normal quick gate. A full
+  daily VM NIC paths. NAT smoke tests are the normal quick gate. `net check`,
+  `net tcp <host> [port]`, `net tls`, and `net diag` split daily failures into
+  link/IPv4, DNS/TCP reachability, and HTTPS/root-trust layers. A full
   ZimaOS matrix run on 2026-05-22 passed NAT e1000e, NAT VirtIO-net, and NAT
   RTL8139 with SSH diagnostics, persistence checks, framebuffer screenshot,
   reboot, post-reboot SSH, and shutdown.

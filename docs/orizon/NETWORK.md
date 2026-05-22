@@ -102,7 +102,9 @@ net
 net dhcp
 net auto
 net check
+net tcp raw.githubusercontent.com 443
 net tls
+net diag
 net config ip 192.168.1.50 gateway 192.168.1.1 dns 192.168.1.1
 ping 8.8.8.8
 dns raw.githubusercontent.com
@@ -116,10 +118,13 @@ update
 `initialized=yes` and `link=up`. `net dhcp` requests an IPv4 lease without
 running a full update. `net auto` tries DHCP, then static fallback. `net check`
 is the daily non-destructive gate for VM work: it prints PASS/WARN/FAIL for the
-link, IPv4 state, default route, gateway ICMP and DNS resolution. `net tls`
-runs the heavier GitHub HTTPS/root-trust probe when update/pkg errors need a
-network-side explanation. If the link is up but DHCP fails, the next suspect is
-VLAN, gateway, DHCP server or firewall on the LAN.
+link, IPv4 state, default route, gateway ICMP and DNS resolution, then points
+to the next cheap TCP/TLS probes. `net tcp raw.githubusercontent.com 443`
+checks DNS + TCP handshake reachability without doing a full HTTPS download.
+`net tls` runs the heavier GitHub HTTPS/root-trust probe when update/pkg errors
+need a network-side explanation. `net diag` chains `net check`, TCP 443 and TLS
+for a fuller daily VM report. If the link is up but DHCP fails, the next
+suspect is VLAN, gateway, DHCP server or firewall on the LAN.
 
 ## Static IPv4
 
@@ -162,7 +167,9 @@ Useful diagnostics:
 net status
 net check
 net renew
+net tcp raw.githubusercontent.com 443
 net tls
+net diag
 route
 dns raw.githubusercontent.com
 ping 8.8.8.8
@@ -170,8 +177,10 @@ logs network
 ```
 
 `net renew` resets the current IPv4 state and reapplies the saved DHCP/static
-configuration. Use it from the local console; over SSH Orizon keeps disruptive
-network writes blocked so the active remote session is not cut mid-command.
+configuration with a second retry before failing. Use it from the local
+console; over SSH Orizon keeps disruptive network writes blocked so the active
+remote session is not cut mid-command. `net tcp` and `net diag` are safe over
+SSH because they only diagnose the already configured path.
 
 ## Local Libvirt Bridge Example
 
@@ -191,11 +200,12 @@ python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl813
 ```
 
 Each case provisions a dedicated VM/disk, boots the current remote `iso_root`,
-runs `net dhcp`, starts SSH, then checks `status`, `net status`, `ping`, `dns`,
-`pkg status`, `update status`, and `hostkey` through OpenSSH. Bridge cases are
-available with `--cases all`. The runner now tries `virsh domifaddr --source
-arp` and host `ip neigh` discovery for bridge guests; if the IP is still not
-visible, the case is reported as `boot-only` after a framebuffer screenshot.
-Host reachability still depends on the lab bridge or macvtap mode, so NAT cases
-are the default SSH-capable automated gate. The NAT gate covers e1000e,
-VirtIO-net, and RTL8139.
+runs `net dhcp`, starts SSH, then checks `status`, `net status`, `net check`,
+`ping`, `dns`, `net tcp raw.githubusercontent.com 443`, `pkg status`,
+`update status`, and `hostkey` through OpenSSH. Bridge cases are available with
+`--cases all`. The runner now tries `virsh domifaddr --source arp` and host
+`ip neigh` discovery for bridge guests; if the IP is still not visible, the
+case is reported as `boot-only` after a framebuffer screenshot. Host
+reachability still depends on the lab bridge or macvtap mode, so NAT cases are
+the default SSH-capable automated gate. The NAT gate covers e1000e, VirtIO-net,
+and RTL8139.

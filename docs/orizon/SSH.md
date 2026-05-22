@@ -101,7 +101,7 @@ console locale.
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
   `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
-  `net check`, `net tls`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
+  `net check`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
   `security`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,

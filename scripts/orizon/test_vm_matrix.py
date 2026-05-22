@@ -256,6 +256,7 @@ def run_ssh_checks(
         ("timer", "source="),
         ("ping 8.8.8.8", "reply from"),
         ("dns raw.githubusercontent.com", " -> "),
+        ("net tcp raw.githubusercontent.com 443", "tcp: PASS"),
         ("pkg status", "Orizon package manager"),
         ("pkg help", "pkg verify"),
         ("pkg search orizon", "pkg search:"),

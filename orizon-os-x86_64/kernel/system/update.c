@@ -1803,8 +1803,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
     append_report(report, report_size, "[3/8] IPv4 failed");
     append_report(report, report_size, net_line);
     append_report(report, report_size,
-                  "Hint: run 'net', 'net dhcp' or configure static IPv4 with "
-                  "'net config ip <ip> gateway <gw> dns <dns>'.");
+                  "Hint: run 'net renew', 'net check' or configure static IPv4 "
+                  "with 'net config ip <ip> gateway <gw> dns <dns>'.");
     update_append_log(net_line);
     vfs_persist_save();
     sched_set_process_state("update-manager", SCHED_SLEEPING);
@@ -1847,7 +1847,8 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
       netstack_format_status(net_line, sizeof(net_line));
       append_report(report, report_size, net_line);
       append_report(report, report_size,
-                    "Hint: check DNS/gateway with 'dns raw.githubusercontent.com', "
+                    "Hint: check DNS/gateway with 'net check', "
+                    "'net tcp raw.githubusercontent.com 443', 'net tls', "
                     "'route' and 'ping 8.8.8.8'.");
       vfs_persist_save();
       sched_set_process_state("update-manager", SCHED_SLEEPING);
@@ -1883,6 +1884,9 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
       if (net_line[0]) {
         append_report(report, report_size, net_line);
       }
+      append_report(report, report_size,
+                    "Hint: run 'net tcp raw.githubusercontent.com 443' and "
+                    "'net tls' before retrying pkg/update.");
       vfs_persist_save();
       sched_set_process_state("update-manager", SCHED_SLEEPING);
       sched_enter_process("gui-shell");

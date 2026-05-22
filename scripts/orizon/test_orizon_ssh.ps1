@@ -34,6 +34,7 @@ $commands = @(
   "system repair",
   "net status",
   "net check",
+  "net tcp raw.githubusercontent.com 443",
   "wifi status",
   "free",
   "ps",
@@ -168,6 +169,9 @@ run_cmd() {
       ;;
     "net check")
       grep -q "network summary:" "`$OUT" || { echo "missing network check summary"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "net tcp raw.githubusercontent.com 443")
+      grep -q "tcp: PASS" "`$OUT" || { echo "missing tcp probe pass"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "wifi status")
       grep -q "driver=" "`$OUT" || { echo "wifi status was not dispatched to the wifi command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

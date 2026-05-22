@@ -88,10 +88,11 @@
   network snapshots in `/logs/wifi.log` and
   `/workspace/.orizon/wifi-validation` for Lenovo AP testing.
 - Repeatable ZimaOS VM smoke matrix: dedicated libvirt VMs can validate boot,
-  DHCP, SSH, ping, DNS, package status, update status, storage persistence, and
-  host-key state across NAT NIC models. Recent NAT smoke passes cover e1000e,
-  VirtIO-net, RTL8139, and a targeted modern VirtIO-blk disk profile; this does
-  not imply validation on Lenovo or any other physical PC.
+  DHCP, SSH, ping, DNS, TCP 443 reachability, package status, update status,
+  storage persistence, and host-key state across NAT NIC models. Recent NAT
+  smoke passes cover e1000e, VirtIO-net, RTL8139, and a targeted modern
+  VirtIO-blk disk profile; this does not imply validation on Lenovo or any
+  other physical PC.
 
 ## Next Stability Track
 
@@ -101,8 +102,9 @@
    never reaches Orizon early boot.
 2. Add detached package repository signatures and key rotation; the package
    index is already pinned through the signed OS manifest.
-3. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
-   bridge/DHCP failure messages.
+3. Expand network diagnostics beyond the current `net check` / `net tcp` /
+   `net tls` / `net diag` split with per-phase counters and clearer bridge/DHCP
+   failure messages.
 4. Finish SSH remote login hardening: safer config permissions, key rotation,
    fuller PTY integration with the local Orizon terminal, and longer
    multi-client soak tests.

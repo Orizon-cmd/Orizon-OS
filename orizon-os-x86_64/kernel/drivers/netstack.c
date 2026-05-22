@@ -1498,6 +1498,10 @@ static int tcp_connect(tcp_conn_t *conn, uint32_t remote_ip, uint16_t port) {
   uint64_t deadline;
 
   memset(conn, 0, sizeof(*conn));
+  if (!stack_status.ipv4_ready) {
+    set_status("tcp: ipv4 not configured");
+    return -1;
+  }
   conn->remote_ip = remote_ip;
   conn->remote_port = port;
   conn->local_port = tcp_next_port++;
@@ -1506,13 +1510,20 @@ static int tcp_connect(tcp_conn_t *conn, uint32_t remote_ip, uint16_t port) {
   }
   conn->seq = 0x4f5a1000U ^ (uint32_t)timer_ticks();
 
+  if (next_hop == 0) {
+    set_status("tcp: no route");
+    return -1;
+  }
   if (arp_resolve(next_hop, conn->remote_mac) != 0) {
     set_status("tcp: gateway arp failed");
     return -1;
   }
 
   set_status("tcp: syn");
-  send_tcp(conn, TCP_SYN, NULL, 0);
+  if (send_tcp(conn, TCP_SYN, NULL, 0) < 0) {
+    set_status("tcp: syn send failed");
+    return -1;
+  }
   deadline = deadline_from_ms(5000);
   while (before_deadline(deadline)) {
     uint8_t src_mac[6];
@@ -1566,6 +1577,13 @@ static int tcp_connect(tcp_conn_t *conn, uint32_t remote_ip, uint16_t port) {
 
   set_status("tcp: connect timeout");
   return -1;
+}
+
+static void tcp_close(tcp_conn_t *conn) {
+  if (!conn || conn->remote_ip == 0) {
+    return;
+  }
+  send_tcp(conn, TCP_FIN | TCP_ACK, NULL, 0);
 }
 
 static int tcp_send_data(tcp_conn_t *conn, const void *data, size_t len) {
@@ -4782,6 +4800,68 @@ int netstack_github_tls_probe(char *out, size_t out_cap, size_t *out_len) {
   return netstack_tls_probe("raw.githubusercontent.com", out, out_cap, out_len);
 }
 
+int netstack_tcp_probe(const char *host, uint16_t port, char *out,
+                       size_t out_cap) {
+  uint32_t ip = 0;
+  tcp_conn_t conn;
+  char ip_s[24];
+  char line[256];
+  int host_is_ip;
+
+  if (!host || !out || out_cap == 0 || port == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  append_text(out, out_cap, "tcp probe:\n");
+  snprintf(line, sizeof(line), "target: %s port=%lu\n", host,
+           (unsigned long)port);
+  append_text(out, out_cap, line);
+
+  if (netstack_configure_ipv4() != 0) {
+    netstack_format_status(line, sizeof(line));
+    append_text(out, out_cap, "ipv4: FAIL ");
+    append_text(out, out_cap, line);
+    append_text(out, out_cap, "\n");
+    append_text(out, out_cap,
+                "hint: run 'net renew' or configure a static bridge address.\n");
+    network_log_line("tcp probe: ipv4 fail");
+    return -1;
+  }
+
+  host_is_ip = netstack_parse_ipv4(host, &ip) == 0;
+  if (!host_is_ip && netstack_resolve_a(host, &ip) != 0) {
+    snprintf(line, sizeof(line), "dns: FAIL host=%s status=%s\n", host,
+             stack_status.status);
+    append_text(out, out_cap, line);
+    append_text(out, out_cap,
+                "hint: check DNS with 'net check' and 'logs network'.\n");
+    network_log_line("tcp probe: dns fail");
+    return -1;
+  }
+  netstack_format_ipv4(ip, ip_s, sizeof(ip_s));
+  snprintf(line, sizeof(line), "dns: %s %s -> %s\n",
+           host_is_ip ? "SKIP" : "PASS", host, ip_s);
+  append_text(out, out_cap, line);
+
+  if (tcp_connect(&conn, ip, port) != 0) {
+    snprintf(line, sizeof(line), "tcp: FAIL %s:%lu status=%s\n", ip_s,
+             (unsigned long)port, stack_status.status);
+    append_text(out, out_cap, line);
+    append_text(out, out_cap,
+                "hint: check gateway/firewall/NAT/bridge, then retry 'net tls'.\n");
+    network_log_line("tcp probe: connect fail");
+    return -1;
+  }
+
+  snprintf(line, sizeof(line), "tcp: PASS %s:%lu connected\n", ip_s,
+           (unsigned long)port);
+  append_text(out, out_cap, line);
+  tcp_close(&conn);
+  set_status("tcp: probe pass");
+  network_log_line("tcp probe: pass");
+  return 0;
+}
+
 const netstack_status_t *netstack_get_status(void) {
   return &stack_status;
 }
@@ -4835,7 +4915,7 @@ void netstack_format_dns(char *buf, size_t size) {
 
 int netstack_renew_ipv4(char *out, size_t out_cap) {
   char line[256];
-  int ok;
+  int ok = -1;
 
   if (!out || out_cap == 0) {
     return -1;
@@ -4843,8 +4923,23 @@ int netstack_renew_ipv4(char *out, size_t out_cap) {
   out[0] = '\0';
   append_text(out, out_cap,
               "net renew: START resetting IPv4 and reapplying saved config\n");
-  netstack_reset();
-  ok = netstack_configure_ipv4();
+  for (unsigned attempt = 1; attempt <= 2; attempt++) {
+    snprintf(line, sizeof(line), "net renew: attempt %lu/2",
+             (unsigned long)attempt);
+    append_text(out, out_cap, line);
+    append_text(out, out_cap, "\n");
+    network_log_line(line);
+    netstack_reset();
+    ok = netstack_configure_ipv4();
+    if (ok == 0) {
+      break;
+    }
+    if (attempt < 2) {
+      append_text(out, out_cap,
+                  "net renew: retrying after DHCP/static failure\n");
+      network_log_line("net renew: retrying after failure");
+    }
+  }
 
   snprintf(line, sizeof(line), "net renew: %s status=%s link=%s\n",
            ok == 0 ? "PASS" : "FAIL", stack_status.status, l2_link_name());
@@ -4862,6 +4957,9 @@ int netstack_renew_ipv4(char *out, size_t out_cap) {
     append_text(out, out_cap,
                 "hint: check NAT/bridge, adapter model, DHCP server, or run "
                 "'net config ip <ip> gateway <gw> dns <dns>'.\n");
+    append_text(out, out_cap,
+                "hint: then run 'net check' and "
+                "'net tcp raw.githubusercontent.com 443'.\n");
     network_log_line("net renew: fail");
     return -1;
   }
@@ -4943,6 +5041,9 @@ int netstack_format_check(char *out, size_t out_cap) {
 
   append_text(out, out_cap,
               "tls: SKIP run 'net tls' for the full HTTPS/root-trust probe\n");
+  append_text(out, out_cap,
+              "tcp: SKIP run 'net tcp raw.githubusercontent.com 443' for a "
+              "cheap HTTPS reachability probe\n");
   snprintf(line, sizeof(line), "network summary: %s\n",
            failures ? "FAIL" : (warnings ? "WARN" : "PASS"));
   append_text(out, out_cap, line);
@@ -4950,6 +5051,10 @@ int netstack_format_check(char *out, size_t out_cap) {
     append_text(out, out_cap,
                 "hint: use 'net renew', 'net dhcp', 'net config show' and "
                 "'logs network' before retrying update/pkg.\n");
+  } else {
+    append_text(out, out_cap,
+                "next: use 'net tcp raw.githubusercontent.com 443' before "
+                "update/pkg, or 'net tls' for full root-trust diagnostics.\n");
   }
   network_log_line(failures ? "net check: fail"
                             : (warnings ? "net check: warn"

@@ -3743,6 +3743,63 @@ static void term_run_net(terminal_t *term, const char *cmd) {
     return;
   }
 
+  if (term_command_is(args, "tcp")) {
+    const char *tcp_args = term_skip_spaces(args + 3);
+    char host[96];
+    char port_text[16];
+    int port = 443;
+
+    tcp_args = term_read_token(tcp_args, host, sizeof(host));
+    if (!tcp_args) {
+      term_puts_t(term, "usage: net tcp <host-or-ip> [port]\n");
+      return;
+    }
+    if (*tcp_args) {
+      tcp_args = term_read_token(tcp_args, port_text, sizeof(port_text));
+      if (!tcp_args || term_parse_uint(port_text, &port) < 0 ||
+          port <= 0 || port > 65535 || *tcp_args) {
+        term_puts_t(term, "usage: net tcp <host-or-ip> [port]\n");
+        return;
+      }
+    }
+    netstack_tcp_probe(host, (uint16_t)port, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "diag") || term_command_is(args, "daily")) {
+    term_puts_t(term, "net diag: daily VM network diagnostics\n");
+    netstack_format_check(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    netstack_tcp_probe("raw.githubusercontent.com", 443, report,
+                       sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    term_puts_t(term, "net diag: TLS/root-trust probe\n");
+    report[0] = '\0';
+    if (netstack_github_tls_probe(report, sizeof(report), &tls_len) == 0) {
+      snprintf(line, sizeof(line), "net tls: PASS bytes=%lu\n",
+               (unsigned long)tls_len);
+      term_puts_t(term, line);
+    } else {
+      snprintf(line, sizeof(line), "net tls: FAIL status=%s\n",
+               netstack_get_status()->status);
+      term_puts_t(term, line);
+    }
+    if (report[0]) {
+      term_puts_t(term, report);
+      if (report[strlen(report) - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    }
+    return;
+  }
+
   if (term_command_is(args, "tls") || term_command_is(args, "https")) {
     term_puts_t(term, "net tls: probing raw.githubusercontent.com over TLS...\n");
     report[0] = '\0';
@@ -3754,6 +3811,9 @@ static void term_run_net(terminal_t *term, const char *cmd) {
       snprintf(line, sizeof(line), "net tls: FAIL status=%s\n",
                netstack_get_status()->status);
       term_puts_t(term, line);
+      term_puts_t(term,
+                  "hint: run 'net tcp raw.githubusercontent.com 443' to "
+                  "separate TCP reachability from TLS/root trust.\n");
     }
     if (report[0]) {
       term_puts_t(term, report);
@@ -5705,7 +5765,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  storage diag - Explain storage/NVMe/eMMC detection\n");
     term_puts_t(term, "  net       - Show ethernet/IP status\n");
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
-    term_puts_t(term, "  net check/renew/tls - Diagnose, reapply config, probe HTTPS\n");
+    term_puts_t(term, "  net check/renew/tcp/tls/diag - Daily VM network diagnostics\n");
     term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
     term_puts_t(term, "  net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
     term_puts_t(term, "  wifi      - Show Wi-Fi hardware status\n");

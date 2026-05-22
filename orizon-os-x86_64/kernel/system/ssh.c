@@ -3538,6 +3538,65 @@ static void ssh_shell_print_net(const char *args) {
     return;
   }
 
+  if (ssh_shell_command_is(sub, "tcp")) {
+    const char *tcp_args = ssh_shell_skip_spaces(sub + 3);
+    char host[96];
+    char port_text[16];
+    uint32_t port = 443;
+
+    tcp_args = ssh_shell_read_token(tcp_args, host, sizeof(host));
+    if (!tcp_args) {
+      ssh_queue_channel_text("usage: net tcp <host-or-ip> [port]\r\n");
+      ssh_shell_prompt();
+      return;
+    }
+    if (*tcp_args) {
+      tcp_args = ssh_shell_read_token(tcp_args, port_text, sizeof(port_text));
+      if (!tcp_args || ssh_shell_parse_uint(port_text, &port) < 0 ||
+          port == 0 || port > 65535 || *tcp_args) {
+        ssh_queue_channel_text("usage: net tcp <host-or-ip> [port]\r\n");
+        ssh_shell_prompt();
+        return;
+      }
+    }
+    netstack_tcp_probe(host, (uint16_t)port, report, sizeof(report));
+    ssh_queue_channel_text(report);
+    ssh_shell_prompt();
+    return;
+  }
+
+  if (ssh_shell_command_is(sub, "diag") ||
+      ssh_shell_command_is(sub, "daily")) {
+    ssh_queue_channel_text("net diag: daily VM network diagnostics\r\n");
+    netstack_format_check(report, sizeof(report));
+    ssh_queue_channel_text(report);
+    netstack_tcp_probe("raw.githubusercontent.com", 443, report,
+                       sizeof(report));
+    ssh_queue_channel_text(report);
+    ssh_queue_channel_text("net diag: TLS/root-trust probe\r\n");
+    report[0] = '\0';
+    if (netstack_github_tls_probe(report, sizeof(report), &tls_len) == 0) {
+      snprintf(line, sizeof(line), "net tls: PASS bytes=%lu\r\n",
+               (unsigned long)tls_len);
+      ssh_queue_channel_text(line);
+    } else {
+      snprintf(line, sizeof(line), "net tls: FAIL status=%s\r\n",
+               netstack_get_status()->status);
+      ssh_queue_channel_text(line);
+      ssh_queue_channel_text(
+          "hint: run 'net tcp raw.githubusercontent.com 443' to separate TCP "
+          "reachability from TLS/root trust.\r\n");
+    }
+    if (report[0]) {
+      ssh_queue_channel_text(report);
+      if (report[strlen(report) - 1] != '\n') {
+        ssh_queue_channel_text("\r\n");
+      }
+    }
+    ssh_shell_prompt();
+    return;
+  }
+
   if (ssh_shell_command_is(sub, "tls") ||
       ssh_shell_command_is(sub, "https")) {
     report[0] = '\0';
@@ -3549,6 +3608,9 @@ static void ssh_shell_print_net(const char *args) {
       snprintf(line, sizeof(line), "net tls: FAIL status=%s\r\n",
                netstack_get_status()->status);
       ssh_queue_channel_text(line);
+      ssh_queue_channel_text(
+          "hint: run 'net tcp raw.githubusercontent.com 443' to separate TCP "
+          "reachability from TLS/root trust.\r\n");
     }
     if (report[0]) {
       ssh_queue_channel_text(report);
@@ -3581,7 +3643,7 @@ static void ssh_shell_print_net(const char *args) {
   }
 
   ssh_queue_channel_text(
-      "usage: net [status|check|doctor|tls|config show]\r\n"
+      "usage: net [status|check|doctor|tcp|tls|diag|config show]\r\n"
       "note: net dhcp/auto/renew/reset/config writes are local-console only "
       "during SSH.\r\n");
   ssh_shell_prompt();
@@ -3920,7 +3982,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, system status, system services, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, system status, system services, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3982,7 +4044,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
         "  logs [name]          show boot/storage/pci/network/usb/wifi/ssh/update logs\r\n"
-        "  net check|tls        show daily network and HTTPS diagnostics\r\n"
+        "  net check|tcp|tls|diag show daily network/TCP/HTTPS diagnostics\r\n"
         "  net|route|dns|ping   show network status and probes\r\n"
         "  usb|usb rescan       show USB diagnostics\r\n"
         "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
@@ -4389,7 +4451,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, system status, system services, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, system status, system services, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "services") == 0) {

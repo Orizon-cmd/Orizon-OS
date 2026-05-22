@@ -1691,6 +1691,8 @@ int orizon_pkg_status(char *out, size_t out_size) {
   pkg_append_line(out, out_size,
                   "commands pkg search <query>, pkg remote [verify], "
                   "pkg upgrade [plan], pkg rollback <name>");
+  pkg_append_line(out, out_size,
+                  "network-diagnostics net check; net tcp raw.githubusercontent.com 443; net tls");
   pkg_append_line(out, out_size, "db " PKG_DB_ROOT);
   return 0;
 }

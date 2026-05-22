@@ -65,6 +65,8 @@ int netstack_http_get(const char *host, const char *path, char *out,
 int netstack_github_probe(char *out, size_t out_cap, size_t *out_len);
 int netstack_tls_probe(const char *host, char *out, size_t out_cap,
                        size_t *out_len);
+int netstack_tcp_probe(const char *host, uint16_t port, char *out,
+                       size_t out_cap);
 int netstack_https_range_get(const char *host, const char *path,
                              uint64_t start, uint64_t end, void *out,
                              size_t out_cap, size_t *out_len,
