@@ -42,8 +42,9 @@ design note.
   `z/s`, arrows, space, `g/G`, and `q`; SSH `cat /workspace/hardware-report.txt`
   is still preferred for copying the full report.
 - Wired VM networking supports e1000/e1000e, RTL8139, and VirtIO-net. The
-  ZimaOS NAT smoke cases for those NICs have passed before; do not rerun the
-  full matrix unless that is the explicit task.
+  ZimaOS NAT matrix cases for those NICs passed with lifecycle checks on
+  2026-05-22. Bridge cases booted to framebuffer, but SSH was not reachable
+  because the guest IP was not discoverable from the ZimaOS host.
 - USB Ethernet has xHCI CDC-ECM and Realtek RTL815x packet paths, plus
   `/logs/usb.log` family/support diagnostics for CDC-NCM, ASIX, SMSC/LAN95xx,
   RNDIS, hub, and endpoint-blocker investigation.

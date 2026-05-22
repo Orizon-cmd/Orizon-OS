@@ -193,6 +193,9 @@ python scripts/orizon/test_vm_matrix.py --cases nat-e1000e,nat-virtio,nat-rtl813
 Each case provisions a dedicated VM/disk, boots the current remote `iso_root`,
 runs `net dhcp`, starts SSH, then checks `status`, `net status`, `ping`, `dns`,
 `pkg status`, `update status`, and `hostkey` through OpenSSH. Bridge cases are
-available with `--cases all`, but host reachability depends on the lab bridge or
-macvtap mode, so NAT cases are the default automated gate. The NAT gate covers
-e1000e, VirtIO-net, and RTL8139.
+available with `--cases all`. The runner now tries `virsh domifaddr --source
+arp` and host `ip neigh` discovery for bridge guests; if the IP is still not
+visible, the case is reported as `boot-only` after a framebuffer screenshot.
+Host reachability still depends on the lab bridge or macvtap mode, so NAT cases
+are the default SSH-capable automated gate. The NAT gate covers e1000e,
+VirtIO-net, and RTL8139.

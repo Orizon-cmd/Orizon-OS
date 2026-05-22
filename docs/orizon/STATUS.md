@@ -37,7 +37,10 @@ work.
   persistent per install when storage is available, long outputs are segmented,
   and diagnostic commands are usable through OpenSSH.
 - Wired VM networking: e1000/e1000e, RTL8139, and VirtIO-net are the current
-  daily VM NIC paths. NAT smoke tests are the normal quick gate.
+  daily VM NIC paths. NAT smoke tests are the normal quick gate. A full
+  ZimaOS matrix run on 2026-05-22 passed NAT e1000e, NAT VirtIO-net, and NAT
+  RTL8139 with SSH diagnostics, persistence checks, framebuffer screenshot,
+  reboot, post-reboot SSH, and shutdown.
 - Update/rollback: installed systems fetch a signed GitHub manifest, verify
   SHA-256 payloads, refresh the ESP, and use Limine fallback metadata for
   post-update validation.
@@ -61,9 +64,11 @@ work.
   the Lenovo has not been validated in the current workflow.
 - I2C-HID laptop input: first probes exist for the documented Lenovo paths, but
   multitouch/stylus report parsing is still future work.
-- Bridge networking: bridge mode is supported by configuration and scripts, but
-  lab reachability depends on the host bridge/macvtap setup. NAT is the default
-  smoke path.
+- Bridge networking: bridge mode is supported by configuration and scripts. In
+  the 2026-05-22 ZimaOS matrix, bridge e1000e, bridge VirtIO-net, and bridge
+  RTL8139 reached boot/framebuffer smoke, but SSH checks were skipped because
+  the guest IP was not discoverable from `virsh` ARP or host neighbor tables.
+  NAT remains the default SSH-capable gate.
 
 ## Not Implemented Yet
 

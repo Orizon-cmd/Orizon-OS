@@ -23,6 +23,12 @@ python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
 python scripts/orizon/test_update_rollback_vm.py
 ```
 
+`test_vm_matrix.py --cases all --include-lifecycle` runs NAT and bridge
+profiles. NAT cases are SSH-validated. Bridge cases now try `virsh` ARP and
+host neighbor-table discovery; if no IP is discoverable, they still perform a
+boot/framebuffer smoke and report `boot-only` instead of silently pretending
+that SSH was tested.
+
 `quick_check.py` runs `git diff --check`, Python syntax checks for all
 `scripts/orizon/*.py`, PowerShell syntax checks when PowerShell is available,
 and the strict release-artifact validator. Use `--log artifacts/quick-check.log`

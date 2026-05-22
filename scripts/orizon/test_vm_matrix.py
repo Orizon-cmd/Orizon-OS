@@ -108,6 +108,62 @@ def find_nat_ip(client, sudo_password: str, mac: str, network_name: str, timeout
     return ""
 
 
+def _extract_ipv4_for_mac(text: str, mac: str) -> str:
+    wanted = mac.lower()
+    for line in text.splitlines():
+        if wanted not in line.lower():
+            continue
+        match = re.search(r"\b([0-9]+(?:\.[0-9]+){3})(?:/[0-9]+)?\b", line)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def find_bridge_ip(
+    client,
+    sudo_password: str,
+    vm_name: str,
+    mac: str,
+    bridge_device: str,
+    timeout: int,
+) -> str:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        probes = [
+            f"virsh domifaddr {vm_name} --source arp || true",
+            "ip -4 neigh show || true",
+        ]
+        if bridge_device:
+            probes.append(f"ip -4 neigh show dev {bridge_device} || true")
+        for probe in probes:
+            out = run_sudo_command(client, sudo_password, probe, check=False)
+            ip = _extract_ipv4_for_mac(out, mac)
+            if ip:
+                return ip
+        time.sleep(2)
+    return ""
+
+
+def find_guest_ip(
+    client,
+    sudo_password: str,
+    cfg: dict,
+    vm_name: str,
+    mac: str,
+    timeout: int,
+) -> str:
+    if cfg["network_name"]:
+        return find_nat_ip(client, sudo_password, mac, cfg["network_name"], timeout)
+    return find_bridge_ip(
+        client,
+        sudo_password,
+        vm_name,
+        mac,
+        cfg.get("bridge_device", ""),
+        timeout,
+    )
+
+
 def wait_domstate(
     client,
     sudo_password: str,
@@ -335,8 +391,8 @@ def run_lifecycle_checks(
     if state != "running":
         raise RuntimeError(f"VM did not return to running after reboot; state={state}")
     boot_and_start_ssh(client, sudo_password, vm_name, password)
-    reboot_ip = find_nat_ip(
-        client, sudo_password, mac, cfg["network_name"], boot_timeout
+    reboot_ip = find_guest_ip(
+        client, sudo_password, cfg, vm_name, mac, boot_timeout
     )
     if not reboot_ip:
         raise RuntimeError("guest IP unavailable after reboot")
@@ -430,13 +486,36 @@ def main() -> int:
             boot_and_start_ssh(client, sudo_password, cfg["name"], args.password)
             mac = domif_mac(client, sudo_password, cfg["name"])
             ip = ""
-            if cfg["network_name"]:
-                ip = find_nat_ip(client, sudo_password, mac, cfg["network_name"], args.boot_timeout)
+            ip = find_guest_ip(
+                client,
+                sudo_password,
+                cfg,
+                cfg["name"],
+                mac,
+                args.boot_timeout,
+            )
             if not ip:
-                detail = "guest IP unavailable from libvirt lease table"
-                status = "fail" if cfg["network_name"] else "skip-ssh"
+                if cfg["network_name"]:
+                    detail = "guest IP unavailable from libvirt lease table"
+                    results.append((case_name, "fail", detail))
+                    print(f"FAIL: {detail}")
+                    continue
+                ok, size = capture_framebuffer_smoke(client, sudo_password, cfg["name"])
+                status = "boot-only" if ok else "fail"
+                detail = (
+                    f"framebuffer={'ok' if ok else 'missing'} bytes={size}; "
+                    "ssh skipped because bridge guest IP was not discoverable "
+                    "from virsh arp or host neighbor tables"
+                )
                 results.append((case_name, status, detail))
                 print(f"{status.upper()}: {detail}")
+                if args.include_lifecycle:
+                    run_sudo_command(
+                        client,
+                        sudo_password,
+                        f"virsh destroy {cfg['name']} || true",
+                        check=False,
+                    )
                 continue
             output = run_ssh_checks(
                 client,
