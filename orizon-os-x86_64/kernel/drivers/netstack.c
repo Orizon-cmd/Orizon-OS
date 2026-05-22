@@ -4832,3 +4832,127 @@ void netstack_format_dns(char *buf, size_t size) {
            stack_status.last_host[0] ? stack_status.last_host : "none",
            resolved);
 }
+
+int netstack_renew_ipv4(char *out, size_t out_cap) {
+  char line[256];
+  int ok;
+
+  if (!out || out_cap == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  append_text(out, out_cap,
+              "net renew: START resetting IPv4 and reapplying saved config\n");
+  netstack_reset();
+  ok = netstack_configure_ipv4();
+
+  snprintf(line, sizeof(line), "net renew: %s status=%s link=%s\n",
+           ok == 0 ? "PASS" : "FAIL", stack_status.status, l2_link_name());
+  append_text(out, out_cap, line);
+  netstack_format_status(line, sizeof(line));
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  netstack_format_route(line, sizeof(line));
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  netstack_format_dns(line, sizeof(line));
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  if (ok != 0) {
+    append_text(out, out_cap,
+                "hint: check NAT/bridge, adapter model, DHCP server, or run "
+                "'net config ip <ip> gateway <gw> dns <dns>'.\n");
+    network_log_line("net renew: fail");
+    return -1;
+  }
+  network_log_line("net renew: pass");
+  return 0;
+}
+
+int netstack_format_check(char *out, size_t out_cap) {
+  char line[256];
+  char ip_s[24];
+  uint32_t ms = 0;
+  uint32_t resolved = 0;
+  int failures = 0;
+  int warnings = 0;
+  int configured;
+
+  if (!out || out_cap == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  append_text(out, out_cap, "network check:\n");
+
+  snprintf(line, sizeof(line), "link: %s %s\n",
+           l2_link_up() ? "PASS" : "FAIL", l2_link_name());
+  append_text(out, out_cap, line);
+  if (!l2_link_up()) {
+    failures++;
+  }
+
+  configured = netstack_configure_ipv4();
+  netstack_format_status(line, sizeof(line));
+  snprintf(line + strlen(line), sizeof(line) - strlen(line), " status=%s",
+           stack_status.status);
+  append_text(out, out_cap, configured == 0 ? "ipv4: PASS " : "ipv4: FAIL ");
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  if (configured != 0) {
+    failures++;
+  }
+
+  netstack_format_route(line, sizeof(line));
+  append_text(out, out_cap,
+              stack_status.ipv4_ready && stack_status.gateway ? "route: PASS "
+                                                              : "route: FAIL ");
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  if (!stack_status.ipv4_ready || !stack_status.gateway) {
+    failures++;
+  }
+
+  if (stack_status.ipv4_ready && stack_status.gateway) {
+    netstack_format_ipv4(stack_status.gateway, ip_s, sizeof(ip_s));
+    if (netstack_ping(stack_status.gateway, &ms) == 0) {
+      snprintf(line, sizeof(line), "gateway: PASS %s time=%lums\n", ip_s,
+               (unsigned long)ms);
+    } else {
+      snprintf(line, sizeof(line),
+               "gateway: WARN %s did not answer ICMP; routing may still work\n",
+               ip_s);
+      warnings++;
+    }
+    append_text(out, out_cap, line);
+  } else {
+    append_text(out, out_cap, "gateway: FAIL no default gateway\n");
+    failures++;
+  }
+
+  if (stack_status.ipv4_ready && stack_status.dns &&
+      netstack_resolve_a("raw.githubusercontent.com", &resolved) == 0) {
+    netstack_format_ipv4(resolved, ip_s, sizeof(ip_s));
+    snprintf(line, sizeof(line), "dns: PASS raw.githubusercontent.com -> %s\n",
+             ip_s);
+    append_text(out, out_cap, line);
+  } else {
+    append_text(out, out_cap,
+                "dns: FAIL cannot resolve raw.githubusercontent.com\n");
+    failures++;
+  }
+
+  append_text(out, out_cap,
+              "tls: SKIP run 'net tls' for the full HTTPS/root-trust probe\n");
+  snprintf(line, sizeof(line), "network summary: %s\n",
+           failures ? "FAIL" : (warnings ? "WARN" : "PASS"));
+  append_text(out, out_cap, line);
+  if (failures) {
+    append_text(out, out_cap,
+                "hint: use 'net renew', 'net dhcp', 'net config show' and "
+                "'logs network' before retrying update/pkg.\n");
+  }
+  network_log_line(failures ? "net check: fail"
+                            : (warnings ? "net check: warn"
+                                        : "net check: pass"));
+  return failures ? -1 : 0;
+}

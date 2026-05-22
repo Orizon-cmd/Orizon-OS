@@ -60,6 +60,11 @@ plus que de secours si la generation ou la persistence echoue.
 Apres connexion OpenSSH, les commandes admin utiles peuvent aussi etre lancees
 directement avec `ssh orizon@<ip> "ssh auth max 4"`, `ssh orizon@<ip> "ssh
 lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
+Les diagnostics reseau non destructifs sont aussi exposes avec `ssh
+orizon@<ip> "net check"` et `ssh orizon@<ip> "net tls"`. Les commandes qui
+peuvent couper la session active (`net dhcp`, `net auto`, `net renew`,
+`net reset`, modifications `net config`) restent volontairement reservees a la
+console locale.
 
 ## Etat actuel
 
@@ -90,8 +95,9 @@ lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
-  `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`, `route`, `dns`,
-  `ping`, `usb`, `wifi`, `ps`, `pkg`, `update`, `update status`, `storage`,
+  `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
+  `net check`, `net tls`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`, `pkg`,
+  `update`, `update status`, `storage`,
   `storage diag`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `logs storage`, `logs pci`, `disk identify`,

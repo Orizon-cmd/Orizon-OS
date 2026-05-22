@@ -98,6 +98,8 @@ Inside Orizon:
 net
 net dhcp
 net auto
+net check
+net tls
 net config ip 192.168.1.50 gateway 192.168.1.1 dns 192.168.1.1
 ping 8.8.8.8
 dns raw.githubusercontent.com
@@ -109,9 +111,12 @@ update
 
 `net` should show `driver=virtio-net` or `driver=intel-e1000`, `present=yes`,
 `initialized=yes` and `link=up`. `net dhcp` requests an IPv4 lease without
-running a full update. `net auto` tries DHCP, then static fallback. If the link
-is up but DHCP fails, the next suspect is VLAN, gateway, DHCP server or firewall
-on the LAN.
+running a full update. `net auto` tries DHCP, then static fallback. `net check`
+is the daily non-destructive gate for VM work: it prints PASS/WARN/FAIL for the
+link, IPv4 state, default route, gateway ICMP and DNS resolution. `net tls`
+runs the heavier GitHub HTTPS/root-trust probe when update/pkg errors need a
+network-side explanation. If the link is up but DHCP fails, the next suspect is
+VLAN, gateway, DHCP server or firewall on the LAN.
 
 ## Static IPv4
 
@@ -152,11 +157,18 @@ Useful diagnostics:
 
 ```text
 net status
+net check
+net renew
+net tls
 route
 dns raw.githubusercontent.com
 ping 8.8.8.8
 logs network
 ```
+
+`net renew` resets the current IPv4 state and reapplies the saved DHCP/static
+configuration. Use it from the local console; over SSH Orizon keeps disruptive
+network writes blocked so the active remote session is not cut mid-command.
 
 ## Local Libvirt Bridge Example
 

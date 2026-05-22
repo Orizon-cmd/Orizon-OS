@@ -173,6 +173,7 @@ def run_ssh_checks(
         ("hostname", "orizon"),
         ("system repair", "system repair:"),
         ("net status", "ipv4=yes"),
+        ("net check", "network summary:"),
         ("timer", "source="),
         ("ping 8.8.8.8", "reply from"),
         ("dns raw.githubusercontent.com", " -> "),

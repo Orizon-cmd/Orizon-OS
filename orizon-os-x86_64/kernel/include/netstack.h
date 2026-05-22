@@ -56,6 +56,8 @@ int netstack_save_static_config(uint32_t ip, uint32_t subnet,
                                 uint32_t gateway, uint32_t dns);
 int netstack_save_dhcp_config(void);
 void netstack_reset(void);
+int netstack_renew_ipv4(char *out, size_t out_cap);
+int netstack_format_check(char *out, size_t out_cap);
 int netstack_ping(uint32_t target_ip, uint32_t *reply_ms);
 int netstack_resolve_a(const char *host, uint32_t *out_ip);
 int netstack_http_get(const char *host, const char *path, char *out,

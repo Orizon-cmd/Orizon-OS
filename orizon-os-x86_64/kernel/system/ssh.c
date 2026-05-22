@@ -3372,6 +3372,85 @@ static void ssh_shell_print_ping(const char *args) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_net(const char *args) {
+  static char report[SSH_CHANNEL_TEXT_BUF];
+  const char *sub = ssh_shell_skip_spaces(args);
+  char line[512];
+  size_t used = 0;
+  size_t tls_len = 0;
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "status")) {
+    netstack_format_status(line, sizeof(line));
+    ssh_shell_append(report, sizeof(report), &used, line);
+    ssh_shell_append(report, sizeof(report), &used, "\r\n");
+    netstack_format_route(line, sizeof(line));
+    ssh_shell_append(report, sizeof(report), &used, line);
+    ssh_shell_append(report, sizeof(report), &used, "\r\n");
+    netstack_format_dns(line, sizeof(line));
+    ssh_shell_append(report, sizeof(report), &used, line);
+    ssh_shell_append(report, sizeof(report), &used, "\r\n");
+    ssh_queue_channel_text(report);
+    ssh_shell_prompt();
+    return;
+  }
+
+  if (ssh_shell_command_is(sub, "check") ||
+      ssh_shell_command_is(sub, "doctor")) {
+    netstack_format_check(report, sizeof(report));
+    ssh_queue_channel_text(report);
+    ssh_shell_prompt();
+    return;
+  }
+
+  if (ssh_shell_command_is(sub, "tls") ||
+      ssh_shell_command_is(sub, "https")) {
+    report[0] = '\0';
+    if (netstack_github_tls_probe(report, sizeof(report), &tls_len) == 0) {
+      snprintf(line, sizeof(line), "net tls: PASS bytes=%lu\r\n",
+               (unsigned long)tls_len);
+      ssh_queue_channel_text(line);
+    } else {
+      snprintf(line, sizeof(line), "net tls: FAIL status=%s\r\n",
+               netstack_get_status()->status);
+      ssh_queue_channel_text(line);
+    }
+    if (report[0]) {
+      ssh_queue_channel_text(report);
+      if (report[strlen(report) - 1] != '\n') {
+        ssh_queue_channel_text("\r\n");
+      }
+    }
+    ssh_shell_prompt();
+    return;
+  }
+
+  if (ssh_shell_command_is(sub, "config")) {
+    const char *cfg_args = ssh_shell_skip_spaces(sub + 6);
+    if (*cfg_args == '\0' || ssh_shell_command_is(cfg_args, "show")) {
+      ssh_shell_print_file(netstack_config_path(), 1200, 0);
+      return;
+    }
+  }
+
+  if (ssh_shell_command_is(sub, "renew") ||
+      ssh_shell_command_is(sub, "dhcp") ||
+      ssh_shell_command_is(sub, "auto") ||
+      ssh_shell_command_is(sub, "reset") ||
+      ssh_shell_command_is(sub, "config")) {
+    ssh_queue_channel_text(
+        "net: this command can disrupt the active SSH link; run it on the "
+        "local console, then reconnect and use 'net check'.\r\n");
+    ssh_shell_prompt();
+    return;
+  }
+
+  ssh_queue_channel_text(
+      "usage: net [status|check|doctor|tls|config show]\r\n"
+      "note: net dhcp/auto/renew/reset/config writes are local-console only "
+      "during SSH.\r\n");
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_print_update(const char *args) {
   static char report[SSH_CHANNEL_TEXT_BUF];
   const char *sub = ssh_shell_skip_spaces(args);
@@ -3705,7 +3784,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3763,7 +3842,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  touch|mkdir|rm       edit VFS entries\r\n"
         "  write|append f text  write text to a file\r\n"
         "  logs [name]          show boot/storage/pci/network/usb/wifi/ssh/update logs\r\n"
-        "  net|route|dns|ping   show network diagnostics\r\n"
+        "  net check|tls        show daily network and HTTPS diagnostics\r\n"
+        "  net|route|dns|ping   show network status and probes\r\n"
         "  usb|usb rescan       show USB diagnostics\r\n"
         "  wifi ...             show Intel Wi-Fi diagnostics\r\n"
         "  usb rescan           rescan USB root ports\r\n"
@@ -4038,14 +4118,12 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_audit();
     return;
   }
-  if (ssh_shell_command_is(line, "net") ||
-      strcmp(line, "network-status") == 0) {
-    netstack_format_status(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
-    ssh_shell_prompt();
+  if (ssh_shell_command_is(line, "net")) {
+    ssh_shell_print_net(ssh_shell_skip_spaces(line + 3));
+    return;
+  }
+  if (strcmp(line, "network-status") == 0) {
+    ssh_shell_print_net("status");
     return;
   }
   if (strcmp(line, "usb") == 0 || strcmp(line, "usb rescan") == 0) {
@@ -4143,7 +4221,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "rescue") == 0) {
@@ -4280,13 +4358,10 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (ssh_shell_command_is(cmd, "net") ||
-             strcmp(cmd, "network-status") == 0) {
-    netstack_format_status(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
+  } else if (ssh_shell_command_is(cmd, "net")) {
+    ssh_shell_print_net(ssh_shell_skip_spaces(cmd + 3));
+  } else if (strcmp(cmd, "network-status") == 0) {
+    ssh_shell_print_net("status");
   } else if (strcmp(cmd, "usb") == 0 || strcmp(cmd, "usb rescan") == 0) {
     ssh_shell_print_usb(strcmp(cmd, "usb rescan") == 0);
   } else if (strcmp(cmd, "route") == 0) {

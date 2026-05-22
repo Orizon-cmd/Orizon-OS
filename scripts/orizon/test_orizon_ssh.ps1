@@ -29,6 +29,7 @@ $commands = @(
   "hostname",
   "system repair",
   "net status",
+  "net check",
   "wifi status",
   "free",
   "ps",
@@ -144,6 +145,9 @@ run_cmd() {
       ;;
     "net status")
       grep -q "ipv4=" "`$OUT" || { echo "net status was not dispatched to the network command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "net check")
+      grep -q "network summary:" "`$OUT" || { echo "missing network check summary"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "wifi status")
       grep -q "driver=" "`$OUT" || { echo "wifi status was not dispatched to the wifi command"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

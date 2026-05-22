@@ -175,13 +175,16 @@ que l'hote. Si le reseau local ne distribue pas d'adresse, Orizon peut utiliser
 une IP statique persistante dans `/system/network.conf`.
 Dans Orizon, `net` affiche le pilote detecte, `net dhcp` teste l'obtention
 d'une adresse IPv4 sans lancer une mise a jour, et `net auto` tente DHCP puis
-la configuration statique si DHCP echoue.
+la configuration statique si DHCP echoue. `net check` donne un diagnostic
+quotidien PASS/WARN/FAIL pour lien, IPv4, route, passerelle et DNS; `net tls`
+lance le probe HTTPS GitHub/root-trust quand `update` ou `pkg` echoue.
 
 Exemple IP statique:
 
 ```text
 net config ip 192.168.1.50 gateway 192.168.1.1 dns 192.168.1.1
 net auto
+net check
 ping 8.8.8.8
 dns raw.githubusercontent.com
 route
@@ -209,7 +212,7 @@ Le build ZimaOS direct rapatrie maintenant aussi `Orizon-OS.iso` a la racine
 apres compilation reussie, sauf avec `--no-publish-root-iso`. La matrice
 provisionne des VMs dediees, demarre Orizon, lance DHCP puis SSH, et teste
 `system status`, `rescue`, `hostname`, `net status`, `timer`, `ping`, `dns`,
-`pkg status`, `update status`,
+`net check`, `pkg status`, `update status`,
 `selftest`, les logs, `report save`, `cat /workspace/hardware-report.txt` et
 `hostkey`. Le mode `--include-lifecycle` capture une screenshot framebuffer,
 declenche `reboot`, reverifie SSH apres redemarrage, puis teste `shutdown`

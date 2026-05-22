@@ -77,6 +77,9 @@ net
 net status
 net dhcp
 net auto
+net check
+net renew
+net tls
 net config show
 net config ip <ip> gateway <gateway> dns <dns> [subnet <mask>]
 route
@@ -90,7 +93,11 @@ logs network
 logs update
 ```
 
-`update` is installed-disk only. Live ISO boot intentionally blocks it.
+`net check` is safe over SSH and summarizes link, IPv4, route, gateway and DNS
+with PASS/WARN/FAIL. `net renew` reapplies saved DHCP/static config from the
+local console. `net tls` runs the heavier GitHub HTTPS/root-trust probe used to
+explain update/pkg network failures. `update` is installed-disk only. Live ISO
+boot intentionally blocks it.
 
 ## Packages
 
@@ -124,6 +131,8 @@ ssh start
 ssh status
 ssh audit
 ssh sessions
+net check
+net tls
 ssh auth
 ssh auth max <attempts>
 ssh auth lockout <seconds>

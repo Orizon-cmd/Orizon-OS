@@ -3524,7 +3524,42 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
 
 static void term_run_net(terminal_t *term, const char *cmd) {
   const char *args = term_skip_spaces(cmd + 3);
+  static char report[16384];
   char line[512];
+  size_t tls_len = 0;
+
+  if (term_command_is(args, "check") || term_command_is(args, "doctor")) {
+    netstack_format_check(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "renew")) {
+    netstack_renew_ipv4(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "tls") || term_command_is(args, "https")) {
+    term_puts_t(term, "net tls: probing raw.githubusercontent.com over TLS...\n");
+    report[0] = '\0';
+    if (netstack_github_tls_probe(report, sizeof(report), &tls_len) == 0) {
+      snprintf(line, sizeof(line), "net tls: PASS bytes=%lu\n",
+               (unsigned long)tls_len);
+      term_puts_t(term, line);
+    } else {
+      snprintf(line, sizeof(line), "net tls: FAIL status=%s\n",
+               netstack_get_status()->status);
+      term_puts_t(term, line);
+    }
+    if (report[0]) {
+      term_puts_t(term, report);
+      if (report[strlen(report) - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    }
+    return;
+  }
 
   if (term_command_is(args, "dhcp")) {
     term_puts_t(term, "net: configuring IPv4 with DHCP...\n");
@@ -5056,6 +5091,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  storage diag - Explain storage/NVMe/eMMC detection\n");
     term_puts_t(term, "  net       - Show ethernet/IP status\n");
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
+    term_puts_t(term, "  net check/renew/tls - Diagnose, reapply config, probe HTTPS\n");
     term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
     term_puts_t(term, "  net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
     term_puts_t(term, "  wifi      - Show Wi-Fi hardware status\n");
