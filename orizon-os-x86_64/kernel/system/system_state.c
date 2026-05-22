@@ -189,7 +189,7 @@ static int system_path_ok(const char *path) {
 int orizon_system_is_installed(void) {
   char state[256];
 
-  if (vfs_exists(ORIZON_INSTALL_MARKER_PATH) || vfs_exists("/system/installed")) {
+  if (vfs_exists(ORIZON_INSTALL_MARKER_PATH)) {
     return 1;
   }
   if (system_read_text_file(ORIZON_INSTALL_STATE_PATH, state, sizeof(state)) >

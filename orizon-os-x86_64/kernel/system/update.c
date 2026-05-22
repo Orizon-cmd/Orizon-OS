@@ -57,6 +57,10 @@
 #define UPDATE_MANIFEST_SIG_MAX 1024U
 #define UPDATE_MANIFEST_SIG_BYTES 256U
 #define UPDATE_BOOT_GUARD_ATTEMPTS 2U
+#define UPDATE_BOOT_GUARD_STRATEGY "limine-boot-count-shell-validation"
+#define UPDATE_BOOT_GUARD_SCOPE "post-orizon-early-boot"
+#define UPDATE_BOOTNEXT_REASON "efi-runtime-writer-not-implemented"
+#define UPDATE_AB_SLOT_REASON "single-esp-main-plus-rollback-slot"
 #define UPDATE_PACKAGE_INDEX_MAX 8192U
 #define UPDATE_PACKAGE_MAX (48U * 1024U)
 #define UPDATE_PACKAGE_MAX_ENTRIES 16U
@@ -558,11 +562,22 @@ static void update_boot_guard_arm(const update_manifest_t *manifest,
            "updated-commit %s\n"
            "expected-kernel-sha256 %s\n"
            "rollback-kernel-sha256 %s\n"
+           "strategy %s\n"
+           "scope %s\n"
+           "attempts-total %lu\n"
            "attempts-left %lu\n"
+           "normal-config %s\n"
+           "fallback-config %s\n"
+           "nvram-bootnext prepared=no reason=%s\n"
+           "ab-slots prepared=no reason=%s\n"
            "action boot-count-shell-validation\n",
            UPDATE_SOURCE, UPDATE_CHANNEL, manifest->version, manifest->commit,
            manifest->kernel_sha256, rollback_hash,
-           (unsigned long)UPDATE_BOOT_GUARD_ATTEMPTS);
+           UPDATE_BOOT_GUARD_STRATEGY, UPDATE_BOOT_GUARD_SCOPE,
+           (unsigned long)UPDATE_BOOT_GUARD_ATTEMPTS,
+           (unsigned long)UPDATE_BOOT_GUARD_ATTEMPTS,
+           UPDATE_LIMINE_NORMAL_PATH, UPDATE_LIMINE_FALLBACK_PATH,
+           UPDATE_BOOTNEXT_REASON, UPDATE_AB_SLOT_REASON);
   update_boot_guard_write(guard);
   update_write_line(UPDATE_ROLLBACK_STATE_PATH,
                     "rollback available: update pending boot validation");
@@ -570,7 +585,7 @@ static void update_boot_guard_arm(const update_manifest_t *manifest,
 }
 
 static void update_boot_guard_mark_current(const update_manifest_t *manifest) {
-  char guard[512];
+  char guard[900];
 
   if (!manifest) {
     return;
@@ -583,9 +598,15 @@ static void update_boot_guard_mark_current(const update_manifest_t *manifest) {
            "updated-version %s\n"
            "updated-commit %s\n"
            "expected-kernel-sha256 %s\n"
+           "strategy %s\n"
+           "scope %s\n"
+           "nvram-bootnext prepared=no reason=%s\n"
+           "ab-slots prepared=no reason=%s\n"
            "action none\n",
            UPDATE_SOURCE, UPDATE_CHANNEL, manifest->version, manifest->commit,
-           manifest->kernel_sha256);
+           manifest->kernel_sha256, UPDATE_BOOT_GUARD_STRATEGY,
+           UPDATE_BOOT_GUARD_SCOPE, UPDATE_BOOTNEXT_REASON,
+           UPDATE_AB_SLOT_REASON);
   update_boot_guard_write(guard);
 }
 
@@ -614,11 +635,20 @@ static void update_boot_guard_write_state(const char *state,
            "detail %s\n"
            "current-kernel-sha256 %s\n"
            "expected-kernel-sha256 %s\n"
-           "rollback-kernel-sha256 %s\n",
+           "rollback-kernel-sha256 %s\n"
+           "strategy %s\n"
+           "scope %s\n"
+           "normal-config %s\n"
+           "fallback-config %s\n"
+           "nvram-bootnext prepared=no reason=%s\n"
+           "ab-slots prepared=no reason=%s\n",
            state ? state : "unknown", detail ? detail : "none",
            current_hash ? current_hash : "unknown",
            expected_hash ? expected_hash : "unknown",
-           rollback_hash ? rollback_hash : "unknown");
+           rollback_hash ? rollback_hash : "unknown",
+           UPDATE_BOOT_GUARD_STRATEGY, UPDATE_BOOT_GUARD_SCOPE,
+           UPDATE_LIMINE_NORMAL_PATH, UPDATE_LIMINE_FALLBACK_PATH,
+           UPDATE_BOOTNEXT_REASON, UPDATE_AB_SLOT_REASON);
   update_boot_guard_write(guard);
   update_append_log(detail ? detail : "boot-guard: state updated");
 }
@@ -638,15 +668,26 @@ static void update_boot_guard_write_testing(unsigned attempts_left,
            "current-kernel-sha256 %s\n"
            "expected-kernel-sha256 %s\n"
            "rollback-kernel-sha256 %s\n"
+           "strategy %s\n"
+           "scope %s\n"
+           "attempts-total %lu\n"
            "attempts-left %lu\n"
            "fallback-armed %s\n"
+           "normal-config %s\n"
+           "fallback-config %s\n"
+           "nvram-bootnext prepared=no reason=%s\n"
+           "ab-slots prepared=no reason=%s\n"
            "action validate-at-shell-ready\n",
            detail ? detail : "boot-guard: updated kernel entered Orizon",
            current_hash ? current_hash : "unknown",
            expected_hash ? expected_hash : "unknown",
            rollback_hash ? rollback_hash : "unknown",
+           UPDATE_BOOT_GUARD_STRATEGY, UPDATE_BOOT_GUARD_SCOPE,
+           (unsigned long)UPDATE_BOOT_GUARD_ATTEMPTS,
            (unsigned long)attempts_left,
-           fallback_armed ? "yes" : "no");
+           fallback_armed ? "yes" : "no",
+           UPDATE_LIMINE_NORMAL_PATH, UPDATE_LIMINE_FALLBACK_PATH,
+           UPDATE_BOOTNEXT_REASON, UPDATE_AB_SLOT_REASON);
   update_boot_guard_write(guard);
   update_append_log(detail ? detail : "boot-guard: updated kernel testing");
 }
@@ -853,9 +894,27 @@ void orizon_update_boot_guard_status(char *out, size_t out_size) {
   } else {
     boot_guard_append(out, out_size, "efi-system-table unavailable");
   }
-  boot_guard_append(
-      out, out_size,
-      "nvram-bootnext prepared=no reason=efi-runtime-writer-not-implemented");
+  snprintf(buf, sizeof(buf), "nvram-bootnext prepared=no reason=%s",
+           UPDATE_BOOTNEXT_REASON);
+  boot_guard_append(out, out_size, buf);
+  snprintf(buf, sizeof(buf), "boot-strategy: %s",
+           UPDATE_BOOT_GUARD_STRATEGY);
+  boot_guard_append(out, out_size, buf);
+  snprintf(buf, sizeof(buf),
+           "boot-count-scope: %s firmware-pre-kernel-rollback=no",
+           UPDATE_BOOT_GUARD_SCOPE);
+  boot_guard_append(out, out_size, buf);
+  snprintf(buf, sizeof(buf), "limine-normal-config: %s path=%s",
+           vfs_exists(UPDATE_LIMINE_NORMAL_PATH) ? "present" : "missing",
+           UPDATE_LIMINE_NORMAL_PATH);
+  boot_guard_append(out, out_size, buf);
+  snprintf(buf, sizeof(buf), "limine-fallback-config: %s path=%s",
+           vfs_exists(UPDATE_LIMINE_FALLBACK_PATH) ? "present" : "missing",
+           UPDATE_LIMINE_FALLBACK_PATH);
+  boot_guard_append(out, out_size, buf);
+  snprintf(buf, sizeof(buf), "ab-slots: prepared=no reason=%s",
+           UPDATE_AB_SLOT_REASON);
+  boot_guard_append(out, out_size, buf);
   if (update_read_file(UPDATE_ROLLBACK_STATE_PATH, buf, sizeof(buf), NULL) ==
       0) {
     boot_guard_append(out, out_size, "rollback-state:");
@@ -1682,7 +1741,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
   size_t manifest_sig_len = 0;
   int metadata_verified = 0;
   char update_text[512];
-  char rollback_text[512];
+  char rollback_text[768];
   uint64_t total_started_ticks = timer_ticks();
 
   if (report && report_size > 0) {
@@ -2008,10 +2067,17 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
            "updated-version %s\n"
            "updated-commit %s\n"
            "rollback-kernel-sha256 %s\n"
+           "rollback-strategy limine-rollback-entry\n"
+           "bootguard-strategy %s\n"
+           "bootguard-scope %s\n"
+           "bootguard-attempts %lu\n"
+           "bootnext-used no\n"
            "boot-entry Orizon OS Rollback\n"
            "restore-command rollback\n",
            UPDATE_SOURCE, UPDATE_CHANNEL, manifest.version, manifest.commit,
-           rollback_hash);
+           rollback_hash, UPDATE_BOOT_GUARD_STRATEGY,
+           UPDATE_BOOT_GUARD_SCOPE,
+           (unsigned long)UPDATE_BOOT_GUARD_ATTEMPTS);
 
   update_set_state("update: writing installed ESP");
   append_report(report, report_size, "[7/8] Rewriting installed boot partition");
@@ -2052,7 +2118,7 @@ int orizon_update_full_upgrade(char *report, size_t report_size) {
 
 int orizon_update_rollback(char *report, size_t report_size) {
   char rollback_hash[SHA256_HEX_SIZE];
-  char rollback_text[512];
+  char rollback_text[768];
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -2083,7 +2149,8 @@ int orizon_update_rollback(char *report, size_t report_size) {
                     rollback_hash);
   snprintf(rollback_text, sizeof(rollback_text),
            "Orizon OS rollback restored\nsource=currently-booted-payload\n"
-           "kernel-sha256=%s\n",
+           "kernel-sha256=%s\nrollback-strategy=currently-booted-payload-to-main-slot\n"
+           "limine-default=normal\nbootnext-used=no\n",
            rollback_hash);
 
   if (orizon_install_update_esp(boot_kernel_image(), boot_kernel_image_size(),
@@ -2129,13 +2196,18 @@ static void update_status_append(char *out, size_t out_size, const char *line) {
 void orizon_update_format_status(char *out, size_t out_size) {
   char manifest[UPDATE_MANIFEST_MAX];
   char sig[UPDATE_MANIFEST_SIG_MAX];
+  char guard[1024];
+  char guard_state[32];
   char line[256];
   char value[128];
   char manifest_hash[SHA256_HEX_SIZE];
   size_t manifest_len = 0;
   size_t sig_len = 0;
+  size_t guard_len = 0;
   int manifest_ok;
   int sig_ok;
+  int guard_ok;
+  int guard_pending = 0;
 
   if (!out || out_size == 0) {
     return;
@@ -2234,15 +2306,64 @@ void orizon_update_format_status(char *out, size_t out_size) {
            vfs_exists(UPDATE_EFI_CACHE_PATH) ? "present" : "empty",
            vfs_exists(UPDATE_LIMINE_CACHE_PATH) ? "present" : "empty");
   update_status_append(out, out_size, line);
+  guard_state[0] = '\0';
+  guard_ok = update_read_file(UPDATE_BOOT_GUARD_PATH, guard, sizeof(guard),
+                              &guard_len) == 0 &&
+             guard_len > 0;
+  if (guard_ok &&
+      manifest_copy_value(guard, "state", guard_state, sizeof(guard_state)) ==
+          0 &&
+      (strcmp(guard_state, "pending") == 0 ||
+       strcmp(guard_state, "testing") == 0)) {
+    guard_pending = 1;
+  }
   snprintf(line, sizeof(line), "  bootguard-pending: %s",
-           vfs_exists(UPDATE_BOOT_GUARD_PATH) ? "yes" : "no");
+           guard_pending ? "yes" : "no");
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  bootguard-state: %s",
+           guard_ok && guard_state[0] ? guard_state : "none");
+  update_status_append(out, out_size, line);
+  if (guard_ok &&
+      manifest_copy_value(guard, "attempts-left", value, sizeof(value)) == 0) {
+    snprintf(line, sizeof(line), "  bootguard-attempts-left: %s", value);
+    update_status_append(out, out_size, line);
+  }
+  if (guard_ok &&
+      manifest_copy_value(guard, "fallback-armed", value, sizeof(value)) == 0) {
+    snprintf(line, sizeof(line), "  bootguard-fallback-armed: %s", value);
+    update_status_append(out, out_size, line);
+  }
+  if (guard_ok &&
+      manifest_copy_value(guard, "action", value, sizeof(value)) == 0) {
+    snprintf(line, sizeof(line), "  bootguard-action: %s", value);
+    update_status_append(out, out_size, line);
+  }
+  snprintf(line, sizeof(line), "  bootguard-strategy: %s",
+           UPDATE_BOOT_GUARD_STRATEGY);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  bootguard-scope: %s",
+           UPDATE_BOOT_GUARD_SCOPE);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  bootguard-normal-config: %s path=%s",
+           vfs_exists(UPDATE_LIMINE_NORMAL_PATH) ? "present" : "missing",
+           UPDATE_LIMINE_NORMAL_PATH);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  bootguard-fallback-config: %s path=%s",
+           vfs_exists(UPDATE_LIMINE_FALLBACK_PATH) ? "present" : "missing",
+           UPDATE_LIMINE_FALLBACK_PATH);
   update_status_append(out, out_size, line);
   snprintf(line, sizeof(line), "  rollback-ready: %s",
            vfs_exists(UPDATE_ROLLBACK_INFO_PATH) ? "yes" : "no");
   update_status_append(out, out_size, line);
-  update_status_append(
-      out, out_size,
-      "  nvram-bootnext: prepared=no reason=efi-runtime-writer-not-implemented");
+  snprintf(line, sizeof(line), "  rollback-scope: %s",
+           UPDATE_BOOT_GUARD_SCOPE);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  nvram-bootnext: prepared=no reason=%s",
+           UPDATE_BOOTNEXT_REASON);
+  update_status_append(out, out_size, line);
+  snprintf(line, sizeof(line), "  ab-slots: prepared=no reason=%s",
+           UPDATE_AB_SLOT_REASON);
+  update_status_append(out, out_size, line);
   update_status_append(
       out, out_size,
       update_installed_marker_present()

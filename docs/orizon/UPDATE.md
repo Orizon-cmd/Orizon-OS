@@ -65,8 +65,11 @@ skips the boot artifact download and ESP rewrite, then only checks packages.
 `update status` is safe in the live ISO and on installed systems. It reports
 whether the cached manifest/signature are present, whether `manifest.sig`
 metadata matches the manifest SHA-256, the embedded TLS/root-trust posture,
-HTTPS retry/resume cache state, bootguard pending state, rollback readiness,
-and the live-ISO vs installed-system difference.
+HTTPS retry/resume cache state, bootguard state/attempts, cached normal and
+fallback Limine configs, rollback readiness, and the live-ISO vs
+installed-system difference. It also prints the honest boundary for recovery:
+`nvram-bootnext: prepared=no`, `ab-slots: prepared=no`, and
+`rollback-scope: post-orizon-early-boot`.
 It also states the mandatory signature policy: `manifest.sig` must verify with
 `rsa-pkcs1-sha256` and the embedded `orizon-update-root-2026-05` key before any
 payload is accepted.
@@ -99,10 +102,13 @@ default and marks the update as validated. If the refreshed kernel reaches
 Orizon early boot but fails before the shell, the next default boot selects
 `Orizon OS Rollback` automatically.
 
-`bootguard` now also reports the remaining validation attempts, the Limine
-firmware type, and the EFI system table address when booted through UEFI. That
-is the prepared plumbing for a future `BootNext` writer, but Orizon still does
-not call UEFI Runtime Services yet.
+`bootguard` now also reports the remaining validation attempts, the selected
+strategy (`limine-boot-count-shell-validation`), the Limine normal/fallback
+config cache state, the firmware type, and the EFI system table address when
+booted through UEFI. That is the prepared plumbing for a future `BootNext`
+writer, but Orizon still does not call UEFI Runtime Services yet. The status
+therefore says `firmware-pre-kernel-rollback=no`: firmware-level failures
+before the Orizon kernel starts still need future BootNext or A/B work.
 
 If the refreshed system does not boot correctly, or if automatic fallback has
 selected the rollback entry, run:
@@ -119,10 +125,12 @@ rollback-status
 ```
 
 This is the current recovery layer. It is boot-count style and automatic after
-the refreshed kernel reaches Orizon early boot. True UEFI NVRAM `BootNext` or a
-firmware-level boot-count path, which would also cover failures before the
-kernel starts at all, is still a future hardening step even though the Limine
-EFI system table handoff is now captured for diagnostics.
+the refreshed kernel reaches Orizon early boot. Rollback metadata now records
+the selected strategy, scope, attempt budget, and whether BootNext was used
+(`bootnext-used no`). True UEFI NVRAM `BootNext` or a firmware-level boot-count
+path, which would also cover failures before the kernel starts at all, is still
+a future hardening step even though the Limine EFI system table handoff is now
+captured for diagnostics.
 
 ## Public Manifest
 
@@ -404,3 +412,5 @@ place after artifact verification. The next reliability steps are:
 
 - UEFI NVRAM `BootNext` writing through Runtime Services, or bootloader-level
   boot-count fallback before the refreshed kernel starts at all
+- A/B system payload slots instead of the current single ESP main slot plus
+  rollback files

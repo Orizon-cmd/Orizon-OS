@@ -541,10 +541,13 @@ default de secours jusqu'a ce que le shell soit atteint; si le shell est pret,
 le default normal est restaure et le boot est valide. Si une mise a jour boote
 mal apres l'entree dans Orizon mais avant le shell, le boot suivant choisit le
 rollback par defaut. Le bootguard journalise aussi le compteur de tentatives,
-le type de firmware et, en UEFI, l'adresse EFI system table exposee par Limine;
-la vraie ecriture NVRAM `BootNext` reste volontairement non active tant que les
-Runtime Services ne sont pas cables. Une fois dans ce slot, la commande suivante
-restaure le payload demarre comme slot principal:
+la strategie `limine-boot-count-shell-validation`, les configs Limine
+normal/fallback, le type de firmware et, en UEFI, l'adresse EFI system table
+exposee par Limine. `update status` affiche aussi `nvram-bootnext:
+prepared=no` et `ab-slots: prepared=no`: la vraie ecriture NVRAM `BootNext`
+reste volontairement non active tant que les Runtime Services ne sont pas
+cables. Une fois dans ce slot, la commande suivante restaure le payload demarre
+comme slot principal:
 
 ```text
 rollback
