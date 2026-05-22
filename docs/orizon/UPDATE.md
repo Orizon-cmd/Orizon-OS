@@ -3,6 +3,10 @@
 Orizon OS does not depend on one host. GitHub is the public update source;
 ZimaOS is only the current lab VM backend.
 
+For the exact implemented/prepared/not-implemented boundary, see
+[STATUS.md](STATUS.md). In particular, rollback is currently Limine fallback
+logic after Orizon early boot; true firmware `BootNext` is still future work.
+
 Status: active for installed systems. The in-OS `update` command is hidden from
 `help` in live boot and refuses to run without the installed marker at
 `/workspace/.orizon/installed`.

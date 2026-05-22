@@ -4,6 +4,13 @@ Orizon OS est maintenant un projet autonome et personnel. Ce depot est la
 source d'autorite du systeme: il n'y a plus de synchronisation prevue avec un
 autre OS ou un depot amont externe.
 
+Pour connaitre l'etat exact de validation, les limites et ce qui est seulement
+prepare pour le materiel futur, commence par
+[docs/orizon/STATUS.md](docs/orizon/STATUS.md). La regle actuelle est simple:
+la VM ZimaOS peut etre testee, mais aucune validation Lenovo, dongle USB, AP
+Wi-Fi reel ou autre PC physique ne doit etre revendiquee sans capture materielle
+fraiche.
+
 ## Direction actuelle
 
 Le point d'entree actif est `orizon-os-x86_64`, recentre en base minimale pour
@@ -682,6 +689,8 @@ La premiere commande reconstruit `orizon-os-x86_64`, deploie le resultat sur
 - `orizon-os-x86_64/` : noyau et image de demarrage `x86_64`
 - `docs/orizon/START_HERE.md` : page de reprise avec etat courant, limites et
   prochaine validation
+- `docs/orizon/STATUS.md` : tableau court des fonctions implementees, preparees
+  et non validees materiellement
 - `docs/orizon/COMMANDS.md` : aide-memoire des commandes terminal utiles
 - `docs/orizon/` : notes de projet et labo ZimaOS
 - `scripts/orizon/` : update portable, build, deploiement VM, acces VNC et SSH

@@ -5,6 +5,9 @@ design note.
 
 ## Current State
 
+- For the precise truth table, read [STATUS.md](STATUS.md). It separates
+  VM-ready features, prepared hardware paths, and work that is not implemented
+  yet.
 - Installed updates are active: the in-OS `update` command downloads the signed
   GitHub manifest, verifies boot payload SHA-256 values, refreshes the installed
   ESP, and writes rollback metadata.
@@ -96,6 +99,7 @@ python scripts/orizon/quick_check.py
 ## Files To Open First
 
 - [README.md](../../README.md)
+- [docs/orizon/STATUS.md](STATUS.md)
 - [docs/orizon/COMMANDS.md](COMMANDS.md)
 - [docs/orizon/ROADMAP.md](ROADMAP.md)
 - [docs/orizon/UPDATE.md](UPDATE.md)

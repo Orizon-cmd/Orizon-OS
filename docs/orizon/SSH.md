@@ -4,6 +4,10 @@ Orizon contient maintenant une base serveur SSH integree au kernel. Elle valide
 le reseau entrant, la negociation crypto et le debut de transport chiffre avant
 d'activer un vrai shell distant.
 
+Etat exact et limites: [STATUS.md](STATUS.md). Le SSH est une interface admin
+de diagnostic pour VM/ZimaOS et captures materiel futures; il ne remplace pas
+encore une separation POSIX user/admin complete.
+
 ## Commandes
 
 ```text

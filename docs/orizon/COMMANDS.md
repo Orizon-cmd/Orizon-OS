@@ -4,6 +4,12 @@ This page groups the commands that matter most during validation. It is not a
 complete shell manual; it is the checklist to avoid hunting through the longer
 docs.
 
+## Status And Limits
+
+Before claiming a feature is complete, check [STATUS.md](STATUS.md). It is the
+short source of truth for VM-ready features, prepared hardware paths, known
+limits, and the rule that Lenovo/real-hardware validation needs fresh captures.
+
 ## Release And Build
 
 ```powershell
@@ -279,11 +285,12 @@ For future hardware work, capture command output rather than summarizing it from
 memory. Start with `report next` to see the safe capture plan, then run
 `report save` and copy `/workspace/hardware-report.txt`.
 If the internal disk is missing, run `storage diag`, `logs storage`, `logs pci`,
-`pci bars`, `disk identify`, `disk read-test last`, and `gpt scan`; they are read-only and report
-NVMe/AHCI candidates, Intel RST/VMD blockers, secondary PCI bus hints, NVMe
-CAP/CC/CSTS/admin errors, last-sector readability, and SDHCI/eMMC cases without
-installing or writing to disk. The useful files are `/workspace/hardware-report.txt`, `/logs/wifi.log`,
-`/logs/usb.log`, `/logs/network.log`, `/logs/ssh.log`, and
+`pci bars`, `disk identify`, `disk read-test last`, and `gpt scan`; they are
+read-only and report NVMe/AHCI candidates, Intel RST/VMD blockers, secondary
+PCI bus hints, NVMe CAP/CC/CSTS/admin errors, last-sector readability, and
+SDHCI/eMMC cases without installing or writing to disk. The useful files are
+`/workspace/hardware-report.txt`, `/logs/wifi.log`, `/logs/usb.log`,
+`/logs/network.log`, `/logs/ssh.log`, and
 `/workspace/.orizon/update.log`.
 
 `persist status` affiche l'etat detecte des racines data, le LBA de la

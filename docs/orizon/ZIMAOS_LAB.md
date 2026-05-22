@@ -41,12 +41,25 @@
 - Dedicated Orizon test VM created: `orizon-dev`
 - Current Orizon display endpoint while running: `vnc://localhost:0`
 
-## Current Bootstrap Mode
+## Current Build And VM Mode
 
-The Windows machine does not currently have the local `x86_64` build toolchain
-installed, and ZimaOS itself also lacks the compiler stack. For now, the first
-VM boot path uses the tracked `orizon-os-x86_64/iso_root` UEFI tree and writes
-it directly onto the VM disk with `scripts/orizon/deploy_x86_64_tree_vm.py`.
+The normal build path is now the release helper:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-iso
+```
+
+It runs the remote Docker build on ZimaOS, publishes `Orizon-OS.iso`, refreshes
+`updates/x86_64/`, signs the manifest, and validates the release bundle. For a
+VM deploy loop, use:
+
+```powershell
+python scripts/orizon/orizon_update.py --mode zimaos-vm
+```
+
+The lower-level scripts such as `build_x86_64_on_zimaos.py` and
+`deploy_x86_64_tree_vm.py` still exist for debugging, but day-to-day work should
+prefer `orizon_update.py` so the ISO and update artifacts stay synchronized.
 
 ## GitHub Access On ZimaOS
 

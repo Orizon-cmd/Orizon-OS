@@ -3,6 +3,9 @@
 This page documents the current wired networking path used by `update`,
 diagnostics and VM testing.
 
+Current validation boundaries are summarized in [STATUS.md](STATUS.md). NAT VM
+smokes do not prove Lenovo, USB dongle, or real LAN bridge hardware.
+
 ## Supported VM NICs
 
 - Intel `e1000` / `e1000e`

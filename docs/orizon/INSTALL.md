@@ -3,6 +3,9 @@
 The live ISO cannot safely rewrite itself, so durable updates begin with a real
 disk installation path:
 
+Current validation and safety limits are summarized in [STATUS.md](STATUS.md).
+Do not treat VM install success as Lenovo or physical-PC validation.
+
 1. boot the live ISO,
 2. run `install`,
 3. collect language, keyboard, target disk, disk strategy, optional data

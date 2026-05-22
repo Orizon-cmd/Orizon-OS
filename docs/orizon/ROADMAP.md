@@ -45,6 +45,8 @@
 - Documentation cleanup: `START_HERE.md` now summarizes the current state,
   guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
   operator command checklist separate from the long-form subsystem notes.
+  `STATUS.md` is the compact truth table for implemented, VM-ready, prepared,
+  not-yet-implemented, and not-yet-hardware-validated work.
 - Staged remote-management base: `ssh start/status/algorithms/stop`, TCP/22
   listener, SSH banner, server/client `KEXINIT`, X25519, RSA host-key
   signature, `ECDH_REPLY`, key derivation, `NEWKEYS`, encrypted
@@ -83,7 +85,8 @@
   `/workspace/.orizon/wifi-validation` for Lenovo AP testing.
 - Repeatable ZimaOS VM smoke matrix: dedicated libvirt VMs can validate boot,
   DHCP, SSH, ping, DNS, package status, update status, and host-key state across
-  NAT NIC models. Current verified NAT passes: e1000e, VirtIO-net, and RTL8139.
+  NAT NIC models. Recent NAT smoke passes cover e1000e, VirtIO-net, and RTL8139;
+  this does not imply validation on Lenovo or any other physical PC.
 
 ## Next Stability Track
 
