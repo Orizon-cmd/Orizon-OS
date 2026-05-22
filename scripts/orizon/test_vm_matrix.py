@@ -260,6 +260,8 @@ def run_ssh_checks(
         ("pkg help", "pkg verify"),
         ("pkg search orizon", "pkg search:"),
         ("pkg remote", "package remote:"),
+        ("pkg remote verify", "pkg remote verify:"),
+        ("pkg upgrade plan", "pkg upgrade plan:"),
         ("pkg sample", "Sample package written"),
         ("pkg verify /workspace/packages/orizon-hello.opkg", "package verify: OK"),
         ("pkg install /workspace/packages/orizon-hello.opkg", "install"),

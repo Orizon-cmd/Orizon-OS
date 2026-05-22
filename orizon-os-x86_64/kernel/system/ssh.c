@@ -2899,12 +2899,15 @@ static void ssh_shell_print_pkg(const char *args) {
              "  pkg list               list builtin/installed packages\r\n"
              "  pkg search <query>     search builtin/installed/remote packages\r\n"
              "  pkg remote             show cached signed remote package index\r\n"
+             "  pkg remote verify      validate cached signed remote index\r\n"
+             "  pkg upgrade plan       show signed package upgrade plan\r\n"
              "  pkg info <name>        show package metadata/files\r\n"
              "  pkg history            show install/remove history\r\n"
              "  pkg sample             create /workspace/packages/orizon-hello.opkg\r\n"
              "  pkg hash <file>        print package payload sha256\r\n"
              "  pkg verify <file>      verify package hash/dependencies\r\n"
              "  pkg update             run signed package refresh through update\r\n"
+             "  pkg upgrade            plan then run signed package refresh\r\n"
              "  pkg install <file>     install a verified package after disk install\r\n"
              "  pkg remove <name>      remove an installed package\r\n"
              "  pkg rollback <name>    restore last removed package snapshot\r\n");
@@ -2914,7 +2917,32 @@ static void ssh_shell_print_pkg(const char *args) {
     const char *query = ssh_shell_skip_spaces(sub + 6);
     orizon_pkg_search(query, out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "remote")) {
-    orizon_pkg_remote(out, sizeof(out));
+    const char *remote_args = ssh_shell_skip_spaces(sub + 6);
+    if (ssh_shell_command_is(remote_args, "verify") ||
+        ssh_shell_command_is(remote_args, "check")) {
+      orizon_pkg_remote_verify(out, sizeof(out));
+    } else {
+      orizon_pkg_remote(out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "upgrade")) {
+    const char *upgrade_args = ssh_shell_skip_spaces(sub + 7);
+    if (ssh_shell_command_is(upgrade_args, "plan") ||
+        ssh_shell_command_is(upgrade_args, "dry-run") ||
+        ssh_shell_command_is(upgrade_args, "check")) {
+      orizon_pkg_upgrade_plan(out, sizeof(out));
+    } else if (!ssh_install_already_complete()) {
+      snprintf(out, sizeof(out),
+               "pkg upgrade: unavailable in live boot. Install Orizon OS first.\r\n"
+               "hint: use 'pkg upgrade plan' to inspect the cached signed index.\r\n");
+    } else {
+      orizon_pkg_upgrade_plan(out, sizeof(out));
+      if (strlen(out) + strlen("pkg upgrade: running signed system manifest/package refresh\r\n") <
+          sizeof(out)) {
+        strcat(out,
+               "pkg upgrade: running signed system manifest/package refresh\r\n");
+      }
+      orizon_update_full_upgrade(out + strlen(out), sizeof(out) - strlen(out));
+    }
   } else if (ssh_shell_command_is(sub, "info")) {
     if (!ssh_shell_read_token(sub + 4, token, sizeof(token))) {
       snprintf(out, sizeof(out), "usage: pkg info <name>\r\n");
@@ -3961,6 +3989,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  usb rescan           rescan USB root ports\r\n"
         "  ps|pkg|update        show system/update/package state\r\n"
         "  pkg help             show package search/verify/install/update commands\r\n"
+        "  pkg upgrade plan     show signed package upgrade plan\r\n"
         "  pkg search|remote    inspect local and signed remote package metadata\r\n"
         "  storage|storage diag show storage and disk detection state\r\n"
         "  persist status|slots|save|repair inspect or rewrite data snapshots\r\n"

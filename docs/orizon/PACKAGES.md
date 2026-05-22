@@ -21,7 +21,10 @@ pkg list
 pkg status
 pkg search orizon
 pkg remote
+pkg remote verify
+pkg upgrade plan
 pkg update
+pkg upgrade
 pkg info orizon-hello
 pkg history
 pkg sample
@@ -32,14 +35,17 @@ pkg remove orizon-hello
 pkg rollback orizon-hello
 ```
 
-`pkg update`, `pkg install`, `pkg remove`, and `pkg rollback` are available only
-after Orizon OS has been installed to disk. Live boot can inspect, search,
-create, hash and verify package files, but it refuses persistent package
-changes because the live ISO is not the installed system. `pkg update` is
-intentionally a thin wrapper around the signed system `update` flow: the package
-index is authenticated by the signed OS manifest, pinned package repository
-commit, and pinned package-index SHA-256. `pkg remote` shows the cached signed
-index once an installed system has refreshed it.
+`pkg update`, `pkg upgrade`, `pkg install`, `pkg remove`, and `pkg rollback`
+are available only after Orizon OS has been installed to disk. Live boot can
+inspect, search, create, hash and verify package files, but it refuses
+persistent package changes because the live ISO is not the installed system.
+`pkg upgrade plan` remains safe in live boot: it reads the cached signed remote
+index when present and prints install/upgrade/current/protected decisions
+without mutating files. `pkg update` and `pkg upgrade` are intentionally thin
+wrappers around the signed system `update` flow: the package index is
+authenticated by the signed OS manifest, pinned package repository commit, and
+pinned package-index SHA-256. `pkg remote verify` validates the cached index
+shape, paths, hashes, sizes and duplicate names.
 
 ## Package Format
 
@@ -102,6 +108,7 @@ Installed package state is stored under:
 /workspace/.orizon/pkgdb/installed
 /workspace/.orizon/pkgdb/packages
 /workspace/.orizon/pkgdb/removed
+/workspace/.orizon/pkgdb/cache
 /workspace/.orizon/package-index
 ```
 
@@ -134,8 +141,13 @@ verify the internal payload SHA-256 before installation.
 
 `pkg search <query>` searches builtin, installed and cached remote package
 metadata. `pkg remote` prints the cached signed package index and makes clear
-when it is not available yet. `pkg info <name>` shows stored package metadata,
-dependencies, scripts and the files owned by an installed package.
+when it is not available yet. `pkg remote verify` writes
+`/workspace/.orizon/pkgdb/cache/remote.status` with the last validation result.
+`pkg upgrade plan` compares cached remote package versions against builtin and
+installed package metadata, then prints a non-destructive plan. `pkg upgrade`
+prints that plan and then reuses the signed `update` flow to refresh packages.
+`pkg info <name>` shows stored package metadata, dependencies, scripts and the
+files owned by an installed package.
 
 `pkg remove <name>` saves a rollback snapshot in
 `/workspace/.orizon/pkgdb/removed`, runs an optional `pre-remove` script,
@@ -147,6 +159,7 @@ if the package is not already installed.
 Package install now keeps a previous package manifest in memory while applying
 an upgrade. If payload replay or metadata update fails, Orizon removes the
 partial new payload and restores the previous package payload/metadata when it
-exists. Remove rollback is persistent across reboots through the package
-database, but it is still a local package transaction guard, not a full
-boot-level package rollback.
+exists. History entries include explicit `installed` / `upgraded` /
+`removed` / `rollback` events. Remove rollback is persistent across reboots
+through the package database, but it is still a local package transaction
+guard, not a full boot-level package rollback.

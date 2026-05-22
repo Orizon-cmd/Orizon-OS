@@ -231,7 +231,10 @@ pkg list
 pkg status
 pkg search <query>
 pkg remote
+pkg remote verify
+pkg upgrade plan
 pkg update
+pkg upgrade
 pkg info <name>
 pkg history
 pkg sample
@@ -257,7 +260,11 @@ owned by a package and stores a persistent remove snapshot for
 `pkg rollback <name>`. Local package install has a transaction guard: if
 replaying the new payload or updating package metadata fails, Orizon removes the
 partial new payload and restores the previous package payload/metadata when one
-exists.
+exists. `pkg remote verify` validates the cached package index shape and records
+the result in `/workspace/.orizon/pkgdb/cache/remote.status`. `pkg upgrade
+plan` is a read-only comparison between the cached signed index and installed
+package metadata; `pkg upgrade` prints that plan and then enters the same signed
+update path as `pkg update`.
 This is not yet a full boot-level package rollback.
 
 ## Live Boot Behavior

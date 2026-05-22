@@ -455,8 +455,9 @@ Details:
 Orizon OS contient maintenant une premiere base de gestionnaire de paquets.
 Le format est volontairement simple: un fichier texte `.opkg` contient `name`,
 `version`, un `sha256` du payload, des blocs `file` a installer, puis un
-bloc `post-install` minimal. La couche v2 ajoute recherche, index distant
-signe en cache, scripts `pre-remove`/`post-remove`, et rollback local apres
+bloc `post-install` minimal. La couche v3 ajoute recherche, verification de
+l'index distant signe en cache, `pkg upgrade plan`, scripts
+`pre-remove`/`post-remove`, historique explicite, et rollback local apres
 suppression.
 
 Commandes disponibles:
@@ -466,7 +467,10 @@ pkg list
 pkg status
 pkg search orizon
 pkg remote
+pkg remote verify
+pkg upgrade plan
 pkg update
+pkg upgrade
 pkg info orizon-hello
 pkg history
 pkg sample
@@ -477,13 +481,15 @@ pkg remove orizon-hello
 pkg rollback orizon-hello
 ```
 
-`pkg update`, `pkg install`, `pkg remove` et `pkg rollback` sont reserves a un
-OS installe sur disque. Les paquets installes sont stockes dans
+`pkg update`, `pkg upgrade`, `pkg install`, `pkg remove` et `pkg rollback` sont
+reserves a un OS installe sur disque. `pkg upgrade plan` reste non destructif et
+peut afficher le plan depuis l'index signe cache. Les paquets installes sont stockes dans
 `/workspace/.orizon/pkgdb`, puis rejoues au boot pour restaurer les fichiers
 systeme en RAM comme `/system/share/...`. `pkg verify` controle le hash payload
 et les dependances simples `depends`; `pkg install` restaure l'ancien paquet si
 l'installation echoue avant la fin. `pkg remove` conserve un snapshot dans
 `/workspace/.orizon/pkgdb/removed`, que `pkg rollback <name>` peut restaurer.
+`pkg remote verify` ecrit aussi `/workspace/.orizon/pkgdb/cache/remote.status`.
 `pkg info <name>` affiche les metadonnees, dependances, scripts et fichiers
 possedes par un paquet.
 

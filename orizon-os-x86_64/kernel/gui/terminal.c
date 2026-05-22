@@ -3184,6 +3184,8 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg status        - Show package manager state\n");
   term_puts_t(term, "  pkg search <query> - Search builtin/installed/remote packages\n");
   term_puts_t(term, "  pkg remote        - Show cached signed remote package index\n");
+  term_puts_t(term, "  pkg remote verify - Validate cached remote package index\n");
+  term_puts_t(term, "  pkg upgrade plan  - Show signed package upgrade plan\n");
   term_puts_t(term, "  pkg info <name>   - Show package metadata/files\n");
   term_puts_t(term, "  pkg history       - Show package install/remove history\n");
   term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
@@ -3191,12 +3193,15 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
   if (term_install_already_complete()) {
     term_puts_t(term, "  pkg update        - Run signed update package refresh\n");
+    term_puts_t(term, "  pkg upgrade       - Plan then run signed package refresh\n");
     term_puts_t(term, "  pkg install <file> - Install a verified local package\n");
     term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
     term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
   } else {
     term_puts_t(term,
                 "  pkg update        - Available after disk install only\n");
+    term_puts_t(term,
+                "  pkg upgrade       - Available after disk install only\n");
     term_puts_t(term,
                 "  pkg install <file> - Available after disk install only\n");
     term_puts_t(term,
@@ -3241,7 +3246,38 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
   }
 
   if (term_command_is(args, "remote")) {
-    orizon_pkg_remote(report, sizeof(report));
+    const char *remote_args = term_skip_spaces(args + 6);
+    if (term_command_is(remote_args, "verify") ||
+        term_command_is(remote_args, "check")) {
+      orizon_pkg_remote_verify(report, sizeof(report));
+    } else {
+      orizon_pkg_remote(report, sizeof(report));
+    }
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "upgrade")) {
+    const char *upgrade_args = term_skip_spaces(args + 7);
+    if (term_command_is(upgrade_args, "plan") ||
+        term_command_is(upgrade_args, "dry-run") ||
+        term_command_is(upgrade_args, "check")) {
+      orizon_pkg_upgrade_plan(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (!term_install_already_complete()) {
+      term_puts_t(term,
+                  "pkg upgrade: unavailable in live boot. Install Orizon OS first.\n");
+      term_puts_t(term,
+                  "hint: use 'pkg upgrade plan' to inspect the cached signed index.\n");
+      return;
+    }
+    orizon_pkg_upgrade_plan(report, sizeof(report));
+    term_puts_t(term, report);
+    term_puts_t(term,
+                "pkg upgrade: running signed system manifest/package refresh\n");
+    orizon_update_full_upgrade(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -5083,6 +5119,8 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
     term_puts_t(term, "  pkg search <q>  - Search builtin/installed/remote packages\n");
     term_puts_t(term, "  pkg remote      - Show cached signed remote package index\n");
+    term_puts_t(term, "  pkg remote verify - Validate cached remote index\n");
+    term_puts_t(term, "  pkg upgrade plan - Show signed upgrade plan\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
     term_puts_t(term, "  pkg history    - Show package transaction history\n");
     term_puts_t(term, "  pkg sample      - Create a sample .opkg package\n");
@@ -5090,6 +5128,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  pkg update      - Refresh packages through signed update\n");
+      term_puts_t(term, "  pkg upgrade     - Plan then refresh packages through signed update\n");
       term_puts_t(term, "  pkg install <file> - Install a verified package\n");
       term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
       term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");

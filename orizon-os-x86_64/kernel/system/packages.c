@@ -6,6 +6,7 @@
  *   orizon-package 1
  *   name example
  *   version 1.0.0
+ *   depends orizon-core core-x86_64
  *   sha256 <sha256 of every byte after the payload: line>
  *   payload:
  *   file /system/share/example.txt
@@ -27,13 +28,16 @@
 #define PKG_DB_INSTALLED "/workspace/.orizon/pkgdb/installed"
 #define PKG_DB_STORE "/workspace/.orizon/pkgdb/packages"
 #define PKG_DB_REMOVED "/workspace/.orizon/pkgdb/removed"
+#define PKG_DB_CACHE "/workspace/.orizon/pkgdb/cache"
 #define PKG_DB_HISTORY "/workspace/.orizon/pkgdb/history.log"
+#define PKG_REMOTE_CACHE_STATUS "/workspace/.orizon/pkgdb/cache/remote.status"
 #define PKG_REMOTE_INDEX_PATH "/workspace/.orizon/package-index"
 #define PKG_WORKSPACE_LIST "/workspace/.orizon/packages"
 #define PKG_SYSTEM_LIST "/system/packages"
 #define PKG_SYSTEM_INSTALLED "/system/installed"
 #define PKG_STATUS_PATH "/system/package-status"
 #define PKG_MAX_DEPENDS 8U
+#define PKG_MAX_REMOTE_ENTRIES 32U
 
 typedef struct {
   const char *name;
@@ -70,6 +74,14 @@ typedef struct {
   size_t size;
 } pkg_remote_entry_t;
 
+typedef struct {
+  size_t bytes;
+  int total_lines;
+  int valid_entries;
+  int invalid_lines;
+  int duplicate_names;
+} pkg_remote_validation_t;
+
 static const builtin_package_t builtin_packages[] = {
     {"orizon-core", "core-x86_64", "builtin"},
     {"orizon-console", "minimal-shell", "builtin"},
@@ -82,7 +94,7 @@ static const builtin_package_t builtin_packages[] = {
     {"orizon-timer", "pit-100hz", "builtin"},
     {"orizon-scheduler", "process-accounting", "builtin"},
     {"orizon-updater", "installed-esp-writer", "builtin"},
-    {"orizon-packages", "text-payload-v1", "builtin"},
+    {"orizon-packages", "text-payload-v3", "builtin"},
 };
 
 static char pkg_buf[PKG_MAX_BYTES + 1] __attribute__((aligned(4096)));
@@ -505,6 +517,12 @@ static int parse_remote_index_line(const char *line,
       !pkg_remote_path_safe(entry->path) || !hex_is_valid(entry->sha256)) {
     return -1;
   }
+  while (*p == ' ' || *p == '\t') {
+    p++;
+  }
+  if (*p != '\0') {
+    return -1;
+  }
   return 0;
 }
 
@@ -874,6 +892,7 @@ static int store_installed_package(const char *source_path,
   char manifest_path[MAX_PATH];
   char meta_path[MAX_PATH];
   char meta[512];
+  char event[256];
 
   if (package_store_paths(pkg->name, manifest_path, sizeof(manifest_path),
                           meta_path, sizeof(meta_path)) < 0) {
@@ -893,6 +912,11 @@ static int store_installed_package(const char *source_path,
   if (pkg_write_blob_internal(meta_path, meta, strlen(meta)) < 0) {
     return -1;
   }
+  snprintf(event, sizeof(event),
+           "installed %s %s source=%s sha256=%s transaction=v3\n",
+           pkg->name, pkg->version, source_path ? source_path : "unknown",
+           actual_hash);
+  pkg_append_text_internal(PKG_DB_HISTORY, event);
   pkg_append_text_internal(PKG_DB_HISTORY, meta);
   pkg_append_text_internal(PKG_DB_HISTORY, "\n");
   return 0;
@@ -937,6 +961,37 @@ static int package_dependency_satisfied(const pkg_dependency_t *dep) {
     return 0;
   }
   return pkg_version_matches(dep->version, version);
+}
+
+static int package_current_version(const char *name, char *version,
+                                   size_t version_size, char *origin,
+                                   size_t origin_size) {
+  const builtin_package_t *builtin;
+  char manifest_path[MAX_PATH];
+  char meta_path[MAX_PATH];
+  char meta[512];
+
+  if (!pkg_name_safe(name) || !version || version_size == 0) {
+    return -1;
+  }
+  builtin = find_builtin_package(name);
+  if (builtin) {
+    snprintf(version, version_size, "%s", builtin->version);
+    if (origin && origin_size > 0) {
+      snprintf(origin, origin_size, "%s", "builtin");
+    }
+    return 0;
+  }
+  if (package_store_paths(name, manifest_path, sizeof(manifest_path),
+                          meta_path, sizeof(meta_path)) < 0 ||
+      pkg_read_file(meta_path, meta, sizeof(meta), NULL) < 0 ||
+      meta_value(meta, "version", version, version_size) < 0) {
+    return -1;
+  }
+  if (origin && origin_size > 0) {
+    snprintf(origin, origin_size, "%s", "installed");
+  }
+  return 0;
 }
 
 static int check_package_dependencies(const pkg_manifest_t *pkg, char *report,
@@ -1235,6 +1290,137 @@ static int append_remote_index_entries(const char *query, char *out,
   return 0;
 }
 
+static int remote_name_seen(char names[PKG_MAX_REMOTE_ENTRIES][64], size_t count,
+                            const char *name) {
+  for (size_t i = 0; i < count; i++) {
+    if (strcmp(names[i], name) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void pkg_write_remote_cache_status(const pkg_remote_validation_t *stats,
+                                          int rc) {
+  char status[256];
+  if (!stats) {
+    return;
+  }
+  snprintf(status, sizeof(status),
+           "remote-index-valid %s\n"
+           "entries %d\n"
+           "invalid-lines %d\n"
+           "duplicate-names %d\n"
+           "bytes %lu\n",
+           rc == 0 ? "yes" : "no", stats->valid_entries,
+           stats->invalid_lines, stats->duplicate_names,
+           (unsigned long)stats->bytes);
+  pkg_write_blob_internal(PKG_REMOTE_CACHE_STATUS, status, strlen(status));
+}
+
+static int pkg_validate_remote_index(pkg_remote_validation_t *stats, char *out,
+                                     size_t out_size, int verbose) {
+  line_reader_t reader;
+  char line[PKG_MAX_LINE];
+  char seen_names[PKG_MAX_REMOTE_ENTRIES][64];
+  size_t seen_count = 0;
+  int warnings = 0;
+  size_t size = 0;
+  int rc;
+
+  if (stats) {
+    memset(stats, 0, sizeof(*stats));
+  }
+  memset(seen_names, 0, sizeof(seen_names));
+  if (pkg_read_file(PKG_REMOTE_INDEX_PATH, pkg_rollback_buf,
+                    sizeof(pkg_rollback_buf), &size) < 0 ||
+      size == 0) {
+    if (verbose) {
+      pkg_append_line(out, out_size, "cached-index=no");
+    }
+    return -1;
+  }
+  if (stats) {
+    stats->bytes = size;
+  }
+
+  reader.data = pkg_rollback_buf;
+  reader.size = size;
+  reader.pos = 0;
+  while (reader_line(&reader, line, sizeof(line))) {
+    pkg_remote_entry_t entry;
+    if (line[0] == '\0' || line[0] == '#') {
+      continue;
+    }
+    if (stats) {
+      stats->total_lines++;
+    }
+    if (!pkg_starts_with(line, "package ") ||
+        parse_remote_index_line(line, &entry) < 0) {
+      if (stats) {
+        stats->invalid_lines++;
+      }
+      if (verbose && warnings < 6) {
+        char warn[192];
+        snprintf(warn, sizeof(warn), "WARN invalid-index-line %d",
+                 stats ? stats->total_lines : warnings + 1);
+        pkg_append_line(out, out_size, warn);
+        warnings++;
+      }
+      continue;
+    }
+    if (remote_name_seen(seen_names, seen_count, entry.name)) {
+      if (stats) {
+        stats->duplicate_names++;
+      }
+      if (verbose && warnings < 6) {
+        char warn[192];
+        snprintf(warn, sizeof(warn), "WARN duplicate-package %s", entry.name);
+        pkg_append_line(out, out_size, warn);
+        warnings++;
+      }
+    } else if (seen_count < PKG_MAX_REMOTE_ENTRIES) {
+      snprintf(seen_names[seen_count], sizeof(seen_names[seen_count]), "%s",
+               entry.name);
+      seen_count++;
+    } else {
+      if (stats) {
+        stats->duplicate_names++;
+      }
+      if (verbose && warnings < 6) {
+        pkg_append_line(out, out_size,
+                        "WARN remote-index-too-large-for-duplicate-scan");
+        warnings++;
+      }
+    }
+    if (stats) {
+      stats->valid_entries++;
+    }
+  }
+
+  rc = (stats && (stats->invalid_lines > 0 || stats->duplicate_names > 0)) ? 1
+                                                                           : 0;
+  if (verbose && stats) {
+    char summary[192];
+    snprintf(summary, sizeof(summary), "cached-index=yes bytes=%lu",
+             (unsigned long)stats->bytes);
+    pkg_append_line(out, out_size, summary);
+    snprintf(summary, sizeof(summary),
+             "remote-index-valid=%s entries=%d invalid-lines=%d "
+             "duplicate-names=%d",
+             rc == 0 ? "yes" : "no", stats->valid_entries,
+             stats->invalid_lines, stats->duplicate_names);
+    pkg_append_line(out, out_size, summary);
+    pkg_append_line(out, out_size,
+                    "auth signed-update-manifest-sha256-pinned");
+    pkg_append_line(out, out_size, "cache-status " PKG_REMOTE_CACHE_STATUS);
+  }
+  if (stats) {
+    pkg_write_remote_cache_status(stats, rc);
+  }
+  return rc;
+}
+
 int orizon_pkg_refresh_database(void) {
   static char list[8192];
   static char installed[8192];
@@ -1261,6 +1447,7 @@ int orizon_pkg_init(void) {
   pkg_ensure_dir(PKG_DB_INSTALLED);
   pkg_ensure_dir(PKG_DB_STORE);
   pkg_ensure_dir(PKG_DB_REMOVED);
+  pkg_ensure_dir(PKG_DB_CACHE);
   pkg_ensure_dir("/system");
   pkg_ensure_dir("/system/share");
   pkg_ensure_dir("/home");
@@ -1328,6 +1515,10 @@ static int pkg_install_loaded(const char *source_name, const char *data,
     had_old = 1;
     pkg_read_file(meta_path, pkg_rollback_meta, sizeof(pkg_rollback_meta),
                   &old_meta_size);
+    snprintf(line, sizeof(line),
+             "pkg: previous version %s staged for failure rollback",
+             old_pkg.version);
+    pkg_append_line(report, report_size, line);
   }
 
   if (replay_payload(&pkg, 1, report, report_size) < 0) {
@@ -1360,6 +1551,10 @@ static int pkg_install_loaded(const char *source_name, const char *data,
   if (had_old) {
     snprintf(line, sizeof(line), "Replaced previous version %s", old_pkg.version);
     pkg_append_line(report, report_size, line);
+    snprintf(line, sizeof(line), "upgraded %s %s -> %s rollback=guarded",
+             pkg.name, old_pkg.version, pkg.version);
+    pkg_append_text_internal(PKG_DB_HISTORY, line);
+    pkg_append_text_internal(PKG_DB_HISTORY, "\n");
   }
   pkg_status_text = "package installed";
   orizon_pkg_refresh_database();
@@ -1418,10 +1613,13 @@ int orizon_pkg_list(char *out, size_t out_size) {
 
 int orizon_pkg_status(char *out, size_t out_size) {
   char line[160];
+  pkg_remote_validation_t remote_stats;
   int installed_count = 0;
   int removed_count = 0;
   int cached_count = 0;
+  int cache_meta_count = 0;
   int remote_cached = 0;
+  int remote_valid_rc = -1;
   dirent_t entries[64];
   int count;
 
@@ -1442,7 +1640,13 @@ int orizon_pkg_status(char *out, size_t out_size) {
   }
   removed_count = pkg_count_regular_files(PKG_DB_REMOVED);
   cached_count = pkg_count_regular_files(PKG_DB_STORE);
+  cache_meta_count = pkg_count_regular_files(PKG_DB_CACHE);
   remote_cached = vfs_stat(PKG_REMOTE_INDEX_PATH, NULL, NULL) == 0;
+  if (remote_cached) {
+    remote_valid_rc = pkg_validate_remote_index(&remote_stats, NULL, 0, 0);
+  } else {
+    memset(&remote_stats, 0, sizeof(remote_stats));
+  }
   pkg_append_line(out, out_size, "Orizon package manager");
   pkg_append_line(out, out_size, pkg_status_text);
   snprintf(line, sizeof(line), "builtin-packages %lu",
@@ -1452,13 +1656,19 @@ int orizon_pkg_status(char *out, size_t out_size) {
   pkg_append_line(out, out_size, line);
   snprintf(line, sizeof(line), "cached-packages %d", cached_count);
   pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "cache-metadata %d", cache_meta_count);
+  pkg_append_line(out, out_size, line);
   snprintf(line, sizeof(line), "remove-rollback-snapshots %d",
            removed_count / 2);
   pkg_append_line(out, out_size, line);
-  pkg_append_line(out, out_size, "format orizon-package 1 manager-v2=yes");
+  pkg_append_line(out, out_size,
+                  "format orizon-package 1 manager-v2=yes manager-v3=yes");
   pkg_append_line(out, out_size, "dependencies depends <name> <version|*>");
   pkg_append_line(out, out_size,
                   "scripts post-install pre-remove post-remove");
+  pkg_append_line(out, out_size,
+                  "script-policy allow=mkdir,touch,write,append,echo,sync "
+                  "safe-paths=/system,/home,/packages,/logs,/tmp,/workspace");
   pkg_append_line(out, out_size,
                   "rollback install-restores-previous-payload remove-cache="
                   PKG_DB_REMOVED);
@@ -1467,14 +1677,28 @@ int orizon_pkg_status(char *out, size_t out_size) {
   snprintf(line, sizeof(line), "remote-index cached=%s path=%s",
            remote_cached ? "yes" : "no", PKG_REMOTE_INDEX_PATH);
   pkg_append_line(out, out_size, line);
+  if (remote_cached) {
+    snprintf(line, sizeof(line),
+             "remote-index-valid=%s entries=%d invalid-lines=%d "
+             "duplicate-names=%d",
+             remote_valid_rc == 0 ? "yes" : "no",
+             remote_stats.valid_entries, remote_stats.invalid_lines,
+             remote_stats.duplicate_names);
+    pkg_append_line(out, out_size, line);
+  }
   pkg_append_line(out, out_size,
-                  "commands pkg search <query>, pkg remote, pkg rollback <name>");
+                  "upgrade-plan pkg upgrade plan; apply pkg upgrade");
+  pkg_append_line(out, out_size,
+                  "commands pkg search <query>, pkg remote [verify], "
+                  "pkg upgrade [plan], pkg rollback <name>");
   pkg_append_line(out, out_size, "db " PKG_DB_ROOT);
   return 0;
 }
 
 int orizon_pkg_remote(char *out, size_t out_size) {
+  pkg_remote_validation_t validation;
   int remote_matches = 0;
+  int validation_rc = -1;
 
   if (!out || out_size == 0) {
     return -1;
@@ -1493,10 +1717,158 @@ int orizon_pkg_remote(char *out, size_t out_size) {
                     "hint: run pkg update after disk install to refresh it");
     return 1;
   }
+  validation_rc = pkg_validate_remote_index(&validation, NULL, 0, 0);
   pkg_append_line(out, out_size, "cached-index=yes");
+  if (validation_rc >= 0) {
+    char line[192];
+    snprintf(line, sizeof(line),
+             "remote-index-valid=%s entries=%d invalid-lines=%d "
+             "duplicate-names=%d",
+             validation_rc == 0 ? "yes" : "no", validation.valid_entries,
+             validation.invalid_lines, validation.duplicate_names);
+    pkg_append_line(out, out_size, line);
+  }
   if (remote_matches == 0) {
     pkg_append_line(out, out_size, "remote packages: none");
   }
+  return 0;
+}
+
+int orizon_pkg_remote_verify(char *out, size_t out_size) {
+  pkg_remote_validation_t validation;
+  int rc;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  pkg_append_line(out, out_size, "pkg remote verify:");
+  pkg_append_line(out, out_size, "path " PKG_REMOTE_INDEX_PATH);
+  rc = pkg_validate_remote_index(&validation, out, out_size, 1);
+  if (rc < 0) {
+    pkg_append_line(out, out_size,
+                    "hint: run pkg update after disk install to refresh it");
+    return 1;
+  }
+  if (rc == 0) {
+    pkg_append_line(out, out_size, "package-index verification: OK");
+    return 0;
+  }
+  pkg_append_line(out, out_size,
+                  "package-index verification: FAIL invalid cached index");
+  return 1;
+}
+
+int orizon_pkg_upgrade_plan(char *out, size_t out_size) {
+  pkg_remote_validation_t validation;
+  line_reader_t reader;
+  char line[PKG_MAX_LINE];
+  size_t size = 0;
+  int validation_rc;
+  int install_count = 0;
+  int upgrade_count = 0;
+  int current_count = 0;
+  int protected_count = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+
+  pkg_append_line(out, out_size, "pkg upgrade plan:");
+  pkg_append_line(out, out_size,
+                  "auth signed-update-manifest-sha256-pinned");
+  pkg_append_line(out, out_size, "remote-index " PKG_REMOTE_INDEX_PATH);
+  validation_rc = pkg_validate_remote_index(&validation, NULL, 0, 0);
+  if (validation_rc < 0) {
+    pkg_append_line(out, out_size, "cached-index=no");
+    pkg_append_line(out, out_size,
+                    "action: run pkg update/pkg upgrade after disk install "
+                    "to fetch the signed package index");
+    return 1;
+  }
+  snprintf(line, sizeof(line),
+           "cached-index=yes valid=%s entries=%d invalid-lines=%d "
+           "duplicate-names=%d",
+           validation_rc == 0 ? "yes" : "no", validation.valid_entries,
+           validation.invalid_lines, validation.duplicate_names);
+  pkg_append_line(out, out_size, line);
+
+  if (pkg_read_file(PKG_REMOTE_INDEX_PATH, pkg_rollback_buf,
+                    sizeof(pkg_rollback_buf), &size) < 0 ||
+      size == 0) {
+    pkg_append_line(out, out_size, "pkg upgrade plan: cannot read index");
+    return 1;
+  }
+
+  reader.data = pkg_rollback_buf;
+  reader.size = size;
+  reader.pos = 0;
+  while (reader_line(&reader, line, sizeof(line))) {
+    pkg_remote_entry_t entry;
+    char current_version[64];
+    char origin[32];
+    char entry_line[256];
+
+    if (!pkg_starts_with(line, "package ") ||
+        parse_remote_index_line(line, &entry) < 0) {
+      continue;
+    }
+    if (package_current_version(entry.name, current_version,
+                                sizeof(current_version), origin,
+                                sizeof(origin)) < 0) {
+      snprintf(entry_line, sizeof(entry_line),
+               "install %s %s size=%lu sha256=%s", entry.name, entry.version,
+               (unsigned long)entry.size, entry.sha256);
+      pkg_append_line(out, out_size, entry_line);
+      install_count++;
+      continue;
+    }
+    if (strcmp(current_version, entry.version) == 0) {
+      snprintf(entry_line, sizeof(entry_line), "current %s %s source=%s",
+               entry.name, entry.version, origin);
+      pkg_append_line(out, out_size, entry_line);
+      current_count++;
+      continue;
+    }
+    if (strcmp(origin, "builtin") == 0) {
+      snprintf(entry_line, sizeof(entry_line),
+               "protected-builtin %s %s -> %s use OS update", entry.name,
+               current_version, entry.version);
+      pkg_append_line(out, out_size, entry_line);
+      protected_count++;
+      continue;
+    }
+    snprintf(entry_line, sizeof(entry_line), "upgrade %s %s -> %s",
+             entry.name, current_version, entry.version);
+    pkg_append_line(out, out_size, entry_line);
+    upgrade_count++;
+  }
+
+  snprintf(line, sizeof(line),
+           "summary install=%d upgrade=%d current=%d protected=%d",
+           install_count, upgrade_count, current_count, protected_count);
+  pkg_append_line(out, out_size, line);
+  pkg_append_line(out, out_size,
+                  "rollback package-transaction=previous-payload-on-failure "
+                  "boot-rollback=update-bootguard");
+  if (validation_rc != 0) {
+    pkg_append_line(out, out_size,
+                    "action: fix signed package index before upgrade");
+    return 1;
+  }
+  if (install_count == 0 && upgrade_count == 0 && protected_count == 0) {
+    pkg_append_line(out, out_size, "action: nothing to upgrade");
+    return 0;
+  }
+  pkg_append_line(out, out_size,
+                  "action: pkg upgrade runs signed update/package refresh");
   return 0;
 }
 
@@ -1887,6 +2259,7 @@ int orizon_pkg_verify_file(const char *path, char *out, size_t out_size) {
 
 int orizon_pkg_history(char *out, size_t out_size) {
   size_t size = 0;
+  static char history_buf[4096];
 
   if (!out || out_size == 0) {
     return -1;
@@ -1895,9 +2268,17 @@ int orizon_pkg_history(char *out, size_t out_size) {
   if (!pkg_initialized) {
     orizon_pkg_init();
   }
-  if (pkg_read_file(PKG_DB_HISTORY, out, out_size, &size) < 0 || size == 0) {
+  if (pkg_read_file(PKG_DB_HISTORY, history_buf, sizeof(history_buf), &size) <
+          0 ||
+      size == 0) {
     pkg_append_line(out, out_size, "pkg history: empty");
     return 1;
+  }
+  pkg_append_line(out, out_size, "pkg history:");
+  pkg_append_line(out, out_size, "path " PKG_DB_HISTORY);
+  pkg_append(out, out_size, history_buf);
+  if (strlen(out) > 0 && out[strlen(out) - 1] != '\n') {
+    pkg_append_line(out, out_size, "");
   }
   return 0;
 }

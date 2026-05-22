@@ -30,11 +30,12 @@
   validation once the refreshed kernel reaches the shell, `bootguard`
   diagnostics, and automatic main-slot restore when the rollback boot entry is
   selected during a pending update.
-- Package manager v2 foundation with `pkg list`, `pkg status`, `pkg search`,
-  `pkg remote`, `pkg info`, `pkg sample`, `pkg hash`, `pkg verify`,
-  installed-only `pkg update/install/remove`, signed package-index cache
-  inspection, `pre-remove`/`post-remove` scripts, and local
-  `pkg rollback <name>` for the last removed package snapshot.
+- Package manager v3 foundation with `pkg list`, `pkg status`, `pkg search`,
+  `pkg remote`, `pkg remote verify`, `pkg upgrade plan`, `pkg info`,
+  `pkg sample`, `pkg hash`, `pkg verify`, installed-only
+  `pkg update/upgrade/install/remove`, signed package-index cache validation,
+  `pre-remove`/`post-remove` scripts, explicit package history events, and
+  local `pkg rollback <name>` for the last removed package snapshot.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, persistent history, simple autocomplete, editor, `sysinfo`, `hw`,
   `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`, and `uptime`.
@@ -96,15 +97,14 @@
    `BootNext` writing, or add bootloader-native boot-count integration, so
    firmware can automatically select rollback even when the refreshed kernel
    never reaches Orizon early boot.
-2. Add package rollback metadata before package updates overwrite files.
-3. Add detached package repository signatures and key rotation; the package
+2. Add detached package repository signatures and key rotation; the package
    index is already pinned through the signed OS manifest.
-4. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
+3. Expand network diagnostics with per-phase DNS/TCP/TLS counters and clearer
    bridge/DHCP failure messages.
-5. Finish SSH remote login hardening: safer config permissions, key rotation,
+4. Finish SSH remote login hardening: safer config permissions, key rotation,
    fuller PTY integration with the local Orizon terminal, and longer
    multi-client soak tests.
-6. Finish dual boot: automatic UEFI NVRAM/BCD entry creation, boot-count
+5. Finish dual boot: automatic UEFI NVRAM/BCD entry creation, boot-count
    recovery, and eventually an in-OS partition create/resize workflow beside
    existing operating systems.
 
@@ -141,8 +141,7 @@
 
 1. Split more features into packages so update can refresh components without
    replacing the whole kernel payload.
-2. Add `pkg upgrade` once package rollback exists.
-3. Grow the small service/init registry into real configurable boot services
+2. Grow the small service/init registry into real configurable boot services
    once the installed VM path has more long-running daemons.
-4. Improve the editor with save confirmation, file size warnings, and simple
+3. Improve the editor with save confirmation, file size warnings, and simple
    search.

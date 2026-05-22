@@ -16,6 +16,8 @@ int orizon_pkg_list(char *out, size_t out_size);
 int orizon_pkg_status(char *out, size_t out_size);
 int orizon_pkg_search(const char *query, char *out, size_t out_size);
 int orizon_pkg_remote(char *out, size_t out_size);
+int orizon_pkg_remote_verify(char *out, size_t out_size);
+int orizon_pkg_upgrade_plan(char *out, size_t out_size);
 int orizon_pkg_info(const char *name, char *out, size_t out_size);
 int orizon_pkg_remove(const char *name, char *report, size_t report_size);
 int orizon_pkg_rollback(const char *name, char *report, size_t report_size);

@@ -41,6 +41,8 @@ $commands = @(
   "pkg help",
   "pkg search orizon",
   "pkg remote",
+  "pkg remote verify",
+  "pkg upgrade plan",
   "pkg sample",
   "pkg verify /workspace/packages/orizon-hello.opkg",
   "pkg install /workspace/packages/orizon-hello.opkg",

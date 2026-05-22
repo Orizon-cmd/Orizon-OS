@@ -135,7 +135,10 @@ pkg status
 pkg list
 pkg search orizon
 pkg remote
+pkg remote verify
+pkg upgrade plan
 pkg update
+pkg upgrade
 pkg info <name>
 pkg history
 pkg sample
@@ -146,11 +149,11 @@ pkg remove orizon-hello
 pkg rollback orizon-hello
 ```
 
-`pkg update`, `pkg install`, `pkg remove`, and `pkg rollback` are installed-disk
-only. `pkg sample`, `pkg hash`, `pkg verify`, `pkg search`, and `pkg remote`
-are safe in the live ISO and over SSH. The remote package index is authenticated
-through the signed system manifest, package repository commit pin, and
-package-index SHA-256 pin.
+`pkg update`, `pkg upgrade`, `pkg install`, `pkg remove`, and `pkg rollback`
+are installed-disk only. `pkg sample`, `pkg hash`, `pkg verify`, `pkg search`,
+`pkg remote`, `pkg remote verify`, and `pkg upgrade plan` are safe in the live
+ISO and over SSH. The remote package index is authenticated through the signed
+system manifest, package repository commit pin, and package-index SHA-256 pin.
 
 ## SSH
 
