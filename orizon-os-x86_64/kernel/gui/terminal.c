@@ -55,6 +55,7 @@ static const uint32_t term_colors[16] = {
 #define TERM_KEY_SCROLL_LINES 3
 #define TERM_HISTORY_MAX 32
 #define TERM_PAGER_MAX 32768
+#define TERM_PIPE_MAX TERM_PAGER_MAX
 #define TERM_PAGER_PAGE_LINES (TERM_ROWS - 2)
 #define TERM_HISTORY_PATH "/workspace/.orizon/history"
 #define TERM_WIFI_LOG_PATH "/logs/wifi.log"
@@ -125,9 +126,18 @@ typedef struct terminal {
 static terminal_t *active_term = NULL;
 static char term_diag_buf[32768];
 static char term_pager_buf[TERM_PAGER_MAX + 1];
+static char term_pipe_buf[TERM_PIPE_MAX + 1];
+static char term_pipe_tmp[TERM_PIPE_MAX + 1];
+static char *term_capture_buf = NULL;
+static size_t term_capture_cap = 0;
+static size_t term_capture_used = 0;
+static int term_capture_truncated = 0;
+static int term_capture_esc = 0;
 
 static int term_install_already_complete(void);
 static int term_read_text_file_silent(const char *path, char *buf, size_t cap);
+static void term_execute_single(terminal_t *term, const char *cmd);
+static void term_capture_append_char(char c);
 
 /* External functions */
 extern void fb_fill_rect(int x, int y, int w, int h, uint32_t color);
@@ -462,6 +472,11 @@ static void term_process_escape(terminal_t *term) {
 void term_putc(terminal_t *term, char c) {
   if (!term) return;
 
+  if (term_capture_buf) {
+    term_capture_append_char(c);
+    return;
+  }
+
   term->scroll_offset = 0;
   
   if (term->in_escape) {
@@ -758,6 +773,76 @@ static int term_starts_with(const char *text, const char *prefix) {
   return strncmp(text, prefix, strlen(prefix)) == 0;
 }
 
+static char *term_trim_mut(char *text) {
+  size_t len;
+
+  if (!text) {
+    return text;
+  }
+  while (*text == ' ' || *text == '\t') {
+    text++;
+  }
+  len = strlen(text);
+  while (len > 0 && (text[len - 1] == ' ' || text[len - 1] == '\t')) {
+    text[--len] = '\0';
+  }
+  return text;
+}
+
+static int term_command_is_interactive(const char *cmd) {
+  return term_command_is(cmd, "less") || term_command_is(cmd, "more") ||
+         term_command_is(cmd, "edit") || term_command_is(cmd, "install") ||
+         term_command_is(cmd, "reboot") || term_command_is(cmd, "restart") ||
+         term_command_is(cmd, "shutdown") || term_command_is(cmd, "poweroff") ||
+         term_command_is(cmd, "clear");
+}
+
+static void term_capture_begin(char *buf, size_t cap) {
+  term_capture_buf = buf;
+  term_capture_cap = cap;
+  term_capture_used = 0;
+  term_capture_truncated = 0;
+  term_capture_esc = 0;
+  if (buf && cap > 0) {
+    buf[0] = '\0';
+  }
+}
+
+static void term_capture_end(void) {
+  if (term_capture_buf && term_capture_cap > 0) {
+    size_t end = term_capture_used < term_capture_cap
+                     ? term_capture_used
+                     : term_capture_cap - 1;
+    term_capture_buf[end] = '\0';
+  }
+  term_capture_buf = NULL;
+  term_capture_cap = 0;
+  term_capture_used = 0;
+  term_capture_esc = 0;
+}
+
+static void term_capture_append_char(char c) {
+  if (!term_capture_buf || term_capture_cap == 0) {
+    return;
+  }
+  if (term_capture_esc) {
+    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '~') {
+      term_capture_esc = 0;
+    }
+    return;
+  }
+  if (c == '\033') {
+    term_capture_esc = 1;
+    return;
+  }
+  if (term_capture_used + 1 < term_capture_cap) {
+    term_capture_buf[term_capture_used++] = c;
+    term_capture_buf[term_capture_used] = '\0';
+  } else {
+    term_capture_truncated = 1;
+  }
+}
+
 static void term_prompt_prefix(terminal_t *term) {
   const char *cwd = (term && term->cwd[0]) ? term->cwd : "/";
   term_puts_t(term, "\033[32morizon-os\033[0m:");
@@ -783,7 +868,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "input", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
       "rollback-status", "repair-boot", "rescue", "rm", "security", "selftest", "services", "shutdown", "stat", "storage", "partitions", "sync",
-      "sysinfo", "ssh", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
+      "sysinfo", "ssh", "tail", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write", "system"};
   const char *matches[16];
   int count = 0;
@@ -2450,6 +2535,30 @@ static void term_start_pager(terminal_t *term, const char *display,
   term_pager_render(term);
 }
 
+static void term_start_pager_text(terminal_t *term, const char *title,
+                                  const char *text, size_t size,
+                                  int truncated) {
+  size_t copy = size;
+
+  if (!term || !text) {
+    return;
+  }
+  if (copy > TERM_PAGER_MAX) {
+    copy = TERM_PAGER_MAX;
+    truncated = 1;
+  }
+  memcpy(term_pager_buf, text, copy);
+  term_pager_buf[copy] = '\0';
+  term->pager_mode = 1;
+  term->pager_size = copy;
+  term->pager_top_line = 0;
+  term->pager_total_lines = term_pager_count_visual_lines(term->pager_size);
+  term->pager_truncated = truncated;
+  snprintf(term->pager_title, sizeof(term->pager_title), "%s",
+           title ? title : "pipeline");
+  term_pager_render(term);
+}
+
 static void term_print_head(terminal_t *term, const char *display,
                             const char *path, int max_lines) {
   char buf[2048];
@@ -2465,6 +2574,38 @@ static void term_print_head(terminal_t *term, const char *display,
     if (buf[i] == '\n') {
       lines++;
     }
+  }
+  if (n > 0 && buf[n - 1] != '\n') {
+    term_puts_t(term, "\n");
+  }
+}
+
+static void term_print_tail(terminal_t *term, const char *display,
+                            const char *path, int max_lines) {
+  char buf[4096];
+  int n = term_read_regular_file(term, display, path, buf, sizeof(buf), "tail");
+  int lines = 0;
+  int start;
+
+  if (n < 0) {
+    return;
+  }
+  start = n;
+  while (start > 0 && lines <= max_lines) {
+    start--;
+    if (buf[start] == '\n') {
+      lines++;
+      if (lines > max_lines) {
+        start++;
+        break;
+      }
+    }
+  }
+  if (start < 0) {
+    start = 0;
+  }
+  for (int i = start; i < n; i++) {
+    term_putc(term, buf[i]);
   }
   if (n > 0 && buf[n - 1] != '\n') {
     term_puts_t(term, "\n");
@@ -5024,6 +5165,393 @@ static void term_start_installer(terminal_t *term) {
   term_install_prompt(term);
 }
 
+static char *term_find_group_separator(char *cmd, int *sep_len) {
+  if (sep_len) {
+    *sep_len = 0;
+  }
+  while (cmd && *cmd) {
+    if (*cmd == ';') {
+      if (sep_len) {
+        *sep_len = 1;
+      }
+      return cmd;
+    }
+    if (cmd[0] == '&' && cmd[1] == '&') {
+      if (sep_len) {
+        *sep_len = 2;
+      }
+      return cmd;
+    }
+    cmd++;
+  }
+  return NULL;
+}
+
+static int term_extract_redirect(char *cmd, char *path, size_t path_size,
+                                 int *append) {
+  char *p;
+  char *arg;
+  size_t len = 0;
+
+  if (!cmd || !path || path_size == 0 || !append) {
+    return 0;
+  }
+  path[0] = '\0';
+  *append = 0;
+  for (p = cmd; *p; p++) {
+    if (*p == '>') {
+      break;
+    }
+  }
+  if (*p != '>') {
+    return 0;
+  }
+  *append = p[1] == '>';
+  *p = '\0';
+  arg = term_trim_mut(p + (*append ? 2 : 1));
+  while (arg[len] && arg[len] != ' ' && arg[len] != '\t') {
+    len++;
+  }
+  if (len == 0 || len >= path_size) {
+    return -1;
+  }
+  memcpy(path, arg, len);
+  path[len] = '\0';
+  arg = term_trim_mut(arg + len);
+  if (*arg != '\0') {
+    return -1;
+  }
+  term_trim_mut(cmd);
+  return 1;
+}
+
+static char *term_find_pipe(char *cmd) {
+  while (cmd && *cmd) {
+    if (*cmd == '|') {
+      return cmd;
+    }
+    cmd++;
+  }
+  return NULL;
+}
+
+static size_t term_text_append(char *out, size_t out_size, size_t used,
+                               const char *text, size_t len) {
+  if (!out || out_size == 0 || !text) {
+    return used;
+  }
+  if (used >= out_size - 1) {
+    return used;
+  }
+  if (len > out_size - 1 - used) {
+    len = out_size - 1 - used;
+  }
+  memcpy(out + used, text, len);
+  used += len;
+  out[used] = '\0';
+  return used;
+}
+
+static int term_line_contains(const char *line, size_t len,
+                              const char *pattern) {
+  size_t pattern_len = strlen(pattern ? pattern : "");
+
+  if (pattern_len == 0) {
+    return 1;
+  }
+  if (!line || pattern_len > len) {
+    return 0;
+  }
+  for (size_t i = 0; i + pattern_len <= len; i++) {
+    if (strncmp(line + i, pattern, pattern_len) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static void term_pipe_grep(const char *input, const char *pattern, char *out,
+                           size_t out_size) {
+  const char *p = input ? input : "";
+  size_t used = 0;
+  int matches = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  while (*p) {
+    const char *line = p;
+    size_t len = 0;
+    while (line[len] && line[len] != '\n') {
+      len++;
+    }
+    if (term_line_contains(line, len, pattern)) {
+      used = term_text_append(out, out_size, used, line, len);
+      used = term_text_append(out, out_size, used, "\n", 1);
+      matches++;
+    }
+    p = line + len;
+    if (*p == '\n') {
+      p++;
+    }
+  }
+  if (matches == 0) {
+    term_text_append(out, out_size, used, "grep: no matches\n",
+                     strlen("grep: no matches\n"));
+  }
+}
+
+static void term_pipe_head(const char *input, int max_lines, char *out,
+                           size_t out_size) {
+  const char *p = input ? input : "";
+  size_t used = 0;
+  int lines = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  while (*p && lines < max_lines) {
+    const char *line = p;
+    size_t len = 0;
+    while (line[len] && line[len] != '\n') {
+      len++;
+    }
+    used = term_text_append(out, out_size, used, line, len);
+    if (line[len] == '\n') {
+      used = term_text_append(out, out_size, used, "\n", 1);
+    }
+    lines++;
+    p = line + len;
+    if (*p == '\n') {
+      p++;
+    }
+  }
+}
+
+static void term_pipe_tail(const char *input, int max_lines, char *out,
+                           size_t out_size) {
+  size_t len = strlen(input ? input : "");
+  size_t start = len;
+  int lines = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  while (start > 0 && lines <= max_lines) {
+    start--;
+    if (input[start] == '\n') {
+      lines++;
+      if (lines > max_lines) {
+        start++;
+        break;
+      }
+    }
+  }
+  term_text_append(out, out_size, 0, (input ? input : "") + start,
+                   len - start);
+}
+
+static int term_parse_pipe_line_count(const char *args, int *lines) {
+  args = term_skip_spaces(args);
+  *lines = 10;
+  if (*args == '\0') {
+    return 0;
+  }
+  if (*args == '-') {
+    args++;
+  }
+  if (term_parse_uint(args, lines) < 0) {
+    return -1;
+  }
+  while (*args >= '0' && *args <= '9') {
+    args++;
+  }
+  return *term_skip_spaces(args) == '\0' ? 0 : -1;
+}
+
+static int term_apply_pipe_stage(terminal_t *term, char *stage,
+                                 const char *input, char *out,
+                                 size_t out_size, int *opened_pager) {
+  stage = term_trim_mut(stage);
+  if (!stage || *stage == '\0') {
+    term_puts_t(term, "pipe: missing command after '|'\n");
+    return -1;
+  }
+  if (term_command_is(stage, "grep")) {
+    const char *pattern = term_skip_spaces(stage + 4);
+    if (*pattern == '\0') {
+      term_puts_t(term, "usage: cmd | grep <text>\n");
+      return -1;
+    }
+    term_pipe_grep(input, pattern, out, out_size);
+    return 0;
+  }
+  if (term_command_is(stage, "head")) {
+    int lines = 10;
+    if (term_parse_pipe_line_count(stage + 4, &lines) < 0) {
+      term_puts_t(term, "usage: cmd | head [-n]\n");
+      return -1;
+    }
+    term_pipe_head(input, lines, out, out_size);
+    return 0;
+  }
+  if (term_command_is(stage, "tail")) {
+    int lines = 10;
+    if (term_parse_pipe_line_count(stage + 4, &lines) < 0) {
+      term_puts_t(term, "usage: cmd | tail [-n]\n");
+      return -1;
+    }
+    term_pipe_tail(input, lines, out, out_size);
+    return 0;
+  }
+  if (term_command_is(stage, "less") || term_command_is(stage, "more")) {
+    term_start_pager_text(term, "pipeline", input, strlen(input),
+                          term_capture_truncated);
+    if (opened_pager) {
+      *opened_pager = 1;
+    }
+    return 0;
+  }
+  if (term_command_is(stage, "cat")) {
+    snprintf(out, out_size, "%s", input ? input : "");
+    return 0;
+  }
+  term_puts_t(term, "pipe: supported stages are grep, head, tail, less\n");
+  return -1;
+}
+
+static int term_write_redirect_output(terminal_t *term, const char *path_arg,
+                                      const char *text, int append) {
+  char path[MAX_PATH];
+  file_t *f;
+  size_t len = strlen(text ? text : "");
+
+  if (resolve_path(term->cwd, path_arg, path, sizeof(path)) < 0) {
+    term_puts_t(term, "redirect: invalid path\n");
+    return -1;
+  }
+  f = vfs_open(path, O_CREAT | O_WRONLY | (append ? O_APPEND : O_TRUNC));
+  if (!f) {
+    term_puts_t(term, "redirect: cannot open target\n");
+    return -1;
+  }
+  if (len > 0 && vfs_write(f, text, len) != (ssize_t)len) {
+    vfs_close(f);
+    term_puts_t(term, "redirect: write failed\n");
+    return -1;
+  }
+  vfs_close(f);
+  term_puts_t(term, append ? "redirect: appended " : "redirect: wrote ");
+  term_puts_t(term, path);
+  term_puts_t(term, "\n");
+  return 0;
+}
+
+static void term_execute_pipeline_or_redirect(terminal_t *term, char *cmd) {
+  char redirect_path[MAX_PATH];
+  char *pipe_pos;
+  int append = 0;
+  int redirect;
+  int opened_pager = 0;
+
+  cmd = term_trim_mut(cmd);
+  if (!cmd || *cmd == '\0') {
+    return;
+  }
+  redirect = term_extract_redirect(cmd, redirect_path, sizeof(redirect_path),
+                                   &append);
+  if (redirect < 0) {
+    term_puts_t(term, "usage: <command> > <file> | <command> >> <file>\n");
+    return;
+  }
+  cmd = term_trim_mut(cmd);
+  pipe_pos = term_find_pipe(cmd);
+  if (!pipe_pos && redirect == 0) {
+    term_execute_single(term, cmd);
+    return;
+  }
+  if (term_command_is_interactive(cmd)) {
+    term_puts_t(term,
+                "shell: this interactive command cannot be piped or redirected\n");
+    return;
+  }
+
+  if (pipe_pos) {
+    char *current = term_pipe_buf;
+    char *next = term_pipe_tmp;
+    char *stage;
+
+    *pipe_pos = '\0';
+    cmd = term_trim_mut(cmd);
+    stage = pipe_pos + 1;
+    if (*cmd == '\0') {
+      term_puts_t(term, "pipe: missing command before '|'\n");
+      return;
+    }
+    if (term_command_is_interactive(cmd)) {
+      term_puts_t(term,
+                  "shell: this interactive command cannot be piped\n");
+      return;
+    }
+    term_capture_begin(term_pipe_buf, sizeof(term_pipe_buf));
+    term_execute_single(term, cmd);
+    term_capture_end();
+    while (stage && *stage) {
+      char *next_pipe = term_find_pipe(stage);
+      if (next_pipe) {
+        *next_pipe = '\0';
+      }
+      if (term_apply_pipe_stage(term, stage, current, next, sizeof(term_pipe_tmp),
+                                &opened_pager) < 0) {
+        return;
+      }
+      if (opened_pager) {
+        return;
+      }
+      current = next;
+      next = (next == term_pipe_tmp) ? term_pipe_buf : term_pipe_tmp;
+      stage = next_pipe ? next_pipe + 1 : NULL;
+    }
+    if (redirect > 0) {
+      term_write_redirect_output(term, redirect_path, current, append);
+    } else {
+      term_puts_t(term, current);
+      if (current[0] && current[strlen(current) - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+    }
+    return;
+  }
+
+  term_capture_begin(term_pipe_buf, sizeof(term_pipe_buf));
+  term_execute_single(term, cmd);
+  term_capture_end();
+  term_write_redirect_output(term, redirect_path, term_pipe_buf, append);
+}
+
+static void term_execute_command_groups(terminal_t *term, char *cmd) {
+  char *cursor = cmd;
+
+  while (cursor && *cursor) {
+    int sep_len = 0;
+    char *sep = term_find_group_separator(cursor, &sep_len);
+    char *segment = cursor;
+    if (sep) {
+      *sep = '\0';
+      cursor = sep + sep_len;
+    } else {
+      cursor = NULL;
+    }
+    segment = term_trim_mut(segment);
+    if (*segment) {
+      term_execute_pipeline_or_redirect(term, segment);
+    }
+  }
+}
+
 static void term_get_render_cell(terminal_t *term, int row, int col, char *ch,
                                  uint8_t *fg, uint8_t *bg) {
   int total = term->scroll_count + TERM_ROWS;
@@ -5082,17 +5610,33 @@ void term_render(terminal_t *term) {
   }
 }
 
-/* Execute command */
-void term_execute(terminal_t *term, const char *cmd) {
+static void term_print_help_shell(terminal_t *term) {
+  term_puts_t(term, "\033[1;36mOrizon shell helpers\033[0m\n");
+  term_puts_t(term, "  help shell       - Show shell operators and shortcuts\n");
+  term_puts_t(term, "  cmd1 ; cmd2      - Run commands sequentially\n");
+  term_puts_t(term, "  cmd > file       - Write command output to a file\n");
+  term_puts_t(term, "  cmd >> file      - Append command output to a file\n");
+  term_puts_t(term, "  cmd | grep text  - Filter captured output\n");
+  term_puts_t(term, "  cmd | head -20   - Keep the first lines\n");
+  term_puts_t(term, "  cmd | tail -20   - Keep the last lines\n");
+  term_puts_t(term, "  cmd | less       - Open captured output in the pager\n");
+  term_puts_t(term, "\n");
+  term_puts_t(term, "Notes: pipes are intentionally small and diagnostic-focused.\n");
+  term_puts_t(term, "Interactive commands such as less/edit/install/reboot cannot be piped.\n");
+}
+
+/* Execute one parsed command */
+static void term_execute_single(terminal_t *term, const char *cmd) {
   /* Skip whitespace */
   while (*cmd == ' ') cmd++;
   if (*cmd == '\0') return;
-  
-  term_add_history(term, cmd);
-  
-  term_puts_t(term, "\n");
-  
-  if (strncmp(cmd, "help", 4) == 0) {
+
+  if (term_command_is(cmd, "help")) {
+    const char *topic = term_skip_spaces(cmd + 4);
+    if (term_command_is(topic, "shell")) {
+      term_print_help_shell(term);
+      return;
+    }
     term_puts_t(term, "\033[1;36mOrizon OS Core Console\033[0m\n");
     term_puts_t(term, "\033[33mFile Commands:\033[0m\n");
     term_puts_t(term, "  ls        - List directory contents\n");
@@ -5101,6 +5645,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  cat <f>   - Display file contents\n");
     term_puts_t(term, "  less <f>  - Page a file (z/s, arrows, space, q)\n");
     term_puts_t(term, "  head [-n] <f> - Show first lines\n");
+    term_puts_t(term, "  tail [-n] <f> - Show last lines\n");
     term_puts_t(term, "  grep <text> <f> - Search file text\n");
     term_puts_t(term, "  find [p] [text] - Find entries\n");
     term_puts_t(term, "  stat <p>  - Show file or directory info\n");
@@ -5233,10 +5778,12 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  ps        - Process list\n");
     term_puts_t(term, "  clear     - Clear screen\n");
     term_puts_t(term, "  help      - This help message\n");
+    term_puts_t(term, "  help shell - Shell operators and shortcuts\n");
     term_puts_t(term, "\n");
     term_puts_t(term, "This build intentionally starts from a minimal core shell.\n");
     term_puts_t(term, "Tip: Tab completes commands/files; Up/Down browse saved history.\n");
     term_puts_t(term, "Tip: empty prompt z/s scrolls output; less uses z/s/space/q.\n");
+    term_puts_t(term, "Tip: use 'cmd | less' for long diagnostic output.\n");
     term_puts_t(term, "Add new tools only when they belong in Orizon OS.\n");
   } else if (strncmp(cmd, "clear", 5) == 0) {
     term_clear_screen(term);
@@ -5456,6 +6003,33 @@ void term_execute(terminal_t *term, const char *cmd) {
       return;
     }
     term_print_head(term, filename, path, lines);
+  } else if (term_command_is(cmd, "tail")) {
+    const char *args = term_skip_spaces(cmd + 4);
+    const char *filename = args;
+    int lines = 10;
+    char path[MAX_PATH];
+
+    if (*args == '-') {
+      args++;
+      if (term_parse_uint(args, &lines) < 0) {
+        term_puts_t(term, "usage: tail [-n] <file>\n");
+        return;
+      }
+      while (*args >= '0' && *args <= '9') {
+        args++;
+      }
+      filename = term_skip_spaces(args);
+    }
+
+    if (*filename == '\0') {
+      term_puts_t(term, "usage: tail [-n] <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "tail: invalid path\n");
+      return;
+    }
+    term_print_tail(term, filename, path, lines);
   } else if (term_command_is(cmd, "grep")) {
     char pattern[MAX_PATH];
     char file_arg[MAX_PATH];
@@ -5986,6 +6560,30 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, cmd);
     term_puts_t(term, ": command not found\n");
   }
+}
+
+/* Execute command line */
+void term_execute(terminal_t *term, const char *cmd) {
+  char work[256];
+  size_t len;
+
+  while (cmd && *cmd == ' ') {
+    cmd++;
+  }
+  if (!cmd || *cmd == '\0') {
+    return;
+  }
+
+  term_add_history(term, cmd);
+  term_puts_t(term, "\n");
+
+  len = strlen(cmd);
+  if (len >= sizeof(work)) {
+    term_puts_t(term, "shell: command too long\n");
+    return;
+  }
+  memcpy(work, cmd, len + 1);
+  term_execute_command_groups(term, work);
 }
 
 /* Print prompt */

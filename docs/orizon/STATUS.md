@@ -35,7 +35,9 @@ work.
   `pkg rollback <name>` are present. Package rollback is local transaction
   recovery, not full boot-level rollback.
 - Console usability: framebuffer scrollback with `z`/`s`, persistent command
-  history, autocomplete, and `less <file>` are available locally.
+  history, autocomplete, `less <file>`, `tail`, `help shell`, simple `;`
+  command grouping, `>`/`>>` redirection, and diagnostic pipes to
+  `grep/head/tail/less` are available locally.
 - SSH admin: password auth is opt-in, lockout/audit are visible, host keys are
   persistent per install when storage is available, long outputs are segmented,
   and diagnostic commands are usable through OpenSSH.

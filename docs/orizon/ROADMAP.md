@@ -37,8 +37,10 @@
   `pre-remove`/`post-remove` scripts, explicit package history events, and
   local `pkg rollback <name>` for the last removed package snapshot.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
-  pager, persistent history, simple autocomplete, editor, `sysinfo`, `hw`,
-  `mounts`, `logs`, `report`, `report save`, `selftest`, `ps`, and `uptime`.
+  pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
+  redirection, diagnostic pipes to `grep/head/tail/less`, persistent history,
+  simple autocomplete, editor, `sysinfo`, `hw`, `mounts`, `logs`, `report`,
+  `report save`, `selftest`, `ps`, and `uptime`.
 - Installed/live lifecycle commands: `system status`, `system init`,
   `system services`, `system doctor`, `system repair`, `rescue`,
   `hostname set <name>`, and `firstboot done` clarify first boot, record

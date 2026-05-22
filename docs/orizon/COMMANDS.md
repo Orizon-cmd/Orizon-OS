@@ -331,6 +331,29 @@ destructives pour le partitionnement et ne servent pas a installer l'OS.
 l'etat live/installe, le hostname et les commandes de recuperation sans devoir
 lire l'ecran local.
 
+## Shell Helpers
+
+```text
+help shell
+tail [-n] <file>
+cmd1 ; cmd2
+cmd > /workspace/out.txt
+cmd >> /workspace/out.txt
+cmd | grep text
+cmd | head -20
+cmd | tail -20
+cmd | less
+```
+
+The local framebuffer shell now has a small diagnostic command layer above the
+classic command dispatcher. It can run simple grouped commands with `;`, write
+or append captured command output with `>` and `>>`, and pass captured output
+through lightweight pipe stages: `grep`, `head`, `tail`, `cat`, `less`/`more`.
+This is intentionally not a full POSIX shell yet: no quoting, variables,
+background jobs, or conditional exit-code logic. Interactive commands such as
+`less`, `edit`, `install`, `reboot`, and `shutdown` are blocked as pipe or
+redirection sources.
+
 ## Local Console Scrolling
 
 When a command is longer than the visible framebuffer console, use `z` on an
