@@ -149,6 +149,8 @@ ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
 logs ssh
+hw next
+report next
 report save
 cat /workspace/hardware-report.txt
 head /workspace/hardware-report.txt
@@ -237,6 +239,7 @@ real AP validation on the user's Lenovo before it can be called hardware-proven.
 ```text
 sysinfo
 report
+report next
 report save
 selftest
 selftest network
@@ -245,6 +248,7 @@ selftest crypto
 selftest ssh
 selftest update
 hw
+hw next
 pci
 pci bars
 logs pci
@@ -271,8 +275,9 @@ system repair
 logs all
 ```
 
-For Lenovo hardware work, capture command output rather than summarizing it from
-memory. Start with `report save`, then copy `/workspace/hardware-report.txt`.
+For future hardware work, capture command output rather than summarizing it from
+memory. Start with `report next` to see the safe capture plan, then run
+`report save` and copy `/workspace/hardware-report.txt`.
 If the internal disk is missing, run `storage diag`, `logs storage`, `logs pci`,
 `pci bars`, `disk identify`, `disk read-test last`, and `gpt scan`; they are read-only and report
 NVMe/AHCI candidates, Intel RST/VMD blockers, secondary PCI bus hints, NVMe

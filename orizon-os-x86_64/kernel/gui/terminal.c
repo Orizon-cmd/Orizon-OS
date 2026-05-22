@@ -1976,13 +1976,23 @@ static void term_print_first_line_or(terminal_t *term, const char *label,
   term_puts_t(term, "\n");
 }
 
-static void term_print_hw(terminal_t *term) {
+static void term_print_hw(terminal_t *term, const char *args) {
   char line[256];
   char uptime[40];
   char vendor[13];
   uint32_t a, b, c, d;
   kmalloc_stats_t stats;
   pci_device_info_t devs[24];
+
+  if (term_command_is(term_skip_spaces(args), "next")) {
+    static char next_report[2048];
+    orizon_report_format_hardware_next(next_report, sizeof(next_report));
+    term_puts_t(term, next_report);
+    if (next_report[0] && next_report[strlen(next_report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
+    return;
+  }
 
   term_puts_t(term, "\033[1;36mOrizon Hardware Diagnostics\033[0m\n");
   snprintf(line, sizeof(line), "Boot cmdline: %s\n",
@@ -2096,6 +2106,7 @@ static void term_print_hw(terminal_t *term) {
   if (total > shown) {
     term_puts_t(term, "  ... use 'pci' for the complete list\n");
   }
+  term_puts_t(term, "Next capture plan: run 'hw next' or 'report next'.\n");
 }
 
 static void term_print_stat(terminal_t *term, const char *display,
@@ -5074,6 +5085,7 @@ void term_execute(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  rescue    - Non-destructive recovery checklist\n");
     term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
     term_puts_t(term, "  hw        - Hardware diagnostics\n");
+    term_puts_t(term, "  hw next   - Hardware capture plan for future real-PC tests\n");
     term_puts_t(term, "  pci [bars] - List PCI devices and driver hints\n");
     term_puts_t(term, "  usb [rescan] - Show USB/HID/USB-Ethernet diagnostics\n");
     term_puts_t(term, "  input     - Keyboard/pointer/input bus diagnostics\n");
@@ -5201,7 +5213,7 @@ void term_execute(terminal_t *term, const char *cmd) {
       term_puts_t(term, "usage: firstboot done\n");
     }
   } else if (term_command_is(cmd, "hw")) {
-    term_print_hw(term);
+    term_print_hw(term, term_skip_spaces(cmd + 2));
   } else if (term_command_is(cmd, "pci")) {
     term_print_pci(term, cmd);
   } else if (term_command_is(cmd, "usb")) {
@@ -5214,6 +5226,15 @@ void term_execute(terminal_t *term, const char *cmd) {
     const char *args = term_skip_spaces(cmd + 6);
     if (term_install_already_complete()) {
       klog_persist_boot_if_installed();
+    }
+    if (term_command_is(args, "next")) {
+      static char next_report[2048];
+      orizon_report_format_hardware_next(next_report, sizeof(next_report));
+      term_puts_t(term, next_report);
+      if (next_report[0] && next_report[strlen(next_report) - 1] != '\n') {
+        term_puts_t(term, "\n");
+      }
+      return;
     }
     if (term_command_is(args, "save")) {
       char status[160];

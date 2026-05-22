@@ -58,6 +58,8 @@ $commands = @(
   "selftest ssh",
   "ssh sessions",
   "pci bars",
+  "hw next",
+  "report next",
   "report save",
   "install-plan",
   "head /workspace/hardware-report.txt",
@@ -227,6 +229,9 @@ run_cmd() {
       ;;
     "pci bars")
       grep -q "PCI devices:" "`$OUT" || { echo "missing PCI diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "hw next"|"report next")
+      grep -q "Hardware return plan" "`$OUT" && grep -q "diagnostic-only" "`$OUT" || { echo "missing hardware return plan"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "report save")
       grep -q "/workspace/hardware-report.txt" "`$OUT" || { echo "missing report save output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

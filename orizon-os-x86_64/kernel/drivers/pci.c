@@ -244,7 +244,7 @@ void pci_format_diagnostics(char *out, size_t out_size) {
                     "  no PCI mass-storage candidates visible to the OS\n");
   }
   snprintf(line, sizeof(line),
-           "  intel-vmd-rst=%s driver=not-implemented action=capture pci bars + storage diag on Lenovo\n",
+           "  intel-vmd-rst=%s driver=not-implemented action=capture pci bars + storage diag\n",
            vmd ? "detected" : "not-detected");
   pci_diag_append(out, out_size, &used, line);
   if (total > 128) {

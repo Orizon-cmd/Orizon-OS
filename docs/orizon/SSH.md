@@ -102,8 +102,9 @@ console locale.
   `storage diag`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `logs storage`, `logs pci`, `disk identify`,
-  `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`, `pci bars`, `report save`,
-  `install-plan`, `free`, `timer`, `bootguard`, `bootguard confirm`,
+  `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`,
+  `pci bars`, `hw next`, `report next`, `report save`, `install-plan`,
+  `free`, `timer`, `bootguard`, `bootguard confirm`,
   `rollback`, `audit`, `ssh sessions`, `sync`, `reboot`,
   `shutdown`, `status`, `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.
@@ -118,9 +119,11 @@ console locale.
 - Journaux: `logs ssh`, `logs boot`, `logs storage` et `logs pci` affichent les
   etats utiles sans action destructive; storage/PCI sont des snapshots
   diagnostiques quand aucun vrai fichier journal persistant n'existe encore.
-- Rapport materiel: `report save` ecrit `/workspace/hardware-report.txt` depuis
-  SSH pour capturer storage, PCI BARs, USB, Wi-Fi, reseau, bootguard, update,
-  selftest et les queues de logs avant une validation Lenovo. `cat
+- Rapport materiel: `report next` / `hw next` affiche le plan de capture
+  materielle future sans rien ecrire. `report save` ecrit
+  `/workspace/hardware-report.txt` depuis SSH pour capturer storage, PCI BARs,
+  USB, Wi-Fi, reseau, bootguard, update, selftest et les queues de logs avant
+  une validation reelle. `cat
   /workspace/hardware-report.txt`, `tail /workspace/hardware-report.txt` et
   `report show` utilisent maintenant un tampon de sortie plus large ou une vue
   de fin de fichier pour lire un rapport complet depuis un vrai client SSH,

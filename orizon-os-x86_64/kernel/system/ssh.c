@@ -3068,9 +3068,35 @@ static void ssh_shell_print_pci(const char *args) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_hw(const char *args) {
+  static char out[2600];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "next")) {
+    orizon_report_format_hardware_next(out, sizeof(out));
+  } else {
+    snprintf(out, sizeof(out), "usage: hw [next]\r\n");
+  }
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_print_report(const char *args) {
   static char out[SSH_CHANNEL_TEXT_BUF];
   const char *sub = ssh_shell_skip_spaces(args);
+
+  if (ssh_shell_command_is(sub, "next")) {
+    orizon_report_format_hardware_next(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
 
   if (ssh_shell_command_is(sub, "save")) {
     orizon_report_save(out, sizeof(out));
@@ -3094,7 +3120,7 @@ static void ssh_shell_print_report(const char *args) {
     return;
   }
 
-  ssh_queue_channel_text("usage: report [save|show]\r\n");
+  ssh_queue_channel_text("usage: report [save|show|next]\r\n");
   ssh_shell_prompt();
 }
 
@@ -3858,7 +3884,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, system status, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tls, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -3933,7 +3959,8 @@ static void ssh_remote_shell_execute(const char *line) {
         "  gpt scan             read-only GPT partition scan\r\n"
         "  selftest [scope]     run PASS/WARN/FAIL live checks\r\n"
         "  pci [bars]           list PCI devices for hardware diagnosis\r\n"
-        "  report save          write /workspace/hardware-report.txt\r\n"
+        "  hw next              show future hardware capture plan\r\n"
+        "  report save|next     write report or show hardware capture plan\r\n"
         "  install-plan [mode]  save non-destructive installer preflight report\r\n"
         "  free                 show heap state\r\n"
         "  bootguard [confirm]  show/confirm update boot validation state\r\n"
@@ -4178,6 +4205,10 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_pci(line + 3);
     return;
   }
+  if (ssh_shell_command_is(line, "hw")) {
+    ssh_shell_print_hw(line + 2);
+    return;
+  }
   if (ssh_shell_command_is(line, "report")) {
     ssh_shell_print_report(line + 6);
     return;
@@ -4306,7 +4337,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, report save, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, system status, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tls, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "rescue") == 0) {
@@ -4361,6 +4392,8 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_print_storage("");
   } else if (ssh_shell_command_is(cmd, "pci")) {
     ssh_shell_print_pci(cmd + 3);
+  } else if (ssh_shell_command_is(cmd, "hw")) {
+    ssh_shell_print_hw(cmd + 2);
   } else if (ssh_shell_command_is(cmd, "report")) {
     ssh_shell_print_report(cmd + 6);
   } else if (ssh_shell_command_is(cmd, "install-plan")) {

@@ -44,9 +44,10 @@ le developpement noyau:
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
   en plein ecran, support molette souris PS/2, `edit` ameliore et navigation
   historique `Up/Down`
-- diagnostics `sysinfo`, `hw`, `mounts`, `report`, `report save` et `selftest`
+- diagnostics `sysinfo`, `hw`, `hw next`, `mounts`, `report`, `report next`,
+  `report save` et `selftest`
   pour voir CPU, memoire, stockage, racines data, reseau, USB/PS2, installation,
-  update et principaux peripheriques PCI
+  update, principaux peripheriques PCI et plan de capture materielle future
 - service `ssh` experimental: listener TCP/22, banniere SSH Orizon, paquet
   `KEXINIT`, X25519, signature hote RSA de developpement, `ECDH_REPLY`,
   `NEWKEYS`, premiere lecture/reponse chiffree `SERVICE_REQUEST` /
@@ -255,7 +256,8 @@ de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `tail`, `touch`, `mkdir`, `rm`
 `write`, `append`, `system status`, `system repair`, `rescue`, `hostname`,
 `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`, `security`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
-`disk read-test`, `gpt scan`, `selftest`, `report save`, `free`, `timer`,
+`disk read-test`, `gpt scan`, `selftest`, `hw next`, `report save`,
+`report next`, `free`, `timer`,
 `audit`, `ssh sessions`, `persist status`, `persist slots`, `persist save`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
 `whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`,
 `ssh lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en

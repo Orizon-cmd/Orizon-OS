@@ -199,6 +199,8 @@ def run_ssh_checks(
         ("gpt scan", "GPT partitions"),
         ("logs storage", "storage log:"),
         ("logs network", "ipv4:"),
+        ("hw next", "Hardware return plan"),
+        ("report next", "diagnostic-only"),
         ("report save", "hardware-report.txt"),
         ("cat /workspace/hardware-report.txt", "System State"),
         ("install-plan", "install-plan: wrote"),

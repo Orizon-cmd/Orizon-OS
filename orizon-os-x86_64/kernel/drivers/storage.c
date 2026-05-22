@@ -1327,6 +1327,29 @@ void storage_format_diagnostics(char *out, size_t out_size) {
                         "    none; firmware may hide the disk behind a "
                         "non-enumerated controller\n");
   }
+  if (storage_device_total > 0) {
+    storage_diag_append(out, out_size, &used,
+                        "  next-action: disk detected; run disk identify, "
+                        "gpt scan and disk read-test last before install/update\n");
+  } else if (vmd_rst) {
+    storage_diag_append(out, out_size, &used,
+                        "  next-action: Intel VMD/RST candidate visible; "
+                        "capture pci bars + logs pci + logs storage; true "
+                        "VMD remap driver is pending\n");
+  } else if (nvme_controller_seen && !nvme_namespace_ready) {
+    storage_diag_append(out, out_size, &used,
+                        "  next-action: NVMe controller visible but no "
+                        "namespace active; capture CAP/CC/CSTS, last-cid and "
+                        "last-status from this report\n");
+  } else if (candidates > 0) {
+    storage_diag_append(out, out_size, &used,
+                        "  next-action: unsupported storage candidate; "
+                        "capture this candidate line and pci bars\n");
+  } else {
+    storage_diag_append(out, out_size, &used,
+                        "  next-action: no storage candidate visible; "
+                        "capture full report and firmware storage mode\n");
+  }
   snprintf(line, sizeof(line),
            "  intel-vmd-rst: detected=%s true-driver=not-implemented "
            "fallback=diagnostic-only\n",

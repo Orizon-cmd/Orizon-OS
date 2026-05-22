@@ -143,6 +143,48 @@ static void report_append_pci_bars(char *out, size_t out_size, size_t *used) {
   }
 }
 
+int orizon_report_format_hardware_next(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+
+  report_append(out, out_size, &used, "Hardware return plan\n");
+  report_append(out, out_size, &used,
+                "scope: diagnostic-only; no Lenovo or real-PC validation is claimed by this build\n");
+  report_append(out, out_size, &used,
+                "primary export: report save; then copy /workspace/hardware-report.txt over SSH\n");
+  report_append(out, out_size, &used, "\nStorage / missing disk:\n");
+  report_append(out, out_size, &used,
+                "  1. run storage diag, logs storage, logs pci, pci bars\n");
+  report_append(out, out_size, &used,
+                "  2. run disk identify, disk read-test last, gpt scan when a disk appears\n");
+  report_append(out, out_size, &used,
+                "  3. if intel-vmd-rst=detected, capture the report; true VMD/RST remap driver is still pending\n");
+  report_append(out, out_size, &used,
+                "  4. if nvme active=no, keep CAP/CC/CSTS and last-status from storage diag\n");
+  report_append(out, out_size, &used, "\nUSB Ethernet:\n");
+  report_append(out, out_size, &used,
+                "  1. run usb rescan, usb, logs usb, net status\n");
+  report_append(out, out_size, &used,
+                "  2. ready=yes raw=yes means DHCP can try the adapter; pending families need driver work\n");
+  report_append(out, out_size, &used,
+                "  3. capture VID/PID, family, endpoints, bursts and support=... from the report\n");
+  report_append(out, out_size, &used, "\nIntel Wi-Fi / AX201:\n");
+  report_append(out, out_size, &used,
+                "  1. run wifi status, wifi firmware, wifi bringup, wifi scan, wifi scan arm, wifi scan poll\n");
+  report_append(out, out_size, &used,
+                "  2. run wifi validate <ssid> [password] only on real AP testing; do not paste passwords into reports\n");
+  report_append(out, out_size, &used,
+                "  3. capture logs wifi, wifi wpa, wifi data and the validation file if the AP path fails\n");
+  report_append(out, out_size, &used, "\nGeneral rule:\n");
+  report_append(out, out_size, &used,
+                "  keep the VM-installed OS stable first; hardware captures should explain blockers, not claim fixes\n");
+  return (int)used;
+}
+
 int orizon_report_format(char *out, size_t out_size) {
   char line[256];
   char block[4096];
@@ -179,6 +221,8 @@ int orizon_report_format(char *out, size_t out_size) {
 
   orizon_system_format_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "System State", block);
+  orizon_report_format_hardware_next(block, sizeof(block));
+  report_append_block(out, out_size, &used, "Hardware Return Plan", block);
 
   timer_format_status(block, sizeof(block));
   report_append_block(out, out_size, &used, "Timer", block);

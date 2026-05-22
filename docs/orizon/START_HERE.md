@@ -21,6 +21,8 @@ design note.
 - Hardware capture is exportable with `report save`, which writes the
   non-destructive `/workspace/hardware-report.txt` bundle containing storage,
   PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
+  `report next` and `hw next` print the exact future-hardware capture plan
+  without claiming any real-PC validation.
 - Installer preflight is exportable with `install-plan`, which writes the
   non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
   review before any disk write.
@@ -79,9 +81,10 @@ python scripts/orizon/quick_check.py
 - ZimaOS installed update/rollback smoke, when requested:
   `python scripts/orizon/test_update_rollback_vm.py` installs a disposable VM,
   validates signed update metadata, runs rollback, reboots, and shuts down.
-- Lenovo storage capture, only when the user boots the new ISO: `report save`,
-  `storage diag`, `logs storage`, `logs pci`, `pci bars`, `disk identify`, and
-  `gpt scan`; do not install while investigating missing-disk detection.
+- Future storage capture, only when the user boots a real machine intentionally:
+  `report next`, `report save`, `storage diag`, `logs storage`, `logs pci`,
+  `pci bars`, `disk identify`, and `gpt scan`; do not install while
+  investigating missing-disk detection.
 - USB Ethernet hardware: `usb rescan`, `usb`, `logs usb`, `net status`.
 - Lenovo Wi-Fi AP validation, only on the user's real hardware: `wifi validate
   <ssid> [password]`, then `logs wifi`, `net status`, `wifi wpa`, and
