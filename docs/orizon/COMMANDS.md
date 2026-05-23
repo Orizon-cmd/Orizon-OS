@@ -74,6 +74,7 @@ dualboot-check
 repair-boot
 bootguard
 bootguard confirm
+bootguard recover
 rollback-status
 rollback
 logs boot
@@ -82,9 +83,11 @@ logs update
 
 Known limit: rollback is currently Limine/boot-count style after Orizon early
 boot. `bootguard` and `update status` show the strategy, remaining attempts,
-normal/fallback Limine config cache, `nvram-bootnext: prepared=no`, and
-`ab-slots: prepared=no`. True firmware `BootNext` through UEFI Runtime Services
-is not implemented yet.
+normal/fallback Limine config cache, `bootguard-recover`,
+`pseudo-ab-slots: prepared=yes`, `nvram-bootnext: prepared=no`, and
+`ab-slots: prepared=no`. `bootguard recover` arms the cached fallback Limine
+config for the next boot. True firmware `BootNext` through UEFI Runtime
+Services is not implemented yet.
 
 `install-plan` is non-destructive. It writes
 `/workspace/.orizon/install-report.txt` so VM/SSH checks can review the selected

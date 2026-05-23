@@ -238,10 +238,12 @@ def main() -> int:
           ("update status", "manifest:"),
           ("update status", "bootguard-strategy: limine-boot-count-shell-validation"),
           ("update status", "nvram-bootnext: prepared=no"),
+          ("update status", "pseudo-ab-slots:"),
           ("update status", "ab-slots: prepared=no"),
           ("bootguard", "Orizon boot guard"),
           ("bootguard", "boot-strategy: limine-boot-count-shell-validation"),
           ("bootguard", "firmware-pre-kernel-rollback=no"),
+          ("bootguard", "pseudo-ab-slots prepared="),
           ("persist status", "ready=yes"),
           ("persist save", "persistence save: ok"),
           ("selftest update", "update.status"),
@@ -315,12 +317,15 @@ def main() -> int:
           ("update status", "package-index-auth: signed-manifest-sha256-pinned"),
           ("update status", "resume-cache:"),
           ("update status", "bootguard-state:"),
+          ("update status", "bootguard-recover:"),
           ("update status", "bootguard-fallback-config:"),
           ("update status", "rollback-scope: post-orizon-early-boot"),
+          ("update status", "pseudo-ab-slots:"),
           ("update status", "ab-slots: prepared=no"),
           ("logs update", "Update complete"),
           ("bootguard", "Orizon boot guard"),
           ("bootguard", "limine-fallback-config:"),
+          ("bootguard", "bootguard-recover:"),
           ("bootguard", "ab-slots: prepared=no"),
           ("pkg status", "remote-index-auth signed-update-manifest-sha256-pinned"),
           ("pkg remote", "cached-index=yes"),
@@ -362,6 +367,7 @@ def main() -> int:
           client, ip, args.password, "rollback-status", args.ssh_timeout
       )
       print(rollback_status)
+      expect(rollback_status, "rollback status:", "rollback-status")
       expect(rollback_status, "currently-booted-payload", "rollback-status")
       transcript.append("rollback: restored currently booted payload")
 

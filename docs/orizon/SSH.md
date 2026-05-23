@@ -44,6 +44,7 @@ firstboot done
 selftest ssh
 bootguard
 bootguard confirm
+bootguard recover
 rollback
 ```
 
@@ -109,7 +110,7 @@ console locale.
   `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`,
   `pci bars`, `hw next`, `report next`, `report save`, `install-plan`,
-  `free`, `timer`, `bootguard`, `bootguard confirm`,
+  `free`, `timer`, `bootguard`, `bootguard confirm`, `bootguard recover`,
   `rollback`, `audit`, `ssh sessions`, `sync`, `reboot`,
   `shutdown`, `status`, `auth`, `hostkey`, `whoami`,
   `uname`, `pwd`, `uptime` et `exit`, puis ferme proprement avec `exit-status`.

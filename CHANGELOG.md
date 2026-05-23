@@ -14,6 +14,7 @@
 - Improved VM matrix reporting for bridge profiles by probing ARP/neigh IP discovery and marking unreachable bridge guests as boot/framebuffer-only instead of ambiguous SSH skips.
 - Added a tracked-secret CI gate and release-notes preview artifact to the GitHub workflows.
 - Clarified update rollback strategy/status with explicit Limine boot-count scope, BootNext/A-B not-prepared markers, and rollback metadata.
+- Added `bootguard recover`, richer `rollback-status`, and explicit pseudo-A/B metadata for Limine main/rollback recovery.
 - Fixed installed-state detection so the package database at `/system/installed` no longer disables the live installer.
 - Added modern VirtIO-blk VM storage support, VirtIO disk smoke coverage, and clearer storage diagnostics for VirtIO-blk vs VirtIO-scsi.
 - Added a small installed/live init layer with `system init`, `system services`, `system doctor`, `/system/boot-state`, and `/logs/init.log`.

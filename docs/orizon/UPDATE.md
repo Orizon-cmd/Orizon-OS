@@ -105,10 +105,25 @@ Orizon early boot but fails before the shell, the next default boot selects
 `bootguard` now also reports the remaining validation attempts, the selected
 strategy (`limine-boot-count-shell-validation`), the Limine normal/fallback
 config cache state, the firmware type, and the EFI system table address when
-booted through UEFI. That is the prepared plumbing for a future `BootNext`
-writer, but Orizon still does not call UEFI Runtime Services yet. The status
-therefore says `firmware-pre-kernel-rollback=no`: firmware-level failures
-before the Orizon kernel starts still need future BootNext or A/B work.
+booted through UEFI. It also exposes a pseudo-A/B boundary:
+`pseudo-ab-slots prepared=yes scope=single-esp-main-plus-rollback-entry`.
+That means Orizon has a main ESP payload plus rollback payload and Limine
+fallback config, but not true firmware-managed A/B system slots. The prepared
+plumbing for a future `BootNext` writer is visible, but Orizon still does not
+call UEFI Runtime Services yet. The status therefore says
+`firmware-pre-kernel-rollback=no`: firmware-level failures before the Orizon
+kernel starts still need future BootNext or full A/B work.
+
+If an operator wants to force the next boot to try the rollback entry, run:
+
+```text
+bootguard recover
+```
+
+This installs the cached fallback Limine config and records the request in
+`rollback-state`. It is useful when the refreshed system is reachable but
+should be rolled back on the next reboot. It is still Limine/pseudo-A-B, not
+NVRAM `BootNext`.
 
 If the refreshed system does not boot correctly, or if automatic fallback has
 selected the rollback entry, run:
@@ -124,13 +139,15 @@ the main boot slot again. Metadata is available with:
 rollback-status
 ```
 
+`rollback-status` now summarizes rollback info, rollback state, cached normal
+and fallback configs, pseudo-A/B status, and the relevant recovery commands.
 This is the current recovery layer. It is boot-count style and automatic after
 the refreshed kernel reaches Orizon early boot. Rollback metadata now records
-the selected strategy, scope, attempt budget, and whether BootNext was used
-(`bootnext-used no`). True UEFI NVRAM `BootNext` or a firmware-level boot-count
-path, which would also cover failures before the kernel starts at all, is still
-a future hardening step even though the Limine EFI system table handoff is now
-captured for diagnostics.
+the selected strategy, scope, attempt budget, `bootguard recover`, and whether
+BootNext was used (`bootnext-used no`). True UEFI NVRAM `BootNext` or a
+firmware-level boot-count path, which would also cover failures before the
+kernel starts at all, is still a future hardening step even though the Limine
+EFI system table handoff is now captured for diagnostics.
 
 ## Public Manifest
 

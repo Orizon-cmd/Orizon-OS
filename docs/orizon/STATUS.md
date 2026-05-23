@@ -61,8 +61,8 @@ work.
 - Update/rollback: installed systems fetch a signed GitHub manifest, verify
   SHA-256 payloads, refresh the ESP, and use Limine fallback metadata for
   post-update validation. `update status` and `bootguard` now expose the
-  strategy, scope, attempts, Limine normal/fallback cache state, and the
-  honest `BootNext`/A-B not-prepared boundary.
+  strategy, scope, attempts, `bootguard recover`, Limine normal/fallback cache
+  state, and the honest pseudo-A/B vs `BootNext`/full-A-B boundary.
 - Release guardrails: `Orizon-OS.iso`, update payloads, `manifest.txt`,
   `manifest.sig`, and `release.txt` are cross-checked by
   `python scripts/orizon/orizon_update.py --mode validate-release` and by
@@ -94,8 +94,9 @@ work.
 
 ## Not Implemented Yet
 
-- UEFI Runtime Services `BootNext` writing, A/B slots, or firmware-level
-  rollback before the refreshed kernel starts.
+- UEFI Runtime Services `BootNext` writing, full A/B root/ESP slots, or
+  firmware-level rollback before the refreshed kernel starts. The implemented
+  rollback layer is pseudo-A/B through Limine main/rollback payloads.
 - Secure Boot, TPM attestation, disk encryption, Unix users/groups/ACLs, sudo,
   user/admin separation, or a full MAC policy.
 - Automatic Windows BCD/UEFI boot entry creation for dual boot.

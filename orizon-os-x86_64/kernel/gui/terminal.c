@@ -3321,6 +3321,9 @@ static void term_run_bootguard(terminal_t *term, const char *cmd) {
   if (term_command_is(args, "confirm") ||
       term_command_is(args, "validate")) {
     orizon_update_boot_guard_confirm(report, sizeof(report));
+  } else if (term_command_is(args, "recover") ||
+             term_command_is(args, "rollback")) {
+    orizon_update_boot_guard_recover(report, sizeof(report));
   } else {
     orizon_update_boot_guard_status(report, sizeof(report));
   }
@@ -5835,7 +5838,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
       term_puts_t(term, "  update    - Run Orizon full-upgrade\n");
       term_puts_t(term, "  rollback  - Restore the booted rollback slot\n");
       term_puts_t(term, "  rollback-status - Show rollback metadata\n");
-      term_puts_t(term, "  bootguard [confirm] - Show/confirm update boot validation\n");
+      term_puts_t(term, "  bootguard [confirm|recover] - Show/confirm/arm rollback fallback\n");
     }
     term_puts_t(term, "  update status - Show manifest/signature/TLS/rollback state\n");
     term_puts_t(term, "  about     - Show Orizon build details\n");
@@ -6516,17 +6519,9 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "bootguard")) {
     term_run_bootguard(term, cmd);
   } else if (term_command_is(cmd, "rollback-status")) {
-    char buf[1024];
-    int n = term_read_regular_file(term, "rollback-info",
-                                   "/workspace/.orizon/rollback-info", buf,
-                                   sizeof(buf), "rollback-status");
-    if (n > 0) {
-      buf[n] = '\0';
-      term_puts_t(term, buf);
-      if (buf[n - 1] != '\n') {
-        term_puts_t(term, "\n");
-      }
-    }
+    static char buf[4096];
+    orizon_update_rollback_status(buf, sizeof(buf));
+    term_puts_t(term, buf);
   } else if (term_command_is(cmd, "pkg")) {
     term_run_pkg(term, cmd);
   } else if (term_command_is(cmd, "selftest")) {
