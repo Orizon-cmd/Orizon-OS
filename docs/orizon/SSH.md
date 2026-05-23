@@ -102,7 +102,8 @@ console locale.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
-  `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
+  `system services`, `system logs`, `system firstboot`, `system repair`,
+  `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
   `net check`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
   `security`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `storage vmcheck`, `persist status`, `persist slots`, `persist save`,

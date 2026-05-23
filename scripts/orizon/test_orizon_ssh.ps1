@@ -27,8 +27,10 @@ $commands = @(
   "security",
   "system status",
   "system services",
+  "system logs",
   "system doctor",
   "system init",
+  "system firstboot",
   "rescue",
   "hostname",
   "system repair",
@@ -150,11 +152,17 @@ run_cmd() {
     "system services")
       grep -q "Orizon init/services" "`$OUT" && grep -q "services:" "`$OUT" || { echo "missing system services output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "system logs")
+      grep -q "Orizon system logs" "`$OUT" && grep -q "service-state" "`$OUT" || { echo "missing system logs output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "system doctor")
       grep -q "Orizon system doctor" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing system doctor output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system init")
       grep -q "system init:" "`$OUT" && grep -q "init-log=" "`$OUT" || { echo "missing system init output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "system firstboot")
+      grep -q "Orizon first boot" "`$OUT" && grep -q "checklist:" "`$OUT" || { echo "missing firstboot checklist"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "rescue")
       grep -q "Orizon rescue mode" "`$OUT" || { echo "missing rescue checklist"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

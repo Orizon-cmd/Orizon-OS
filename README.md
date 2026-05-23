@@ -26,8 +26,9 @@ le developpement noyau:
 - etat systeme installe/live lisible avec `system status`, checklist
   non-destructive `rescue`, reparation des fichiers initiaux via
   `system repair`, mini-init via `system init`, audit `system doctor`,
-  politique services via `system services`, marqueur `firstboot done` et
-  hostname persistant avec `hostname set <nom>`
+  politique services via `system services`, journal admin via `system logs`,
+  checklist `system firstboot`, marqueur `firstboot done` et hostname
+  persistant avec `hostname set <nom>`
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
   dual-boot data sur partition choisie, mode ESP seul non destructif,
   verification du boot UEFI, selection explicite du disque/partition cible et
@@ -128,6 +129,9 @@ Au premier boot installe, commence par:
 
 ```text
 system status
+system firstboot
+system services
+system logs
 firstboot done
 ```
 
@@ -135,7 +139,9 @@ firstboot done
 `boot-mode: installed`, affiche le hostname, l'etat first-boot, les racines
 persistantes, les fichiers initiaux et les commandes sures suivantes. Si un
 fichier systeme de base manque dans `/system`, `/home`, `/packages` ou
-`/logs`, `system repair` recree uniquement les defaults manquants et ecrit un
+`/logs`, `system logs` regroupe `/system/boot-state`,
+`/system/service-state`, `/logs/init.log` et `/logs/service.log`, et
+`system repair` recree uniquement les defaults manquants avant d'ecrire un
 rapport dans `/workspace/.orizon/rescue-report.txt`; il ne partitionne pas et
 n'installe pas l'OS.
 

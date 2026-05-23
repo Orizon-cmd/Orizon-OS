@@ -303,6 +303,8 @@ int orizon_report_format(char *out, size_t out_size) {
                           REPORT_LOG_TAIL_BYTES);
   report_append_file_tail(out, out_size, &used, "Init Log", "/logs/init.log",
                           REPORT_LOG_TAIL_BYTES);
+  report_append_file_tail(out, out_size, &used, "Service Log",
+                          "/logs/service.log", REPORT_LOG_TAIL_BYTES);
   storage_format_log(block, sizeof(block));
   report_append_block(out, out_size, &used, "Storage Log", block);
   pci_format_diagnostics(block, sizeof(block));

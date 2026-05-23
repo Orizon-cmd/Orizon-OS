@@ -63,9 +63,11 @@ install-status
 system status
 system init
 system services
+system logs
 system doctor
 system repair
 rescue
+system firstboot
 firstboot done
 hostname
 hostname set orizon-vm
@@ -98,16 +100,20 @@ installer write happens.
 `boot-mode: live` or `boot-mode: installed`, hostname, first-boot state,
 persistent roots, required `/system` files, init/log state, and safe next
 commands. `system init` reruns the idempotent boot tasks, writes
-`/system/boot-state` and `/logs/init.log`, and persists roots when possible.
+`/system/boot-state`, `/system/service-state`, `/logs/init.log`, and
+`/logs/service.log`, and persists roots when possible.
 `system services` shows the small service policy (`persistence`, `bootlog`,
-`network`, `ssh`, `update-bootguard`) without pretending to be a full service
-manager. `system doctor` audits roots/config/init state without writes.
+`network`, `ssh`, `package-db`, `update-bootguard`, `firstboot`) without
+pretending to be a full service manager. `system logs` prints the boot-state,
+service-state, init log, and service log in one place. `system firstboot`
+prints the first installed boot checklist before `firstboot done` marks it as
+reviewed. `system doctor` audits roots/config/init state without writes.
 `rescue` prints the non-destructive recovery checklist. `system repair`
 recreates only missing defaults under `/workspace/.orizon`, `/home/orizon`,
-`/system`, `/packages`, and `/logs`, then writes
-`/workspace/.orizon/rescue-report.txt`. `hostname set <name>` persists
-`/system/hostname`; `firstboot done` marks the installed VM's first boot as
-reviewed.
+`/system`, `/packages`, and `/logs`, including `/system/motd`,
+`/system/fstab`, `/system/rescue.conf`, `/system/admin-guide.txt`,
+`/home/orizon/.profile`, then writes `/workspace/.orizon/rescue-report.txt`.
+`hostname set <name>` persists `/system/hostname`.
 
 ## Network And Update
 

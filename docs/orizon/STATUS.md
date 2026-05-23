@@ -59,6 +59,12 @@ work.
   save/restore, `gpt scan`, first/last sector read tests, install preflight,
   reboot, and shutdown. VirtIO-scsi is still diagnostic-only and reported as
   such in storage diagnostics.
+- Installed VM UX: `system init` now records both boot-state and service-state,
+  `system services` exposes the current mini service policy, `system logs`
+  gathers boot/service/init evidence, `system firstboot` guides the first
+  installed boot checklist, and `system repair` recreates missing admin defaults
+  like MOTD, fstab map, rescue policy, admin guide and home profile without
+  repartitioning or installing.
 - Update/rollback: installed systems fetch a signed GitHub manifest, verify
   SHA-256 payloads, refresh the ESP, and use Limine fallback metadata for
   post-update validation. `update status` and `bootguard` now expose the

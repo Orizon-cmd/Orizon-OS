@@ -16,6 +16,14 @@
 #define ORIZON_BOOT_STATE_PATH "/system/boot-state"
 #define ORIZON_INIT_LOG_PATH "/logs/init.log"
 #define ORIZON_SERVICES_PATH "/system/services.conf"
+#define ORIZON_SERVICE_STATE_PATH "/system/service-state"
+#define ORIZON_SERVICE_LOG_PATH "/logs/service.log"
+#define ORIZON_MOTD_PATH "/system/motd"
+#define ORIZON_ISSUE_PATH "/system/issue"
+#define ORIZON_FSTAB_PATH "/system/fstab"
+#define ORIZON_RESCUE_CONF_PATH "/system/rescue.conf"
+#define ORIZON_ADMIN_GUIDE_PATH "/system/admin-guide.txt"
+#define ORIZON_HOME_PROFILE_PATH "/home/orizon/.profile"
 
 static const char *system_default_services =
     "# Orizon service policy v1\n"
@@ -24,7 +32,45 @@ static const char *system_default_services =
     "bootlog installed\n"
     "network manual\n"
     "ssh manual\n"
+    "package-db installed\n"
     "update-bootguard installed\n";
+
+static const char *system_default_motd =
+    "Welcome to Orizon OS.\n"
+    "Start with: system status, system firstboot, system services, system logs.\n"
+    "Use rescue for the safe recovery checklist.\n";
+
+static const char *system_default_fstab =
+    "# Orizon mount map v1\n"
+    "# This records intended persistent roots; it is not a POSIX mount table yet.\n"
+    "rootfs / memory defaults 0 0\n"
+    "persist /workspace persistent optional 0 0\n"
+    "persist /home persistent optional 0 0\n"
+    "persist /system persistent optional 0 0\n"
+    "persist /packages persistent optional 0 0\n"
+    "persist /logs persistent optional 0 0\n";
+
+static const char *system_default_rescue_conf =
+    "# Orizon rescue policy v1\n"
+    "repair-defaults yes\n"
+    "allow-disk-layout-writes no\n"
+    "prefer-previous-snapshot yes\n"
+    "export-report /workspace/.orizon/rescue-report.txt\n";
+
+static const char *system_default_admin_guide =
+    "Orizon admin quickstart\n"
+    "1. system status\n"
+    "2. system firstboot\n"
+    "3. system services\n"
+    "4. system logs\n"
+    "5. system doctor\n"
+    "6. rescue\n";
+
+static const char *system_default_profile =
+    "# Orizon shell profile\n"
+    "# The console uses the built-in Orizon shell; this file records user defaults.\n"
+    "HOME=/home/orizon\n"
+    "WORKSPACE=/workspace\n";
 
 static void system_append(char *out, size_t out_size, size_t *used,
                           const char *text) {
@@ -109,6 +155,25 @@ static void system_trim_first_line(char *buf) {
   }
 }
 
+static void system_append_file_preview(char *out, size_t out_size, size_t *used,
+                                       const char *label, const char *path) {
+  char buf[768];
+  char line[160];
+  int n;
+
+  snprintf(line, sizeof(line), "%s: %s\n", label, path);
+  system_append(out, out_size, used, line);
+  n = system_read_text_file(path, buf, sizeof(buf));
+  if (n <= 0) {
+    system_append(out, out_size, used, "  (not available)\n");
+    return;
+  }
+  system_append(out, out_size, used, buf);
+  if (buf[strlen(buf) - 1] != '\n') {
+    system_append(out, out_size, used, "\n");
+  }
+}
+
 static int system_hostname_valid(const char *name) {
   size_t len;
 
@@ -166,6 +231,19 @@ static int system_ensure_defaults(int *created) {
           created) < 0) {
     rc = -1;
   }
+  if (system_write_default_file(ORIZON_FSTAB_PATH, system_default_fstab,
+                                created) < 0) {
+    rc = -1;
+  }
+  if (system_write_default_file(ORIZON_MOTD_PATH, system_default_motd,
+                                created) < 0) {
+    rc = -1;
+  }
+  if (system_write_default_file(ORIZON_ISSUE_PATH,
+                                "Orizon OS Core Development Base\n",
+                                created) < 0) {
+    rc = -1;
+  }
   if (system_write_default_file("/system/network.conf", "mode dhcp\n",
                                 created) < 0) {
     rc = -1;
@@ -174,8 +252,25 @@ static int system_ensure_defaults(int *created) {
                                 created) < 0) {
     rc = -1;
   }
+  if (system_write_default_file(ORIZON_SERVICE_STATE_PATH,
+                                "service-state: not-recorded\n", created) <
+      0) {
+    rc = -1;
+  }
+  if (system_write_default_file(ORIZON_RESCUE_CONF_PATH,
+                                system_default_rescue_conf, created) < 0) {
+    rc = -1;
+  }
+  if (system_write_default_file(ORIZON_ADMIN_GUIDE_PATH,
+                                system_default_admin_guide, created) < 0) {
+    rc = -1;
+  }
   if (system_write_default_file(ORIZON_BOOT_STATE_PATH,
                                 "boot-state: not-recorded\n", created) < 0) {
+    rc = -1;
+  }
+  if (system_write_default_file(ORIZON_HOME_PROFILE_PATH,
+                                system_default_profile, created) < 0) {
     rc = -1;
   }
   if (system_write_default_file(
@@ -238,6 +333,43 @@ static void system_format_boot_state_text(char *out, size_t out_size,
                      : "not-installed");
 }
 
+static void system_format_service_state_text(char *out, size_t out_size,
+                                             const char *source) {
+  char host[80];
+  int installed;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  orizon_system_hostname(host, sizeof(host));
+  installed = orizon_system_is_installed();
+  snprintf(out, out_size,
+           "service-state: recorded\n"
+           "source: %s\n"
+           "mode: %s\n"
+           "hostname: %s\n"
+           "uptime-seconds: %lu\n"
+           "services:\n"
+           "  persistence policy=auto state=%s\n"
+           "  bootlog policy=installed state=%s\n"
+           "  network policy=manual state=configured-on-demand\n"
+           "  ssh policy=manual state=configured-on-demand\n"
+           "  package-db policy=installed state=%s\n"
+           "  update-bootguard policy=installed state=%s\n"
+           "  firstboot policy=installed state=%s\n",
+           source && source[0] ? source : "system-init",
+           installed ? "installed" : "live", host,
+           (unsigned long)timer_uptime_seconds(),
+           vfs_persist_available() ? "active" : "memory-only",
+           installed ? (klog_boot_persisted() ? "saved" : "pending")
+                     : "live-skip",
+           vfs_exists("/system/installed") ? "present" : "live-or-pending",
+           installed ? "available" : "installed-only",
+           installed ? (vfs_exists(ORIZON_FIRSTBOOT_DONE_PATH) ? "done"
+                                                               : "pending")
+                     : "not-installed");
+}
+
 static int system_path_ok(const char *path) {
   return vfs_exists(path);
 }
@@ -277,6 +409,10 @@ void orizon_system_format_services(char *out, size_t out_size) {
            ORIZON_BOOT_STATE_PATH,
            system_path_ok(ORIZON_BOOT_STATE_PATH) ? "present" : "missing");
   system_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "service-state: %s %s\n",
+           ORIZON_SERVICE_STATE_PATH,
+           system_path_ok(ORIZON_SERVICE_STATE_PATH) ? "present" : "missing");
+  system_append(out, out_size, &used, line);
   system_append(out, out_size, &used, "services:\n");
   snprintf(line, sizeof(line),
            "  persistence policy=auto state=%s detail=\"%s\"\n",
@@ -297,9 +433,22 @@ void orizon_system_format_services(char *out, size_t out_size) {
            system_ok_missing("/system/ssh.conf"),
            system_ok_missing("/system/ssh_host_rsa.key"));
   system_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "  package-db policy=installed state=%s\n",
+           vfs_exists("/system/installed") ? "present" : "live-or-pending");
+  system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "  update-bootguard policy=installed state=%s\n",
            installed ? "available" : "installed-only");
+  system_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "  firstboot policy=installed state=%s\n",
+           installed ? (vfs_exists(ORIZON_FIRSTBOOT_DONE_PATH) ? "done"
+                                                               : "pending")
+                     : "not-installed");
+  system_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "logs: init=%s service=%s boot=%s\n",
+           system_ok_missing(ORIZON_INIT_LOG_PATH),
+           system_ok_missing(ORIZON_SERVICE_LOG_PATH),
+           system_ok_missing(KLOG_BOOT_PATH));
   system_append(out, out_size, &used, line);
   system_append(out, out_size, &used, "admin:\n");
   system_append(out, out_size, &used,
@@ -308,6 +457,8 @@ void orizon_system_format_services(char *out, size_t out_size) {
                 "  system doctor    audit installed/live state without writes\n");
   system_append(out, out_size, &used,
                 "  system repair    recreate missing defaults and persist state\n");
+  system_append(out, out_size, &used,
+                "  system logs      show boot-state, service-state and init logs\n");
 }
 
 void orizon_system_format_doctor(char *out, size_t out_size) {
@@ -341,10 +492,18 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
   DOCTOR_CHECK("/packages root", system_path_ok("/packages"));
   DOCTOR_CHECK("/logs root", system_path_ok("/logs"));
   DOCTOR_CHECK("hostname file", system_path_ok(ORIZON_HOSTNAME_PATH));
+  DOCTOR_CHECK("motd file", system_path_ok(ORIZON_MOTD_PATH));
+  DOCTOR_CHECK("issue file", system_path_ok(ORIZON_ISSUE_PATH));
+  DOCTOR_CHECK("fstab map", system_path_ok(ORIZON_FSTAB_PATH));
   DOCTOR_CHECK("network config", system_path_ok("/system/network.conf"));
   DOCTOR_CHECK("services config", system_path_ok(ORIZON_SERVICES_PATH));
+  DOCTOR_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
+  DOCTOR_CHECK("rescue config", system_path_ok(ORIZON_RESCUE_CONF_PATH));
+  DOCTOR_CHECK("admin guide", system_path_ok(ORIZON_ADMIN_GUIDE_PATH));
+  DOCTOR_CHECK("home profile", system_path_ok(ORIZON_HOME_PROFILE_PATH));
   DOCTOR_CHECK("boot state", system_path_ok(ORIZON_BOOT_STATE_PATH));
   DOCTOR_CHECK("init log", system_path_ok(ORIZON_INIT_LOG_PATH));
+  DOCTOR_CHECK("service log", system_path_ok(ORIZON_SERVICE_LOG_PATH));
   DOCTOR_CHECK("persistence", vfs_persist_available());
   if (installed) {
     DOCTOR_CHECK("install marker", system_path_ok(ORIZON_INSTALL_MARKER_PATH));
@@ -361,13 +520,16 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
 
 int orizon_system_run_boot_tasks(char *out, size_t out_size) {
   char boot_state[1024];
+  char service_state[1024];
   char services[1536];
   char line[256];
   size_t used = 0;
   int created = 0;
   int defaults_rc;
   int boot_rc;
+  int service_state_rc;
   int initlog_rc;
+  int servicelog_rc;
   int bootlog_rc;
   int save_rc;
   int installed;
@@ -375,17 +537,24 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
   defaults_rc = system_ensure_defaults(&created);
   installed = orizon_system_is_installed();
   system_format_boot_state_text(boot_state, sizeof(boot_state), "system-init");
+  system_format_service_state_text(service_state, sizeof(service_state),
+                                   "system-init");
   boot_rc = system_write_text_file(ORIZON_BOOT_STATE_PATH, boot_state);
+  service_state_rc =
+      system_write_text_file(ORIZON_SERVICE_STATE_PATH, service_state);
   orizon_system_format_services(services, sizeof(services));
   initlog_rc = system_write_text_file(ORIZON_INIT_LOG_PATH, boot_state);
   if (initlog_rc == 0) {
     file_t *f = vfs_open(ORIZON_INIT_LOG_PATH, O_WRONLY | O_APPEND);
     if (f) {
       vfs_write(f, "\n", 1);
+      vfs_write(f, service_state, strlen(service_state));
+      vfs_write(f, "\n", 1);
       vfs_write(f, services, strlen(services));
       vfs_close(f);
     }
   }
+  servicelog_rc = system_write_text_file(ORIZON_SERVICE_LOG_PATH, service_state);
   bootlog_rc = klog_persist_boot_if_installed();
   save_rc = vfs_persist_save();
 
@@ -393,14 +562,19 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
     out[0] = '\0';
     snprintf(line, sizeof(line),
              "system init: %s\nmode=%s created-defaults=%d\n",
-             defaults_rc == 0 && boot_rc == 0 && initlog_rc == 0 ? "PASS"
-                                                                  : "WARN",
+             defaults_rc == 0 && boot_rc == 0 && service_state_rc == 0 &&
+                     initlog_rc == 0 && servicelog_rc == 0
+                 ? "PASS"
+                 : "WARN",
              installed ? "installed" : "live", created);
     system_append(out, out_size, &used, line);
     snprintf(line, sizeof(line),
-             "boot-state=%s init-log=%s boot-log=%s persistence-save=%s\n",
+             "boot-state=%s service-state=%s init-log=%s service-log=%s "
+             "boot-log=%s persistence-save=%s\n",
              boot_rc == 0 ? ORIZON_BOOT_STATE_PATH : "failed",
+             service_state_rc == 0 ? ORIZON_SERVICE_STATE_PATH : "failed",
              initlog_rc == 0 ? ORIZON_INIT_LOG_PATH : "failed",
+             servicelog_rc == 0 ? ORIZON_SERVICE_LOG_PATH : "failed",
              bootlog_rc == 0 ? KLOG_BOOT_PATH
                              : (installed ? "pending-or-unavailable"
                                           : "skipped-live"),
@@ -409,7 +583,10 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
     system_append(out, out_size, &used, "\n");
     system_append(out, out_size, &used, services);
   }
-  return defaults_rc == 0 && boot_rc == 0 && initlog_rc == 0 ? 0 : -EIO;
+  return defaults_rc == 0 && boot_rc == 0 && service_state_rc == 0 &&
+                 initlog_rc == 0 && servicelog_rc == 0
+             ? 0
+             : -EIO;
 }
 
 void orizon_system_hostname(char *out, size_t out_size) {
@@ -502,29 +679,109 @@ void orizon_system_format_status(char *out, size_t out_size) {
   system_append(out, out_size, &used, line);
   system_append(out, out_size, &used, "files:\n");
   snprintf(line, sizeof(line),
-           "  hostname=%s network=%s services=%s data-layout=%s install-marker=%s\n",
+           "  hostname=%s motd=%s fstab=%s network=%s services=%s "
+           "data-layout=%s install-marker=%s\n",
            system_path_ok(ORIZON_HOSTNAME_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_MOTD_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_FSTAB_PATH) ? "ok" : "missing",
            system_path_ok("/system/network.conf") ? "ok" : "missing",
            system_path_ok(ORIZON_SERVICES_PATH) ? "ok" : "missing",
            system_path_ok("/system/data-layout") ? "ok" : "missing",
            installed ? "present" : "absent");
   system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "init: boot-state=%s init-log=%s boot-log=%s\n",
+           "init: boot-state=%s service-state=%s init-log=%s service-log=%s "
+           "boot-log=%s\n",
            system_path_ok(ORIZON_BOOT_STATE_PATH) ? "present" : "missing",
+           system_path_ok(ORIZON_SERVICE_STATE_PATH) ? "present" : "missing",
            system_path_ok(ORIZON_INIT_LOG_PATH) ? "present" : "missing",
+           system_path_ok(ORIZON_SERVICE_LOG_PATH) ? "present" : "missing",
            klog_boot_persisted() ? "saved" : (installed ? "pending" : "live-skip"));
   system_append(out, out_size, &used, line);
   system_append(out, out_size, &used, "safe commands:\n");
   if (installed) {
     system_append(out, out_size, &used,
-                  "  system init, system services, system doctor, update status, bootguard, rollback-status, rescue\n");
+                  "  system init, system services, system logs, system firstboot, system doctor, update status, bootguard, rollback-status, rescue\n");
   } else {
     system_append(out, out_size, &used,
-                  "  system init, system services, system doctor, install-plan, report save, storage diag, rescue\n");
+                  "  system init, system services, system logs, system firstboot, system doctor, install-plan, report save, storage diag, rescue\n");
   }
   system_append(out, out_size, &used,
                 "notes: system repair is non-destructive and only recreates missing defaults.\n");
+}
+
+void orizon_system_format_firstboot(char *out, size_t out_size) {
+  char host[80];
+  char line[192];
+  size_t used = 0;
+  int installed;
+  int done;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_system_hostname(host, sizeof(host));
+  installed = orizon_system_is_installed();
+  done = vfs_exists(ORIZON_FIRSTBOOT_DONE_PATH);
+  system_append(out, out_size, &used, "Orizon first boot\n");
+  snprintf(line, sizeof(line), "mode: %s\nhostname: %s\nstate: %s\n",
+           installed ? "installed" : "live", host,
+           installed ? (done ? "done" : "pending") : "not-installed");
+  system_append(out, out_size, &used, line);
+  system_append(out, out_size, &used, "checklist:\n");
+  system_append(out, out_size, &used,
+                "  1. system status     # confirm live vs installed\n");
+  system_append(out, out_size, &used,
+                "  2. system services   # confirm boot service policy\n");
+  system_append(out, out_size, &used,
+                "  3. system logs       # inspect boot-state and init logs\n");
+  system_append(out, out_size, &used,
+                "  4. system doctor     # audit required roots and config\n");
+  system_append(out, out_size, &used,
+                "  5. report save       # export evidence before risky changes\n");
+  if (installed && !done) {
+    system_append(out, out_size, &used,
+                  "finish: run 'firstboot done' after reviewing the checklist.\n");
+  } else if (installed) {
+    system_append(out, out_size, &used,
+                  "finish: first boot already confirmed; rerun system init after repairs.\n");
+  } else {
+    system_append(out, out_size, &used,
+                  "note: firstboot can only be completed after installing to a VM disk.\n");
+  }
+}
+
+void orizon_system_format_logs(char *out, size_t out_size) {
+  char line[256];
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  system_append(out, out_size, &used, "Orizon system logs\n");
+  snprintf(line, sizeof(line),
+           "paths: boot-state=%s service-state=%s init-log=%s service-log=%s "
+           "boot-log=%s\n",
+           system_ok_missing(ORIZON_BOOT_STATE_PATH),
+           system_ok_missing(ORIZON_SERVICE_STATE_PATH),
+           system_ok_missing(ORIZON_INIT_LOG_PATH),
+           system_ok_missing(ORIZON_SERVICE_LOG_PATH),
+           system_ok_missing(KLOG_BOOT_PATH));
+  system_append(out, out_size, &used, line);
+  system_append(out, out_size, &used, "\n");
+  system_append_file_preview(out, out_size, &used, "boot-state",
+                             ORIZON_BOOT_STATE_PATH);
+  system_append(out, out_size, &used, "\n");
+  system_append_file_preview(out, out_size, &used, "service-state",
+                             ORIZON_SERVICE_STATE_PATH);
+  system_append(out, out_size, &used, "\n");
+  system_append_file_preview(out, out_size, &used, "init-log",
+                             ORIZON_INIT_LOG_PATH);
+  system_append(out, out_size, &used, "\n");
+  system_append_file_preview(out, out_size, &used, "service-log",
+                             ORIZON_SERVICE_LOG_PATH);
 }
 
 void orizon_system_format_rescue(char *out, size_t out_size) {
@@ -539,13 +796,14 @@ void orizon_system_format_rescue(char *out, size_t out_size) {
            "  2. report save\n"
            "  3. system doctor             # audit roots/config/init without writes\n"
            "  4. system services           # inspect simple init/service policy\n"
-           "  5. persist status && persist slots\n"
-           "  6. persist restore previous  # only if the current state is broken\n"
-           "  7. system repair             # recreate missing /system,/home,/logs defaults\n"
+           "  5. system logs               # inspect boot/service/init evidence\n"
+           "  6. persist status && persist slots\n"
+           "  7. persist restore previous  # only if the current state is broken\n"
+           "  8. system repair             # recreate missing /system,/home,/logs defaults\n"
            "installed-only helpers:\n"
            "  boot-check, repair-boot, update status, bootguard, rollback-status\n"
            "logs:\n"
-           "  /logs/init.log, /logs/boot.log, /workspace/.orizon/rescue-report.txt\n"
+           "  /logs/init.log, /logs/service.log, /logs/boot.log, /workspace/.orizon/rescue-report.txt\n"
            "report: " ORIZON_RESCUE_REPORT_PATH "\n");
 }
 
@@ -568,6 +826,7 @@ int orizon_system_mark_firstboot_done(char *out, size_t out_size) {
 
 int orizon_system_repair(char *out, size_t out_size) {
   char status[2048];
+  char service_state[1024];
   char rescue[1024];
   char services[1536];
   char doctor[1536];
@@ -580,6 +839,10 @@ int orizon_system_repair(char *out, size_t out_size) {
   defaults_rc = system_ensure_defaults(&created);
   system_format_boot_state_text(status, sizeof(status), "system-repair");
   system_write_text_file(ORIZON_BOOT_STATE_PATH, status);
+  system_format_service_state_text(service_state, sizeof(service_state),
+                                   "system-repair");
+  system_write_text_file(ORIZON_SERVICE_STATE_PATH, service_state);
+  system_write_text_file(ORIZON_SERVICE_LOG_PATH, service_state);
   orizon_system_format_status(status, sizeof(status));
   orizon_system_format_rescue(rescue, sizeof(rescue));
   orizon_system_format_services(services, sizeof(services));

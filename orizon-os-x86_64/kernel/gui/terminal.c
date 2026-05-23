@@ -865,7 +865,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
       "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
       "doctor", "firstboot", "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id", "init",
       "install", "install-plan", "install-status",
-      "input", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
+      "input", "journal", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
       "rollback-status", "repair-boot", "rescue", "rm", "security", "selftest", "services", "shutdown", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "tail", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
@@ -2010,6 +2010,12 @@ static void term_print_system_state(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "logs") || term_command_is(args, "journal") ||
+      term_command_is(args, "bootlog")) {
+    orizon_system_format_logs(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "doctor") || term_command_is(args, "check")) {
     orizon_system_format_doctor(report, sizeof(report));
     term_puts_t(term, report);
@@ -2027,13 +2033,13 @@ static void term_print_system_state(terminal_t *term, const char *cmd) {
       term_puts_t(term, report);
       return;
     }
-    orizon_system_format_status(report, sizeof(report));
+    orizon_system_format_firstboot(report, sizeof(report));
     term_puts_t(term, report);
     term_puts_t(term, "usage: system firstboot done\n");
     return;
   }
   term_puts_t(term,
-              "usage: system [status|init|services|doctor|repair|rescue|firstboot done]\n");
+              "usage: system [status|init|services|logs|doctor|repair|rescue|firstboot done]\n");
 }
 
 static void term_print_hostname_command(terminal_t *term, const char *cmd) {
@@ -5754,8 +5760,9 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
-    term_puts_t(term, "  system [status|init|services|doctor|repair|rescue|firstboot done] - Installed/live admin\n");
+    term_puts_t(term, "  system [status|init|services|logs|doctor|repair|rescue|firstboot done] - Installed/live admin\n");
     term_puts_t(term, "  services  - Show simple init/service policy\n");
+    term_puts_t(term, "  system logs - Show boot-state, service-state and init logs\n");
     term_puts_t(term, "  doctor    - Audit roots/config/init state\n");
     term_puts_t(term, "  rescue    - Non-destructive recovery checklist\n");
     term_puts_t(term, "  sysinfo   - Compact OS/hardware/storage summary\n");
@@ -5878,6 +5885,10 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     static char report[2048];
     orizon_system_format_services(report, sizeof(report));
     term_puts_t(term, report);
+  } else if (term_command_is(cmd, "journal")) {
+    static char report[4096];
+    orizon_system_format_logs(report, sizeof(report));
+    term_puts_t(term, report);
   } else if (term_command_is(cmd, "doctor")) {
     static char report[2048];
     orizon_system_format_doctor(report, sizeof(report));
@@ -5897,7 +5908,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
       orizon_system_mark_firstboot_done(report, sizeof(report));
       term_puts_t(term, report);
     } else {
-      orizon_system_format_status(report, sizeof(report));
+      orizon_system_format_firstboot(report, sizeof(report));
       term_puts_t(term, report);
       term_puts_t(term, "usage: firstboot done\n");
     }
