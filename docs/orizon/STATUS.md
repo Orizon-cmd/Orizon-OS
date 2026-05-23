@@ -53,11 +53,12 @@ work.
   ZimaOS matrix run on 2026-05-22 passed NAT e1000e, NAT VirtIO-net, and NAT
   RTL8139 with SSH diagnostics, persistence checks, framebuffer screenshot,
   reboot, post-reboot SSH, and shutdown.
-- VM storage: AHCI, NVMe diagnostics, GPT scan/read-test, and VirtIO-blk are
-  available for VM work. A 2026-05-22 ZimaOS smoke with an e1000e NAT NIC and
-  modern VirtIO-blk disk passed SSH, selftest, persistence save/restore,
-  `gpt scan`, first/last sector read tests, install preflight, reboot, and
-  shutdown. VirtIO-scsi is still diagnostic-only.
+- VM storage: AHCI, NVMe diagnostics, GPT scan/read-test, `storage vmcheck`,
+  and VirtIO-blk are available for VM work. A 2026-05-22 ZimaOS smoke with an
+  e1000e NAT NIC and modern VirtIO-blk disk passed SSH, selftest, persistence
+  save/restore, `gpt scan`, first/last sector read tests, install preflight,
+  reboot, and shutdown. VirtIO-scsi is still diagnostic-only and reported as
+  such in storage diagnostics.
 - Update/rollback: installed systems fetch a signed GitHub manifest, verify
   SHA-256 payloads, refresh the ESP, and use Limine fallback metadata for
   post-update validation. `update status` and `bootguard` now expose the

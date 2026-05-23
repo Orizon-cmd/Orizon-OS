@@ -89,25 +89,48 @@ def send_console_text(client, sudo_password: str, vm_name: str, text: str) -> No
         time.sleep(0.12 if ch != "\n" else 0.5)
 
 
-def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) -> None:
-    # Console input is sent blind through libvirt. Give the framebuffer shell
-    # time to appear, then replay the idempotent setup once to avoid losing the
-    # password/start commands during slower boots.
+def configure_ssh_console(
+    client,
+    sudo_password: str,
+    vm_name: str,
+    password: str,
+    *,
+    rounds: int = 1,
+    initial_wait: int = 0,
+) -> None:
+    # Console input is sent blind through libvirt. Keep this sequence
+    # idempotent so tests can safely re-arm SSH after DHCP/IP discovery.
     commands = (
         "keyboard us",
         "net dhcp",
+        "ssh stop",
+        "ssh lockout clear",
         f"ssh password {password}",
-        "ssh auth max 3",
+        "ssh auth max 5",
         "ssh auth lockout 30",
         "ssh start",
     )
-    time.sleep(20)
-    for round_index in range(2):
+    if initial_wait:
+        time.sleep(initial_wait)
+    for round_index in range(rounds):
         for cmd in commands:
             send_console_text(client, sudo_password, vm_name, cmd + "\n")
             time.sleep(1.5)
-        if round_index == 0:
+        if round_index + 1 < rounds:
             time.sleep(5)
+
+
+def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) -> None:
+    # Give the framebuffer shell time to appear, then replay the setup once to
+    # avoid losing password/start commands during slower boots.
+    configure_ssh_console(
+        client,
+        sudo_password,
+        vm_name,
+        password,
+        rounds=2,
+        initial_wait=20,
+    )
 
 
 def find_nat_ip(client, sudo_password: str, mac: str, network_name: str, timeout: int) -> str:
@@ -274,6 +297,8 @@ def run_ssh_checks(
         ("selftest", "summary:"),
         ("storage", "selected="),
         ("storage diag", "nvme: controllers="),
+        ("storage vmcheck", "storage vmcheck:"),
+        ("storage vmcheck", "summary:"),
         ("persist status", "persistence:"),
         ("persist slots", "persistence slots:"),
         ("persist save", "persistence save: ok"),
@@ -557,6 +582,13 @@ def main() -> int:
                         check=False,
                     )
                 continue
+            configure_ssh_console(
+                client,
+                sudo_password,
+                cfg["name"],
+                args.password,
+                rounds=1,
+            )
             output = run_ssh_checks(
                 client,
                 ip,

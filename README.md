@@ -66,7 +66,7 @@ le developpement noyau:
   configuration `/system/ssh.conf`, journal `/logs/ssh.log` et diagnostics
   `ssh status`
 - inspection stockage avec `disks`, `partitions`, `storage detail`,
-  `storage diag`, `logs storage`, `logs pci`, `disk identify`,
+  `storage diag`, `storage vmcheck`, `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `gpt scan` et selection du disque actif via
   `storage select <n>`
 - journal noyau en memoire avec `dmesg`, lecture des journaux via `logs` et
@@ -357,6 +357,7 @@ pci bars
 logs storage
 logs pci
 storage diag
+storage vmcheck
 disk identify
 disk read-test
 disk read-test last

@@ -105,7 +105,7 @@ console locale.
   `system repair`, `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
   `net check`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
   `security`, `pkg`, `update`, `update status`, `storage`,
-  `storage diag`, `persist status`, `persist slots`, `persist save`,
+  `storage diag`, `storage vmcheck`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `logs storage`, `logs pci`, `disk identify`,
   `disk read-test`, `disk read-test last`, `gpt scan`, `selftest`, `pci`,
@@ -159,7 +159,7 @@ console locale.
   `/workspace`, `/home`, `/logs` et `/packages`, sans pouvoir ecrire
   `/workspace/.orizon` ni les noms sensibles (`.env`, `.key`, `.pem`, `.ssh`,
   private, secret, token, credential, `id_rsa`, `id_ed25519`), lancer les diagnostics non destructifs
-  `security`, `selftest`, `disk identify`, `disk read-test`, `disk read-test last`,
+  `security`, `selftest`, `storage vmcheck`, `disk identify`, `disk read-test`, `disk read-test last`,
   `gpt scan`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `bootguard confirm`, `rollback`, et sauvegarder avec `sync`. En VM, `reboot` et `shutdown` persistent d'abord les racines Orizon

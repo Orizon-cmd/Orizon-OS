@@ -289,6 +289,8 @@ static uint16_t nvme_last_cqe_cid = 0;
 static uint16_t nvme_last_cmd_cid = 0;
 static uint8_t storage_read_test_buf[ORIZON_SECTOR_SIZE]
     __attribute__((aligned(4096)));
+static uint8_t storage_probe_sector[ORIZON_SECTOR_SIZE]
+    __attribute__((aligned(4096)));
 
 static uint16_t virtio_blk_io_base = 0;
 static uint16_t virtio_blk_queue_size = 0;
@@ -304,6 +306,8 @@ static int virtio_blk_writable = 1;
 static int virtio_blk_modern_only = 0;
 static int virtio_blk_modern = 0;
 static int virtio_scsi_count = 0;
+static int virtio_scsi_legacy_count = 0;
+static int virtio_scsi_modern_count = 0;
 static uint8_t virtio_blk_last_status = 0;
 static uint8_t virtio_blk_last_req_status = 0xFF;
 static char virtio_blk_model[64] = "VirtIO block device";
@@ -355,6 +359,17 @@ static uint64_t storage_phys_addr(const void *ptr) {
     return v - hhdm_offset;
   }
   return v;
+}
+
+static uint32_t storage_le32(const uint8_t *p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) |
+         ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint64_t storage_le64(const uint8_t *p) {
+  uint64_t lo = storage_le32(p);
+  uint64_t hi = storage_le32(p + 4);
+  return lo | (hi << 32);
 }
 
 static void set_status(const char *status) {
@@ -1097,10 +1112,24 @@ static int virtio_blk_scan_controller(void) {
 
   virtio_blk_count = 0;
   virtio_scsi_count = 0;
+  virtio_scsi_legacy_count = 0;
+  virtio_scsi_modern_count = 0;
   for (int i = 0; i < total && i < 96; i++) {
     if (storage_is_virtio_scsi(&devs[i])) {
+      char line[192];
       virtio_scsi_count++;
-      storage_log_append("storage: VirtIO-scsi visible but driver is diagnostic-only");
+      if (devs[i].device_id == VIRTIO_PCI_DEVICE_SCSI_MODERN) {
+        virtio_scsi_modern_count++;
+      } else {
+        virtio_scsi_legacy_count++;
+      }
+      snprintf(line, sizeof(line),
+               "storage: VirtIO-scsi visible mode=%s bar0=%08lx bar1=%08lx "
+               "driver=diagnostic-only",
+               devs[i].device_id == VIRTIO_PCI_DEVICE_SCSI_MODERN ? "modern"
+                                                                  : "legacy",
+               (unsigned long)devs[i].bar[0], (unsigned long)devs[i].bar[1]);
+      storage_log_append(line);
       continue;
     }
     if (!storage_is_virtio_blk(&devs[i])) {
@@ -1928,6 +1957,8 @@ int storage_init(void) {
   virtio_blk_modern_only = 0;
   virtio_blk_modern = 0;
   virtio_scsi_count = 0;
+  virtio_scsi_legacy_count = 0;
+  virtio_scsi_modern_count = 0;
   virtio_blk_last_status = 0;
   virtio_blk_last_req_status = 0xFF;
   virtio_blk_common_mmio = NULL;
@@ -2042,7 +2073,7 @@ void storage_format_diagnostics(char *out, size_t out_size) {
   storage_diag_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "  virtio-blk: controllers=%d detected=%s active=%s modern=%s modern-only=%s io=0x%lx qnum=%lu sectors=%lu writable=%s features=%08lx status=%02x req-status=%u notify=%lu/%lu model=\"%s\"\n"
-           "  virtio-scsi: controllers=%d true-driver=not-implemented fallback=diagnostic-only\n",
+           "  virtio-scsi: controllers=%d legacy=%d modern=%d true-driver=not-implemented fallback=diagnostic-only action=use-virtio-blk-for-VM-disks\n",
            virtio_blk_count, virtio_blk_seen ? "yes" : "no",
            virtio_blk_ready ? "yes" : "no",
            virtio_blk_modern ? "yes" : "no",
@@ -2056,7 +2087,8 @@ void storage_format_diagnostics(char *out, size_t out_size) {
            (unsigned)virtio_blk_last_req_status,
            (unsigned long)virtio_blk_queue_notify_off,
            (unsigned long)virtio_blk_notify_multiplier, virtio_blk_model,
-           virtio_scsi_count);
+           virtio_scsi_count, virtio_scsi_legacy_count,
+           virtio_scsi_modern_count);
   storage_diag_append(out, out_size, &used, line);
   if (storage_blocker[0]) {
     snprintf(line, sizeof(line), "  blocker: %s\n", storage_blocker);
@@ -2156,7 +2188,8 @@ void storage_format_identify(char *out, size_t out_size) {
            "  status: %s\n"
            "  nvme: controllers=%d detected=%s active=%s nsid=%lu lba-size=%lu scale=%lu model=\"%s\"\n"
            "  nvme-regs: CAP=%08lx%08lx CC=%08lx CSTS=%08lx last-status=%04x\n"
-           "  virtio-blk: controllers=%d detected=%s active=%s modern=%s io=0x%lx qnum=%lu sectors=%lu writable=%s req-status=%u model=\"%s\"\n",
+           "  virtio-blk: controllers=%d detected=%s active=%s modern=%s io=0x%lx qnum=%lu sectors=%lu writable=%s req-status=%u model=\"%s\"\n"
+           "  virtio-scsi: controllers=%d legacy=%d modern=%d driver=diagnostic-only\n",
            storage_selected_index + 1, storage_available() ? "yes" : "no",
            storage_status(), nvme_controller_count,
            nvme_controller_seen ? "yes" : "no",
@@ -2174,7 +2207,9 @@ void storage_format_identify(char *out, size_t out_size) {
            (unsigned long)virtio_blk_queue_size,
            (unsigned long)virtio_blk_capacity,
            virtio_blk_writable ? "yes" : "no",
-           (unsigned)virtio_blk_last_req_status, virtio_blk_model);
+           (unsigned)virtio_blk_last_req_status, virtio_blk_model,
+           virtio_scsi_count, virtio_scsi_legacy_count,
+           virtio_scsi_modern_count);
   storage_diag_append(out, out_size, &used, line);
   for (int i = 0; i < count && i < ORIZON_STORAGE_MAX_DEVICES; i++) {
     storage_device_info_t info;
@@ -2303,6 +2338,143 @@ int storage_read(uint64_t lba, void *buf, uint32_t sector_count) {
     return virtio_blk_io(lba, buf, sector_count, 0);
   }
   return ahci_io(lba, buf, sector_count, 0);
+}
+
+static int storage_probe_gpt(char *out, size_t out_size, size_t *used) {
+  char line[256];
+  int protective = 0;
+
+  if (storage_read(0, storage_probe_sector, 1) != 0) {
+    storage_diag_append(out, out_size, used,
+                        "    gpt: WARN mbr-read-failed\n");
+    return 1;
+  }
+  protective = storage_probe_sector[510] == 0x55 &&
+               storage_probe_sector[511] == 0xAA &&
+               storage_probe_sector[0x1BE + 4] == 0xEE;
+  if (storage_read(1, storage_probe_sector, 1) != 0) {
+    snprintf(line, sizeof(line),
+             "    gpt: WARN primary-header-read-failed protective-mbr=%s\n",
+             protective ? "yes" : "no");
+    storage_diag_append(out, out_size, used, line);
+    return 1;
+  }
+  if (memcmp(storage_probe_sector, "EFI PART", 8) != 0) {
+    snprintf(line, sizeof(line),
+             "    gpt: WARN primary-header=missing protective-mbr=%s\n",
+             protective ? "yes" : "no");
+    storage_diag_append(out, out_size, used, line);
+    return 1;
+  }
+  snprintf(line, sizeof(line),
+           "    gpt: PASS protective-mbr=%s first-usable=%lu last-usable=%lu "
+           "entries-lba=%lu entries=%lu entry-size=%lu\n",
+           protective ? "yes" : "no",
+           (unsigned long)storage_le64(storage_probe_sector + 40),
+           (unsigned long)storage_le64(storage_probe_sector + 48),
+           (unsigned long)storage_le64(storage_probe_sector + 72),
+           (unsigned long)storage_le32(storage_probe_sector + 80),
+           (unsigned long)storage_le32(storage_probe_sector + 84));
+  storage_diag_append(out, out_size, used, line);
+  return protective ? 0 : 1;
+}
+
+void storage_format_vmcheck(char *out, size_t out_size) {
+  char line[320];
+  char read_report[320];
+  char cap[64];
+  size_t used = 0;
+  int count;
+  int original;
+  int read_failures = 0;
+  int warnings = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!storage_scanned) {
+    storage_init();
+  }
+  count = storage_device_count();
+  original = storage_selected_device();
+  storage_diag_append(out, out_size, &used, "storage vmcheck:\n");
+  storage_diag_append(
+      out, out_size, &used,
+      "  scope: VM-safe non-destructive storage verification; no disk writes\n");
+  snprintf(line, sizeof(line), "  status: %s\n", storage_status());
+  storage_diag_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "  devices: %d selected-before=%d\n", count,
+           original + 1);
+  storage_diag_append(out, out_size, &used, line);
+
+  if (count <= 0) {
+    storage_diag_append(out, out_size, &used,
+                        "  summary: WARN no disk registered\n");
+    storage_diag_append(out, out_size, &used,
+                        "  next: run storage diag, logs storage, pci bars\n");
+    return;
+  }
+
+  for (int i = 0; i < count && i < ORIZON_STORAGE_MAX_DEVICES; i++) {
+    storage_device_info_t dev;
+    if (storage_get_device(i, &dev) < 0) {
+      warnings++;
+      continue;
+    }
+    storage_format_size(dev.sectors, cap, sizeof(cap));
+    snprintf(line, sizeof(line),
+             "  disk%d: name=%s driver=%s selected-before=%s writable=%s "
+             "size=%s model=\"%s\"\n",
+             i + 1, dev.name, dev.driver, dev.selected ? "yes" : "no",
+             dev.writable ? "yes" : "no", cap, dev.model);
+    storage_diag_append(out, out_size, &used, line);
+    if (storage_select_device(i) != 0) {
+      storage_diag_append(out, out_size, &used,
+                          "    select: FAIL cannot select disk\n");
+      read_failures++;
+      continue;
+    }
+    read_report[0] = '\0';
+    if (storage_read_test(0, read_report, sizeof(read_report)) == 0) {
+      storage_diag_append(out, out_size, &used, "    first-sector: ");
+    } else {
+      storage_diag_append(out, out_size, &used, "    first-sector: ");
+      read_failures++;
+    }
+    storage_diag_append(out, out_size, &used, read_report);
+    read_report[0] = '\0';
+    if (dev.sectors > 0 &&
+        storage_read_test(dev.sectors - 1, read_report,
+                          sizeof(read_report)) == 0) {
+      storage_diag_append(out, out_size, &used, "    last-sector: ");
+    } else {
+      storage_diag_append(out, out_size, &used, "    last-sector: ");
+      read_failures++;
+    }
+    storage_diag_append(out, out_size, &used, read_report);
+    warnings += storage_probe_gpt(out, out_size, &used);
+  }
+
+  if (original >= 0 && original < count) {
+    if (storage_select_device(original) != 0) {
+      warnings++;
+      storage_diag_append(out, out_size, &used,
+                          "  selected-restore: WARN failed\n");
+    } else {
+      snprintf(line, sizeof(line), "  selected-restored: %d\n", original + 1);
+      storage_diag_append(out, out_size, &used, line);
+    }
+  }
+
+  snprintf(line, sizeof(line), "  summary: %s read-failures=%d warnings=%d\n",
+           read_failures ? "FAIL" : (warnings ? "WARN" : "PASS"),
+           read_failures, warnings);
+  storage_diag_append(out, out_size, &used, line);
+  storage_diag_append(
+      out, out_size, &used,
+      "  repair-hints: persist repair | system repair | repair-boot; storage "
+      "vmcheck itself never partitions or writes\n");
 }
 
 int storage_write(uint64_t lba, const void *buf, uint32_t sector_count) {

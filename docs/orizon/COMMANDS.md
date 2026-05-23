@@ -303,6 +303,7 @@ input
 storage
 disks
 storage diag
+storage vmcheck
 logs storage
 disk identify
 disk read-test
@@ -327,12 +328,13 @@ logs all
 For future hardware work, capture command output rather than summarizing it from
 memory. Start with `report next` to see the safe capture plan, then run
 `report save` and copy `/workspace/hardware-report.txt`.
-If the internal disk is missing, run `storage diag`, `logs storage`, `logs pci`,
-`pci bars`, `disk identify`, `disk read-test last`, and `gpt scan`; they are
-read-only and report NVMe/AHCI candidates, Intel RST/VMD blockers, secondary
-PCI bus hints, modern/legacy VirtIO-blk state, NVMe CAP/CC/CSTS/admin errors,
-last-sector readability, and SDHCI/eMMC cases without installing or writing to
-disk. The useful files are
+If the internal disk is missing, run `storage diag`, `storage vmcheck`,
+`logs storage`, `logs pci`, `pci bars`, `disk identify`, `disk read-test last`,
+and `gpt scan`; they are read-only and report NVMe/AHCI candidates, Intel
+RST/VMD blockers, secondary PCI bus hints, modern/legacy VirtIO-blk state,
+VirtIO-scsi diagnostic-only status, NVMe CAP/CC/CSTS/admin errors,
+first/last-sector readability, GPT/protective-MBR state, and SDHCI/eMMC cases
+without installing or writing to disk. The useful files are
 `/workspace/hardware-report.txt`, `/logs/wifi.log`, `/logs/usb.log`,
 `/logs/network.log`, `/logs/ssh.log`, `/logs/security.log`, and
 `/workspace/.orizon/update.log`.

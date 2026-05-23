@@ -2800,8 +2800,8 @@ static void ssh_shell_print_ps(void) {
 }
 
 static void ssh_shell_print_storage(const char *args) {
-  static char out[2200];
-  static char diag[1400];
+  static char out[8192];
+  static char diag[2048];
   static char line[160];
   static char cap[64];
   size_t used = 0;
@@ -2810,6 +2810,18 @@ static void ssh_shell_print_storage(const char *args) {
   if (ssh_shell_command_is(sub, "diag") ||
       ssh_shell_command_is(sub, "diagnostics")) {
     storage_format_diagnostics(out, sizeof(out));
+    if (strlen(out) + 2 < sizeof(out)) {
+      strcat(out, "\r\n");
+    }
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(sub, "vmcheck") ||
+      ssh_shell_command_is(sub, "check") ||
+      ssh_shell_command_is(sub, "verify") ||
+      ssh_shell_command_is(sub, "repair")) {
+    storage_format_vmcheck(out, sizeof(out));
     if (strlen(out) + 2 < sizeof(out)) {
       strcat(out, "\r\n");
     }
@@ -4083,7 +4095,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, system status, system services, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, system status, system services, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -4154,7 +4166,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  pkg help             show package search/verify/install/update commands\r\n"
         "  pkg upgrade plan     show signed package upgrade plan\r\n"
         "  pkg search|remote    inspect local and signed remote package metadata\r\n"
-        "  storage|storage diag show storage and disk detection state\r\n"
+        "  storage|storage diag|storage vmcheck show storage and read-only VM checks\r\n"
         "  persist status|slots|save|repair inspect or rewrite data snapshots\r\n"
         "  persist restore previous|slot <n> restore and promote a snapshot\r\n"
         "  disk identify        show read-only disk/NVMe identity\r\n"
@@ -4552,7 +4564,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, system status, system services, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, system status, system services, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "services") == 0) {

@@ -5776,7 +5776,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  gpt scan  - Read-only GPT partition scan\n");
     term_puts_t(term, "  partitions - List GPT partitions on selected disk\n");
     term_puts_t(term, "  storage select <n> - Select active disk\n");
-    term_puts_t(term, "  storage diag - Explain storage/NVMe/eMMC detection\n");
+    term_puts_t(term, "  storage diag/check - Explain and verify VM storage read-only\n");
     term_puts_t(term, "  net       - Show ethernet/IP status\n");
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
     term_puts_t(term, "  net check/renew/tcp/tls/diag - Daily VM network diagnostics\n");
@@ -6374,6 +6374,13 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
       static char diag[2048];
       storage_format_diagnostics(diag, sizeof(diag));
       term_puts_t(term, diag);
+      return;
+    }
+    if (term_command_is(args, "vmcheck") || term_command_is(args, "check") ||
+        term_command_is(args, "verify") || term_command_is(args, "repair")) {
+      static char report[8192];
+      storage_format_vmcheck(report, sizeof(report));
+      term_puts_t(term, report);
       return;
     }
     if (term_command_is(args, "detail") || term_command_is(args, "list")) {
