@@ -246,6 +246,8 @@ package commands remain:
 ```text
 pkg list
 pkg status
+pkg audit
+pkg cache
 pkg search <query>
 pkg remote
 pkg remote verify
@@ -257,6 +259,7 @@ pkg history
 pkg sample
 pkg hash <file.opkg>
 pkg verify <file.opkg>
+pkg simulate <file.opkg>
 pkg install <file.opkg>
 pkg remove <name>
 pkg rollback <name>
@@ -280,8 +283,9 @@ partial new payload and restores the previous package payload/metadata when one
 exists. `pkg remote verify` validates the cached package index shape and records
 the result in `/workspace/.orizon/pkgdb/cache/remote.status`. `pkg upgrade
 plan` is a read-only comparison between the cached signed index and installed
-package metadata; `pkg upgrade` prints that plan and then enters the same signed
-update path as `pkg update`.
+package metadata; `pkg audit`, `pkg cache`, and `pkg simulate <file.opkg>` are
+also non-destructive helpers for CI/VM diagnostics. `pkg upgrade` prints that
+plan and then enters the same signed update path as `pkg update`.
 This is not yet a full boot-level package rollback.
 
 ## Live Boot Behavior

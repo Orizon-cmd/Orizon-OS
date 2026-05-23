@@ -79,6 +79,9 @@ orizon-update-root-2026-05
 
 `update status` now states that this signature policy is required. The package
 remote index remains pinned by fields inside the signed OS manifest.
+Detached package-repository signatures are still not implemented; package
+authenticity currently depends on the signed update manifest pinning the package
+repository commit, index path, index size, and index SHA-256.
 
 Package payloads and package scripts are limited to `/system`, `/home`,
 `/packages`, `/logs`, `/tmp`, and `/workspace`, with `/workspace/.orizon` and

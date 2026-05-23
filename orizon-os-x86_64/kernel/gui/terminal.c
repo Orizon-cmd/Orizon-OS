@@ -3343,6 +3343,8 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "\033[1;36mOrizon packages\033[0m\n");
   term_puts_t(term, "  pkg list          - List installed packages\n");
   term_puts_t(term, "  pkg status        - Show package manager state\n");
+  term_puts_t(term, "  pkg audit         - Audit package db/cache consistency\n");
+  term_puts_t(term, "  pkg cache         - Show package cache details\n");
   term_puts_t(term, "  pkg search <query> - Search builtin/installed/remote packages\n");
   term_puts_t(term, "  pkg remote        - Show cached signed remote package index\n");
   term_puts_t(term, "  pkg remote verify - Validate cached remote package index\n");
@@ -3352,6 +3354,7 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
   term_puts_t(term, "  pkg hash <file>   - Print package payload sha256\n");
   term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
+  term_puts_t(term, "  pkg simulate <file> - Dry-run install/upgrade without writes\n");
   if (term_install_already_complete()) {
     term_puts_t(term, "  pkg update        - Run signed update package refresh\n");
     term_puts_t(term, "  pkg upgrade       - Plan then run signed package refresh\n");
@@ -3395,6 +3398,18 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "status")) {
     orizon_pkg_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "audit")) {
+    orizon_pkg_audit(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "cache")) {
+    orizon_pkg_cache(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -3494,6 +3509,24 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     orizon_pkg_verify_file(path, report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "simulate") ||
+      term_command_is(args, "dry-run")) {
+    char path[MAX_PATH];
+    const char *requested =
+        term_skip_spaces(args + (term_command_is(args, "dry-run") ? 7 : 8));
+    if (*requested == '\0') {
+      term_puts_t(term, "usage: pkg simulate <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
+      term_puts_t(term, "pkg simulate: invalid path\n");
+      return;
+    }
+    orizon_pkg_simulate_file(path, report, sizeof(report));
     term_puts_t(term, report);
     return;
   }

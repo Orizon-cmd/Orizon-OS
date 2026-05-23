@@ -154,6 +154,8 @@ blocks it.
 ```text
 pkg status
 pkg list
+pkg audit
+pkg cache
 pkg search orizon
 pkg remote
 pkg remote verify
@@ -165,6 +167,7 @@ pkg history
 pkg sample
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
+pkg simulate /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg remove orizon-hello
 pkg rollback orizon-hello
@@ -172,9 +175,11 @@ pkg rollback orizon-hello
 
 `pkg update`, `pkg upgrade`, `pkg install`, `pkg remove`, and `pkg rollback`
 are installed-disk only. `pkg sample`, `pkg hash`, `pkg verify`, `pkg search`,
-`pkg remote`, `pkg remote verify`, and `pkg upgrade plan` are safe in the live
-ISO and over SSH. The remote package index is authenticated through the signed
-system manifest, package repository commit pin, and package-index SHA-256 pin.
+`pkg audit`, `pkg cache`, `pkg simulate`, `pkg remote`, `pkg remote verify`,
+and `pkg upgrade plan` are safe in the live ISO and over SSH. The remote
+package index is authenticated through the signed system manifest, package
+repository commit pin, and package-index SHA-256 pin; detached package repo
+signatures are still future work.
 
 ## SSH
 

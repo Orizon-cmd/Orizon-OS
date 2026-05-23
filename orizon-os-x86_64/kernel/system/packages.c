@@ -94,7 +94,7 @@ static const builtin_package_t builtin_packages[] = {
     {"orizon-timer", "pit-100hz", "builtin"},
     {"orizon-scheduler", "process-accounting", "builtin"},
     {"orizon-updater", "installed-esp-writer", "builtin"},
-    {"orizon-packages", "text-payload-v3", "builtin"},
+    {"orizon-packages", "text-payload-v4", "builtin"},
 };
 
 static char pkg_buf[PKG_MAX_BYTES + 1] __attribute__((aligned(4096)));
@@ -102,6 +102,18 @@ static char pkg_rollback_buf[PKG_MAX_BYTES + 1] __attribute__((aligned(4096)));
 static char pkg_rollback_meta[1024];
 static const char *pkg_status_text = "package manager ready";
 static int pkg_initialized = 0;
+static unsigned long pkg_transaction_seq = 0;
+
+static int meta_value(const char *text, const char *key, char *out,
+                      size_t out_size);
+
+static unsigned long pkg_next_transaction_id(void) {
+  pkg_transaction_seq++;
+  if (pkg_transaction_seq == 0) {
+    pkg_transaction_seq = 1;
+  }
+  return pkg_transaction_seq;
+}
 
 static void pkg_append(char *out, size_t out_size, const char *text) {
   size_t used;
@@ -963,11 +975,128 @@ static int pkg_count_regular_files(const char *path) {
   return files;
 }
 
+static int pkg_name_has_suffix(const char *name, const char *suffix) {
+  size_t name_len;
+  size_t suffix_len;
+
+  if (!name || !suffix) {
+    return 0;
+  }
+  name_len = strlen(name);
+  suffix_len = strlen(suffix);
+  if (name_len < suffix_len) {
+    return 0;
+  }
+  return strcmp(name + name_len - suffix_len, suffix) == 0;
+}
+
+static void pkg_audit_store(int *valid, int *invalid, int *missing_meta) {
+  dirent_t entries[64];
+  int count;
+  char path[MAX_PATH];
+  char manifest_path[MAX_PATH];
+  char meta_path[MAX_PATH];
+  pkg_manifest_t pkg;
+  char actual_hash[SHA256_HEX_SIZE];
+  size_t size = 0;
+
+  if (valid) {
+    *valid = 0;
+  }
+  if (invalid) {
+    *invalid = 0;
+  }
+  if (missing_meta) {
+    *missing_meta = 0;
+  }
+  count = vfs_readdir(PKG_DB_STORE, entries, 64);
+  if (count <= 0) {
+    return;
+  }
+  for (int i = 0; i < count; i++) {
+    if (entries[i].type != 0) {
+      continue;
+    }
+    snprintf(path, sizeof(path), PKG_DB_STORE "/%s", entries[i].name);
+    if (!pkg_name_has_suffix(entries[i].name, ".opkg") ||
+        pkg_read_file(path, pkg_buf, sizeof(pkg_buf), &size) < 0 ||
+        parse_manifest(pkg_buf, size, &pkg, actual_hash) != 0) {
+      if (invalid) {
+        (*invalid)++;
+      }
+      continue;
+    }
+    if (valid) {
+      (*valid)++;
+    }
+    if (missing_meta &&
+        package_store_paths(pkg.name, manifest_path, sizeof(manifest_path),
+                            meta_path, sizeof(meta_path)) == 0 &&
+        vfs_stat(meta_path, NULL, NULL) < 0) {
+      (*missing_meta)++;
+    }
+  }
+}
+
+static void pkg_audit_installed_meta(int *valid_meta, int *invalid_meta,
+                                     int *orphan_meta) {
+  dirent_t entries[64];
+  int count;
+  char meta_path[MAX_PATH];
+  char manifest_path[MAX_PATH];
+  char store_meta_path[MAX_PATH];
+  char name[64];
+
+  if (valid_meta) {
+    *valid_meta = 0;
+  }
+  if (invalid_meta) {
+    *invalid_meta = 0;
+  }
+  if (orphan_meta) {
+    *orphan_meta = 0;
+  }
+  count = vfs_readdir(PKG_DB_INSTALLED, entries, 64);
+  if (count <= 0) {
+    return;
+  }
+  for (int i = 0; i < count; i++) {
+    if (entries[i].type != 0) {
+      continue;
+    }
+    snprintf(meta_path, sizeof(meta_path), PKG_DB_INSTALLED "/%s",
+             entries[i].name);
+    if (!pkg_name_has_suffix(entries[i].name, ".meta") ||
+        pkg_read_file(meta_path, pkg_buf, sizeof(pkg_buf), NULL) < 0 ||
+        meta_value(pkg_buf, "name", name, sizeof(name)) < 0 ||
+        package_store_paths(name, manifest_path, sizeof(manifest_path),
+                            store_meta_path, sizeof(store_meta_path)) < 0) {
+      if (invalid_meta) {
+        (*invalid_meta)++;
+      }
+      continue;
+    }
+    if (strcmp(store_meta_path, meta_path) != 0) {
+      if (invalid_meta) {
+        (*invalid_meta)++;
+      }
+      continue;
+    }
+    if (valid_meta) {
+      (*valid_meta)++;
+    }
+    if (orphan_meta && vfs_stat(manifest_path, NULL, NULL) < 0) {
+      (*orphan_meta)++;
+    }
+  }
+}
+
 static int store_installed_package(const char *source_path,
                                    const pkg_manifest_t *pkg,
                                    const char *actual_hash,
                                    const char *source_data,
-                                   size_t source_size) {
+                                   size_t source_size,
+                                   unsigned long transaction_id) {
   char manifest_path[MAX_PATH];
   char meta_path[MAX_PATH];
   char meta[512];
@@ -985,16 +1114,20 @@ static int store_installed_package(const char *source_path,
            "version %s\n"
            "sha256 %s\n"
            "source %s\n"
-           "state installed\n",
+           "state installed\n"
+           "manager v4\n"
+           "transaction v4-%lu\n"
+           "rollback previous-payload-on-failure\n",
            pkg->name, pkg->version, actual_hash,
-           source_path ? source_path : "unknown");
+           source_path ? source_path : "unknown", transaction_id);
   if (pkg_write_blob_internal(meta_path, meta, strlen(meta)) < 0) {
     return -1;
   }
   snprintf(event, sizeof(event),
-           "installed %s %s source=%s sha256=%s transaction=v3\n",
+           "installed %s %s source=%s sha256=%s transaction=v4-%lu "
+           "rollback=previous-payload-on-failure result=stored\n",
            pkg->name, pkg->version, source_path ? source_path : "unknown",
-           actual_hash);
+           actual_hash, transaction_id);
   pkg_append_text_internal(PKG_DB_HISTORY, event);
   pkg_append_text_internal(PKG_DB_HISTORY, meta);
   pkg_append_text_internal(PKG_DB_HISTORY, "\n");
@@ -1099,6 +1232,20 @@ static int check_package_dependencies(const pkg_manifest_t *pkg, char *report,
     missing = 1;
   }
   return missing ? -1 : 0;
+}
+
+static int package_dependency_missing_count(const pkg_manifest_t *pkg) {
+  int missing = 0;
+
+  if (!pkg) {
+    return 1;
+  }
+  for (size_t i = 0; i < pkg->depends_count; i++) {
+    if (!package_dependency_satisfied(&pkg->depends[i])) {
+      missing++;
+    }
+  }
+  return missing;
 }
 
 static void append_package_dependencies(const pkg_manifest_t *pkg, char *out,
@@ -1554,6 +1701,7 @@ static int pkg_install_loaded(const char *source_name, const char *data,
   int had_old = 0;
   size_t old_size = 0;
   size_t old_meta_size = 0;
+  unsigned long transaction_id = 0;
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -1582,6 +1730,7 @@ static int pkg_install_loaded(const char *source_name, const char *data,
   if (check_package_dependencies(&pkg, report, report_size) < 0) {
     return -4;
   }
+  transaction_id = pkg_next_transaction_id();
 
   if (package_store_paths(pkg.name, manifest_path, sizeof(manifest_path),
                           meta_path, sizeof(meta_path)) < 0) {
@@ -1599,6 +1748,10 @@ static int pkg_install_loaded(const char *source_name, const char *data,
              old_pkg.version);
     pkg_append_line(report, report_size, line);
   }
+  snprintf(line, sizeof(line),
+           "Transaction v4-%lu action=%s rollback=previous-payload-on-failure",
+           transaction_id, had_old ? "upgrade" : "install");
+  pkg_append_line(report, report_size, line);
 
   if (replay_payload(&pkg, 1, report, report_size) < 0) {
     pkg_append_line(report, report_size, "pkg: payload install failed");
@@ -1608,9 +1761,15 @@ static int pkg_install_loaded(const char *source_name, const char *data,
       pkg_append_line(report, report_size,
                       "pkg: rollback restored previous package payload");
     }
+    snprintf(line, sizeof(line),
+             "failed-install %s %s transaction=v4-%lu result=payload-failed",
+             pkg.name, pkg.version, transaction_id);
+    pkg_append_text_internal(PKG_DB_HISTORY, line);
+    pkg_append_text_internal(PKG_DB_HISTORY, "\n");
     return -5;
   }
-  if (store_installed_package(source_name, &pkg, actual_hash, data, size) < 0) {
+  if (store_installed_package(source_name, &pkg, actual_hash, data, size,
+                              transaction_id) < 0) {
     pkg_append_line(report, report_size, "pkg: cannot update installed db");
     remove_payload_files(&pkg, report, report_size);
     if (had_old) {
@@ -1625,13 +1784,19 @@ static int pkg_install_loaded(const char *source_name, const char *data,
       vfs_delete(meta_path);
       vfs_delete(manifest_path);
     }
+    snprintf(line, sizeof(line),
+             "failed-install %s %s transaction=v4-%lu result=db-failed",
+             pkg.name, pkg.version, transaction_id);
+    pkg_append_text_internal(PKG_DB_HISTORY, line);
+    pkg_append_text_internal(PKG_DB_HISTORY, "\n");
     return -6;
   }
   if (had_old) {
     snprintf(line, sizeof(line), "Replaced previous version %s", old_pkg.version);
     pkg_append_line(report, report_size, line);
-    snprintf(line, sizeof(line), "upgraded %s %s -> %s rollback=guarded",
-             pkg.name, old_pkg.version, pkg.version);
+    snprintf(line, sizeof(line),
+             "upgraded %s %s -> %s transaction=v4-%lu rollback=guarded",
+             pkg.name, old_pkg.version, pkg.version, transaction_id);
     pkg_append_text_internal(PKG_DB_HISTORY, line);
     pkg_append_text_internal(PKG_DB_HISTORY, "\n");
   }
@@ -1741,7 +1906,8 @@ int orizon_pkg_status(char *out, size_t out_size) {
            removed_count / 2);
   pkg_append_line(out, out_size, line);
   pkg_append_line(out, out_size,
-                  "format orizon-package 1 manager-v2=yes manager-v3=yes");
+                  "format orizon-package 1 manager-v2=yes manager-v3=yes "
+                  "manager-v4=yes");
   pkg_append_line(out, out_size, "dependencies depends <name> <version|*>");
   pkg_append_line(out, out_size,
                   "scripts post-install pre-remove post-remove");
@@ -1754,6 +1920,11 @@ int orizon_pkg_status(char *out, size_t out_size) {
                   PKG_DB_REMOVED);
   pkg_append_line(out, out_size,
                   "remote-index-auth signed-update-manifest-sha256-pinned");
+  pkg_append_line(out, out_size,
+                  "package-repo-signature detached=no "
+                  "fallback=signed-update-manifest-pin");
+  pkg_append_line(out, out_size,
+                  "cache-audit pkg audit; cache-details pkg cache; dry-run pkg simulate <file>");
   snprintf(line, sizeof(line), "remote-index cached=%s path=%s",
            remote_cached ? "yes" : "no", PKG_REMOTE_INDEX_PATH);
   pkg_append_line(out, out_size, line);
@@ -1770,11 +1941,151 @@ int orizon_pkg_status(char *out, size_t out_size) {
                   "upgrade-plan pkg upgrade plan; apply pkg upgrade");
   pkg_append_line(out, out_size,
                   "commands pkg search <query>, pkg remote [verify], "
+                  "pkg audit, pkg cache, pkg simulate <file>, "
                   "pkg upgrade [plan], pkg rollback <name>");
   pkg_append_line(out, out_size,
                   "network-diagnostics net check; net tcp raw.githubusercontent.com 443; net tls");
   pkg_append_line(out, out_size, "db " PKG_DB_ROOT);
   return 0;
+}
+
+int orizon_pkg_cache(char *out, size_t out_size) {
+  pkg_remote_validation_t remote_stats;
+  char line[192];
+  size_t remote_size = 0;
+  size_t history_size = 0;
+  int remote_rc = -1;
+  int remote_cached;
+  int history_present;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+
+  remote_cached = vfs_stat(PKG_REMOTE_INDEX_PATH, &remote_size, NULL) == 0;
+  history_present = vfs_stat(PKG_DB_HISTORY, &history_size, NULL) == 0;
+  if (remote_cached) {
+    remote_rc = pkg_validate_remote_index(&remote_stats, NULL, 0, 0);
+  } else {
+    memset(&remote_stats, 0, sizeof(remote_stats));
+  }
+
+  pkg_append_line(out, out_size, "pkg cache:");
+  pkg_append_line(out, out_size, "db-root " PKG_DB_ROOT);
+  snprintf(line, sizeof(line), "installed-meta %d",
+           pkg_count_regular_files(PKG_DB_INSTALLED));
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "stored-packages %d",
+           pkg_count_regular_files(PKG_DB_STORE));
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "removed-snapshots %d",
+           pkg_count_regular_files(PKG_DB_REMOVED) / 2);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "cache-files %d",
+           pkg_count_regular_files(PKG_DB_CACHE));
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "remote-index cached=%s bytes=%lu path=%s",
+           remote_cached ? "yes" : "no", (unsigned long)remote_size,
+           PKG_REMOTE_INDEX_PATH);
+  pkg_append_line(out, out_size, line);
+  if (remote_cached) {
+    snprintf(line, sizeof(line),
+             "remote-index-valid=%s entries=%d invalid-lines=%d "
+             "duplicate-names=%d",
+             remote_rc == 0 ? "yes" : "no", remote_stats.valid_entries,
+             remote_stats.invalid_lines, remote_stats.duplicate_names);
+    pkg_append_line(out, out_size, line);
+  }
+  snprintf(line, sizeof(line), "remote-status %s", PKG_REMOTE_CACHE_STATUS);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "history present=%s bytes=%lu path=%s",
+           history_present ? "yes" : "no", (unsigned long)history_size,
+           PKG_DB_HISTORY);
+  pkg_append_line(out, out_size, line);
+  pkg_append_line(out, out_size,
+                  "package-repo-signature detached=no "
+                  "fallback=signed-update-manifest-pin");
+  pkg_append_line(out, out_size, "audit-command pkg audit");
+  return remote_cached && remote_rc != 0 ? 1 : 0;
+}
+
+int orizon_pkg_audit(char *out, size_t out_size) {
+  pkg_remote_validation_t remote_stats;
+  char line[192];
+  int valid_store = 0;
+  int invalid_store = 0;
+  int missing_meta = 0;
+  int valid_meta = 0;
+  int invalid_meta = 0;
+  int orphan_meta = 0;
+  int remote_cached;
+  int remote_rc = -1;
+  int fail;
+  int warn;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+
+  pkg_audit_store(&valid_store, &invalid_store, &missing_meta);
+  pkg_audit_installed_meta(&valid_meta, &invalid_meta, &orphan_meta);
+  remote_cached = vfs_stat(PKG_REMOTE_INDEX_PATH, NULL, NULL) == 0;
+  if (remote_cached) {
+    remote_rc = pkg_validate_remote_index(&remote_stats, NULL, 0, 0);
+  } else {
+    memset(&remote_stats, 0, sizeof(remote_stats));
+  }
+
+  fail = invalid_store > 0 || invalid_meta > 0 || orphan_meta > 0 ||
+         missing_meta > 0;
+  warn = !remote_cached || remote_rc != 0;
+
+  pkg_append_line(out, out_size, "pkg audit:");
+  pkg_append_line(out, out_size,
+                  "scope non-destructive; validates package db/cache only");
+  snprintf(line, sizeof(line),
+           "stored valid=%d invalid=%d missing-meta=%d", valid_store,
+           invalid_store, missing_meta);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line),
+           "installed-meta valid=%d invalid=%d orphan=%d", valid_meta,
+           invalid_meta, orphan_meta);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "rollback-snapshots %d",
+           pkg_count_regular_files(PKG_DB_REMOVED) / 2);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "remote-index cached=%s path=%s",
+           remote_cached ? "yes" : "no", PKG_REMOTE_INDEX_PATH);
+  pkg_append_line(out, out_size, line);
+  if (remote_cached) {
+    snprintf(line, sizeof(line),
+             "remote-index-valid=%s entries=%d invalid-lines=%d "
+             "duplicate-names=%d",
+             remote_rc == 0 ? "yes" : "no", remote_stats.valid_entries,
+             remote_stats.invalid_lines, remote_stats.duplicate_names);
+    pkg_append_line(out, out_size, line);
+  } else {
+    pkg_append_line(out, out_size,
+                    "remote-index WARN not cached; run pkg update after install");
+  }
+  pkg_append_line(out, out_size,
+                  "script-policy allow=mkdir,touch,write,append,echo,sync "
+                  "sensitive-paths=blocked");
+  pkg_append_line(out, out_size,
+                  "package-repo-signature detached=no "
+                  "fallback=signed-update-manifest-pin");
+  snprintf(line, sizeof(line), "summary: %s",
+           fail ? "FAIL" : (warn ? "WARN" : "PASS"));
+  pkg_append_line(out, out_size, line);
+  return fail ? 2 : (warn ? 1 : 0);
 }
 
 int orizon_pkg_remote(char *out, size_t out_size) {
@@ -1792,6 +2103,9 @@ int orizon_pkg_remote(char *out, size_t out_size) {
   pkg_append_line(out, out_size, "package remote:");
   pkg_append_line(out, out_size,
                   "auth signed-update-manifest-sha256-pinned");
+  pkg_append_line(out, out_size,
+                  "package-repo-signature detached=no "
+                  "fallback=signed-update-manifest-pin");
   pkg_append_line(out, out_size, "path " PKG_REMOTE_INDEX_PATH);
   if (append_remote_index_entries(NULL, out, out_size, &remote_matches) < 0) {
     pkg_append_line(out, out_size, "cached-index=no");
@@ -1829,6 +2143,9 @@ int orizon_pkg_remote_verify(char *out, size_t out_size) {
   }
   pkg_append_line(out, out_size, "pkg remote verify:");
   pkg_append_line(out, out_size, "path " PKG_REMOTE_INDEX_PATH);
+  pkg_append_line(out, out_size,
+                  "package-repo-signature detached=no "
+                  "fallback=signed-update-manifest-pin");
   rc = pkg_validate_remote_index(&validation, out, out_size, 1);
   if (rc < 0) {
     pkg_append_line(out, out_size,
@@ -1866,6 +2183,11 @@ int orizon_pkg_upgrade_plan(char *out, size_t out_size) {
   pkg_append_line(out, out_size, "pkg upgrade plan:");
   pkg_append_line(out, out_size,
                   "auth signed-update-manifest-sha256-pinned");
+  pkg_append_line(out, out_size,
+                  "package-repo-signature detached=no "
+                  "fallback=signed-update-manifest-pin");
+  pkg_append_line(out, out_size,
+                  "dependency-resolution per-package-depends-checked-after-download");
   pkg_append_line(out, out_size, "remote-index " PKG_REMOTE_INDEX_PATH);
   validation_rc = pkg_validate_remote_index(&validation, NULL, 0, 0);
   if (validation_rc < 0) {
@@ -1896,7 +2218,7 @@ int orizon_pkg_upgrade_plan(char *out, size_t out_size) {
     pkg_remote_entry_t entry;
     char current_version[64];
     char origin[32];
-    char entry_line[256];
+    char entry_line[320];
 
     if (!pkg_starts_with(line, "package ") ||
         parse_remote_index_line(line, &entry) < 0) {
@@ -1906,14 +2228,16 @@ int orizon_pkg_upgrade_plan(char *out, size_t out_size) {
                                 sizeof(current_version), origin,
                                 sizeof(origin)) < 0) {
       snprintf(entry_line, sizeof(entry_line),
-               "install %s %s size=%lu sha256=%s", entry.name, entry.version,
-               (unsigned long)entry.size, entry.sha256);
+               "install %s %s size=%lu sha256=%s deps=validated-on-download",
+               entry.name, entry.version, (unsigned long)entry.size,
+               entry.sha256);
       pkg_append_line(out, out_size, entry_line);
       install_count++;
       continue;
     }
     if (strcmp(current_version, entry.version) == 0) {
-      snprintf(entry_line, sizeof(entry_line), "current %s %s source=%s",
+      snprintf(entry_line, sizeof(entry_line),
+               "current %s %s source=%s deps=validated-on-download",
                entry.name, entry.version, origin);
       pkg_append_line(out, out_size, entry_line);
       current_count++;
@@ -1921,13 +2245,15 @@ int orizon_pkg_upgrade_plan(char *out, size_t out_size) {
     }
     if (strcmp(origin, "builtin") == 0) {
       snprintf(entry_line, sizeof(entry_line),
-               "protected-builtin %s %s -> %s use OS update", entry.name,
-               current_version, entry.version);
+               "protected-builtin %s %s -> %s use OS update "
+               "deps=validated-on-download",
+               entry.name, current_version, entry.version);
       pkg_append_line(out, out_size, entry_line);
       protected_count++;
       continue;
     }
-    snprintf(entry_line, sizeof(entry_line), "upgrade %s %s -> %s",
+    snprintf(entry_line, sizeof(entry_line),
+             "upgrade %s %s -> %s deps=validated-on-download",
              entry.name, current_version, entry.version);
     pkg_append_line(out, out_size, entry_line);
     upgrade_count++;
@@ -2101,6 +2427,7 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
   size_t size = 0;
   size_t meta_size = 0;
   int post_remove_result;
+  unsigned long transaction_id = 0;
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -2129,6 +2456,7 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
                     &meta_size) < 0) {
     meta_size = 0;
   }
+  transaction_id = pkg_next_transaction_id();
   if (package_removed_paths(name, removed_manifest_path,
                             sizeof(removed_manifest_path), removed_meta_path,
                             sizeof(removed_meta_path)) < 0 ||
@@ -2142,6 +2470,10 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
   }
 
   snprintf(line, sizeof(line), "Removing %s %s", pkg.name, pkg.version);
+  pkg_append_line(report, report_size, line);
+  snprintf(line, sizeof(line),
+           "Transaction v4-%lu action=remove rollback=snapshot",
+           transaction_id);
   pkg_append_line(report, report_size, line);
   pkg_append_line(report, report_size,
                   "pkg: rollback snapshot saved for pkg rollback <name>");
@@ -2179,8 +2511,9 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
     pkg_append_line(report, report_size,
                     "pkg remove: WARN post-remove script failed");
   }
-  snprintf(line, sizeof(line), "removed %s %s rollback=available", pkg.name,
-           pkg.version);
+  snprintf(line, sizeof(line),
+           "removed %s %s transaction=v4-%lu rollback=available", pkg.name,
+           pkg.version, transaction_id);
   pkg_append_text_internal(PKG_DB_HISTORY, line);
   pkg_append_text_internal(PKG_DB_HISTORY, "\n");
   pkg_status_text = "package removed; rollback available";
@@ -2202,6 +2535,7 @@ int orizon_pkg_rollback(const char *name, char *report, size_t report_size) {
   pkg_manifest_t pkg;
   size_t size = 0;
   int rc;
+  unsigned long transaction_id = 0;
 
   if (report && report_size > 0) {
     report[0] = '\0';
@@ -2235,6 +2569,7 @@ int orizon_pkg_rollback(const char *name, char *report, size_t report_size) {
     return -3;
   }
 
+  transaction_id = pkg_next_transaction_id();
   rc = pkg_install_loaded(removed_manifest_path, pkg_rollback_buf, size,
                           report, report_size);
   if (rc != 0) {
@@ -2242,10 +2577,15 @@ int orizon_pkg_rollback(const char *name, char *report, size_t report_size) {
                     "pkg rollback: restore failed, snapshot kept");
     return rc;
   }
+  snprintf(line, sizeof(line),
+           "Rollback transaction v4-%lu source=remove-snapshot",
+           transaction_id);
+  pkg_append_line(report, report_size, line);
   vfs_delete(removed_manifest_path);
   vfs_delete(removed_meta_path);
-  snprintf(line, sizeof(line), "rollback %s %s restored", pkg.name,
-           pkg.version);
+  snprintf(line, sizeof(line),
+           "rollback %s %s transaction=v4-%lu restored", pkg.name,
+           pkg.version, transaction_id);
   pkg_append_text_internal(PKG_DB_HISTORY, line);
   pkg_append_text_internal(PKG_DB_HISTORY, "\n");
   pkg_status_text = "package rollback restored";
@@ -2253,6 +2593,94 @@ int orizon_pkg_rollback(const char *name, char *report, size_t report_size) {
   vfs_persist_save();
   snprintf(line, sizeof(line), "Restored %s %s", pkg.name, pkg.version);
   pkg_append_line(report, report_size, line);
+  return 0;
+}
+
+int orizon_pkg_simulate_file(const char *path, char *out, size_t out_size) {
+  pkg_manifest_t pkg;
+  char actual_hash[SHA256_HEX_SIZE];
+  char current_version[64];
+  char origin[32];
+  char line[256];
+  size_t size = 0;
+  int missing_deps;
+  int protected_builtin = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  if (pkg_read_file(path, pkg_buf, sizeof(pkg_buf), &size) < 0 || size == 0) {
+    pkg_append_line(out, out_size, "pkg simulate: cannot read package file");
+    return -1;
+  }
+  if (parse_manifest(pkg_buf, size, &pkg, actual_hash) == -2) {
+    pkg_append_line(out, out_size, "pkg simulate: sha256 mismatch");
+    snprintf(line, sizeof(line), "actual-payload-sha256 %s", actual_hash);
+    pkg_append_line(out, out_size, line);
+    return -2;
+  }
+  if (parse_manifest(pkg_buf, size, &pkg, actual_hash) < 0) {
+    pkg_append_line(out, out_size, "pkg simulate: invalid package format");
+    return -3;
+  }
+
+  pkg_append_line(out, out_size, "pkg simulate:");
+  snprintf(line, sizeof(line), "source %s", path ? path : "unknown");
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "name %s", pkg.name);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "version %s", pkg.version);
+  pkg_append_line(out, out_size, line);
+  snprintf(line, sizeof(line), "payload-sha256 %s", actual_hash);
+  pkg_append_line(out, out_size, line);
+  pkg_append_line(out, out_size, "mode dry-run writes=no");
+
+  if (package_current_version(pkg.name, current_version,
+                              sizeof(current_version), origin,
+                              sizeof(origin)) < 0) {
+    pkg_append_line(out, out_size, "action install");
+  } else if (strcmp(origin, "builtin") == 0) {
+    protected_builtin = 1;
+    snprintf(line, sizeof(line),
+             "action protected-builtin current=%s use OS update",
+             current_version);
+    pkg_append_line(out, out_size, line);
+  } else if (strcmp(current_version, pkg.version) == 0) {
+    snprintf(line, sizeof(line), "action current version=%s source=%s",
+             current_version, origin);
+    pkg_append_line(out, out_size, line);
+  } else {
+    snprintf(line, sizeof(line), "action upgrade %s -> %s",
+             current_version, pkg.version);
+    pkg_append_line(out, out_size, line);
+  }
+
+  append_package_dependencies(&pkg, out, out_size);
+  append_package_scripts(&pkg, out, out_size);
+  append_payload_files(&pkg, out, out_size);
+  pkg_append_line(out, out_size,
+                  "script-policy allow=mkdir,touch,write,append,echo,sync "
+                  "safe-paths=/system,/home,/packages,/logs,/tmp,/workspace "
+                  "sensitive-paths=blocked");
+  pkg_append_line(out, out_size,
+                  "transaction-preview v4 rollback=previous-payload-on-failure");
+  missing_deps = package_dependency_missing_count(&pkg);
+  if (protected_builtin) {
+    pkg_append_line(out, out_size,
+                    "pkg simulate: WARN builtin package is kernel-protected");
+    return 1;
+  }
+  if (missing_deps > 0) {
+    snprintf(line, sizeof(line),
+             "pkg simulate: WARN missing-dependencies=%d", missing_deps);
+    pkg_append_line(out, out_size, line);
+    return 1;
+  }
+  pkg_append_line(out, out_size, "pkg simulate: OK dry-run");
   return 0;
 }
 
@@ -2331,6 +2759,12 @@ int orizon_pkg_verify_file(const char *path, char *out, size_t out_size) {
   append_package_dependencies(&pkg, out, out_size);
   append_package_scripts(&pkg, out, out_size);
   append_payload_files(&pkg, out, out_size);
+  pkg_append_line(out, out_size,
+                  "script-policy allow=mkdir,touch,write,append,echo,sync "
+                  "safe-paths=/system,/home,/packages,/logs,/tmp,/workspace "
+                  "sensitive-paths=blocked");
+  pkg_append_line(out, out_size,
+                  "transaction-preview v4 rollback=previous-payload-on-failure");
   if (check_package_dependencies(&pkg, out, out_size) == 0) {
     pkg_append_line(out, out_size, "package verify: OK");
     return 0;
@@ -2358,6 +2792,8 @@ int orizon_pkg_history(char *out, size_t out_size) {
   }
   pkg_append_line(out, out_size, "pkg history:");
   pkg_append_line(out, out_size, "path " PKG_DB_HISTORY);
+  pkg_append_line(out, out_size,
+                  "format v4 transaction=v4-N rollback/result fields");
   pkg_append(out, out_size, history_buf);
   if (strlen(out) > 0 && out[strlen(out) - 1] != '\n') {
     pkg_append_line(out, out_size, "");

@@ -19,6 +19,8 @@ https://github.com/Orizon-cmd/Orizon-Packages
 pkg help
 pkg list
 pkg status
+pkg audit
+pkg cache
 pkg search orizon
 pkg remote
 pkg remote verify
@@ -30,6 +32,7 @@ pkg history
 pkg sample
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
+pkg simulate /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg remove orizon-hello
 pkg rollback orizon-hello
@@ -37,15 +40,20 @@ pkg rollback orizon-hello
 
 `pkg update`, `pkg upgrade`, `pkg install`, `pkg remove`, and `pkg rollback`
 are available only after Orizon OS has been installed to disk. Live boot can
-inspect, search, create, hash and verify package files, but it refuses
+inspect, audit, search, create, hash, verify and simulate package files, but it refuses
 persistent package changes because the live ISO is not the installed system.
+`pkg audit` checks package database/cache consistency, `pkg cache` prints cache
+paths and counters, and `pkg simulate <file>` prints a dry-run install/upgrade
+plan without writing files.
 `pkg upgrade plan` remains safe in live boot: it reads the cached signed remote
 index when present and prints install/upgrade/current/protected decisions
 without mutating files. `pkg update` and `pkg upgrade` are intentionally thin
 wrappers around the signed system `update` flow: the package index is
 authenticated by the signed OS manifest, pinned package repository commit, and
 pinned package-index SHA-256. `pkg remote verify` validates the cached index
-shape, paths, hashes, sizes and duplicate names.
+shape, paths, hashes, sizes and duplicate names. Detached package repository
+signatures are not implemented yet; the current fallback is the signed update
+manifest pinning the package index.
 
 ## Package Format
 
@@ -148,6 +156,11 @@ verify the internal payload SHA-256 before installation.
 metadata. `pkg remote` prints the cached signed package index and makes clear
 when it is not available yet. `pkg remote verify` writes
 `/workspace/.orizon/pkgdb/cache/remote.status` with the last validation result.
+`pkg audit` reports invalid stored packages, orphan metadata, missing metadata,
+rollback snapshots, remote-index status and a PASS/WARN/FAIL summary. `pkg cache`
+prints the package database/cache layout and is useful for CI logs.
+`pkg simulate <file>` parses a package, validates dependencies, lists scripts/files, shows the
+install/upgrade action and confirms that the run is dry-run only.
 `pkg upgrade plan` compares cached remote package versions against builtin and
 installed package metadata, then prints a non-destructive plan. `pkg upgrade`
 prints that plan and then reuses the signed `update` flow to refresh packages.
@@ -165,6 +178,7 @@ Package install now keeps a previous package manifest in memory while applying
 an upgrade. If payload replay or metadata update fails, Orizon removes the
 partial new payload and restores the previous package payload/metadata when it
 exists. History entries include explicit `installed` / `upgraded` /
-`removed` / `rollback` events. Remove rollback is persistent across reboots
-through the package database, but it is still a local package transaction
-guard, not a full boot-level package rollback.
+`removed` / `rollback` events with `transaction=v4-N`, rollback and result
+fields. Remove rollback is persistent across reboots through the package
+database, but it is still a local package transaction guard, not a full
+boot-level package rollback.

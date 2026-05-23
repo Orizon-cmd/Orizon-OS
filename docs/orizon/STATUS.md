@@ -29,11 +29,13 @@ work.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.
-- Package manager v3: `pkg status`, `pkg search`, `pkg remote`,
-  `pkg remote verify`, `pkg upgrade plan`, `pkg verify`, `pkg history`,
-  installed-only `pkg update/upgrade/install/remove`, and
-  `pkg rollback <name>` are present. Package rollback is local transaction
-  recovery, not full boot-level rollback.
+- Package manager v4: `pkg status`, `pkg audit`, `pkg cache`, `pkg search`,
+  `pkg remote`, `pkg remote verify`, `pkg upgrade plan`, `pkg simulate`,
+  `pkg verify`, `pkg history`, installed-only
+  `pkg update/upgrade/install/remove`, and `pkg rollback <name>` are present.
+  Package rollback is local transaction recovery, not full boot-level rollback.
+  Detached package repository signatures are not implemented yet; package index
+  trust still falls back to the signed update manifest pins.
 - Console usability: framebuffer scrollback with `z`/`s`, persistent command
   history, autocomplete, `less <file>`, `tail`, `help shell`, simple `;`
   command grouping, `>`/`>>` redirection, and diagnostic pipes to

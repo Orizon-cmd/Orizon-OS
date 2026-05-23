@@ -3003,6 +3003,8 @@ static void ssh_shell_print_pkg(const char *args) {
     snprintf(out, sizeof(out),
              "Orizon packages\r\n"
              "  pkg status             show package manager state\r\n"
+             "  pkg audit              audit package db/cache consistency\r\n"
+             "  pkg cache              show package cache details\r\n"
              "  pkg list               list builtin/installed packages\r\n"
              "  pkg search <query>     search builtin/installed/remote packages\r\n"
              "  pkg remote             show cached signed remote package index\r\n"
@@ -3013,6 +3015,7 @@ static void ssh_shell_print_pkg(const char *args) {
              "  pkg sample             create /workspace/packages/orizon-hello.opkg\r\n"
              "  pkg hash <file>        print package payload sha256\r\n"
              "  pkg verify <file>      verify package hash/dependencies\r\n"
+             "  pkg simulate <file>    dry-run install/upgrade without writes\r\n"
              "  pkg update             run signed package refresh through update\r\n"
              "  pkg upgrade            plan then run signed package refresh\r\n"
              "  pkg install <file>     install a verified package after disk install\r\n"
@@ -3020,6 +3023,10 @@ static void ssh_shell_print_pkg(const char *args) {
              "  pkg rollback <name>    restore last removed package snapshot\r\n");
   } else if (ssh_shell_command_is(sub, "list")) {
     orizon_pkg_list(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "audit")) {
+    orizon_pkg_audit(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "cache")) {
+    orizon_pkg_cache(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "search")) {
     const char *query = ssh_shell_skip_spaces(sub + 6);
     orizon_pkg_search(query, out, sizeof(out));
@@ -3071,6 +3078,15 @@ static void ssh_shell_print_pkg(const char *args) {
       snprintf(out, sizeof(out), "usage: pkg verify <file>\r\n");
     } else {
       orizon_pkg_verify_file(path, out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "simulate") ||
+             ssh_shell_command_is(sub, "dry-run")) {
+    const char *path_args =
+        sub + (ssh_shell_command_is(sub, "dry-run") ? 7 : 8);
+    if (ssh_shell_resolve_path(path_args, path, sizeof(path)) < 0) {
+      snprintf(out, sizeof(out), "usage: pkg simulate <file>\r\n");
+    } else {
+      orizon_pkg_simulate_file(path, out, sizeof(out));
     }
   } else if (ssh_shell_command_is(sub, "update")) {
     if (!ssh_install_already_complete()) {

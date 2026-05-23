@@ -30,12 +30,13 @@
   validation once the refreshed kernel reaches the shell, `bootguard`
   diagnostics, and automatic main-slot restore when the rollback boot entry is
   selected during a pending update.
-- Package manager v3 foundation with `pkg list`, `pkg status`, `pkg search`,
-  `pkg remote`, `pkg remote verify`, `pkg upgrade plan`, `pkg info`,
-  `pkg sample`, `pkg hash`, `pkg verify`, installed-only
-  `pkg update/upgrade/install/remove`, signed package-index cache validation,
-  `pre-remove`/`post-remove` scripts, explicit package history events, and
-  local `pkg rollback <name>` for the last removed package snapshot.
+- Package manager v4 foundation with `pkg list`, `pkg status`, `pkg audit`,
+  `pkg cache`, `pkg search`, `pkg remote`, `pkg remote verify`,
+  `pkg upgrade plan`, `pkg simulate`, `pkg info`, `pkg sample`, `pkg hash`,
+  `pkg verify`, installed-only `pkg update/upgrade/install/remove`, signed
+  package-index cache validation, `pre-remove`/`post-remove` scripts, explicit
+  transaction history events, and local `pkg rollback <name>` for the last
+  removed package snapshot.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
   redirection, diagnostic pipes to `grep/head/tail/less`, persistent history,

@@ -41,12 +41,15 @@ $commands = @(
   "free",
   "ps",
   "pkg status",
+  "pkg audit",
+  "pkg cache",
   "pkg help",
   "pkg search orizon",
   "pkg remote",
   "pkg remote verify",
   "pkg upgrade plan",
   "pkg sample",
+  "pkg simulate /workspace/packages/orizon-hello.opkg",
   "pkg verify /workspace/packages/orizon-hello.opkg",
   "pkg install /workspace/packages/orizon-hello.opkg",
   "update status",
@@ -240,7 +243,13 @@ run_cmd() {
       grep -q "update status:" "`$OUT" || { echo "missing update status"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg help")
-      grep -q "pkg verify" "`$OUT" || { echo "missing pkg help output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "pkg simulate" "`$OUT" || { echo "missing pkg help output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg audit")
+      grep -q "pkg audit:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing pkg audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg cache")
+      grep -q "pkg cache:" "`$OUT" && grep -q "package-repo-signature" "`$OUT" || { echo "missing pkg cache output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg search orizon")
       grep -q "pkg search:" "`$OUT" && grep -q "builtin orizon-core" "`$OUT" || { echo "missing pkg search output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -250,6 +259,9 @@ run_cmd() {
       ;;
     "pkg sample")
       grep -q "Sample package written" "`$OUT" || { echo "missing pkg sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg simulate /workspace/packages/orizon-hello.opkg")
+      grep -q "pkg simulate:" "`$OUT" && grep -q "dry-run" "`$OUT" || { echo "missing pkg simulate output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg verify /workspace/packages/orizon-hello.opkg")
       grep -q "package verify: OK" "`$OUT" || { echo "missing pkg verify output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
