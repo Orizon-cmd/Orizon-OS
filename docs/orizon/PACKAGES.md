@@ -6,6 +6,8 @@ kernel updater into a giant boot-only replacement tool.
 
 Current package-manager limits are summarized in [STATUS.md](STATUS.md).
 `pkg rollback` is local package recovery, not full boot-level package rollback.
+Package/update release rules are centralized in [RELEASE.md](RELEASE.md), and
+VM package failure triage is in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 Official repository:
 

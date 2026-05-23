@@ -19,10 +19,13 @@ design note.
   `release.txt` are generated and cross-checked by
   `scripts/orizon/orizon_update.py --mode validate-release`, including
   manifest/release size and SHA-256 consistency for the current ISO.
+  Use [RELEASE.md](RELEASE.md) as the release checklist before publishing a
+  build or artifact change.
 - Developer checks are unified in `scripts/orizon/quick_check.py`; GitHub
   Actions uses `scripts/orizon/ci_release_guard.py` to run quick checks,
   release validation, release-note generation, tracked-secret scan, and a
   machine-readable artifact sync summary before the source build.
+  Use [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for VM/ZimaOS failure triage.
 - Hardware capture is exportable with `report save`, which writes the
   non-destructive `/workspace/hardware-report.txt` bundle containing storage,
   PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
@@ -111,6 +114,8 @@ python scripts/orizon/quick_check.py
 - [docs/orizon/UPDATE.md](UPDATE.md)
 - [docs/orizon/NETWORK.md](NETWORK.md)
 - [docs/orizon/SECURITY.md](SECURITY.md)
+- [docs/orizon/RELEASE.md](RELEASE.md)
+- [docs/orizon/TROUBLESHOOTING.md](TROUBLESHOOTING.md)
 - [docs/orizon/LAPTOP_HARDWARE.md](LAPTOP_HARDWARE.md)
 - [docs/orizon/ZIMAOS_LAB.md](ZIMAOS_LAB.md)
 

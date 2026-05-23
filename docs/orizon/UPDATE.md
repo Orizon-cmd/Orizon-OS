@@ -6,6 +6,8 @@ ZimaOS is only the current lab VM backend.
 For the exact implemented/prepared/not-implemented boundary, see
 [STATUS.md](STATUS.md). In particular, rollback is currently Limine fallback
 logic after Orizon early boot; true firmware `BootNext` is still future work.
+For publishing update artifacts, use [RELEASE.md](RELEASE.md). For VM update
+failures, use [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 Status: active for installed systems. The in-OS `update` command is hidden from
 `help` in live boot and refuses to run without the installed marker at

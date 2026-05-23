@@ -14,6 +14,21 @@ work.
 - The full VM matrix should not be run unless the current task explicitly asks
   for it. Prefer build, syntax, diff-check, release validation, and a short VM
   smoke when needed.
+- Release procedure: use [RELEASE.md](RELEASE.md) for artifact/CI publishing
+  rules and [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for VM/ZimaOS failure
+  triage.
+
+## Meaning Of Status Labels
+
+- Implemented: code or script support exists in the repository.
+- VM-ready: implemented and usable in the ZimaOS VM workflow.
+- Prepared: detection, diagnostics, or staged plumbing exists, but the real
+  device/path is not proven.
+- Simulated: behavior is represented by a safe dry-run, report, or VM-only
+  workflow rather than a real production path.
+- Not hardware-proven: do not claim Lenovo, real AP, dongle, or physical-PC
+  validation without fresh user-provided evidence.
+- Not implemented: documented future work, not just an untested feature.
 
 ## Implemented And VM-Ready
 
@@ -147,3 +162,15 @@ python scripts/orizon/test_vm_matrix.py --cases nat-e1000e
 
 Do not commit private keys, local env files, imported firmware blobs, hotspot
 credentials, or captured passwords.
+
+## Documentation Map
+
+- Start/resume: [START_HERE.md](START_HERE.md)
+- Commands: [COMMANDS.md](COMMANDS.md)
+- Release and CI: [RELEASE.md](RELEASE.md)
+- VM/ZimaOS troubleshooting: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+- Update/rollback: [UPDATE.md](UPDATE.md)
+- Packages: [PACKAGES.md](PACKAGES.md)
+- SSH/security: [SSH.md](SSH.md), [SECURITY.md](SECURITY.md)
+- Hardware preparation only: [HARDWARE_BOOT.md](HARDWARE_BOOT.md),
+  [LAPTOP_HARDWARE.md](LAPTOP_HARDWARE.md)

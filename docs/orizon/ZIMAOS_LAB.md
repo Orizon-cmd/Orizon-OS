@@ -60,6 +60,9 @@ python scripts/orizon/orizon_update.py --mode zimaos-vm
 The lower-level scripts such as `build_x86_64_on_zimaos.py` and
 `deploy_x86_64_tree_vm.py` still exist for debugging, but day-to-day work should
 prefer `orizon_update.py` so the ISO and update artifacts stay synchronized.
+Use [RELEASE.md](RELEASE.md) for the exact publish checklist and
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md) when a VM, network, SSH, package, or
+release check fails.
 
 ## GitHub Access On ZimaOS
 
@@ -76,6 +79,8 @@ an SSH key attached to the account that owns `Orizon-cmd/Orizon-OS`.
 The root filesystem on the ZimaOS box is currently at `100%` usage. Before
 trying heavier VM workflows or package installs on that machine, free space
 should be checked to avoid broken updates or failed provisioning.
+If a workflow fails before Orizon boots, treat host storage pressure as a
+first-class suspect before changing OS code.
 
 ## Useful Commands
 

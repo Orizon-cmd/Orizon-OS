@@ -2,6 +2,9 @@
 
 This page tracks the current base hardening posture for VM work. It is honest
 about what is implemented and what is only a guardrail.
+For the full implemented/prepared/not-validated boundary, see
+[STATUS.md](STATUS.md). For release secret-scan behavior, see
+[RELEASE.md](RELEASE.md).
 
 ## Implemented Now
 

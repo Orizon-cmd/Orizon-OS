@@ -24,3 +24,4 @@
 - Added package manager v4 diagnostics with `pkg audit`, `pkg cache`, `pkg simulate`, transaction-tagged history, and clearer detached-signature limitations.
 - Improved the local framebuffer shell with `shell status`, `wc`, richer `grep`, `tee` pipelines, and searchable command history.
 - Added security hardening v2 diagnostics with `security policy/audit/keys/doctor`, SSH host-key rotation, and redacted SSH audit events.
+- Added release and VM/ZimaOS troubleshooting guides, plus clearer documentation labels for implemented, prepared, simulated, and non-validated work.

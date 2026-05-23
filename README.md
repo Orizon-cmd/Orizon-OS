@@ -712,6 +712,10 @@ pour eviter d'oublier un artefact release dans le commit. La validation release
 refuse aussi un manifeste ou un `release.txt` dont les tailles/SHA-256 de
 `kernel.elf`, `BOOTX64.EFI`, `limine.conf`, `manifest.txt`, `manifest.sig` ou
 `Orizon-OS.iso` ne correspondent pas aux artefacts courants.
+Le guide complet de publication est dans
+[docs/orizon/RELEASE.md](docs/orizon/RELEASE.md); le guide de diagnostic
+VM/ZimaOS est dans
+[docs/orizon/TROUBLESHOOTING.md](docs/orizon/TROUBLESHOOTING.md).
 Pour verifier les artefacts sans rebuild, utilisez:
 
 ```powershell
@@ -762,6 +766,8 @@ La premiere commande reconstruit `orizon-os-x86_64`, deploie le resultat sur
 - `docs/orizon/STATUS.md` : tableau court des fonctions implementees, preparees
   et non validees materiellement
 - `docs/orizon/COMMANDS.md` : aide-memoire des commandes terminal utiles
+- `docs/orizon/RELEASE.md` : checklist release, artefacts, CI et erreurs
+- `docs/orizon/TROUBLESHOOTING.md` : diagnostic VM/ZimaOS par symptome
 - `docs/orizon/` : notes de projet et labo ZimaOS
 - `scripts/orizon/` : update portable, build, deploiement VM, acces VNC et SSH
 - `config/hosts/*.local.*` : secrets locaux ignores par Git

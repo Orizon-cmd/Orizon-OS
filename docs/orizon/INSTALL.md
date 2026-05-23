@@ -5,6 +5,9 @@ disk installation path:
 
 Current validation and safety limits are summarized in [STATUS.md](STATUS.md).
 Do not treat VM install success as Lenovo or physical-PC validation.
+For VM install failure triage, use [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+For release artifact publishing after installer changes, use
+[RELEASE.md](RELEASE.md).
 
 1. boot the live ISO,
 2. run `install`,
