@@ -11,20 +11,61 @@ on:
         required: true
         default: "v0.1.0"
 
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-x86_64:
     name: Build x86_64 Release
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run quick checks, release validation, and secret scan
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Run CI release guard
         run: |
           mkdir -p artifacts
-          python scripts/orizon/quick_check.py --log artifacts/quick-check.log
-          python scripts/orizon/release_notes.py --output artifacts/release-notes.md
+          python scripts/orizon/ci_release_guard.py --output-dir artifacts
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang lld xorriso qemu-system-x86 make curl
+
+      - name: Build source sanity artifacts
+        run: |
+          set -o pipefail
+          mkdir -p artifacts
+          make clean
+          make 2>&1 | tee artifacts/source-build.log
+
+      - name: Package validated release bundle
+        run: |
+          set -euxo pipefail
+          mkdir -p release/x86_64
+          cp Orizon-OS.iso release/x86_64/Orizon-OS.iso
+          cp updates/x86_64/kernel.elf release/x86_64/kernel.elf
+          cp updates/x86_64/BOOTX64.EFI release/x86_64/BOOTX64.EFI
+          cp updates/x86_64/limine.conf release/x86_64/limine.conf
+          cp updates/x86_64/manifest.txt release/x86_64/manifest.txt
+          cp updates/x86_64/manifest.sig release/x86_64/manifest.sig
+          cp updates/x86_64/release.txt release/x86_64/release.txt
+          cp artifacts/release-notes.md release/x86_64/RELEASE_NOTES.md
+          cd release/x86_64
+          sha256sum * > SHA256SUMS
+          cd ../..
+          tar -czf orizon-os-core-x86_64.tar.gz -C release/x86_64 .
 
       - name: Upload release diagnostics
         if: always()
@@ -32,27 +73,16 @@ jobs:
         with:
           name: orizon-release-diagnostics
           path: |
+            artifacts/quick-check-wrapper.log
             artifacts/quick-check.log
+            artifacts/release-validation.log
+            artifacts/release-notes.log
             artifacts/release-notes.md
+            artifacts/release-summary.md
+            artifacts/release-artifacts.json
+            artifacts/source-build.log
           if-no-files-found: ignore
           retention-days: 30
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang lld xorriso qemu-system-x86 make curl
-
-      - name: Build release artifacts
-        run: |
-          make clean
-          make
-          mkdir -p release/x86_64
-          cp orizon-os-x86_64/build/kernel.elf release/x86_64/orizon-os-core-x86_64.elf
-          cp orizon-os-x86_64/orizonos-x86_64.iso release/x86_64/orizon-os-core-x86_64.iso
-          cd release/x86_64
-          sha256sum * > SHA256SUMS
-          cd ../..
-          tar -czf orizon-os-core-x86_64.tar.gz -C release/x86_64 .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

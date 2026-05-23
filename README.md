@@ -685,6 +685,13 @@ syntaxe PowerShell quand disponible et validation release:
 python scripts/orizon/quick_check.py
 ```
 
+Le point d'entree utilise par GitHub Actions ajoute les release notes et un
+resume d'artefacts lisible:
+
+```powershell
+python scripts/orizon/ci_release_guard.py --output-dir artifacts
+```
+
 Backends disponibles:
 
 - `github-iso`: telecharge l'ISO publique depuis GitHub

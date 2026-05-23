@@ -6,35 +6,32 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-x86_64:
     name: Build x86_64 Core
     runs-on: ubuntu-latest
+    timeout-minutes: 35
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run quick checks, release validation, and secret scan
-        run: |
-          mkdir -p artifacts
-          python scripts/orizon/quick_check.py --log artifacts/quick-check.log
-
-      - name: Generate release notes preview
-        run: |
-          mkdir -p artifacts
-          python scripts/orizon/release_notes.py --output artifacts/release-notes.md
-
-      - name: Upload CI diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: orizon-ci-diagnostics
-          path: |
-            artifacts/quick-check.log
-            artifacts/release-notes.md
-          if-no-files-found: ignore
-          retention-days: 7
+          python-version: "3.x"
+
+      - name: Run CI release guard
+        run: |
+          mkdir -p artifacts
+          python scripts/orizon/ci_release_guard.py --output-dir artifacts
 
       - name: Install dependencies
         run: |
@@ -43,14 +40,33 @@ jobs:
 
       - name: Build Orizon OS x86_64
         run: |
+          set -o pipefail
+          mkdir -p artifacts
           make clean
-          make
+          make 2>&1 | tee artifacts/source-build.log
 
       - name: Check artifacts
         run: |
           ls -lh orizon-os-x86_64/build/kernel.elf
           ls -lh orizon-os-x86_64/orizonos-x86_64.iso
           file orizon-os-x86_64/build/kernel.elf
+
+      - name: Upload CI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orizon-ci-diagnostics
+          path: |
+            artifacts/quick-check-wrapper.log
+            artifacts/quick-check.log
+            artifacts/release-validation.log
+            artifacts/release-notes.log
+            artifacts/release-notes.md
+            artifacts/release-summary.md
+            artifacts/release-artifacts.json
+            artifacts/source-build.log
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

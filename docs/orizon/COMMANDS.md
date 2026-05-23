@@ -18,6 +18,7 @@ python scripts/orizon/orizon_update.py --mode zimaos-vm
 python scripts/orizon/orizon_update.py --mode github-iso
 python scripts/orizon/orizon_update.py --mode validate-release
 python scripts/orizon/quick_check.py
+python scripts/orizon/ci_release_guard.py --output-dir artifacts
 python scripts/orizon/release_notes.py --output release_notes.md
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
 python scripts/orizon/test_update_rollback_vm.py
@@ -34,6 +35,12 @@ that SSH was tested.
 PowerShell is available, and the strict release-artifact validator. Use
 `--log artifacts/quick-check.log` when a CI or ZimaOS run should keep the
 combined output.
+
+`ci_release_guard.py` is the GitHub Actions entrypoint. It runs quick checks
+without duplicating release validation, then runs the strict release validator,
+generates release notes, and writes `artifacts/release-summary.md` plus
+`artifacts/release-artifacts.json` so stale ISO/kernel/manifest/signature
+failures are obvious in CI logs.
 
 Expected release artifacts:
 

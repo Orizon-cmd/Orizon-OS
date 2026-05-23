@@ -19,8 +19,10 @@ design note.
   `release.txt` are generated and cross-checked by
   `scripts/orizon/orizon_update.py --mode validate-release`, including
   manifest/release size and SHA-256 consistency for the current ISO.
-- Developer checks are unified in `scripts/orizon/quick_check.py`; CI uploads
-  the same combined quick-check log so failed builds are easier to inspect.
+- Developer checks are unified in `scripts/orizon/quick_check.py`; GitHub
+  Actions uses `scripts/orizon/ci_release_guard.py` to run quick checks,
+  release validation, release-note generation, tracked-secret scan, and a
+  machine-readable artifact sync summary before the source build.
 - Hardware capture is exportable with `report save`, which writes the
   non-destructive `/workspace/hardware-report.txt` bundle containing storage,
   PCI BARs, USB, Wi-Fi, network, SSH, bootguard, update, selftest and log tails.
@@ -122,4 +124,5 @@ python scripts/orizon/quick_check.py
 - Do not publish a release commit that updates `kernel.elf` without also checking
   whether `Orizon-OS.iso`, `manifest.txt`, `manifest.sig`, and `release.txt`
   need to move with it. Use `python scripts/orizon/quick_check.py` before the
-  commit.
+  commit, or `python scripts/orizon/ci_release_guard.py --output-dir artifacts`
+  when you want the same summary GitHub Actions uploads.

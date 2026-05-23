@@ -67,8 +67,9 @@ work.
   `manifest.sig`, and `release.txt` are cross-checked by
   `python scripts/orizon/orizon_update.py --mode validate-release` and by
   `python scripts/orizon/quick_check.py`. The same quick check now includes a
-  tracked-secret scan, and GitHub CI uploads both quick-check logs and generated
-  release-note previews.
+  tracked-secret scan, and GitHub CI uses `ci_release_guard.py` to upload
+  quick-check logs, generated release-note previews, strict release validation
+  logs, and artifact synchronization summaries.
 - Hardware reports: `report next`, `hw next`, and `report save` produce a
   non-destructive capture plan and `/workspace/hardware-report.txt`.
 
