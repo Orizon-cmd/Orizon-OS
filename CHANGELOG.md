@@ -21,3 +21,4 @@
 - Added modern VirtIO-blk VM storage support, VirtIO disk smoke coverage, and clearer storage diagnostics for VirtIO-blk vs VirtIO-scsi.
 - Added a small installed/live init layer with `system init`, `system services`, `system doctor`, `/system/boot-state`, and `/logs/init.log`.
 - Added package manager v4 diagnostics with `pkg audit`, `pkg cache`, `pkg simulate`, transaction-tagged history, and clearer detached-signature limitations.
+- Improved the local framebuffer shell with `shell status`, `wc`, richer `grep`, `tee` pipelines, and searchable command history.

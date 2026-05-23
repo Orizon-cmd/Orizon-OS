@@ -39,7 +39,9 @@ work.
 - Console usability: framebuffer scrollback with `z`/`s`, persistent command
   history, autocomplete, `less <file>`, `tail`, `help shell`, simple `;`
   command grouping, `>`/`>>` redirection, and diagnostic pipes to
-  `grep/head/tail/less` are available locally.
+  `grep/head/tail/wc/tee/less` are available locally. `grep` supports
+  `-i/-v/-n`, `shell status` exposes buffer/capability limits, and
+  `history grep <text>` searches saved commands.
 - SSH admin: password auth is opt-in, lockout/audit are visible, host keys are
   persistent per install when storage is available, long outputs are segmented,
   diagnostics are usable through OpenSSH, and `/logs/security.log` mirrors SSH

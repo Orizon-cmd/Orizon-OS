@@ -39,9 +39,10 @@
   removed package snapshot.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
-  redirection, diagnostic pipes to `grep/head/tail/less`, persistent history,
-  simple autocomplete, editor, `sysinfo`, `hw`, `mounts`, `logs`, `report`,
-  `report save`, `selftest`, `ps`, and `uptime`.
+  redirection, diagnostic pipes to `grep/head/tail/wc/tee/less`, persistent
+  history with `history grep`, `shell status`, simple autocomplete, editor,
+  `sysinfo`, `hw`, `mounts`, `logs`, `report`, `report save`, `selftest`,
+  `ps`, and `uptime`.
 - Installed/live lifecycle commands: `system status`, `system init`,
   `system services`, `system doctor`, `system repair`, `rescue`,
   `hostname set <name>`, and `firstboot done` clarify first boot, record

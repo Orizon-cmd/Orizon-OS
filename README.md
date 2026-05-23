@@ -53,8 +53,9 @@ le developpement noyau:
   installer des composants separes du kernel
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
   en plein ecran, `tail`, `help shell`, commandes groupees avec `;`, sorties
-  redirigees `>`/`>>`, pipes simples vers `grep/head/tail/less`, support
-  molette souris PS/2, `edit` ameliore et navigation historique `Up/Down`
+  redirigees `>`/`>>`, pipes simples vers `grep/head/tail/wc/tee/less`,
+  `shell status`, `history grep`, support molette souris PS/2, `edit` ameliore
+  et navigation historique `Up/Down`
 - diagnostics `sysinfo`, `hw`, `hw next`, `mounts`, `report`, `report next`,
   `report save` et `selftest`
   pour voir CPU, memoire, stockage, racines data, reseau, USB/PS2, installation,

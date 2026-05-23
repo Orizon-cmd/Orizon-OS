@@ -369,20 +369,30 @@ lire l'ecran local.
 
 ```text
 help shell
+shell status
 tail [-n] <file>
+wc <file>
+grep [-i] [-v] [-n] text <file>
+history grep text
 cmd1 ; cmd2
 cmd > /workspace/out.txt
 cmd >> /workspace/out.txt
-cmd | grep text
+cmd | grep [-i] [-v] [-n] text
 cmd | head -20
 cmd | tail -20
+cmd | wc
+cmd | tee [-a] /workspace/out.txt
 cmd | less
 ```
 
 The local framebuffer shell now has a small diagnostic command layer above the
 classic command dispatcher. It can run simple grouped commands with `;`, write
 or append captured command output with `>` and `>>`, and pass captured output
-through lightweight pipe stages: `grep`, `head`, `tail`, `cat`, `less`/`more`.
+through lightweight pipe stages: `grep`, `head`, `tail`, `wc`, `tee`, `cat`,
+`less`/`more`. `grep` accepts `-i` for case-insensitive search, `-v` for
+inverted matches, and `-n` for line numbers. `shell status` prints the local
+console buffers/capabilities, and `history grep <text>` searches saved command
+history.
 This is intentionally not a full POSIX shell yet: no quoting, variables,
 background jobs, or conditional exit-code logic. Interactive commands such as
 `less`, `edit`, `install`, `reboot`, and `shutdown` are blocked as pipe or

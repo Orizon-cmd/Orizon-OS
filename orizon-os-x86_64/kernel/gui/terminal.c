@@ -773,6 +773,13 @@ static int term_starts_with(const char *text, const char *prefix) {
   return strncmp(text, prefix, strlen(prefix)) == 0;
 }
 
+static char term_ascii_lower(char c) {
+  if (c >= 'A' && c <= 'Z') {
+    return (char)(c - 'A' + 'a');
+  }
+  return c;
+}
+
 static char *term_trim_mut(char *text) {
   size_t len;
 
@@ -2295,6 +2302,66 @@ static void term_print_tree(terminal_t *term, const char *display,
   term_puts_t(term, path);
   term_puts_t(term, "\n");
   term_print_tree_recursive(term, path, 1);
+}
+
+static void term_print_wc(terminal_t *term, const char *display,
+                          const char *path) {
+  file_t *f;
+  char buf[256];
+  ssize_t n;
+  size_t lines = 0;
+  size_t words = 0;
+  size_t bytes = 0;
+  int in_word = 0;
+  char last = '\0';
+  int is_dir = 0;
+  char line[128];
+
+  if (vfs_stat(path, NULL, &is_dir) < 0) {
+    term_puts_t(term, "wc: ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": No such file\n");
+    return;
+  }
+  if (is_dir) {
+    term_puts_t(term, "wc: ");
+    term_puts_t(term, display);
+    term_puts_t(term, ": Is a directory\n");
+    return;
+  }
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    term_puts_t(term, "wc: open failed\n");
+    return;
+  }
+  while ((n = vfs_read(f, buf, sizeof(buf))) > 0) {
+    for (ssize_t i = 0; i < n; i++) {
+      char c = buf[i];
+      bytes++;
+      last = c;
+      if (c == '\n') {
+        lines++;
+      }
+      if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+        in_word = 0;
+      } else if (!in_word) {
+        words++;
+        in_word = 1;
+      }
+    }
+  }
+  vfs_close(f);
+  if (n < 0) {
+    term_puts_t(term, "wc: read error\n");
+    return;
+  }
+  if (bytes > 0 && last != '\n') {
+    lines++;
+  }
+  snprintf(line, sizeof(line), "%lu lines %lu words %lu bytes %s\n",
+           (unsigned long)lines, (unsigned long)words,
+           (unsigned long)bytes, display);
+  term_puts_t(term, line);
 }
 
 static int term_read_regular_file(terminal_t *term, const char *display,
@@ -5365,8 +5432,8 @@ static size_t term_text_append(char *out, size_t out_size, size_t used,
   return used;
 }
 
-static int term_line_contains(const char *line, size_t len,
-                              const char *pattern) {
+static int term_line_contains_mode(const char *line, size_t len,
+                                   const char *pattern, int ignore_case) {
   size_t pattern_len = strlen(pattern ? pattern : "");
 
   if (pattern_len == 0) {
@@ -5376,7 +5443,20 @@ static int term_line_contains(const char *line, size_t len,
     return 0;
   }
   for (size_t i = 0; i + pattern_len <= len; i++) {
-    if (strncmp(line + i, pattern, pattern_len) == 0) {
+    size_t j = 0;
+    while (j < pattern_len) {
+      char a = line[i + j];
+      char b = pattern[j];
+      if (ignore_case) {
+        a = term_ascii_lower(a);
+        b = term_ascii_lower(b);
+      }
+      if (a != b) {
+        break;
+      }
+      j++;
+    }
+    if (j == pattern_len) {
       return 1;
     }
   }
@@ -5384,10 +5464,12 @@ static int term_line_contains(const char *line, size_t len,
 }
 
 static void term_pipe_grep(const char *input, const char *pattern, char *out,
-                           size_t out_size) {
+                           size_t out_size, int ignore_case, int invert,
+                           int show_numbers) {
   const char *p = input ? input : "";
   size_t used = 0;
   int matches = 0;
+  int line_no = 1;
 
   if (!out || out_size == 0) {
     return;
@@ -5399,7 +5481,13 @@ static void term_pipe_grep(const char *input, const char *pattern, char *out,
     while (line[len] && line[len] != '\n') {
       len++;
     }
-    if (term_line_contains(line, len, pattern)) {
+    int found = term_line_contains_mode(line, len, pattern, ignore_case);
+    if ((found && !invert) || (!found && invert)) {
+      if (show_numbers) {
+        char prefix[24];
+        snprintf(prefix, sizeof(prefix), "%d:", line_no);
+        used = term_text_append(out, out_size, used, prefix, strlen(prefix));
+      }
       used = term_text_append(out, out_size, used, line, len);
       used = term_text_append(out, out_size, used, "\n", 1);
       matches++;
@@ -5408,11 +5496,106 @@ static void term_pipe_grep(const char *input, const char *pattern, char *out,
     if (*p == '\n') {
       p++;
     }
+    line_no++;
   }
   if (matches == 0) {
     term_text_append(out, out_size, used, "grep: no matches\n",
                      strlen("grep: no matches\n"));
   }
+}
+
+static const char *term_parse_grep_options(const char *args, int *ignore_case,
+                                           int *invert, int *show_numbers) {
+  args = term_skip_spaces(args);
+  if (ignore_case) {
+    *ignore_case = 0;
+  }
+  if (invert) {
+    *invert = 0;
+  }
+  if (show_numbers) {
+    *show_numbers = 0;
+  }
+  while (args && args[0] == '-' && args[1]) {
+    const char *p = args + 1;
+    int consumed = 0;
+    while (*p && *p != ' ' && *p != '\t') {
+      if (*p == 'i') {
+        if (ignore_case) {
+          *ignore_case = 1;
+        }
+        consumed = 1;
+      } else if (*p == 'v') {
+        if (invert) {
+          *invert = 1;
+        }
+        consumed = 1;
+      } else if (*p == 'n') {
+        if (show_numbers) {
+          *show_numbers = 1;
+        }
+        consumed = 1;
+      } else {
+        return args;
+      }
+      p++;
+    }
+    if (!consumed) {
+      return args;
+    }
+    args = term_skip_spaces(p);
+  }
+  return args;
+}
+
+static void term_text_count_stats(const char *input, size_t *lines,
+                                  size_t *words, size_t *bytes) {
+  const char *p = input ? input : "";
+  int in_word = 0;
+
+  if (lines) {
+    *lines = 0;
+  }
+  if (words) {
+    *words = 0;
+  }
+  if (bytes) {
+    *bytes = 0;
+  }
+  while (*p) {
+    char c = *p++;
+    if (bytes) {
+      (*bytes)++;
+    }
+    if (c == '\n' && lines) {
+      (*lines)++;
+    }
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      in_word = 0;
+    } else if (!in_word) {
+      if (words) {
+        (*words)++;
+      }
+      in_word = 1;
+    }
+  }
+  if (bytes && *bytes > 0 && lines && input[*bytes - 1] != '\n') {
+    (*lines)++;
+  }
+}
+
+static void term_pipe_wc(const char *input, char *out, size_t out_size) {
+  size_t lines = 0;
+  size_t words = 0;
+  size_t bytes = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  term_text_count_stats(input, &lines, &words, &bytes);
+  snprintf(out, out_size, "%lu lines %lu words %lu bytes\n",
+           (unsigned long)lines, (unsigned long)words,
+           (unsigned long)bytes);
 }
 
 static void term_pipe_head(const char *input, int max_lines, char *out,
@@ -5485,6 +5668,10 @@ static int term_parse_pipe_line_count(const char *args, int *lines) {
   return *term_skip_spaces(args) == '\0' ? 0 : -1;
 }
 
+static int term_pipe_tee(terminal_t *term, const char *path_arg,
+                         const char *input, char *out, size_t out_size,
+                         int append);
+
 static int term_apply_pipe_stage(terminal_t *term, char *stage,
                                  const char *input, char *out,
                                  size_t out_size, int *opened_pager) {
@@ -5494,12 +5681,18 @@ static int term_apply_pipe_stage(terminal_t *term, char *stage,
     return -1;
   }
   if (term_command_is(stage, "grep")) {
-    const char *pattern = term_skip_spaces(stage + 4);
+    int ignore_case = 0;
+    int invert = 0;
+    int show_numbers = 0;
+    const char *pattern =
+        term_parse_grep_options(stage + 4, &ignore_case, &invert,
+                                &show_numbers);
     if (*pattern == '\0') {
-      term_puts_t(term, "usage: cmd | grep <text>\n");
+      term_puts_t(term, "usage: cmd | grep [-i] [-v] [-n] <text>\n");
       return -1;
     }
-    term_pipe_grep(input, pattern, out, out_size);
+    term_pipe_grep(input, pattern, out, out_size, ignore_case, invert,
+                   show_numbers);
     return 0;
   }
   if (term_command_is(stage, "head")) {
@@ -5532,7 +5725,22 @@ static int term_apply_pipe_stage(terminal_t *term, char *stage,
     snprintf(out, out_size, "%s", input ? input : "");
     return 0;
   }
-  term_puts_t(term, "pipe: supported stages are grep, head, tail, less\n");
+  if (term_command_is(stage, "wc")) {
+    term_pipe_wc(input, out, out_size);
+    return 0;
+  }
+  if (term_command_is(stage, "tee")) {
+    const char *args = term_skip_spaces(stage + 3);
+    int append = 0;
+    if (term_starts_with(args, "-a") &&
+        (args[2] == '\0' || args[2] == ' ' || args[2] == '\t')) {
+      append = 1;
+      args = term_skip_spaces(args + 2);
+    }
+    return term_pipe_tee(term, args, input, out, out_size, append);
+  }
+  term_puts_t(term,
+              "pipe: supported stages are grep, head, tail, wc, tee, less\n");
   return -1;
 }
 
@@ -5560,6 +5768,21 @@ static int term_write_redirect_output(terminal_t *term, const char *path_arg,
   term_puts_t(term, append ? "redirect: appended " : "redirect: wrote ");
   term_puts_t(term, path);
   term_puts_t(term, "\n");
+  return 0;
+}
+
+static int term_pipe_tee(terminal_t *term, const char *path_arg,
+                         const char *input, char *out, size_t out_size,
+                         int append) {
+  if (!path_arg || *term_skip_spaces(path_arg) == '\0') {
+    term_puts_t(term, "usage: cmd | tee [-a] <file>\n");
+    return -1;
+  }
+  if (term_write_redirect_output(term, term_skip_spaces(path_arg),
+                                 input ? input : "", append) < 0) {
+    return -1;
+  }
+  snprintf(out, out_size, "%s", input ? input : "");
   return 0;
 }
 
@@ -5726,16 +5949,45 @@ void term_render(terminal_t *term) {
 static void term_print_help_shell(terminal_t *term) {
   term_puts_t(term, "\033[1;36mOrizon shell helpers\033[0m\n");
   term_puts_t(term, "  help shell       - Show shell operators and shortcuts\n");
+  term_puts_t(term, "  shell status     - Show console buffers/capabilities\n");
   term_puts_t(term, "  cmd1 ; cmd2      - Run commands sequentially\n");
   term_puts_t(term, "  cmd > file       - Write command output to a file\n");
   term_puts_t(term, "  cmd >> file      - Append command output to a file\n");
-  term_puts_t(term, "  cmd | grep text  - Filter captured output\n");
+  term_puts_t(term, "  cmd | grep [-i] [-v] [-n] text - Filter captured output\n");
   term_puts_t(term, "  cmd | head -20   - Keep the first lines\n");
   term_puts_t(term, "  cmd | tail -20   - Keep the last lines\n");
+  term_puts_t(term, "  cmd | wc         - Count lines/words/bytes\n");
+  term_puts_t(term, "  cmd | tee [-a] file - Save output and keep piping\n");
   term_puts_t(term, "  cmd | less       - Open captured output in the pager\n");
+  term_puts_t(term, "  history grep text - Search saved command history\n");
   term_puts_t(term, "\n");
   term_puts_t(term, "Notes: pipes are intentionally small and diagnostic-focused.\n");
   term_puts_t(term, "Interactive commands such as less/edit/install/reboot cannot be piped.\n");
+}
+
+static void term_print_shell_status(terminal_t *term) {
+  char line[160];
+
+  term_puts_t(term, "\033[1;36mOrizon local shell\033[0m\n");
+  term_puts_t(term, "mode framebuffer-console\n");
+  snprintf(line, sizeof(line), "cwd %s\n", term->cwd[0] ? term->cwd : "/");
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "history count=%d max=%d path=%s\n",
+           term->history_count, TERM_HISTORY_MAX, TERM_HISTORY_PATH);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "scrollback lines=%d max=%d key-step=%d\n",
+           term->scroll_count, TERM_SCROLLBACK_LINES, TERM_KEY_SCROLL_LINES);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "pager buffer=%lu bytes page-lines=%d\n",
+           (unsigned long)TERM_PAGER_MAX, TERM_PAGER_PAGE_LINES);
+  term_puts_t(term, line);
+  snprintf(line, sizeof(line), "pipeline buffer=%lu bytes stages=grep/head/tail/wc/tee/cat/less\n",
+           (unsigned long)TERM_PIPE_MAX);
+  term_puts_t(term, line);
+  term_puts_t(term, "operators: ; && > >> |\n");
+  term_puts_t(term, "grep-options: -i case-insensitive, -v invert, -n line numbers\n");
+  term_puts_t(term, "editor: edit <file> with .show/.insert/.replace/.del/.save/.q\n");
+  term_puts_t(term, "limits: no quoting, variables, globbing, subshells, or POSIX exit chaining yet\n");
 }
 
 /* Execute one parsed command */
@@ -5759,7 +6011,8 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  less <f>  - Page a file (z/s, arrows, space, q)\n");
     term_puts_t(term, "  head [-n] <f> - Show first lines\n");
     term_puts_t(term, "  tail [-n] <f> - Show last lines\n");
-    term_puts_t(term, "  grep <text> <f> - Search file text\n");
+    term_puts_t(term, "  grep [-i] [-v] [-n] <text> <f> - Search file text\n");
+    term_puts_t(term, "  wc <f>    - Count lines, words and bytes\n");
     term_puts_t(term, "  find [p] [text] - Find entries\n");
     term_puts_t(term, "  stat <p>  - Show file or directory info\n");
     term_puts_t(term, "  tree [p]  - Show a small directory tree\n");
@@ -5887,18 +6140,29 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  uname     - Show OS info\n");
     term_puts_t(term, "  id        - Show user/group info\n");
     term_puts_t(term, "  hostname [set <name>] - Show or persist hostname\n");
-    term_puts_t(term, "  history [-c] - Show or clear persistent history\n");
+    term_puts_t(term, "  history [-c|grep <text>] - Show/search/clear persistent history\n");
     term_puts_t(term, "  free      - Memory usage\n");
     term_puts_t(term, "  ps        - Process list\n");
     term_puts_t(term, "  clear     - Clear screen\n");
     term_puts_t(term, "  help      - This help message\n");
     term_puts_t(term, "  help shell - Shell operators and shortcuts\n");
+    term_puts_t(term, "  shell status - Show local shell buffers/capabilities\n");
     term_puts_t(term, "\n");
     term_puts_t(term, "This build intentionally starts from a minimal core shell.\n");
     term_puts_t(term, "Tip: Tab completes commands/files; Up/Down browse saved history.\n");
     term_puts_t(term, "Tip: empty prompt z/s scrolls output; less uses z/s/space/q.\n");
     term_puts_t(term, "Tip: use 'cmd | less' for long diagnostic output.\n");
     term_puts_t(term, "Add new tools only when they belong in Orizon OS.\n");
+  } else if (term_command_is(cmd, "shell")) {
+    const char *args = term_skip_spaces(cmd + 5);
+    if (*args == '\0' || term_command_is(args, "status") ||
+        term_command_is(args, "diag") || term_command_is(args, "diagnostics")) {
+      term_print_shell_status(term);
+    } else if (term_command_is(args, "help")) {
+      term_print_help_shell(term);
+    } else {
+      term_puts_t(term, "usage: shell [status|help]\n");
+    }
   } else if (strncmp(cmd, "clear", 5) == 0) {
     term_clear_screen(term);
   } else if (term_command_is(cmd, "about")) {
@@ -6152,16 +6416,49 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     char pattern[MAX_PATH];
     char file_arg[MAX_PATH];
     char path[MAX_PATH];
+    const char *args = cmd + 4;
+    int ignore_case = 0;
+    int invert = 0;
+    int show_numbers = 0;
 
-    if (term_split_two_paths(cmd + 4, pattern, file_arg, sizeof(file_arg)) < 0) {
-      term_puts_t(term, "usage: grep <text> <file>\n");
+    args = term_parse_grep_options(args, &ignore_case, &invert,
+                                   &show_numbers);
+
+    if (term_split_two_paths(args, pattern, file_arg, sizeof(file_arg)) < 0) {
+      term_puts_t(term, "usage: grep [-i] [-v] [-n] <text> <file>\n");
       return;
     }
     if (resolve_path(term->cwd, file_arg, path, sizeof(path)) < 0) {
       term_puts_t(term, "grep: invalid path\n");
       return;
     }
-    term_print_grep(term, pattern, file_arg, path);
+    if (ignore_case || invert || show_numbers) {
+      static char grep_buf[4096];
+      static char grep_out[4096];
+      int n = term_read_regular_file(term, file_arg, path, grep_buf,
+                                     sizeof(grep_buf), "grep");
+      if (n < 0) {
+        return;
+      }
+      term_pipe_grep(grep_buf, pattern, grep_out, sizeof(grep_out),
+                     ignore_case, invert, show_numbers);
+      term_puts_t(term, grep_out);
+    } else {
+      term_print_grep(term, pattern, file_arg, path);
+    }
+  } else if (term_command_is(cmd, "wc")) {
+    const char *filename = term_skip_spaces(cmd + 2);
+    char path[MAX_PATH];
+
+    if (*filename == '\0') {
+      term_puts_t(term, "usage: wc <file>\n");
+      return;
+    }
+    if (resolve_path(term->cwd, filename, path, sizeof(path)) < 0) {
+      term_puts_t(term, "wc: invalid path\n");
+      return;
+    }
+    term_print_wc(term, filename, path);
   } else if (term_command_is(cmd, "find")) {
     const char *args = term_skip_spaces(cmd + 4);
     char first[MAX_PATH] = {0};
@@ -6644,11 +6941,41 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
       term_puts_t(term, line);
     }
   } else if (term_command_is(cmd, "history")) {
-    if (strcmp(term_skip_spaces(cmd + 7), "-c") == 0) {
+    const char *args = term_skip_spaces(cmd + 7);
+    if (strcmp(args, "-c") == 0 || term_command_is(args, "clear")) {
       term->history_count = 0;
       term->history_pos = 0;
       term_save_history(term);
       term_puts_t(term, "History cleared\n");
+      return;
+    }
+    if (term_command_is(args, "grep") || term_command_is(args, "search")) {
+      const char *query = term_skip_spaces(args + (term_command_is(args, "grep")
+                                                       ? 4
+                                                       : 6));
+      int matches = 0;
+      if (*query == '\0') {
+        term_puts_t(term, "usage: history grep <text>\n");
+        return;
+      }
+      for (int i = 0; i < term->history_count; i++) {
+        if (term_line_contains_mode(term->history[i], strlen(term->history[i]),
+                                    query, 1)) {
+          char num[8];
+          snprintf(num, 8, "%4d  ", i + 1);
+          term_puts_t(term, num);
+          term_puts_t(term, term->history[i]);
+          term_puts_t(term, "\n");
+          matches++;
+        }
+      }
+      if (matches == 0) {
+        term_puts_t(term, "history: no matches\n");
+      }
+      return;
+    }
+    if (*args != '\0') {
+      term_puts_t(term, "usage: history [-c|grep <text>]\n");
       return;
     }
     for (int i = 0; i < term->history_count; i++) {
