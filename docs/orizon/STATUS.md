@@ -52,8 +52,11 @@ work.
   pinned by the signed manifest, and release checks run a tracked-secret scan.
 - Wired VM networking: e1000/e1000e, RTL8139, and VirtIO-net are the current
   daily VM NIC paths. NAT smoke tests are the normal quick gate. `net check`,
-  `net tcp <host> [port]`, `net tls`, and `net diag` split daily failures into
-  link/IPv4, DNS/TCP reachability, and HTTPS/root-trust layers. A full
+  `net daily`, retrying `net tcp <host> [port] [attempts <1-5>]`, `net tls`,
+  and `net diag` split daily failures into link/IPv4, retry/DNS/TCP
+  reachability, and HTTPS/root-trust layers. `net daily` also states the
+  NAT/bridge detection boundary, retry policy, and persistent log/config paths.
+  A full
   ZimaOS matrix run on 2026-05-22 passed NAT e1000e, NAT VirtIO-net, and NAT
   RTL8139 with SSH diagnostics, persistence checks, framebuffer screenshot,
   reboot, post-reboot SSH, and shutdown.

@@ -68,7 +68,9 @@ Apres connexion OpenSSH, les commandes admin utiles peuvent aussi etre lancees
 directement avec `ssh orizon@<ip> "ssh auth max 4"`, `ssh orizon@<ip> "ssh
 lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
 Les diagnostics reseau non destructifs sont aussi exposes avec `ssh
-orizon@<ip> "net check"` et `ssh orizon@<ip> "net tls"`. Les commandes qui
+orizon@<ip> "net check"`, `ssh orizon@<ip> "net daily"`,
+`ssh orizon@<ip> "net tcp raw.githubusercontent.com 443 attempts 2"` et
+`ssh orizon@<ip> "net tls"`. Les commandes qui
 peuvent couper la session active (`net dhcp`, `net auto`, `net renew`,
 `net reset`, modifications `net config`) restent volontairement reservees a la
 console locale.
@@ -104,7 +106,7 @@ console locale.
   `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
   `system services`, `system logs`, `system firstboot`, `system repair`,
   `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
-  `net check`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
+  `net check`, `net daily`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
   `security`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `storage vmcheck`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,

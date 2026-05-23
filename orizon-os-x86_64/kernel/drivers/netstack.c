@@ -42,6 +42,8 @@
 #define DEFAULT_STATIC_SUBNET 0xffffff00U
 #define NETSTACK_FALLBACK_WAITS_PER_MS 16ULL
 #define NETSTACK_SHORT_PAUSE_LOOPS 2048
+#define NETSTACK_TCP_PROBE_DEFAULT_ATTEMPTS 3U
+#define NETSTACK_TCP_PROBE_MAX_ATTEMPTS 5U
 
 static netstack_status_t stack_status = {
     .ipv4_ready = 0,
@@ -4800,8 +4802,9 @@ int netstack_github_tls_probe(char *out, size_t out_cap, size_t *out_len) {
   return netstack_tls_probe("raw.githubusercontent.com", out, out_cap, out_len);
 }
 
-int netstack_tcp_probe(const char *host, uint16_t port, char *out,
-                       size_t out_cap) {
+static int netstack_tcp_probe_once(const char *host, uint16_t port,
+                                   unsigned attempt, char *out,
+                                   size_t out_cap) {
   uint32_t ip = 0;
   tcp_conn_t conn;
   char ip_s[24];
@@ -4813,6 +4816,10 @@ int netstack_tcp_probe(const char *host, uint16_t port, char *out,
   }
   out[0] = '\0';
   append_text(out, out_cap, "tcp probe:\n");
+  if (attempt > 0) {
+    snprintf(line, sizeof(line), "attempt: %lu\n", (unsigned long)attempt);
+    append_text(out, out_cap, line);
+  }
   snprintf(line, sizeof(line), "target: %s port=%lu\n", host,
            (unsigned long)port);
   append_text(out, out_cap, line);
@@ -4860,6 +4867,69 @@ int netstack_tcp_probe(const char *host, uint16_t port, char *out,
   set_status("tcp: probe pass");
   network_log_line("tcp probe: pass");
   return 0;
+}
+
+int netstack_tcp_probe_retry(const char *host, uint16_t port,
+                             unsigned attempts, char *out, size_t out_cap) {
+  char one[2048];
+  char line[256];
+  int rc = -1;
+
+  if (!host || !out || out_cap == 0 || port == 0) {
+    return -1;
+  }
+  if (attempts == 0) {
+    attempts = 1;
+  }
+  if (attempts > NETSTACK_TCP_PROBE_MAX_ATTEMPTS) {
+    attempts = NETSTACK_TCP_PROBE_MAX_ATTEMPTS;
+  }
+
+  out[0] = '\0';
+  snprintf(line, sizeof(line), "tcp retry probe: attempts=%lu target=%s port=%lu\n",
+           (unsigned long)attempts, host, (unsigned long)port);
+  append_text(out, out_cap, line);
+  network_log_line("tcp retry probe: start");
+
+  for (unsigned attempt = 1; attempt <= attempts; attempt++) {
+    one[0] = '\0';
+    rc = netstack_tcp_probe_once(host, port, attempt, one, sizeof(one));
+    append_text(out, out_cap, one);
+    if (one[0] && one[strlen(one) - 1] != '\n') {
+      append_text(out, out_cap, "\n");
+    }
+    if (rc == 0) {
+      snprintf(line, sizeof(line), "tcp retry summary: PASS attempt=%lu/%lu\n",
+               (unsigned long)attempt, (unsigned long)attempts);
+      append_text(out, out_cap, line);
+      network_log_line("tcp retry probe: pass");
+      return 0;
+    }
+    if (attempt < attempts) {
+      snprintf(line, sizeof(line),
+               "tcp retry: attempt %lu/%lu failed status=%s; retrying\n",
+               (unsigned long)attempt, (unsigned long)attempts,
+               stack_status.status);
+      append_text(out, out_cap, line);
+      network_log_line("tcp retry probe: retrying after failure");
+    }
+  }
+
+  snprintf(line, sizeof(line), "tcp retry summary: FAIL attempts=%lu status=%s\n",
+           (unsigned long)attempts, stack_status.status);
+  append_text(out, out_cap, line);
+  append_text(out, out_cap,
+              "hint: check NAT/bridge attachment, guest IP, gateway firewall, "
+              "DNS, then run 'net renew' from the local console.\n");
+  network_log_line("tcp retry probe: fail");
+  return -1;
+}
+
+int netstack_tcp_probe(const char *host, uint16_t port, char *out,
+                       size_t out_cap) {
+  return netstack_tcp_probe_retry(host, port,
+                                  NETSTACK_TCP_PROBE_DEFAULT_ATTEMPTS, out,
+                                  out_cap);
 }
 
 const netstack_status_t *netstack_get_status(void) {
@@ -4911,6 +4981,51 @@ void netstack_format_dns(char *buf, size_t size) {
   snprintf(buf, size, "dns: server=%s last-host=%s resolved=%s", dns,
            stack_status.last_host[0] ? stack_status.last_host : "none",
            resolved);
+}
+
+int netstack_format_daily(char *out, size_t out_cap) {
+  char line[256];
+
+  if (!out || out_cap == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  append_text(out, out_cap, "network daily:\n");
+  append_text(out, out_cap,
+              "scope: VM-safe diagnostics; NAT/bridge mode is host-side and "
+              "cannot be detected from inside the guest\n");
+  snprintf(line, sizeof(line),
+           "retry-policy: renew=2 tcp-probe=%lu max-tcp-probe=%lu dns-timeout=5s tcp-timeout=5s\n",
+           (unsigned long)NETSTACK_TCP_PROBE_DEFAULT_ATTEMPTS,
+           (unsigned long)NETSTACK_TCP_PROBE_MAX_ATTEMPTS);
+  append_text(out, out_cap, line);
+  snprintf(line, sizeof(line), "link: %s %s\n",
+           l2_link_up() ? "up" : "down", l2_link_name());
+  append_text(out, out_cap, line);
+  netstack_format_status(line, sizeof(line));
+  append_text(out, out_cap, "status: ");
+  append_text(out, out_cap, line);
+  snprintf(line, sizeof(line), " status-text=%s\n", stack_status.status);
+  append_text(out, out_cap, line);
+  netstack_format_route(line, sizeof(line));
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  netstack_format_dns(line, sizeof(line));
+  append_text(out, out_cap, line);
+  append_text(out, out_cap, "\n");
+  append_text(out, out_cap, "config: ");
+  append_text(out, out_cap, NETWORK_CONFIG_PATH);
+  append_text(out, out_cap, "\nlog: ");
+  append_text(out, out_cap, NETWORK_LOG_PATH);
+  append_text(out, out_cap, "\n");
+  append_text(out, out_cap,
+              "workflow: net check -> net tcp raw.githubusercontent.com 443 "
+              "-> net tls before retrying update/pkg\n");
+  append_text(out, out_cap,
+              "hint: if DHCP or route fails, run 'net renew' on the local "
+              "console so the active SSH link is not disrupted\n");
+  network_log_line("net daily: formatted");
+  return 0;
 }
 
 int netstack_renew_ipv4(char *out, size_t out_cap) {

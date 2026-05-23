@@ -8,6 +8,7 @@
 - Extended the package manager with signed remote metadata, search/remote/status/history, dependency checks, and rollback-oriented install/remove paths.
 - Improved the local console with scrollback, keyboard paging, command history, and a simple `less` pager.
 - Added daily network diagnostics for DHCP renew, DNS, routes, TLS probe, and clearer update/pkg network errors.
+- Improved VM daily networking with `net daily`, retrying TCP probes, explicit NAT/bridge boundary notes, and SSH/matrix coverage.
 - Hardened SSH diagnostics and security policy with host-key persistence, lockout/audit reporting, safer file access, and explicit signed-manifest posture.
 - Added developer release guardrails: quick checks, release artifact validation, generated release notes, and CI log artifacts.
 - Added a CI release guard entrypoint that centralizes quick checks, secret scan, release validation, release notes, and artifact synchronization summaries for GitHub Actions.

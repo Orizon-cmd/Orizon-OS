@@ -3866,29 +3866,79 @@ static void term_run_net(terminal_t *term, const char *cmd) {
   if (term_command_is(args, "tcp")) {
     const char *tcp_args = term_skip_spaces(args + 3);
     char host[96];
-    char port_text[16];
+    char token[32];
+    char attempts_text[16];
     int port = 443;
+    int attempts = 0;
 
     tcp_args = term_read_token(tcp_args, host, sizeof(host));
     if (!tcp_args) {
-      term_puts_t(term, "usage: net tcp <host-or-ip> [port]\n");
+      term_puts_t(term,
+                  "usage: net tcp <host-or-ip> [port] [attempts <1-5>]\n");
       return;
     }
     if (*tcp_args) {
-      tcp_args = term_read_token(tcp_args, port_text, sizeof(port_text));
-      if (!tcp_args || term_parse_uint(port_text, &port) < 0 ||
-          port <= 0 || port > 65535 || *tcp_args) {
-        term_puts_t(term, "usage: net tcp <host-or-ip> [port]\n");
+      tcp_args = term_read_token(tcp_args, token, sizeof(token));
+      if (!tcp_args) {
+        term_puts_t(term,
+                    "usage: net tcp <host-or-ip> [port] [attempts <1-5>]\n");
+        return;
+      }
+      if (strcmp(token, "attempts") == 0 || strcmp(token, "tries") == 0 ||
+          strcmp(token, "retry") == 0) {
+        tcp_args = term_read_token(tcp_args, attempts_text,
+                                   sizeof(attempts_text));
+        if (!tcp_args || term_parse_uint(attempts_text, &attempts) < 0 ||
+            attempts <= 0 || attempts > 5 || *tcp_args) {
+          term_puts_t(term,
+                      "usage: net tcp <host-or-ip> [port] [attempts <1-5>]\n");
+          return;
+        }
+      } else if (term_parse_uint(token, &port) == 0 && port > 0 &&
+                 port <= 65535) {
+        if (*tcp_args) {
+          tcp_args = term_read_token(tcp_args, token, sizeof(token));
+          if (!tcp_args || (strcmp(token, "attempts") != 0 &&
+                            strcmp(token, "tries") != 0 &&
+                            strcmp(token, "retry") != 0)) {
+            term_puts_t(term,
+                        "usage: net tcp <host-or-ip> [port] [attempts <1-5>]\n");
+            return;
+          }
+          tcp_args = term_read_token(tcp_args, attempts_text,
+                                     sizeof(attempts_text));
+          if (!tcp_args || term_parse_uint(attempts_text, &attempts) < 0 ||
+              attempts <= 0 || attempts > 5 || *tcp_args) {
+            term_puts_t(term,
+                        "usage: net tcp <host-or-ip> [port] [attempts <1-5>]\n");
+            return;
+          }
+        }
+      } else {
+        term_puts_t(term,
+                    "usage: net tcp <host-or-ip> [port] [attempts <1-5>]\n");
         return;
       }
     }
-    netstack_tcp_probe(host, (uint16_t)port, report, sizeof(report));
+    if (attempts > 0) {
+      netstack_tcp_probe_retry(host, (uint16_t)port, (unsigned)attempts,
+                               report, sizeof(report));
+    } else {
+      netstack_tcp_probe(host, (uint16_t)port, report, sizeof(report));
+    }
     term_puts_t(term, report);
     return;
   }
 
   if (term_command_is(args, "diag") || term_command_is(args, "daily")) {
-    term_puts_t(term, "net diag: daily VM network diagnostics\n");
+    int include_tls = term_command_is(args, "diag");
+    term_puts_t(term, include_tls ? "net diag: daily VM network diagnostics\n"
+                                  : "net daily: VM network diagnostics\n");
+    netstack_format_daily(report, sizeof(report));
+    term_puts_t(term, report);
+    if (report[0] && report[strlen(report) - 1] != '\n') {
+      term_puts_t(term, "\n");
+    }
     netstack_format_check(report, sizeof(report));
     term_puts_t(term, report);
     if (report[0] && report[strlen(report) - 1] != '\n') {
@@ -3899,6 +3949,9 @@ static void term_run_net(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     if (report[0] && report[strlen(report) - 1] != '\n') {
       term_puts_t(term, "\n");
+    }
+    if (!include_tls) {
+      return;
     }
     term_puts_t(term, "net diag: TLS/root-trust probe\n");
     report[0] = '\0';
@@ -6072,7 +6125,8 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  storage diag/check - Explain and verify VM storage read-only\n");
     term_puts_t(term, "  net       - Show ethernet/IP status\n");
     term_puts_t(term, "  net dhcp  - Request IPv4 config from DHCP\n");
-    term_puts_t(term, "  net check/renew/tcp/tls/diag - Daily VM network diagnostics\n");
+    term_puts_t(term,
+                "  net check/renew/tcp/daily/tls/diag - VM network diagnostics\n");
     term_puts_t(term, "  net auto/reset/status - Manage IPv4 state\n");
     term_puts_t(term, "  net config ip <ip> gateway <gw> dns <dns> [subnet <mask>]\n");
     term_puts_t(term, "  wifi      - Show Wi-Fi hardware status\n");

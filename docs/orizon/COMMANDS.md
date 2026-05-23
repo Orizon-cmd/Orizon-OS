@@ -123,8 +123,10 @@ net status
 net dhcp
 net auto
 net check
+net daily
 net renew
 net tcp raw.githubusercontent.com 443
+net tcp raw.githubusercontent.com 443 attempts 2
 net tls
 net diag
 net config show
@@ -141,12 +143,14 @@ logs update
 ```
 
 `net check` is safe over SSH and summarizes link, IPv4, route, gateway, DNS,
-and the next TCP/TLS probes with PASS/WARN/FAIL. `net tcp <host> [port]` is the
-cheap reachability check before update/pkg work; it separates DNS/TCP/firewall
-issues from TLS/root-trust issues. `net renew` reapplies saved DHCP/static
-config from the local console with a retry. `net tls` runs the heavier GitHub
-HTTPS/root-trust probe, and `net diag` chains check + TCP + TLS for a fuller
-daily VM report. `update` is installed-disk only. Live ISO boot intentionally
+and the next TCP/TLS probes with PASS/WARN/FAIL. `net daily` adds the VM
+workflow, retry policy, config/log paths, and the honest NAT/bridge boundary.
+`net tcp <host> [port] [attempts <1-5>]` is the cheap reachability check before
+update/pkg work; it retries by default and separates DNS/TCP/firewall issues
+from TLS/root-trust issues. `net renew` reapplies saved DHCP/static config from
+the local console with a retry. `net tls` runs the heavier GitHub
+HTTPS/root-trust probe, and `net diag` chains daily + check + TCP + TLS for a
+fuller VM report. `update` is installed-disk only. Live ISO boot intentionally
 blocks it.
 
 ## Packages
@@ -191,7 +195,9 @@ ssh audit
 ssh sessions
 security
 net check
+net daily
 net tcp raw.githubusercontent.com 443
+net tcp raw.githubusercontent.com 443 attempts 2
 net tls
 ssh auth
 ssh auth max <attempts>

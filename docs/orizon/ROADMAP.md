@@ -104,9 +104,10 @@
    never reaches Orizon early boot.
 2. Add detached package repository signatures and key rotation; the package
    index is already pinned through the signed OS manifest.
-3. Expand network diagnostics beyond the current `net check` / `net tcp` /
-   `net tls` / `net diag` split with per-phase counters and clearer bridge/DHCP
-   failure messages.
+3. Continue network hardening beyond the current `net check` / `net daily` /
+   retrying `net tcp` / `net tls` / `net diag` split with deeper per-phase
+   counters, packet-loss stats, and host-side bridge discovery when the ZimaOS
+   lab can expose it.
 4. Finish SSH remote login hardening: safer config permissions, key rotation,
    fuller PTY integration with the local Orizon terminal, and longer
    multi-client soak tests.

@@ -279,10 +279,12 @@ def run_ssh_checks(
         ("system repair", "system repair:"),
         ("net status", "ipv4=yes"),
         ("net check", "network summary:"),
+        ("net daily", "network daily:"),
         ("timer", "source="),
         ("ping 8.8.8.8", "reply from"),
         ("dns raw.githubusercontent.com", " -> "),
         ("net tcp raw.githubusercontent.com 443", "tcp: PASS"),
+        ("net tcp raw.githubusercontent.com 443 attempts 2", "tcp retry summary: PASS"),
         ("pkg status", "Orizon package manager"),
         ("pkg audit", "pkg audit:"),
         ("pkg cache", "pkg cache:"),
@@ -355,6 +357,11 @@ while IFS=$'\\t' read -r cmd needle; do
     rc=$?
     cat "$OUT"
     echo "rc=$rc"
+    if [ "$cmd" = "persist save" ] && [ "$rc" -eq 0 ]; then
+      if grep -qi "persistence save: ok" "$OUT" || grep -qi "Orizon data persistence full" "$OUT"; then
+        break
+      fi
+    fi
     if [ "$rc" -eq 0 ] && grep -qi "$needle" "$OUT"; then
       if [ "$cmd" = "disk read-test last" ] && grep -q "lba=0 " "$OUT"; then
         echo "last-sector read-test used LBA 0"
