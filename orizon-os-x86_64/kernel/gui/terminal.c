@@ -3845,6 +3845,51 @@ static void term_run_ssh(terminal_t *term, const char *cmd) {
               "usage: ssh password <pass> | ssh password off | ssh start | ssh stop | ssh status | ssh audit | ssh auth | ssh auth max <n> | ssh auth lockout <s> | ssh hostkey | ssh hostkey reload | ssh hostkey reset | ssh reload | ssh lockout clear | ssh algorithms | ssh poll\n");
 }
 
+static void term_run_security(terminal_t *term, const char *cmd) {
+  const char *args = term_skip_spaces(cmd + 8);
+  static char report[4096];
+
+  if (*args == '\0' || term_command_is(args, "status")) {
+    ssh_format_security(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "policy")) {
+    ssh_format_security_policy(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "audit") || term_command_is(args, "sessions")) {
+    ssh_format_security_audit(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "keys") || term_command_is(args, "hostkey")) {
+    ssh_format_security_keys(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "doctor") || term_command_is(args, "check")) {
+    ssh_format_security_doctor(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "rotate")) {
+    const char *rotate = term_skip_spaces(args + 6);
+    if (term_command_is(rotate, "ssh-hostkey") ||
+        term_command_is(rotate, "hostkey")) {
+      term_puts_t(term,
+                  "security rotate: regenerating SSH host key; future clients "
+                  "may need known_hosts cleanup.\n");
+      ssh_reset_hostkey(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+  }
+  term_puts_t(term,
+              "usage: security [status|policy|audit|keys|doctor|rotate ssh-hostkey]\n");
+}
+
 static void term_run_net(terminal_t *term, const char *cmd) {
   const char *args = term_skip_spaces(cmd + 3);
   static char report[16384];
@@ -6114,7 +6159,8 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  report    - Compact health report + log tail\n");
     term_puts_t(term, "  report save - Write /workspace/hardware-report.txt\n");
     term_puts_t(term, "  selftest [network|storage|crypto|ssh|update] - Non-destructive checks\n");
-    term_puts_t(term, "  security  - Show base hardening policy and known limits\n");
+    term_puts_t(term,
+                "  security [policy|audit|keys|doctor|rotate ssh-hostkey] - Show hardening posture\n");
     term_puts_t(term, "  mounts    - Show Orizon data roots\n");
     term_puts_t(term, "  storage   - Show disk and persistence state\n");
     term_puts_t(term, "  disks     - List detected install disks\n");
@@ -6929,9 +6975,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
   } else if (term_command_is(cmd, "selftest")) {
     term_run_selftest(term, cmd);
   } else if (term_command_is(cmd, "security")) {
-    static char security_report[1600];
-    ssh_format_security(security_report, sizeof(security_report));
-    term_puts_t(term, security_report);
+    term_run_security(term, cmd);
   } else if (strncmp(cmd, "echo ", 5) == 0) {
     term_puts_t(term, cmd + 5);
     term_puts_t(term, "\n");

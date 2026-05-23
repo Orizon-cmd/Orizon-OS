@@ -44,8 +44,11 @@ work.
   `history grep <text>` searches saved commands.
 - SSH admin: password auth is opt-in, lockout/audit are visible, host keys are
   persistent per install when storage is available, long outputs are segmented,
-  diagnostics are usable through OpenSSH, and `/logs/security.log` mirrors SSH
-  audit plus policy changes without recording passwords.
+  diagnostics are usable through OpenSSH, `security policy/audit/keys/doctor`
+  are available locally and remotely, `security rotate ssh-hostkey` rotates the
+  local host identity for future sessions, and `/logs/security.log` mirrors SSH
+  audit plus policy changes without recording passwords or generic write/Wi-Fi
+  credentials.
 - Security guardrails: generic SSH writes are path-scoped, `/workspace/.orizon`
   remains internal OS state, common secret-bearing names are blocked for SSH and
   package payloads, signed update manifests are mandatory, package indexes are

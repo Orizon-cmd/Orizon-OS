@@ -7,6 +7,11 @@ about what is implemented and what is only a guardrail.
 
 ```text
 security
+security policy
+security audit
+security keys
+security doctor
+security rotate ssh-hostkey
 ssh auth
 ssh audit
 ssh hostkey
@@ -16,7 +21,12 @@ update status
 
 The `security` command prints a compact status block covering SSH auth,
 lockout, host key storage, remote file policy, signed update policy, package
-index authentication, protected files, and known limits.
+index authentication, protected files, and known limits. `security policy`
+expands the active path, update/package, audit-redaction and admin-command
+rules. `security audit` combines the persistent security mirror with the SSH
+audit counters. `security keys` reports host-key/update/package key posture
+without dumping private material. `security doctor` is a non-destructive
+PASS/WARN checklist for the current VM/live state.
 
 SSH has no default password. Password auth is disabled until the console runs
 `ssh password <password>`. Failed auth is counted, temporary lockout is
@@ -25,7 +35,9 @@ configurable with `ssh auth max <n>` and `ssh auth lockout <seconds>`, and
 recoveries, and the most recent events. SSH audit events are persisted in
 `/logs/ssh.log` and mirrored to `/logs/security.log`; policy changes such as
 auth policy updates, lockout clears, host-key reloads and host-key resets also
-append a non-secret security event.
+append a non-secret security event. Audit storage redacts `ssh password`,
+generic `write`/`append` payloads, and Wi-Fi credentials before they reach the
+recent-event buffer or persistent logs.
 
 Host identity is generated per installation when possible and persisted at:
 
@@ -36,6 +48,16 @@ Host identity is generated per installation when possible and persisted at:
 The compiled bootstrap key is only a fallback if local host-key generation or
 persistence fails. `ssh hostkey` exposes the fingerprint without dumping private
 material.
+
+Host-key rotation is explicit:
+
+```text
+security rotate ssh-hostkey
+```
+
+It regenerates `/system/ssh_host_rsa.key` for future SSH sessions. Existing
+clients may need their known_hosts entry updated because the host fingerprint
+changes by design.
 
 ## SSH File Policy
 
@@ -62,6 +84,7 @@ ssh auth lockout <seconds>
 ssh auth default
 ssh hostkey reload
 ssh hostkey reset
+security rotate ssh-hostkey
 hostname set <name>
 net config ...
 ```

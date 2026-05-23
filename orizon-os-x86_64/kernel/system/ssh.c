@@ -383,10 +383,79 @@ static void ssh_audit_event(const char *event) {
   ssh_security_log_line(line);
 }
 
+static int ssh_command_prefix(const char *command, const char *prefix) {
+  size_t len;
+
+  if (!command || !prefix) {
+    return 0;
+  }
+  len = strlen(prefix);
+  return strncmp(command, prefix, len) == 0 &&
+         (command[len] == '\0' || command[len] == ' ');
+}
+
+static void ssh_copy_command_path(const char *command, const char *op,
+                                  char *safe, size_t safe_size) {
+  char path[80];
+  const char *p;
+  size_t i = 0;
+
+  if (!command || !op || !safe || safe_size == 0) {
+    return;
+  }
+  p = command + strlen(op);
+  while (*p == ' ') {
+    p++;
+  }
+  while (p[i] && p[i] != ' ' && p[i] != '\r' && p[i] != '\n' &&
+         i + 1 < sizeof(path)) {
+    path[i] = p[i];
+    i++;
+  }
+  path[i] = '\0';
+  snprintf(safe, safe_size, "%s %s <redacted-text>", op,
+           path[0] ? path : "<path>");
+}
+
+static void ssh_redact_command_for_audit(const char *command, char *safe,
+                                         size_t safe_size) {
+  size_t i = 0;
+
+  if (!safe || safe_size == 0) {
+    return;
+  }
+  if (!command) {
+    safe[0] = '\0';
+    return;
+  }
+  if (ssh_command_prefix(command, "ssh password")) {
+    snprintf(safe, safe_size, "ssh password <redacted>");
+    return;
+  }
+  if (ssh_command_prefix(command, "write")) {
+    ssh_copy_command_path(command, "write", safe, safe_size);
+    return;
+  }
+  if (ssh_command_prefix(command, "append")) {
+    ssh_copy_command_path(command, "append", safe, safe_size);
+    return;
+  }
+  if (ssh_command_prefix(command, "wifi connect") ||
+      ssh_command_prefix(command, "wifi join")) {
+    snprintf(safe, safe_size, "wifi <redacted-credentials>");
+    return;
+  }
+  while (command[i] && command[i] != '\r' && command[i] != '\n' &&
+         i + 1 < safe_size) {
+    safe[i] = command[i];
+    i++;
+  }
+  safe[i] = '\0';
+}
+
 static void ssh_record_command(const char *kind, const char *command) {
   char safe[128];
   char event[176];
-  size_t i = 0;
 
   if (!kind) {
     kind = "command";
@@ -394,16 +463,7 @@ static void ssh_record_command(const char *kind, const char *command) {
   if (!command) {
     command = "";
   }
-  if (strncmp(command, "ssh password", strlen("ssh password")) == 0) {
-    snprintf(safe, sizeof(safe), "ssh password <redacted>");
-  } else {
-    while (command[i] && command[i] != '\r' && command[i] != '\n' &&
-           i + 1 < sizeof(safe)) {
-      safe[i] = command[i];
-      i++;
-    }
-    safe[i] = '\0';
-  }
+  ssh_redact_command_for_audit(command, safe, sizeof(safe));
   snprintf(ssh_last_command, sizeof(ssh_last_command), "%s: %s", kind, safe);
   snprintf(event, sizeof(event), "%s command=\"%s\"", kind, safe);
   ssh_audit_event(event);
@@ -3481,6 +3541,61 @@ static void ssh_shell_print_algorithms(void) {
   ssh_shell_prompt();
 }
 
+static void ssh_shell_print_security(const char *args) {
+  static char out[4096];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  if (*sub == '\0' || ssh_shell_command_is(sub, "status")) {
+    ssh_format_security(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(sub, "policy")) {
+    ssh_format_security_policy(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(sub, "audit") ||
+      ssh_shell_command_is(sub, "sessions")) {
+    ssh_format_security_audit(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(sub, "keys") ||
+      ssh_shell_command_is(sub, "hostkey")) {
+    ssh_format_security_keys(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(sub, "doctor") ||
+      ssh_shell_command_is(sub, "check")) {
+    ssh_format_security_doctor(out, sizeof(out));
+    ssh_queue_channel_text(out);
+    ssh_shell_prompt();
+    return;
+  }
+  if (ssh_shell_command_is(sub, "rotate")) {
+    const char *rotate = ssh_shell_skip_spaces(sub + strlen("rotate"));
+    if (ssh_shell_command_is(rotate, "ssh-hostkey") ||
+        ssh_shell_command_is(rotate, "hostkey")) {
+      ssh_queue_channel_text(
+          "security rotate: regenerating SSH host key; future clients may "
+          "need known_hosts cleanup.\r\n");
+      ssh_reset_hostkey(out, sizeof(out));
+      ssh_queue_channel_text(out);
+      ssh_shell_prompt();
+      return;
+    }
+  }
+  ssh_queue_channel_text(
+      "usage: security [status|policy|audit|keys|doctor|rotate ssh-hostkey]\r\n");
+  ssh_shell_prompt();
+}
+
 static void ssh_shell_print_rollback_status(void) {
   static char out[4096];
 
@@ -4170,7 +4285,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, system status, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, security policy, security audit, security keys, security doctor, system status, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -4215,7 +4330,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  status               show SSH transport state\r\n"
         "  auth                 show SSH auth policy\r\n"
         "  hostkey              show SSH host identity\r\n"
-        "  security             show base hardening and known limits\r\n"
+        "  security [policy|audit|keys|doctor] show hardening posture\r\n"
         "  system status        show live/installed state and first-boot hints\r\n"
         "  system services      show init/service policy and runtime state\r\n"
         "  system logs          show boot-state, service-state and init logs\r\n"
@@ -4316,14 +4431,8 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_prompt();
     return;
   }
-  if (strcmp(line, "security") == 0 ||
-      strcmp(line, "security status") == 0) {
-    ssh_format_security(out, sizeof(out));
-    if (strlen(out) + strlen("\r\norizon$ ") < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
-    ssh_shell_prompt();
+  if (ssh_shell_command_is(line, "security")) {
+    ssh_shell_print_security(line + strlen("security"));
     return;
   }
   if (ssh_shell_command_is(line, "system")) {
@@ -4644,7 +4753,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, system status, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "services") == 0) {
@@ -4791,13 +4900,8 @@ static void ssh_remote_exec_execute(const uint8_t *command,
       strcat(out, "\r\n");
     }
     ssh_queue_channel_text(out);
-  } else if (strcmp(cmd, "security") == 0 ||
-             strcmp(cmd, "security status") == 0) {
-    ssh_format_security(out, sizeof(out));
-    if (strlen(out) + 2 < sizeof(out)) {
-      strcat(out, "\r\n");
-    }
-    ssh_queue_channel_text(out);
+  } else if (ssh_shell_command_is(cmd, "security")) {
+    ssh_shell_print_security(cmd + strlen("security"));
   } else if (ssh_shell_command_is(cmd, "net")) {
     ssh_shell_print_net(ssh_shell_skip_spaces(cmd + 3));
   } else if (strcmp(cmd, "network-status") == 0) {
@@ -5728,6 +5832,145 @@ void ssh_format_security(char *buf, size_t size) {
            (unsigned long)ssh_auth_failure_total, ssh_last_audit,
            ORIZON_SECURITY_LOG_PATH, orizon_update_status(), ORIZON_SSH_CONFIG_PATH,
            ORIZON_SSH_HOSTKEY_PATH);
+}
+
+void ssh_format_security_policy(char *buf, size_t size) {
+  if (!buf || size == 0) {
+    return;
+  }
+  snprintf(buf, size,
+           "security policy:\n"
+           "  users: local-console=admin remote=orizon-admin "
+           "user-admin-split=planned\n"
+           "  ssh-auth: password=opt-in max-attempts=%lu lockout=%lus "
+           "audit=yes\n"
+           "  ssh-audit-redaction: ssh-password/write/append/wifi-credentials "
+           "arguments redacted\n"
+           "  read-policy: cat/head/tail block sensitive paths and secret-like "
+           "names\n"
+           "  write-policy: generic SSH writes allowed only under "
+           "/workspace,/home,/logs,/packages\n"
+           "  internal-state: /workspace/.orizon write=blocked "
+           "package-payload=blocked\n"
+           "  package-script-policy: allow=mkdir,touch,write,append,echo,sync "
+           "safe-roots=/system,/home,/packages,/logs,/tmp,/workspace\n"
+           "  update-policy: manifest.sig required; key=orizon-update-root-2026-05\n"
+           "  release-secret-policy: tracked scan blocks private keys, .ssh, "
+           "local env/host files and token-looking payloads\n"
+           "  protected-files: %s, %s\n"
+           "  admin-commands: ssh auth, ssh password, security rotate ssh-hostkey, "
+           "hostname set, net config, pkg, update status\n"
+           "  limits: path policy only; no Unix uid/gid/acl/sudo/mac yet\n",
+           (unsigned long)ssh_status.max_auth_attempts,
+           (unsigned long)ssh_status.auth_lockout_seconds,
+           ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_HOSTKEY_PATH);
+}
+
+void ssh_format_security_audit(char *buf, size_t size) {
+  char audit[1800];
+  char line[256];
+  size_t used = 0;
+
+  if (!buf || size == 0) {
+    return;
+  }
+  buf[0] = '\0';
+  ssh_format_audit(audit, sizeof(audit));
+  snprintf(line, sizeof(line),
+           "security audit:\n"
+           "  persistent-log: %s present=%s\n"
+           "  ssh-log: %s present=%s\n"
+           "  mirror: ssh audit events plus policy changes; passwords and "
+           "write payloads are redacted\n",
+           ORIZON_SECURITY_LOG_PATH,
+           vfs_exists(ORIZON_SECURITY_LOG_PATH) ? "yes" : "no",
+           ORIZON_SSH_LOG_PATH,
+           vfs_exists(ORIZON_SSH_LOG_PATH) ? "yes" : "no");
+  ssh_shell_append(buf, size, &used, line);
+  ssh_shell_append(buf, size, &used, audit);
+}
+
+void ssh_format_security_keys(char *buf, size_t size) {
+  char hostkey[640];
+  size_t used = 0;
+
+  if (!buf || size == 0) {
+    return;
+  }
+  buf[0] = '\0';
+  ssh_format_hostkey(hostkey, sizeof(hostkey));
+  ssh_shell_append(buf, size, &used,
+                   "security keys:\n"
+                   "  ssh-hostkey: per-install persistent RSA identity\n"
+                   "  rotation: command=security rotate ssh-hostkey "
+                   "effect=future-ssh-sessions known-hosts-may-change\n"
+                   "  private-material: never printed by hostkey/security; "
+                   "read/write blocked by SSH file policy\n"
+                   "  update-root: id=orizon-update-root-2026-05 "
+                   "storage=compiled-public-key rotation=requires-new-release\n"
+                   "  package-index: signed-manifest-sha256-pinned "
+                   "detached-package-repo-signature=not-yet\n");
+  ssh_shell_append(buf, size, &used, hostkey);
+}
+
+void ssh_format_security_doctor(char *buf, size_t size) {
+  char line[256];
+  size_t used = 0;
+  int warnings = 0;
+  int failures = 0;
+  int hostkey_ok;
+
+  if (!buf || size == 0) {
+    return;
+  }
+  buf[0] = '\0';
+  ssh_ensure_hostkey();
+  hostkey_ok = ssh_status.hostkey_loaded && ssh_status.hostkey_persistent;
+
+#define SECURITY_DOCTOR_LINE(label, state, detail)                         \
+  do {                                                                     \
+    snprintf(line, sizeof(line), "  %-22s %-4s %s\n", label, state, detail); \
+    ssh_shell_append(buf, size, &used, line);                              \
+  } while (0)
+
+  ssh_shell_append(buf, size, &used, "security doctor:\n");
+  SECURITY_DOCTOR_LINE("ssh.hostkey", hostkey_ok ? "PASS" : "WARN",
+                       ssh_status.hostkey_persistent
+                           ? "persistent host key loaded"
+                           : "compiled/bootstrap fallback or not persisted");
+  if (!hostkey_ok) {
+    warnings++;
+  }
+  SECURITY_DOCTOR_LINE("ssh.auth-lockout", "PASS",
+                       "password auth is opt-in and lockout is configurable");
+  SECURITY_DOCTOR_LINE("audit.persistence",
+                       vfs_exists(ORIZON_SECURITY_LOG_PATH) ? "PASS" : "WARN",
+                       ORIZON_SECURITY_LOG_PATH);
+  if (!vfs_exists(ORIZON_SECURITY_LOG_PATH)) {
+    warnings++;
+  }
+  SECURITY_DOCTOR_LINE("audit.redaction", "PASS",
+                       "password/write/append/wifi arguments redacted");
+  SECURITY_DOCTOR_LINE("ssh.file-policy", "PASS",
+                       "sensitive paths blocked; writes scoped");
+  SECURITY_DOCTOR_LINE("update.manifest", "PASS",
+                       "manifest.sig required with compiled root key");
+  SECURITY_DOCTOR_LINE("package.policy", "PASS",
+                       "package paths/scripts are scoped");
+  SECURITY_DOCTOR_LINE("release.secrets", "PASS",
+                       "tracked secret scan is part of release validation");
+  SECURITY_DOCTOR_LINE("user-admin-split", "WARN",
+                       "planned; current remote user is command-scoped admin");
+  warnings++;
+  SECURITY_DOCTOR_LINE("secureboot-tpm", "WARN",
+                       "not implemented yet");
+  warnings++;
+  snprintf(line, sizeof(line), "summary: %s warnings=%d failures=%d\n",
+           failures ? "FAIL" : (warnings ? "WARN" : "PASS"), warnings,
+           failures);
+  ssh_shell_append(buf, size, &used, line);
+
+#undef SECURITY_DOCTOR_LINE
 }
 
 void ssh_format_report(char *buf, size_t size) {

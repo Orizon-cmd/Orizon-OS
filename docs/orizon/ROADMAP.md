@@ -65,7 +65,9 @@
   counters/recent events, multi-packet channel output for longer logs, graceful
   listener recovery, anti-bruteforce lockout, config reload, per-install RSA
   host-key generation and persistent host-key file management in
-  `/system/ssh_host_rsa.key`, `/system/ssh.conf`, and `/logs/ssh.log`.
+  `/system/ssh_host_rsa.key`, `/system/ssh.conf`, and `/logs/ssh.log`, plus
+  `security policy/audit/keys/doctor` diagnostics, explicit SSH host-key
+  rotation, and audit redaction for password/write/Wi-Fi credential commands.
 - Hardware base: PS/2 and USB HID keyboard input, USB root-port rescans,
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
   families, persistent `/logs/usb.log` capture with family/support/blocker

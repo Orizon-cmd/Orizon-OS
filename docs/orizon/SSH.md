@@ -23,6 +23,11 @@ ssh auth lockout <secondes>
 ssh auth default
 ssh hostkey
 security
+security policy
+security audit
+security keys
+security doctor
+security rotate ssh-hostkey
 ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
@@ -64,9 +69,16 @@ console locale que les commandes distantes `audit` et `ssh sessions`.
 `/system/ssh_host_rsa.key`, et `ssh hostkey reset` regenere une cle RSA locale
 persistante pour l'installation courante. La cle de bootstrap compilee ne sert
 plus que de secours si la generation ou la persistence echoue.
+`security policy` detaille les garde-fous actifs, `security audit` affiche le
+miroir persistant et les compteurs SSH, `security keys` resume la posture des
+cles sans exposer de materiel prive, et `security doctor` donne un bilan
+PASS/WARN non destructif. `security rotate ssh-hostkey` regenere la cle hote
+locale pour les futures sessions; le client OpenSSH devra accepter le nouveau
+fingerprint.
 Apres connexion OpenSSH, les commandes admin utiles peuvent aussi etre lancees
 directement avec `ssh orizon@<ip> "ssh auth max 4"`, `ssh orizon@<ip> "ssh
-lockout clear"` ou `ssh orizon@<ip> "ssh hostkey reload"`.
+lockout clear"`, `ssh orizon@<ip> "ssh hostkey reload"` ou `ssh orizon@<ip>
+"security doctor"`.
 Les diagnostics reseau non destructifs sont aussi exposes avec `ssh
 orizon@<ip> "net check"`, `ssh orizon@<ip> "net daily"`,
 `ssh orizon@<ip> "net tcp raw.githubusercontent.com 443 attempts 2"` et
@@ -107,7 +119,8 @@ console locale.
   `system services`, `system logs`, `system firstboot`, `system repair`,
   `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
   `net check`, `net daily`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
-  `security`, `pkg`, `update`, `update status`, `storage`,
+  `security`, `security policy`, `security audit`, `security keys`,
+  `security doctor`, `pkg`, `update`, `update status`, `storage`,
   `storage diag`, `storage vmcheck`, `persist status`, `persist slots`, `persist save`,
   `persist restore previous`, `persist repair`,
   `logs storage`, `logs pci`, `disk identify`,
@@ -124,9 +137,11 @@ console locale.
   commandes `exec`, commandes shell, fermetures de canal, recoveries listener,
   temps idle, derniere commande et les derniers evenements recents; les
   evenements sont aussi journalises dans `/logs/ssh.log` avec le mot de passe
-  masque et miroitent dans `/logs/security.log`. Les changements de politique
-  auth, lockout et hostkey ajoutent aussi une entree non secrete dans
-  `logs security`. Le meme rapport est disponible localement avec `ssh audit`.
+  masque et miroitent dans `/logs/security.log`. Les commandes `ssh password`,
+  `write`, `append` et les identifiants Wi-Fi sont redactes avant audit. Les
+  changements de politique auth, lockout et hostkey ajoutent aussi une entree
+  non secrete dans `logs security`. Le meme rapport est disponible localement
+  avec `ssh audit` ou `security audit`.
 - Journaux: `logs ssh`, `logs security`, `logs boot`, `logs storage` et
   `logs pci` affichent les etats utiles sans action destructive; storage/PCI
   sont des snapshots diagnostiques quand aucun vrai fichier journal persistant

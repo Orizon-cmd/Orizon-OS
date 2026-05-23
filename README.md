@@ -264,6 +264,11 @@ ssh auth lockout <secondes>
 ssh auth default
 ssh hostkey
 security
+security policy
+security audit
+security keys
+security doctor
+security rotate ssh-hostkey
 ssh hostkey reload
 ssh hostkey reset
 ssh algorithms
@@ -284,12 +289,14 @@ Le canal `session` accepte deja `pty-req`, `shell` et `exec` avec un mini-shell
 de diagnostic (`help`, `ls`, `cd`, `cat`, `head`, `tail`, `touch`, `mkdir`, `rm`,
 `write`, `append`, `system status`, `system repair`, `rescue`, `hostname`,
 `logs`, `net`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`, `security`,
+`security policy`, `security audit`, `security keys`, `security doctor`,
 `pkg`, `update`, `update status`, `storage`, `disk identify`,
 `disk read-test`, `gpt scan`, `selftest`, `hw next`, `report save`,
 `report next`, `free`, `timer`,
 `audit`, `ssh sessions`, `persist status`, `persist slots`, `persist save`, `sync`, `reboot`, `shutdown`, `status`, `auth`, `hostkey`,
 `whoami`, `uname`, `pwd`, `uptime`, `exit`). Les commandes admin `ssh auth`,
-`ssh lockout`, `ssh password` et `ssh hostkey reload/reset` fonctionnent aussi en
+`ssh lockout`, `ssh password`, `ssh hostkey reload/reset` et
+`security rotate ssh-hostkey` fonctionnent aussi en
 commande distante directe. Le service remet l'ecoute TCP en etat apres une
 session fermee, garde une protection anti-bruteforce dans `/system/ssh.conf`,
 et expose `audit` / `ssh audit` pour verifier sessions, auth, commandes,
@@ -305,13 +312,19 @@ maintenant un `exit-status` non nul pour mieux fonctionner avec les scripts.
 l'installation et stockee dans `/system/ssh_host_rsa.key`.
 `security` resume la politique active: auth/lockout SSH, host key persistante,
 manifest signe obligatoire, index paquet epingle et garde-fous du shell SSH.
+`security policy` detaille les regles appliquees, `security audit` ajoute le
+miroir persistant `/logs/security.log`, `security keys` montre la posture de
+rotation sans exposer de secret, et `security doctor` donne un bilan PASS/WARN
+non destructif. `security rotate ssh-hostkey` regenere l'identite SSH locale
+pour les futures sessions; le client devra accepter le nouveau known_hosts.
 Les commandes generiques `cat/head/tail/write/append/touch/mkdir/rm` ne peuvent
 plus lire ou modifier `/system/ssh.conf`, `/system/ssh_host_rsa.key` ni les
 noms sensibles (`.env`, `.key`, `.pem`, `.ssh`, private, secret, token,
 credential, id_rsa, id_ed25519). Les ecritures generiques SSH sont limitees a
 `/workspace`, `/home`, `/logs` et `/packages`, avec `/workspace/.orizon`
 reserve comme etat interne. `logs security` lit le miroir persistant
-`/logs/security.log` sans exposer les mots de passe.
+`/logs/security.log` sans exposer les mots de passe; l'audit masque aussi les
+commandes `ssh password`, `write`, `append` et les identifiants Wi-Fi.
 
 Details: [docs/orizon/SSH.md](docs/orizon/SSH.md).
 Securite: [docs/orizon/SECURITY.md](docs/orizon/SECURITY.md).

@@ -194,6 +194,11 @@ ssh status
 ssh audit
 ssh sessions
 security
+security policy
+security audit
+security keys
+security doctor
+security rotate ssh-hostkey
 net check
 net daily
 net tcp raw.githubusercontent.com 443
@@ -231,17 +236,28 @@ commands return a non-zero status so automation can fail fast.
 
 `security` summarizes base hardening: SSH auth/lockout, persistent host key,
 remote file policy, signed manifest requirement, package index pinning and known
-limits. Generic SSH file writes are limited to `/workspace`, `/home`, `/logs`
-and `/packages`, while `/workspace/.orizon` remains internal OS state.
+limits. `security policy` expands the active rules, `security audit` shows the
+persistent security mirror plus SSH audit, `security keys` reports key rotation
+posture without dumping private material, and `security doctor` gives a
+non-destructive PASS/WARN summary. `security rotate ssh-hostkey` regenerates the
+local SSH host identity for future sessions and may require clearing the client
+known_hosts entry. Generic SSH file writes are limited to `/workspace`, `/home`,
+`/logs` and `/packages`, while `/workspace/.orizon` remains internal OS state.
 Sensitive files such as `/system/ssh.conf`, `/system/ssh_host_rsa.key`, `.env`,
 `.key`, `.pem`, `.ssh`, private, secret, token and credential paths are not
-readable through `cat/head/tail`. `logs security` tails the persistent security
-audit mirror.
+readable through `cat/head/tail`. SSH audit redacts `ssh password`, generic
+write/append payloads, and Wi-Fi credentials before mirroring events to
+`/logs/security.log`.
 
 ## Security
 
 ```text
 security
+security policy
+security audit
+security keys
+security doctor
+security rotate ssh-hostkey
 ssh auth
 ssh audit
 ssh hostkey

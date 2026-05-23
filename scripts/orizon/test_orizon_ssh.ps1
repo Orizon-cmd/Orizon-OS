@@ -25,6 +25,10 @@ $commands = @(
   "hostkey",
   "ssh algorithms",
   "security",
+  "security policy",
+  "security audit",
+  "security keys",
+  "security doctor",
   "system status",
   "system services",
   "system logs",
@@ -150,6 +154,18 @@ run_cmd() {
       ;;
     "security")
       grep -q "Orizon security status" "`$OUT" && grep -q "ssh.file-policy:" "`$OUT" || { echo "missing security output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "security policy")
+      grep -q "security policy:" "`$OUT" && grep -q "ssh-audit-redaction" "`$OUT" || { echo "missing security policy output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "security audit")
+      grep -q "security audit:" "`$OUT" && grep -q "persistent-log:" "`$OUT" || { echo "missing security audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "security keys")
+      grep -q "security keys:" "`$OUT" && grep -q "rotation:" "`$OUT" || { echo "missing security keys output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "security doctor")
+      grep -q "security doctor:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing security doctor output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system status")
       grep -q "Orizon system status" "`$OUT" && grep -q "boot-mode:" "`$OUT" || { echo "missing system status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
