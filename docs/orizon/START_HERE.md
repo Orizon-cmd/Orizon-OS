@@ -45,10 +45,12 @@ design note.
   `/system/hostname`, and `firstboot done` marks the installed first boot as
   reviewed.
 - Base security is visible with `security`. SSH has password auth disabled until
-  configured, lockout/audit enabled, a persistent host key, generic remote file
-  writes limited to `/workspace`, `/home`, `/logs`, and `/packages`, and signed
-  update manifests are mandatory. Package repo sidecar signatures are checked
-  when cached and reported as WARN/fallback when absent.
+  configured, lockout/audit enabled, a persistent host key, VFS policy v2,
+  generated `/system/security-policy` and `/system/security-state`, generic
+  remote file writes limited to `/workspace`, `/home`, `/logs`, and `/packages`,
+  remote root deletion blocked, and signed update manifests are mandatory.
+  Package repo sidecar signatures are checked when cached and reported as
+  WARN/fallback when absent.
 - The local framebuffer console can scroll long outputs with `z` up and `s`
   down on an empty prompt. Use `less <file>` for full-screen local paging with
   `z/s`, arrows, space, `g/G`, and `q`; SSH `cat /workspace/hardware-report.txt`

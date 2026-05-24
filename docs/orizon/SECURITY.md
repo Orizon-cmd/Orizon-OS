@@ -24,12 +24,16 @@ update status
 
 The `security` command prints a compact status block covering SSH auth,
 lockout, host key storage, remote file policy, signed update policy, package
-index authentication, protected files, and known limits. `security policy`
-expands the active path, update/package, audit-redaction and admin-command
-rules. `security audit` combines the persistent security mirror with the SSH
-audit counters. `security keys` reports host-key/update/package key posture
-without dumping private material. `security doctor` is a non-destructive
-PASS/WARN checklist for the current VM/live state.
+index authentication, protected files, key-rotation posture, and known limits.
+It also refreshes the non-secret state files `/system/security-policy` and
+`/system/security-state` so VM/SSH reports can copy the active policy without
+reading private material. `security policy` expands the active path,
+update/package, audit-redaction and admin-command rules. `security audit`
+combines the persistent security mirror with SSH audit plus policy-denial
+counters. `security keys` reports host-key/update/package key posture without
+dumping private material. `security doctor` is a non-destructive PASS/WARN
+checklist for the current VM/live state and writes
+`/workspace/.orizon/security-doctor.txt`.
 
 SSH has no default password. Password auth is disabled until the console runs
 `ssh password <password>`. Failed auth is counted, temporary lockout is
@@ -62,12 +66,17 @@ It regenerates `/system/ssh_host_rsa.key` for future SSH sessions. Existing
 clients may need their known_hosts entry updated because the host fingerprint
 changes by design.
 
-## SSH File Policy
+Update-root and package-root rotation are intentionally reported as
+`release-required`: the public trust roots are compiled into the release
+artifacts and must move through a signed release rather than an in-VM command.
+
+## VFS Security Policy V2
 
 Generic SSH file commands are intentionally narrower than local console access.
-This is the current simple policy:
+This is the current structured path policy:
 
 ```text
+policy-version: 2
 cat/head/tail: deny sensitive names such as /system/ssh.conf,
                /system/ssh_host_rsa.key, private, secret, token, password,
                passwd, credential, api_key, id_rsa, id_ed25519, .ssh,
@@ -75,6 +84,8 @@ cat/head/tail: deny sensitive names such as /system/ssh.conf,
 write/append/touch/mkdir/rm: allowed only under /workspace, /home, /logs,
                              and /packages, with /workspace/.orizon blocked
                              as internal OS state
+rm: remote roots /workspace, /home, /logs and /packages cannot be deleted
+denials: counted by class in security/security audit and mirrored to audit
 ```
 
 Use command-scoped admin operations instead of editing protected files by hand:
@@ -127,8 +138,8 @@ can pass.
 Orizon does not yet implement Unix-style users, groups, ACLs, sudo, secure boot,
 TPM attestation, disk encryption, or a full MAC policy. The current SSH user
 `orizon` is an authenticated remote admin with command-scoped restrictions, not
-a low-privilege POSIX account. VFS permissions are simple path allow/deny rules
-plus persistent-root handling, not ownership-enforced isolation.
+a low-privilege POSIX account. VFS permissions are structured path allow/deny
+rules plus persistent-root handling, not ownership-enforced isolation.
 
 Never commit local private signing keys, SSH private host keys, local env files,
 firmware blobs, hotspot credentials, or captured passwords.

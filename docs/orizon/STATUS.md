@@ -66,11 +66,15 @@ work.
   local host identity for future sessions, and `/logs/security.log` mirrors SSH
   audit plus policy changes without recording passwords or generic write/Wi-Fi
   credentials.
-- Security guardrails: generic SSH writes are path-scoped, `/workspace/.orizon`
-  remains internal OS state, common secret-bearing names are blocked for SSH and
-  package payloads, signed update manifests are mandatory, package indexes are
-  pinned by the signed manifest, package-index sidecar signatures are checked
-  when cached, and release checks run a tracked-secret scan.
+- Security guardrails: VFS policy v2 is visible through `security` and persisted
+  as `/system/security-policy` plus `/system/security-state`; generic SSH writes
+  are path-scoped, `/workspace/.orizon` remains internal OS state, remote root
+  deletion is blocked, common secret-bearing names are blocked for SSH and
+  package payloads, denial counters are mirrored to security audit, signed
+  update manifests are mandatory, package indexes are pinned by the signed
+  manifest, package-index sidecar signatures are checked when cached, key
+  rotation posture is explicit (`ssh-hostkey=runtime`, update/package roots
+  `release-required`), and release checks run a tracked-secret scan.
 - Wired VM networking: e1000/e1000e, RTL8139, and VirtIO-net are the current
   daily VM NIC paths. NAT smoke tests are the normal quick gate. `net check`,
   `net daily`, retrying `net tcp <host> [port] [attempts <1-5>]`, `net tls`,

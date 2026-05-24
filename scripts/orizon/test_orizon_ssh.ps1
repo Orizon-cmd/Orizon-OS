@@ -159,19 +159,19 @@ run_cmd() {
       grep -q "ssh algorithms:" "`$OUT" || { echo "missing algorithms output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "security")
-      grep -q "Orizon security status" "`$OUT" && grep -q "ssh.file-policy:" "`$OUT" || { echo "missing security output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon security status" "`$OUT" && grep -q "vfs.policy: version=2" "`$OUT" && grep -q "policy-denies:" "`$OUT" || { echo "missing security output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "security policy")
-      grep -q "security policy:" "`$OUT" && grep -q "ssh-audit-redaction" "`$OUT" || { echo "missing security policy output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "security policy:" "`$OUT" && grep -q "policy-version: 2" "`$OUT" && grep -q "ssh-audit-redaction" "`$OUT" || { echo "missing security policy output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "security audit")
-      grep -q "security audit:" "`$OUT" && grep -q "persistent-log:" "`$OUT" || { echo "missing security audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "security audit:" "`$OUT" && grep -q "persistent-log:" "`$OUT" && grep -q "state-files: policy=/system/security-policy" "`$OUT" || { echo "missing security audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "security keys")
-      grep -q "security keys:" "`$OUT" && grep -q "rotation:" "`$OUT" || { echo "missing security keys output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "security keys:" "`$OUT" && grep -q "rotation-summary: ssh-hostkey=runtime" "`$OUT" || { echo "missing security keys output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "security doctor")
-      grep -q "security doctor:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing security doctor output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "security doctor:" "`$OUT" && grep -q "policy.state" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing security doctor output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system status")
       grep -q "Orizon system status" "`$OUT" && grep -q "boot-mode:" "`$OUT" || { echo "missing system status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -256,19 +256,23 @@ multi-client tests separate from quick build checks. Unknown remote `exec`
 commands return a non-zero status so automation can fail fast.
 
 `security` summarizes base hardening: SSH auth/lockout, persistent host key,
-remote file policy, signed manifest requirement, package index pinning and known
-limits. `security policy` expands the active rules, `security audit` shows the
-persistent security mirror plus SSH audit, `security keys` reports key rotation
-posture without dumping private material, and `security doctor` gives a
-non-destructive PASS/WARN summary. `security rotate ssh-hostkey` regenerates the
-local SSH host identity for future sessions and may require clearing the client
-known_hosts entry. Generic SSH file writes are limited to `/workspace`, `/home`,
-`/logs` and `/packages`, while `/workspace/.orizon` remains internal OS state.
-Sensitive files such as `/system/ssh.conf`, `/system/ssh_host_rsa.key`, `.env`,
-`.key`, `.pem`, `.ssh`, private, secret, token and credential paths are not
-readable through `cat/head/tail`. SSH audit redacts `ssh password`, generic
-write/append payloads, and Wi-Fi credentials before mirroring events to
-`/logs/security.log`.
+VFS policy v2, signed manifest requirement, package index pinning, policy-deny
+counters and known limits. It refreshes `/system/security-policy`,
+`/system/security-state`, and `/workspace/.orizon/security-doctor.txt` as
+non-secret operator evidence. `security policy` expands the active rules,
+`security audit` shows the persistent security mirror plus SSH audit and denial
+counters, `security keys` reports key rotation posture without dumping private
+material, and `security doctor` gives a non-destructive PASS/WARN summary.
+`security rotate ssh-hostkey` regenerates the local SSH host identity for future
+sessions and may require clearing the client known_hosts entry. Update/package
+trust-root rotation is reported as `release-required`. Generic SSH file writes
+are limited to `/workspace`, `/home`, `/logs` and `/packages`, while
+`/workspace/.orizon` remains internal OS state and remote root deletion is
+blocked. Sensitive files such as `/system/ssh.conf`,
+`/system/ssh_host_rsa.key`, `.env`, `.key`, `.pem`, `.ssh`, private, secret,
+token and credential paths are not readable through `cat/head/tail`. SSH audit
+redacts `ssh password`, generic write/append payloads, and Wi-Fi credentials
+before mirroring events to `/logs/security.log`.
 
 ## Security
 
@@ -286,7 +290,8 @@ logs security
 update status
 ```
 
-See [SECURITY.md](SECURITY.md) for the current implemented policy and limits.
+See [SECURITY.md](SECURITY.md) for the current implemented policy, generated
+state files, and limits.
 
 ## USB Ethernet
 

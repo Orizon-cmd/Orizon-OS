@@ -319,18 +319,24 @@ maintenant un `exit-status` non nul pour mieux fonctionner avec les scripts.
 `ssh hostkey` affiche l'identite hote RSA generee pour
 l'installation et stockee dans `/system/ssh_host_rsa.key`.
 `security` resume la politique active: auth/lockout SSH, host key persistante,
-manifest signe obligatoire, index paquet epingle et garde-fous du shell SSH.
+politique VFS v2, manifest signe obligatoire, index paquet epingle,
+compteurs de refus et garde-fous du shell SSH. Il rafraichit aussi
+`/system/security-policy`, `/system/security-state` et le rapport doctor
+`/workspace/.orizon/security-doctor.txt` sans exposer de secret.
 `security policy` detaille les regles appliquees, `security audit` ajoute le
-miroir persistant `/logs/security.log`, `security keys` montre la posture de
-rotation sans exposer de secret, et `security doctor` donne un bilan PASS/WARN
-non destructif. `security rotate ssh-hostkey` regenere l'identite SSH locale
-pour les futures sessions; le client devra accepter le nouveau known_hosts.
+miroir persistant `/logs/security.log`, les fichiers d'etat et les compteurs de
+refus, `security keys` montre la posture de rotation sans exposer de secret, et
+`security doctor` donne un bilan PASS/WARN non destructif. `security rotate
+ssh-hostkey` regenere l'identite SSH locale pour les futures sessions; le
+client devra accepter le nouveau known_hosts. Les racines update/package restent
+en rotation `release-required`, donc elles changent via release signee.
 Les commandes generiques `cat/head/tail/write/append/touch/mkdir/rm` ne peuvent
 plus lire ou modifier `/system/ssh.conf`, `/system/ssh_host_rsa.key` ni les
 noms sensibles (`.env`, `.key`, `.pem`, `.ssh`, private, secret, token,
 credential, id_rsa, id_ed25519). Les ecritures generiques SSH sont limitees a
 `/workspace`, `/home`, `/logs` et `/packages`, avec `/workspace/.orizon`
-reserve comme etat interne. `logs security` lit le miroir persistant
+reserve comme etat interne, et `rm` ne peut pas supprimer ces racines distantes.
+`logs security` lit le miroir persistant
 `/logs/security.log` sans exposer les mots de passe; l'audit masque aussi les
 commandes `ssh password`, `write`, `append` et les identifiants Wi-Fi.
 

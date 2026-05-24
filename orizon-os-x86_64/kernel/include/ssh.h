@@ -12,6 +12,9 @@
 #define ORIZON_SSH_HOSTKEY_PATH "/system/ssh_host_rsa.key"
 #define ORIZON_SSH_LOG_PATH "/logs/ssh.log"
 #define ORIZON_SECURITY_LOG_PATH "/logs/security.log"
+#define ORIZON_SECURITY_POLICY_PATH "/system/security-policy"
+#define ORIZON_SECURITY_STATE_PATH "/system/security-state"
+#define ORIZON_SECURITY_DOCTOR_PATH "/workspace/.orizon/security-doctor.txt"
 
 typedef struct {
   int enabled;

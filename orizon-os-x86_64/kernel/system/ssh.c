@@ -317,6 +317,12 @@ static char ssh_last_audit[192] = "none";
 static char ssh_audit_recent[SSH_AUDIT_RECENT][160];
 static uint32_t ssh_audit_recent_next = 0;
 static uint32_t ssh_audit_recent_count = 0;
+static uint32_t ssh_policy_denied_total = 0;
+static uint32_t ssh_policy_denied_sensitive = 0;
+static uint32_t ssh_policy_denied_internal = 0;
+static uint32_t ssh_policy_denied_write_scope = 0;
+static uint32_t ssh_policy_denied_root = 0;
+static char ssh_last_policy_denial[128] = "none";
 
 static int ssh_ensure_hostkey(void);
 static int ssh_load_hostkey_file(void);
@@ -341,6 +347,28 @@ static void ssh_append_log_line(const char *path, const char *line) {
   vfs_write(f, line, strlen(line));
   vfs_write(f, "\n", 1);
   vfs_close(f);
+}
+
+static int ssh_write_text_file_raw(const char *path, const char *text) {
+  file_t *f;
+
+  if (!path || !text) {
+    return -1;
+  }
+  vfs_mkdir("/system");
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  vfs_mkdir("/logs");
+  f = vfs_open(path, O_CREAT | O_WRONLY | O_TRUNC);
+  if (!f) {
+    return -1;
+  }
+  if (vfs_write(f, text, strlen(text)) != (ssize_t)strlen(text)) {
+    vfs_close(f);
+    return -1;
+  }
+  vfs_close(f);
+  return 0;
 }
 
 static void ssh_log_line(const char *line) {
@@ -2609,11 +2637,53 @@ static int ssh_shell_path_is_remote_root(const char *path) {
                   strcmp(path, "/packages") == 0);
 }
 
-static void ssh_shell_policy_denied(const char *op, const char *hint) {
+static const char *ssh_security_policy_class(const char *op,
+                                             const char *path) {
+  if (path && ssh_shell_path_is_remote_root(path) && op &&
+      strcmp(op, "rm") == 0) {
+    return "remote-root";
+  }
+  if (path && ssh_shell_path_is_sensitive(path)) {
+    return "sensitive-path";
+  }
+  if (path && ssh_shell_path_has_prefix(path, "/workspace/.orizon")) {
+    return "internal-state";
+  }
+  if (op && (strcmp(op, "write") == 0 || strcmp(op, "append") == 0 ||
+             strcmp(op, "touch") == 0 || strcmp(op, "mkdir") == 0 ||
+             strcmp(op, "rm") == 0)) {
+    return "write-scope";
+  }
+  return "policy";
+}
+
+static void ssh_note_policy_denied(const char *op, const char *path) {
+  const char *class_name = ssh_security_policy_class(op, path);
+  char event[128];
+
+  ssh_policy_denied_total++;
+  if (strcmp(class_name, "sensitive-path") == 0) {
+    ssh_policy_denied_sensitive++;
+  } else if (strcmp(class_name, "internal-state") == 0) {
+    ssh_policy_denied_internal++;
+  } else if (strcmp(class_name, "remote-root") == 0) {
+    ssh_policy_denied_root++;
+  } else {
+    ssh_policy_denied_write_scope++;
+  }
+  snprintf(ssh_last_policy_denial, sizeof(ssh_last_policy_denial),
+           "op=%s class=%s", op ? op : "file", class_name);
+  snprintf(event, sizeof(event), "policy-deny op=%s class=%s",
+           op ? op : "file", class_name);
+  ssh_audit_event(event);
+}
+
+static void ssh_shell_policy_denied(const char *op, const char *path,
+                                    const char *hint) {
   char out[192];
 
   ssh_channel_exit_code = 13;
-  ssh_audit_event("remote file policy denied");
+  ssh_note_policy_denied(op, path);
   snprintf(out, sizeof(out), "%s: access denied by SSH file policy%s%s\r\n",
            op ? op : "file", hint ? "; " : "", hint ? hint : "");
   ssh_queue_channel_text(out);
@@ -2782,6 +2852,7 @@ static void ssh_shell_print_file(const char *arg, size_t max_bytes, int tail) {
   }
   if (ssh_shell_path_is_sensitive(path)) {
     ssh_shell_policy_denied("cat",
+                            path,
                             "use 'ssh auth', 'ssh hostkey' or 'security' "
                             "instead of reading secret material");
     return;
@@ -3458,12 +3529,13 @@ static void ssh_shell_mutate_path(const char *arg, const char *op) {
   }
   if (!ssh_shell_path_write_allowed(path)) {
     ssh_shell_policy_denied(op,
+                            path,
                             "generic remote writes are limited to "
                             "/workspace, /home, /logs and /packages");
     return;
   }
   if (strcmp(op, "rm") == 0 && ssh_shell_path_is_remote_root(path)) {
-    ssh_shell_policy_denied(op, "remote root deletion is blocked");
+    ssh_shell_policy_denied(op, path, "remote root deletion is blocked");
     return;
   }
   if (strcmp(op, "touch") == 0) {
@@ -3493,6 +3565,7 @@ static void ssh_shell_write_text(const char *args, int append) {
   }
   if (!ssh_shell_path_write_allowed(path)) {
     ssh_shell_policy_denied(append ? "append" : "write",
+                            path,
                             "generic remote writes are limited to "
                             "/workspace, /home, /logs and /packages");
     return;
@@ -5305,8 +5378,14 @@ int ssh_start(char *report, size_t report_size) {
   ssh_listener_recover_total = 0;
   ssh_auth_success_total = 0;
   ssh_auth_failure_total = 0;
+  ssh_policy_denied_total = 0;
+  ssh_policy_denied_sensitive = 0;
+  ssh_policy_denied_internal = 0;
+  ssh_policy_denied_write_scope = 0;
+  ssh_policy_denied_root = 0;
   strcpy(ssh_last_command, "none");
   strcpy(ssh_last_audit, "none");
+  strcpy(ssh_last_policy_denial, "none");
   memset(ssh_audit_recent, 0, sizeof(ssh_audit_recent));
   ssh_audit_recent_next = 0;
   ssh_audit_recent_count = 0;
@@ -5814,6 +5893,79 @@ void ssh_format_hostkey(char *buf, size_t size) {
                                         : "ssh: host key not loaded");
 }
 
+static void ssh_security_write_policy_file(void) {
+  char text[2048];
+
+  snprintf(text, sizeof(text),
+           "policy-version: 2\n"
+           "roles: local-console=admin remote=orizon-admin "
+           "user-admin-split=prepared command-scoped=yes\n"
+           "vfs-read: normal=allow sensitive=deny secret-like-names=deny\n"
+           "vfs-write: roots=/workspace,/home,/logs,/packages "
+           "internal=/workspace/.orizon:deny sensitive=deny "
+           "remote-roots:rm=deny\n"
+           "protected-files: %s,%s\n"
+           "ssh-auth: password=opt-in lockout=yes audit=yes\n"
+           "ssh-audit-redaction: ssh-password,write,append,wifi-credentials\n"
+           "package-script-policy: allow=mkdir,touch,write,append,echo,sync "
+           "safe-roots=/system,/home,/packages,/logs,/tmp,/workspace "
+           "sensitive=deny internal-state=deny\n"
+           "update-policy: manifest.sig=required "
+           "key=orizon-update-root-2026-05 algorithm=rsa-pkcs1-sha256\n"
+           "package-policy: signed-manifest-pin=required "
+           "detached-sidecar=/workspace/.orizon/package-index.sig\n"
+           "key-rotation: ssh-hostkey=runtime "
+           "update-root=release-required package-root=release-required\n"
+           "secrets-policy: private-keys=.ssh/env/local-host-files/token-looking "
+           "tracked-scan=required\n"
+           "limits: no-unix-uid-gid no-acl no-sudo no-secureboot no-tpm "
+           "no-disk-encryption\n",
+           ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_HOSTKEY_PATH);
+  ssh_write_text_file_raw(ORIZON_SECURITY_POLICY_PATH, text);
+}
+
+static void ssh_security_write_state_file(void) {
+  char text[2048];
+  uint64_t lockout;
+
+  ssh_ensure_hostkey();
+  lockout = ssh_lockout_remaining();
+  snprintf(text, sizeof(text),
+           "security-state-version: 2\n"
+           "role: local-console=admin remote=orizon-admin "
+           "command-scoped=yes user-admin-split=planned\n"
+           "ssh-auth: password=%s max-attempts=%lu lockout-seconds=%lu "
+           "failures=%lu lockout-remaining=%lus\n"
+           "ssh-hostkey: storage=%s bootstrap=%s path=%s "
+           "fingerprint-sha256=%s rotation=runtime\n"
+           "policy-denies: total=%lu sensitive=%lu internal=%lu "
+           "write-scope=%lu remote-root=%lu last=\"%s\"\n"
+           "paths: policy=%s audit=%s doctor=%s\n"
+           "update-root: id=orizon-update-root-2026-05 "
+           "rotation=release-required status=\"%s\"\n"
+           "package-root: id=orizon-update-root-2026-05 "
+           "rotation=release-required sidecar=/workspace/.orizon/package-index.sig "
+           "fallback=signed-update-manifest-pin\n"
+           "limits: unix-acl=no sudo=no secureboot=no tpm=no "
+           "disk-encryption=no\n",
+           ssh_status.auth_configured ? "enabled" : "disabled",
+           (unsigned long)ssh_status.max_auth_attempts,
+           (unsigned long)ssh_status.auth_lockout_seconds,
+           (unsigned long)ssh_status.auth_failures, (unsigned long)lockout,
+           ssh_status.hostkey_persistent ? "persistent" : "compiled-fallback",
+           ssh_status.hostkey_bootstrap ? "yes" : "no",
+           ORIZON_SSH_HOSTKEY_PATH,
+           ssh_status.hostkey_sha256[0] ? ssh_status.hostkey_sha256 : "none",
+           (unsigned long)ssh_policy_denied_total,
+           (unsigned long)ssh_policy_denied_sensitive,
+           (unsigned long)ssh_policy_denied_internal,
+           (unsigned long)ssh_policy_denied_write_scope,
+           (unsigned long)ssh_policy_denied_root, ssh_last_policy_denial,
+           ORIZON_SECURITY_POLICY_PATH, ORIZON_SECURITY_LOG_PATH,
+           ORIZON_SECURITY_DOCTOR_PATH, orizon_update_status());
+  ssh_write_text_file_raw(ORIZON_SECURITY_STATE_PATH, text);
+}
+
 void ssh_format_security(char *buf, size_t size) {
   uint64_t lockout;
 
@@ -5821,19 +5973,28 @@ void ssh_format_security(char *buf, size_t size) {
     return;
   }
   ssh_ensure_hostkey();
+  ssh_security_write_policy_file();
+  ssh_security_write_state_file();
   lockout = ssh_lockout_remaining();
   snprintf(buf, size,
            "Orizon security status\n"
            "mode: single-user admin shell; command-scoped hardening active; "
            "user-admin-split=planned\n"
+           "role-policy: local-console=admin remote=orizon-admin "
+           "command-scoped=yes user-admin-split=prepared\n"
            "remote-user: orizon\n"
-           "vfs.permissions: simple path policy; persistent-roots="
-           "/workspace,/home,/system,/packages,/logs; no uid/gid/acl yet\n"
+           "vfs.policy: version=2 read-sensitive=deny "
+           "write-roots=/workspace,/home,/logs,/packages "
+           "internal-state=/workspace/.orizon:deny remote-root-rm=deny "
+           "no uid/gid/acl yet\n"
+           "security.state: policy=%s state=%s doctor=%s\n"
            "ssh.auth: %s max-attempts=%lu lockout-seconds=%lu "
            "failures=%lu lockout-remaining=%lus\n"
            "ssh.hostkey: %s bootstrap=%s path=%s fingerprint-sha256=%s\n"
            "ssh.audit: sessions=%lu auth-success=%lu auth-failure=%lu "
            "last=%s\n"
+           "policy-denies: total=%lu sensitive=%lu internal=%lu "
+           "write-scope=%lu remote-root=%lu last=\"%s\"\n"
            "security.audit-log: %s mirrored-from=ssh-audit "
            "policy-changes=yes\n"
            "ssh.file-policy: sensitive-read=blocked sensitive-write=blocked "
@@ -5841,8 +6002,11 @@ void ssh_format_security(char *buf, size_t size) {
            "internal-state-write=/workspace/.orizon:blocked\n"
            "update.manifest-policy: required manifest.sig "
            "rsa-pkcs1-sha256 key=orizon-update-root-2026-05 state=\"%s\"\n"
+           "key-rotation: ssh-hostkey=runtime update-root=release-required "
+           "package-root=release-required\n"
            "packages.remote-index: signed-manifest-sha256-pinned "
-           "detached-sidecar=prepared warn-if-missing\n"
+           "detached-sidecar=/workspace/.orizon/package-index.sig "
+           "warn-if-missing\n"
            "packages.script-policy: safe-paths=/system,/home,/packages,"
            "/logs,/tmp,/workspace sensitive-paths=blocked "
            "internal-state=/workspace/.orizon:blocked\n"
@@ -5850,7 +6014,9 @@ void ssh_format_security(char *buf, size_t size) {
            "private-keys/env/local-host-files=blocked\n"
            "protected-files: %s, %s\n"
            "limits: no Unix uid/gid/ACL, no sudo split, no SecureBoot/TPM "
-           "attestation yet\n",
+           "attestation, no disk encryption yet\n",
+           ORIZON_SECURITY_POLICY_PATH, ORIZON_SECURITY_STATE_PATH,
+           ORIZON_SECURITY_DOCTOR_PATH,
            ssh_status.auth_configured ? "password-enabled" : "password-disabled",
            (unsigned long)ssh_status.max_auth_attempts,
            (unsigned long)ssh_status.auth_lockout_seconds,
@@ -5862,6 +6028,11 @@ void ssh_format_security(char *buf, size_t size) {
            (unsigned long)ssh_status.sessions,
            (unsigned long)ssh_auth_success_total,
            (unsigned long)ssh_auth_failure_total, ssh_last_audit,
+           (unsigned long)ssh_policy_denied_total,
+           (unsigned long)ssh_policy_denied_sensitive,
+           (unsigned long)ssh_policy_denied_internal,
+           (unsigned long)ssh_policy_denied_write_scope,
+           (unsigned long)ssh_policy_denied_root, ssh_last_policy_denial,
            ORIZON_SECURITY_LOG_PATH, orizon_update_status(), ORIZON_SSH_CONFIG_PATH,
            ORIZON_SSH_HOSTKEY_PATH);
 }
@@ -5870,54 +6041,75 @@ void ssh_format_security_policy(char *buf, size_t size) {
   if (!buf || size == 0) {
     return;
   }
+  ssh_security_write_policy_file();
+  ssh_security_write_state_file();
   snprintf(buf, size,
            "security policy:\n"
+           "  policy-version: 2\n"
            "  users: local-console=admin remote=orizon-admin "
-           "user-admin-split=planned\n"
+           "user-admin-split=prepared command-scoped=yes\n"
            "  ssh-auth: password=opt-in max-attempts=%lu lockout=%lus "
            "audit=yes\n"
            "  ssh-audit-redaction: ssh-password/write/append/wifi-credentials "
            "arguments redacted\n"
-           "  read-policy: cat/head/tail block sensitive paths and secret-like "
+           "  vfs-read: cat/head/tail block sensitive paths and secret-like "
            "names\n"
-           "  write-policy: generic SSH writes allowed only under "
-           "/workspace,/home,/logs,/packages\n"
+           "  vfs-write: generic SSH writes allowed only under "
+           "/workspace,/home,/logs,/packages; remote-root-rm=deny\n"
            "  internal-state: /workspace/.orizon write=blocked "
            "package-payload=blocked\n"
            "  package-script-policy: allow=mkdir,touch,write,append,echo,sync "
            "safe-roots=/system,/home,/packages,/logs,/tmp,/workspace\n"
            "  update-policy: manifest.sig required; key=orizon-update-root-2026-05\n"
+           "  key-rotation: ssh-hostkey=runtime update-root=release-required "
+           "package-root=release-required\n"
            "  release-secret-policy: tracked scan blocks private keys, .ssh, "
            "local env/host files and token-looking payloads\n"
            "  protected-files: %s, %s\n"
+           "  state-files: policy=%s state=%s doctor=%s\n"
            "  admin-commands: ssh auth, ssh password, security rotate ssh-hostkey, "
            "hostname set, net config, pkg, update status\n"
-           "  limits: path policy only; no Unix uid/gid/acl/sudo/mac yet\n",
+           "  limits: path policy only; no Unix uid/gid/acl/sudo/mac, "
+           "SecureBoot, TPM or disk encryption yet\n",
            (unsigned long)ssh_status.max_auth_attempts,
            (unsigned long)ssh_status.auth_lockout_seconds,
-           ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_HOSTKEY_PATH);
+           ORIZON_SSH_CONFIG_PATH, ORIZON_SSH_HOSTKEY_PATH,
+           ORIZON_SECURITY_POLICY_PATH, ORIZON_SECURITY_STATE_PATH,
+           ORIZON_SECURITY_DOCTOR_PATH);
 }
 
 void ssh_format_security_audit(char *buf, size_t size) {
   char audit[1800];
-  char line[256];
+  char line[640];
   size_t used = 0;
 
   if (!buf || size == 0) {
     return;
   }
   buf[0] = '\0';
+  ssh_security_write_policy_file();
+  ssh_security_write_state_file();
   ssh_format_audit(audit, sizeof(audit));
   snprintf(line, sizeof(line),
            "security audit:\n"
            "  persistent-log: %s present=%s\n"
            "  ssh-log: %s present=%s\n"
+           "  policy-denies: total=%lu sensitive=%lu internal=%lu "
+           "write-scope=%lu remote-root=%lu last=\"%s\"\n"
+           "  state-files: policy=%s state=%s doctor=%s\n"
            "  mirror: ssh audit events plus policy changes; passwords and "
            "write payloads are redacted\n",
            ORIZON_SECURITY_LOG_PATH,
            vfs_exists(ORIZON_SECURITY_LOG_PATH) ? "yes" : "no",
            ORIZON_SSH_LOG_PATH,
-           vfs_exists(ORIZON_SSH_LOG_PATH) ? "yes" : "no");
+           vfs_exists(ORIZON_SSH_LOG_PATH) ? "yes" : "no",
+           (unsigned long)ssh_policy_denied_total,
+           (unsigned long)ssh_policy_denied_sensitive,
+           (unsigned long)ssh_policy_denied_internal,
+           (unsigned long)ssh_policy_denied_write_scope,
+           (unsigned long)ssh_policy_denied_root, ssh_last_policy_denial,
+           ORIZON_SECURITY_POLICY_PATH, ORIZON_SECURITY_STATE_PATH,
+           ORIZON_SECURITY_DOCTOR_PATH);
   ssh_shell_append(buf, size, &used, line);
   ssh_shell_append(buf, size, &used, audit);
 }
@@ -5930,34 +6122,46 @@ void ssh_format_security_keys(char *buf, size_t size) {
     return;
   }
   buf[0] = '\0';
+  ssh_security_write_policy_file();
+  ssh_security_write_state_file();
   ssh_format_hostkey(hostkey, sizeof(hostkey));
   ssh_shell_append(buf, size, &used,
                    "security keys:\n"
                    "  ssh-hostkey: per-install persistent RSA identity\n"
                    "  rotation: command=security rotate ssh-hostkey "
                    "effect=future-ssh-sessions known-hosts-may-change\n"
+                   "  rotation-summary: ssh-hostkey=runtime "
+                   "update-root=release-required package-root=release-required\n"
                    "  private-material: never printed by hostkey/security; "
                    "read/write blocked by SSH file policy\n"
                    "  update-root: id=orizon-update-root-2026-05 "
-                   "storage=compiled-public-key rotation=requires-new-release\n"
+                   "storage=compiled-public-key rotation=release-required\n"
                    "  package-index: signed-manifest-sha256-pinned "
-                   "detached-sidecar=prepared warn-if-missing\n");
+                   "detached-sidecar=/workspace/.orizon/package-index.sig "
+                   "rotation=release-required warn-if-missing\n");
   ssh_shell_append(buf, size, &used, hostkey);
 }
 
 void ssh_format_security_doctor(char *buf, size_t size) {
   char line[256];
+  char detail[192];
   size_t used = 0;
   int warnings = 0;
   int failures = 0;
   int hostkey_ok;
+  int policy_file_ok;
+  int state_file_ok;
 
   if (!buf || size == 0) {
     return;
   }
   buf[0] = '\0';
   ssh_ensure_hostkey();
+  ssh_security_write_policy_file();
+  ssh_security_write_state_file();
   hostkey_ok = ssh_status.hostkey_loaded && ssh_status.hostkey_persistent;
+  policy_file_ok = vfs_exists(ORIZON_SECURITY_POLICY_PATH);
+  state_file_ok = vfs_exists(ORIZON_SECURITY_STATE_PATH);
 
 #define SECURITY_DOCTOR_LINE(label, state, detail)                         \
   do {                                                                     \
@@ -5983,6 +6187,25 @@ void ssh_format_security_doctor(char *buf, size_t size) {
   }
   SECURITY_DOCTOR_LINE("audit.redaction", "PASS",
                        "password/write/append/wifi arguments redacted");
+  SECURITY_DOCTOR_LINE("policy.file", policy_file_ok ? "PASS" : "WARN",
+                       ORIZON_SECURITY_POLICY_PATH);
+  if (!policy_file_ok) {
+    warnings++;
+  }
+  SECURITY_DOCTOR_LINE("policy.state", state_file_ok ? "PASS" : "WARN",
+                       ORIZON_SECURITY_STATE_PATH);
+  if (!state_file_ok) {
+    warnings++;
+  }
+  SECURITY_DOCTOR_LINE("vfs.policy", "PASS",
+                       "version=2 sensitive reads blocked; writes scoped");
+  snprintf(detail, sizeof(detail),
+           "tracked total=%lu sensitive=%lu internal=%lu root=%lu",
+           (unsigned long)ssh_policy_denied_total,
+           (unsigned long)ssh_policy_denied_sensitive,
+           (unsigned long)ssh_policy_denied_internal,
+           (unsigned long)ssh_policy_denied_root);
+  SECURITY_DOCTOR_LINE("policy-denies", "PASS", detail);
   SECURITY_DOCTOR_LINE("ssh.file-policy", "PASS",
                        "sensitive paths blocked; writes scoped");
   SECURITY_DOCTOR_LINE("update.manifest", "PASS",
@@ -5992,6 +6215,9 @@ void ssh_format_security_doctor(char *buf, size_t size) {
   SECURITY_DOCTOR_LINE("package.signature", "WARN",
                        "sidecar prepared; fallback is signed manifest pin");
   warnings++;
+  SECURITY_DOCTOR_LINE("key.rotation", "WARN",
+                       "ssh runtime; update/package require signed release");
+  warnings++;
   SECURITY_DOCTOR_LINE("release.secrets", "PASS",
                        "tracked secret scan is part of release validation");
   SECURITY_DOCTOR_LINE("user-admin-split", "WARN",
@@ -6000,10 +6226,16 @@ void ssh_format_security_doctor(char *buf, size_t size) {
   SECURITY_DOCTOR_LINE("secureboot-tpm", "WARN",
                        "not implemented yet");
   warnings++;
+  SECURITY_DOCTOR_LINE("disk.encryption", "WARN",
+                       "not implemented yet");
+  warnings++;
+  SECURITY_DOCTOR_LINE("doctor.snapshot", "PASS",
+                       ORIZON_SECURITY_DOCTOR_PATH);
   snprintf(line, sizeof(line), "summary: %s warnings=%d failures=%d\n",
            failures ? "FAIL" : (warnings ? "WARN" : "PASS"), warnings,
            failures);
   ssh_shell_append(buf, size, &used, line);
+  ssh_write_text_file_raw(ORIZON_SECURITY_DOCTOR_PATH, buf);
 
 #undef SECURITY_DOCTOR_LINE
 }

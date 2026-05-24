@@ -70,11 +70,13 @@ console locale que les commandes distantes `audit` et `ssh sessions`.
 persistante pour l'installation courante. La cle de bootstrap compilee ne sert
 plus que de secours si la generation ou la persistence echoue.
 `security policy` detaille les garde-fous actifs, `security audit` affiche le
-miroir persistant et les compteurs SSH, `security keys` resume la posture des
-cles sans exposer de materiel prive, et `security doctor` donne un bilan
-PASS/WARN non destructif. `security rotate ssh-hostkey` regenere la cle hote
-locale pour les futures sessions; le client OpenSSH devra accepter le nouveau
-fingerprint.
+miroir persistant, les compteurs SSH et les refus de politique, `security keys`
+resume la posture des cles sans exposer de materiel prive, et
+`security doctor` donne un bilan PASS/WARN non destructif. Ces commandes
+rafraichissent aussi `/system/security-policy`, `/system/security-state` et
+`/workspace/.orizon/security-doctor.txt` pour capturer l'etat securite depuis
+SSH. `security rotate ssh-hostkey` regenere la cle hote locale pour les futures
+sessions; le client OpenSSH devra accepter le nouveau fingerprint.
 Apres connexion OpenSSH, les commandes admin utiles peuvent aussi etre lancees
 directement avec `ssh orizon@<ip> "ssh auth max 4"`, `ssh orizon@<ip> "ssh
 lockout clear"`, `ssh orizon@<ip> "ssh hostkey reload"` ou `ssh orizon@<ip>
@@ -141,8 +143,10 @@ console locale.
   masque et miroitent dans `/logs/security.log`. Les commandes `ssh password`,
   `write`, `append` et les identifiants Wi-Fi sont redactes avant audit. Les
   changements de politique auth, lockout et hostkey ajoutent aussi une entree
-  non secrete dans `logs security`. Le meme rapport est disponible localement
-  avec `ssh audit` ou `security audit`.
+  non secrete dans `logs security`. Les refus `cat/write/rm` dus a la politique
+  VFS sont classes (`sensitive-path`, `internal-state`, `write-scope`,
+  `remote-root`) et comptes dans `security` / `security audit`. Le meme rapport
+  est disponible localement avec `ssh audit` ou `security audit`.
 - Journaux: `logs ssh`, `logs security`, `logs boot`, `logs storage` et
   `logs pci` affichent les etats utiles sans action destructive; storage/PCI
   sont des snapshots diagnostiques quand aucun vrai fichier journal persistant
@@ -196,12 +200,15 @@ console locale.
   (`%-Ns`), ce qui evite les corruptions d'arguments dans les sorties comme
   `ps`.
 - Securite: aucun mot de passe par defaut ni backdoor n'est cree; sans
-  `ssh password`, l'auth reste desactivee. Les fichiers sensibles
-  `/system/ssh.conf` et `/system/ssh_host_rsa.key`, ainsi que les chemins avec
-  noms `private`, `secret`, `token` ou `password`, sont bloques par les
-  commandes generiques `cat/head/tail/write/append/touch/mkdir/rm`. Utiliser
-  `ssh auth`, `ssh hostkey`, `security`, `hostname set` ou `net config` pour les
-  operations encadrees.
+  `ssh password`, l'auth reste desactivee. La politique VFS v2 bloque les
+  fichiers sensibles `/system/ssh.conf` et `/system/ssh_host_rsa.key`, ainsi
+  que les chemins avec noms `private`, `secret`, `token` ou `password`, pour
+  les commandes generiques `cat/head/tail/write/append/touch/mkdir/rm`. Les
+  ecritures generiques restent limitees a `/workspace`, `/home`, `/logs` et
+  `/packages`, `/workspace/.orizon` reste reserve a l'etat interne, et `rm`
+  ne peut pas supprimer les racines distantes. Utiliser `ssh auth`,
+  `ssh hostkey`, `security`, `hostname set` ou `net config` pour les operations
+  encadrees.
 
 Depuis un autre PC du meme reseau:
 
