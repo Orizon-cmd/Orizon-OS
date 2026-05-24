@@ -27,6 +27,8 @@ le developpement noyau:
   non-destructive `rescue`, reparation des fichiers initiaux via
   `system repair`, mini-init via `system init`, audit `system doctor`,
   politique services via `system services`, journal admin via `system logs`,
+  sante synthetique `system health`, snapshot administrateur
+  `system snapshot`, export de configuration non sensible `system backup`,
   checklist `system firstboot`, marqueur `firstboot done` et hostname
   persistant avec `hostname set <nom>`
 - installateur disque guide avec langue, clavier, GPT, ESP FAT32, mode
@@ -130,9 +132,12 @@ Au premier boot installe, commence par:
 
 ```text
 system status
+system health
 system firstboot
 system services
 system logs
+system snapshot
+system backup
 firstboot done
 ```
 
@@ -140,8 +145,11 @@ firstboot done
 `boot-mode: installed`, affiche le hostname, l'etat first-boot, les racines
 persistantes, les fichiers initiaux et les commandes sures suivantes. Si un
 fichier systeme de base manque dans `/system`, `/home`, `/packages` ou
-`/logs`, `system logs` regroupe `/system/boot-state`,
-`/system/service-state`, `/logs/init.log` et `/logs/service.log`, et
+`/logs`, `system health` donne un resume PASS/WARN, `system logs` regroupe
+`/system/boot-state`, `/system/service-state`, `/logs/init.log` et
+`/logs/service.log`, `system snapshot` ecrit
+`/workspace/.orizon/system-snapshot.txt`, `system backup` exporte uniquement
+la configuration non sensible vers `/workspace/.orizon/admin-backup.txt`, et
 `system repair` recree uniquement les defaults manquants avant d'ecrire un
 rapport dans `/workspace/.orizon/rescue-report.txt`; il ne partitionne pas et
 n'installe pas l'OS.

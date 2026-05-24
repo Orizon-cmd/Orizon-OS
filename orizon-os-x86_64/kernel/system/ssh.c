@@ -2997,6 +2997,12 @@ static void ssh_shell_print_system(const char *args) {
     orizon_system_run_boot_tasks(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "services")) {
     orizon_system_format_services(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "health")) {
+    orizon_system_format_health(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "snapshot")) {
+    orizon_system_write_snapshot(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "backup")) {
+    orizon_system_write_admin_backup(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "logs") ||
              ssh_shell_command_is(sub, "journal") ||
              ssh_shell_command_is(sub, "bootlog")) {
@@ -3020,7 +3026,7 @@ static void ssh_shell_print_system(const char *args) {
     }
   } else {
     snprintf(out, sizeof(out),
-             "usage: system [status|init|services|logs|doctor|repair|rescue|firstboot done]\r\n");
+             "usage: system [status|health|snapshot|backup|init|services|logs|doctor|repair|rescue|firstboot done]\r\n");
   }
   if (strlen(out) + 2 < sizeof(out)) {
     strcat(out, "\r\n");
@@ -4285,7 +4291,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, security policy, security audit, security keys, security doctor, system status, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, security, security policy, security audit, security keys, security doctor, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -4332,6 +4338,9 @@ static void ssh_remote_shell_execute(const char *line) {
         "  hostkey              show SSH host identity\r\n"
         "  security [policy|audit|keys|doctor] show hardening posture\r\n"
         "  system status        show live/installed state and first-boot hints\r\n"
+        "  system health        show concise PASS/WARN system state\r\n"
+        "  system snapshot      write /workspace/.orizon/system-snapshot.txt\r\n"
+        "  system backup        export non-secret config to admin-backup.txt\r\n"
         "  system services      show init/service policy and runtime state\r\n"
         "  system logs          show boot-state, service-state and init logs\r\n"
         "  system doctor        audit roots/config/init state without writes\r\n"
@@ -4437,6 +4446,18 @@ static void ssh_remote_shell_execute(const char *line) {
   }
   if (ssh_shell_command_is(line, "system")) {
     ssh_shell_print_system(line + strlen("system"));
+    return;
+  }
+  if (strcmp(line, "health") == 0) {
+    ssh_shell_print_system("health");
+    return;
+  }
+  if (strcmp(line, "snapshot") == 0) {
+    ssh_shell_print_system("snapshot");
+    return;
+  }
+  if (strcmp(line, "backup") == 0) {
+    ssh_shell_print_system("backup");
     return;
   }
   if (strcmp(line, "services") == 0) {
@@ -4753,9 +4774,15 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
+  } else if (strcmp(cmd, "health") == 0) {
+    ssh_shell_print_system("health");
+  } else if (strcmp(cmd, "snapshot") == 0) {
+    ssh_shell_print_system("snapshot");
+  } else if (strcmp(cmd, "backup") == 0) {
+    ssh_shell_print_system("backup");
   } else if (strcmp(cmd, "services") == 0) {
     ssh_shell_print_system("services");
   } else if (strcmp(cmd, "journal") == 0) {

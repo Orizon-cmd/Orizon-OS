@@ -7,8 +7,9 @@ other real hardware.
 
 - Do not install on real hardware while investigating a VM or repository issue.
 - Do not claim physical validation from VM evidence.
-- Prefer non-destructive captures first: `system status`, `selftest`,
-  `report save`, `logs`, and script output.
+- Prefer non-destructive captures first: `system status`, `system health`,
+  `system snapshot`, `system backup`, `selftest`, `report save`, `logs`, and
+  script output.
 - If a build changes runtime code, follow [RELEASE.md](RELEASE.md) before
   committing.
 
@@ -35,6 +36,11 @@ Inside Orizon over SSH or console:
 
 ```text
 system status
+system health
+system snapshot
+cat /workspace/.orizon/system-snapshot.txt
+system backup
+cat /workspace/.orizon/admin-backup.txt
 system logs
 selftest
 security doctor

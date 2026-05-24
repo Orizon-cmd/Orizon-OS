@@ -870,11 +870,11 @@ static void term_complete_command(terminal_t *term, const char *prefix,
   static const char *commands[] = {
       "about", "append", "boot-check", "bootguard", "cat", "cd", "clear", "cp", "date",
       "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
-      "doctor", "firstboot", "free", "gpt", "grep", "head", "help", "history", "hostname", "hw", "id", "init",
+      "backup", "doctor", "firstboot", "free", "gpt", "grep", "head", "health", "help", "history", "hostname", "hw", "id", "init",
       "install", "install-plan", "install-status",
       "input", "journal", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
       "neofetch", "net", "network-status", "logs", "pci", "ping", "pkg", "poweroff", "ps", "pwd", "reboot", "report", "rollback",
-      "rollback-status", "repair-boot", "rescue", "rm", "security", "selftest", "services", "shutdown", "stat", "storage", "partitions", "sync",
+      "rollback-status", "repair-boot", "rescue", "rm", "security", "selftest", "services", "shutdown", "snapshot", "stat", "storage", "partitions", "sync",
       "sysinfo", "ssh", "tail", "touch", "tree", "route", "uname", "update", "uptime", "version", "wifi", "whoami",
       "write", "system"};
   const char *matches[16];
@@ -2017,6 +2017,21 @@ static void term_print_system_state(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "health")) {
+    orizon_system_format_health(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "snapshot")) {
+    orizon_system_write_snapshot(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "backup")) {
+    orizon_system_write_admin_backup(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "logs") || term_command_is(args, "journal") ||
       term_command_is(args, "bootlog")) {
     orizon_system_format_logs(report, sizeof(report));
@@ -2046,7 +2061,7 @@ static void term_print_system_state(terminal_t *term, const char *cmd) {
     return;
   }
   term_puts_t(term,
-              "usage: system [status|init|services|logs|doctor|repair|rescue|firstboot done]\n");
+              "usage: system [status|health|snapshot|backup|init|services|logs|doctor|repair|rescue|firstboot done]\n");
 }
 
 static void term_print_hostname_command(terminal_t *term, const char *cmd) {
@@ -6144,7 +6159,10 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
-    term_puts_t(term, "  system [status|init|services|logs|doctor|repair|rescue|firstboot done] - Installed/live admin\n");
+    term_puts_t(term, "  system [status|health|snapshot|backup|init|services|logs|doctor|repair|rescue|firstboot done] - Installed/live admin\n");
+    term_puts_t(term, "  system health - Concise PASS/WARN installed-state summary\n");
+    term_puts_t(term, "  system snapshot - Write /workspace/.orizon/system-snapshot.txt\n");
+    term_puts_t(term, "  system backup - Export non-secret config to admin-backup.txt\n");
     term_puts_t(term, "  services  - Show simple init/service policy\n");
     term_puts_t(term, "  system logs - Show boot-state, service-state and init logs\n");
     term_puts_t(term, "  doctor    - Audit roots/config/init state\n");
@@ -6278,6 +6296,18 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_print_sysinfo(term);
   } else if (term_command_is(cmd, "system")) {
     term_print_system_state(term, cmd);
+  } else if (term_command_is(cmd, "health")) {
+    static char report[2048];
+    orizon_system_format_health(report, sizeof(report));
+    term_puts_t(term, report);
+  } else if (term_command_is(cmd, "snapshot")) {
+    static char report[1024];
+    orizon_system_write_snapshot(report, sizeof(report));
+    term_puts_t(term, report);
+  } else if (term_command_is(cmd, "backup")) {
+    static char report[1024];
+    orizon_system_write_admin_backup(report, sizeof(report));
+    term_puts_t(term, report);
   } else if (term_command_is(cmd, "services")) {
     static char report[2048];
     orizon_system_format_services(report, sizeof(report));

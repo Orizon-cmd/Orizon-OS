@@ -65,6 +65,11 @@ install
 install-plan
 install-status
 system status
+system health
+system snapshot
+cat /workspace/.orizon/system-snapshot.txt
+system backup
+cat /workspace/.orizon/admin-backup.txt
 system init
 system services
 system logs
@@ -103,7 +108,14 @@ installer write happens.
 `system status` is the fast installed/live lifecycle view. It prints
 `boot-mode: live` or `boot-mode: installed`, hostname, first-boot state,
 persistent roots, required `/system` files, init/log state, and safe next
-commands. `system init` reruns the idempotent boot tasks, writes
+commands. `system health` is the concise PASS/WARN operator view.
+`system snapshot` writes `/workspace/.orizon/system-snapshot.txt` with status, health,
+services, doctor, firstboot, and log evidence. `system backup` writes
+`/workspace/.orizon/admin-backup.txt` with non-secret configuration only:
+`os-release`, `machine-id`, hostname, fstab map, network policy, services,
+rescue policy, admin guide, notes, and shell profile. SSH private keys, update
+private keys, package payload secrets, and disk data are excluded. `system init`
+reruns the idempotent boot tasks, writes
 `/system/boot-state`, `/system/service-state`, `/logs/init.log`, and
 `/logs/service.log`, and persists roots when possible.
 `system services` shows the small service policy (`persistence`, `bootlog`,
@@ -115,8 +127,10 @@ reviewed. `system doctor` audits roots/config/init state without writes.
 `rescue` prints the non-destructive recovery checklist. `system repair`
 recreates only missing defaults under `/workspace/.orizon`, `/home/orizon`,
 `/system`, `/packages`, and `/logs`, including `/system/motd`,
-`/system/fstab`, `/system/rescue.conf`, `/system/admin-guide.txt`,
-`/home/orizon/.profile`, then writes `/workspace/.orizon/rescue-report.txt`.
+`/system/fstab`, `/system/os-release`, `/system/machine-id`,
+`/system/rescue.conf`, `/system/admin-guide.txt`,
+`/system/admin-notes.txt`, `/home/orizon/.profile`, then writes
+`/workspace/.orizon/rescue-report.txt`.
 `hostname set <name>` persists `/system/hostname`.
 
 ## Network And Update

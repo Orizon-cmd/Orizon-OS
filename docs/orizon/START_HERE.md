@@ -34,9 +34,12 @@ design note.
 - Installer preflight is exportable with `install-plan`, which writes the
   non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
   review before any disk write.
-- Installed/live lifecycle is visible with `system status`; `system init`
-  records `/system/boot-state` and `/logs/init.log`, `system services` shows
-  the simple service policy, `system doctor` audits roots/config/init state,
+- Installed/live lifecycle is visible with `system status`; `system health`
+  gives a PASS/WARN summary, `system snapshot` writes
+  `/workspace/.orizon/system-snapshot.txt`, `system backup` exports non-secret
+  config to `/workspace/.orizon/admin-backup.txt`, `system init` records
+  `/system/boot-state` and `/logs/init.log`, `system services` shows the
+  simple service policy, `system doctor` audits roots/config/init state,
   `system repair` recreates only missing default roots/config, `rescue` prints
   the safe recovery checklist, `hostname set <name>` persists
   `/system/hostname`, and `firstboot done` marks the installed first boot as
@@ -84,7 +87,8 @@ python scripts/orizon/quick_check.py
 ## What To Capture Next
 
 - ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `system status`,
-  `rescue`, `pkg status`, `update status`, `report save`, `install-plan`,
+  `system health`, `system snapshot`, `system backup`, `rescue`, `pkg status`,
+  `update status`, `report save`, `install-plan`,
   `security`, `selftest crypto`, and `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT
   first.
 - ZimaOS VM lifecycle smoke, when requested: `python scripts/orizon/test_vm_matrix.py

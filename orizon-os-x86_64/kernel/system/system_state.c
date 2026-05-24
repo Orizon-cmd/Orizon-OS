@@ -24,6 +24,11 @@
 #define ORIZON_RESCUE_CONF_PATH "/system/rescue.conf"
 #define ORIZON_ADMIN_GUIDE_PATH "/system/admin-guide.txt"
 #define ORIZON_HOME_PROFILE_PATH "/home/orizon/.profile"
+#define ORIZON_OS_RELEASE_PATH "/system/os-release"
+#define ORIZON_MACHINE_ID_PATH "/system/machine-id"
+#define ORIZON_ADMIN_NOTES_PATH "/system/admin-notes.txt"
+#define ORIZON_SYSTEM_SNAPSHOT_PATH "/workspace/.orizon/system-snapshot.txt"
+#define ORIZON_ADMIN_BACKUP_PATH "/workspace/.orizon/admin-backup.txt"
 
 static const char *system_default_services =
     "# Orizon service policy v1\n"
@@ -37,7 +42,8 @@ static const char *system_default_services =
 
 static const char *system_default_motd =
     "Welcome to Orizon OS.\n"
-    "Start with: system status, system firstboot, system services, system logs.\n"
+    "Start with: system status, system health, system firstboot, system services.\n"
+    "Export evidence with: system snapshot, system backup, report save.\n"
     "Use rescue for the safe recovery checklist.\n";
 
 static const char *system_default_fstab =
@@ -60,17 +66,35 @@ static const char *system_default_rescue_conf =
 static const char *system_default_admin_guide =
     "Orizon admin quickstart\n"
     "1. system status\n"
-    "2. system firstboot\n"
-    "3. system services\n"
-    "4. system logs\n"
-    "5. system doctor\n"
-    "6. rescue\n";
+    "2. system health\n"
+    "3. system firstboot\n"
+    "4. system services\n"
+    "5. system logs\n"
+    "6. system snapshot\n"
+    "7. system backup\n"
+    "8. system doctor\n"
+    "9. rescue\n";
 
 static const char *system_default_profile =
     "# Orizon shell profile\n"
     "# The console uses the built-in Orizon shell; this file records user defaults.\n"
     "HOME=/home/orizon\n"
     "WORKSPACE=/workspace\n";
+
+static const char *system_default_os_release =
+    "NAME=Orizon OS\n"
+    "ID=orizon\n"
+    "VERSION=core-x86_64\n"
+    "VERSION_ID=core-x86_64\n"
+    "VARIANT=Core Development Base\n"
+    "VALIDATION=vm-zimaos\n";
+
+static const char *system_default_admin_notes =
+    "Orizon admin notes\n"
+    "- system snapshot writes a shareable state report.\n"
+    "- system backup exports non-secret system configuration.\n"
+    "- system repair recreates missing defaults without changing disk layout.\n"
+    "- Lenovo and real hardware validation must be stated separately.\n";
 
 static void system_append(char *out, size_t out_size, size_t *used,
                           const char *text) {
@@ -155,6 +179,19 @@ static void system_trim_first_line(char *buf) {
   }
 }
 
+static void system_generate_machine_id(char *out, size_t out_size) {
+  unsigned long a;
+  unsigned long b;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  a = ((unsigned long)timer_ticks()) ^ 0x4f52495aUL;
+  b = ((unsigned long)timer_uptime_seconds()) ^ ((unsigned long)timer_hz()) ^
+      0x4f53564dUL;
+  snprintf(out, out_size, "orizon-%08lx-%08lx\n", a, b);
+}
+
 static void system_append_file_preview(char *out, size_t out_size, size_t *used,
                                        const char *label, const char *path) {
   char buf[768];
@@ -210,6 +247,7 @@ static void system_ensure_dirs(int *created) {
 }
 
 static int system_ensure_defaults(int *created) {
+  char machine_id[80];
   int rc = 0;
 
   system_ensure_dirs(created);
@@ -224,6 +262,19 @@ static int system_ensure_defaults(int *created) {
   if (system_write_default_file("/system/profile", "minimal-development\n",
                                 created) < 0) {
     rc = -1;
+  }
+  if (system_write_default_file(ORIZON_OS_RELEASE_PATH,
+                                system_default_os_release, created) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_MACHINE_ID_PATH)) {
+    system_generate_machine_id(machine_id, sizeof(machine_id));
+    if (created) {
+      (*created)++;
+    }
+    if (system_write_text_file(ORIZON_MACHINE_ID_PATH, machine_id) < 0) {
+      rc = -1;
+    }
   }
   if (system_write_default_file(
           "/system/data-layout",
@@ -263,6 +314,10 @@ static int system_ensure_defaults(int *created) {
   }
   if (system_write_default_file(ORIZON_ADMIN_GUIDE_PATH,
                                 system_default_admin_guide, created) < 0) {
+    rc = -1;
+  }
+  if (system_write_default_file(ORIZON_ADMIN_NOTES_PATH,
+                                system_default_admin_notes, created) < 0) {
     rc = -1;
   }
   if (system_write_default_file(ORIZON_BOOT_STATE_PATH,
@@ -452,6 +507,12 @@ void orizon_system_format_services(char *out, size_t out_size) {
   system_append(out, out_size, &used, line);
   system_append(out, out_size, &used, "admin:\n");
   system_append(out, out_size, &used,
+                "  system health    show concise PASS/WARN installed-state summary\n");
+  system_append(out, out_size, &used,
+                "  system snapshot  write /workspace/.orizon/system-snapshot.txt\n");
+  system_append(out, out_size, &used,
+                "  system backup    export non-secret config to admin-backup.txt\n");
+  system_append(out, out_size, &used,
                 "  system init      run idempotent boot tasks and write init log\n");
   system_append(out, out_size, &used,
                 "  system doctor    audit installed/live state without writes\n");
@@ -492,6 +553,8 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
   DOCTOR_CHECK("/packages root", system_path_ok("/packages"));
   DOCTOR_CHECK("/logs root", system_path_ok("/logs"));
   DOCTOR_CHECK("hostname file", system_path_ok(ORIZON_HOSTNAME_PATH));
+  DOCTOR_CHECK("machine id", system_path_ok(ORIZON_MACHINE_ID_PATH));
+  DOCTOR_CHECK("os-release", system_path_ok(ORIZON_OS_RELEASE_PATH));
   DOCTOR_CHECK("motd file", system_path_ok(ORIZON_MOTD_PATH));
   DOCTOR_CHECK("issue file", system_path_ok(ORIZON_ISSUE_PATH));
   DOCTOR_CHECK("fstab map", system_path_ok(ORIZON_FSTAB_PATH));
@@ -500,6 +563,7 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
   DOCTOR_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
   DOCTOR_CHECK("rescue config", system_path_ok(ORIZON_RESCUE_CONF_PATH));
   DOCTOR_CHECK("admin guide", system_path_ok(ORIZON_ADMIN_GUIDE_PATH));
+  DOCTOR_CHECK("admin notes", system_path_ok(ORIZON_ADMIN_NOTES_PATH));
   DOCTOR_CHECK("home profile", system_path_ok(ORIZON_HOME_PROFILE_PATH));
   DOCTOR_CHECK("boot state", system_path_ok(ORIZON_BOOT_STATE_PATH));
   DOCTOR_CHECK("init log", system_path_ok(ORIZON_INIT_LOG_PATH));
@@ -679,13 +743,19 @@ void orizon_system_format_status(char *out, size_t out_size) {
   system_append(out, out_size, &used, line);
   system_append(out, out_size, &used, "files:\n");
   snprintf(line, sizeof(line),
-           "  hostname=%s motd=%s fstab=%s network=%s services=%s "
-           "data-layout=%s install-marker=%s\n",
+           "  hostname=%s machine-id=%s os-release=%s motd=%s fstab=%s\n",
            system_path_ok(ORIZON_HOSTNAME_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_MACHINE_ID_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_OS_RELEASE_PATH) ? "ok" : "missing",
            system_path_ok(ORIZON_MOTD_PATH) ? "ok" : "missing",
-           system_path_ok(ORIZON_FSTAB_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_FSTAB_PATH) ? "ok" : "missing");
+  system_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "  network=%s services=%s admin-notes=%s data-layout=%s "
+           "install-marker=%s\n",
            system_path_ok("/system/network.conf") ? "ok" : "missing",
            system_path_ok(ORIZON_SERVICES_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_ADMIN_NOTES_PATH) ? "ok" : "missing",
            system_path_ok("/system/data-layout") ? "ok" : "missing",
            installed ? "present" : "absent");
   system_append(out, out_size, &used, line);
@@ -701,10 +771,10 @@ void orizon_system_format_status(char *out, size_t out_size) {
   system_append(out, out_size, &used, "safe commands:\n");
   if (installed) {
     system_append(out, out_size, &used,
-                  "  system init, system services, system logs, system firstboot, system doctor, update status, bootguard, rollback-status, rescue\n");
+                  "  system health, system snapshot, system backup, system init, system services, system logs, system firstboot, system doctor, update status, bootguard, rollback-status, rescue\n");
   } else {
     system_append(out, out_size, &used,
-                  "  system init, system services, system logs, system firstboot, system doctor, install-plan, report save, storage diag, rescue\n");
+                  "  system health, system snapshot, system backup, system init, system services, system logs, system firstboot, system doctor, install-plan, report save, storage diag, rescue\n");
   }
   system_append(out, out_size, &used,
                 "notes: system repair is non-destructive and only recreates missing defaults.\n");
@@ -733,13 +803,19 @@ void orizon_system_format_firstboot(char *out, size_t out_size) {
   system_append(out, out_size, &used,
                 "  1. system status     # confirm live vs installed\n");
   system_append(out, out_size, &used,
-                "  2. system services   # confirm boot service policy\n");
+                "  2. system health     # quick PASS/WARN state summary\n");
   system_append(out, out_size, &used,
-                "  3. system logs       # inspect boot-state and init logs\n");
+                "  3. system services   # confirm boot service policy\n");
   system_append(out, out_size, &used,
-                "  4. system doctor     # audit required roots and config\n");
+                "  4. system logs       # inspect boot-state and init logs\n");
   system_append(out, out_size, &used,
-                "  5. report save       # export evidence before risky changes\n");
+                "  5. system snapshot   # write shareable admin state\n");
+  system_append(out, out_size, &used,
+                "  6. system backup     # export non-secret config\n");
+  system_append(out, out_size, &used,
+                "  7. system doctor     # audit required roots and config\n");
+  system_append(out, out_size, &used,
+                "  8. report save       # export hardware/network evidence\n");
   if (installed && !done) {
     system_append(out, out_size, &used,
                   "finish: run 'firstboot done' after reviewing the checklist.\n");
@@ -784,6 +860,191 @@ void orizon_system_format_logs(char *out, size_t out_size) {
                              ORIZON_SERVICE_LOG_PATH);
 }
 
+void orizon_system_format_health(char *out, size_t out_size) {
+  char host[80];
+  char line[256];
+  size_t used = 0;
+  int installed;
+  int warn = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_system_hostname(host, sizeof(host));
+  installed = orizon_system_is_installed();
+  system_append(out, out_size, &used, "Orizon system health\n");
+  snprintf(line, sizeof(line), "mode: %s\nhostname: %s\n",
+           installed ? "installed" : "live", host);
+  system_append(out, out_size, &used, line);
+#define HEALTH_CHECK(label, ok_expr)                                           \
+  do {                                                                         \
+    int _ok = (ok_expr);                                                       \
+    snprintf(line, sizeof(line), "  %-24s %s\n", (label),                    \
+             _ok ? "PASS" : "WARN");                                        \
+    system_append(out, out_size, &used, line);                                 \
+    if (!_ok) {                                                                \
+      warn++;                                                                  \
+    }                                                                          \
+  } while (0)
+  HEALTH_CHECK("workspace root", system_path_ok("/workspace"));
+  HEALTH_CHECK("system root", system_path_ok("/system"));
+  HEALTH_CHECK("home root", system_path_ok("/home"));
+  HEALTH_CHECK("packages root", system_path_ok("/packages"));
+  HEALTH_CHECK("logs root", system_path_ok("/logs"));
+  HEALTH_CHECK("hostname", system_path_ok(ORIZON_HOSTNAME_PATH));
+  HEALTH_CHECK("machine-id", system_path_ok(ORIZON_MACHINE_ID_PATH));
+  HEALTH_CHECK("os-release", system_path_ok(ORIZON_OS_RELEASE_PATH));
+  HEALTH_CHECK("service policy", system_path_ok(ORIZON_SERVICES_PATH));
+  HEALTH_CHECK("boot state", system_path_ok(ORIZON_BOOT_STATE_PATH));
+  HEALTH_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
+  HEALTH_CHECK("init log", system_path_ok(ORIZON_INIT_LOG_PATH));
+  HEALTH_CHECK("service log", system_path_ok(ORIZON_SERVICE_LOG_PATH));
+  HEALTH_CHECK("admin notes", system_path_ok(ORIZON_ADMIN_NOTES_PATH));
+  HEALTH_CHECK("persistence", vfs_persist_available());
+  if (installed) {
+    HEALTH_CHECK("install marker", system_path_ok(ORIZON_INSTALL_MARKER_PATH));
+    HEALTH_CHECK("firstboot done", system_path_ok(ORIZON_FIRSTBOOT_DONE_PATH));
+  } else {
+    system_append(out, out_size, &used,
+                  "  firstboot done           SKIP live ISO\n");
+  }
+#undef HEALTH_CHECK
+  snprintf(line, sizeof(line), "summary: %s warnings=%d\n",
+           warn == 0 ? "PASS" : "WARN", warn);
+  system_append(out, out_size, &used, line);
+  system_append(out, out_size, &used,
+                "next: system snapshot | system backup | system doctor | system repair\n");
+}
+
+int orizon_system_write_snapshot(char *out, size_t out_size) {
+  static char snapshot[8192];
+  static char status[2048];
+  static char health[2048];
+  static char services[2048];
+  static char doctor[2048];
+  static char firstboot[1536];
+  static char logs[2048];
+  char line[256];
+  size_t used = 0;
+  int created = 0;
+  int defaults_rc;
+  int write_rc;
+  int save_rc;
+
+  defaults_rc = system_ensure_defaults(&created);
+  orizon_system_format_status(status, sizeof(status));
+  orizon_system_format_health(health, sizeof(health));
+  orizon_system_format_services(services, sizeof(services));
+  orizon_system_format_doctor(doctor, sizeof(doctor));
+  orizon_system_format_firstboot(firstboot, sizeof(firstboot));
+  orizon_system_format_logs(logs, sizeof(logs));
+
+  snapshot[0] = '\0';
+  system_append(snapshot, sizeof(snapshot), &used, "Orizon system snapshot\n");
+  snprintf(line, sizeof(line),
+           "scope: VM/ZimaOS-safe installed/live state, no hardware validation claim\n"
+           "created-defaults: %d\n",
+           created);
+  system_append(snapshot, sizeof(snapshot), &used, line);
+  system_append(snapshot, sizeof(snapshot), &used, "\n== status ==\n");
+  system_append(snapshot, sizeof(snapshot), &used, status);
+  system_append(snapshot, sizeof(snapshot), &used, "\n== health ==\n");
+  system_append(snapshot, sizeof(snapshot), &used, health);
+  system_append(snapshot, sizeof(snapshot), &used, "\n== services ==\n");
+  system_append(snapshot, sizeof(snapshot), &used, services);
+  system_append(snapshot, sizeof(snapshot), &used, "\n== doctor ==\n");
+  system_append(snapshot, sizeof(snapshot), &used, doctor);
+  system_append(snapshot, sizeof(snapshot), &used, "\n== firstboot ==\n");
+  system_append(snapshot, sizeof(snapshot), &used, firstboot);
+  system_append(snapshot, sizeof(snapshot), &used, "\n== logs ==\n");
+  system_append(snapshot, sizeof(snapshot), &used, logs);
+
+  write_rc = system_write_text_file(ORIZON_SYSTEM_SNAPSHOT_PATH, snapshot);
+  save_rc = vfs_persist_save();
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "system snapshot: %s\npath: " ORIZON_SYSTEM_SNAPSHOT_PATH
+             "\nbytes: %lu\ncreated-defaults: %d\npersistence-save: %s\n"
+             "read: cat " ORIZON_SYSTEM_SNAPSHOT_PATH "\n",
+             defaults_rc == 0 && write_rc == 0 ? "PASS" : "WARN",
+             (unsigned long)strlen(snapshot), created,
+             save_rc == 0 ? "ok" : "unavailable");
+  }
+  return defaults_rc == 0 && write_rc == 0 ? 0 : -EIO;
+}
+
+int orizon_system_write_admin_backup(char *out, size_t out_size) {
+  static char backup[8192];
+  char line[256];
+  size_t used = 0;
+  int created = 0;
+  int defaults_rc;
+  int write_rc;
+  int save_rc;
+
+  defaults_rc = system_ensure_defaults(&created);
+  backup[0] = '\0';
+  system_append(backup, sizeof(backup), &used, "Orizon admin backup\n");
+  system_append(backup, sizeof(backup), &used,
+                "scope: non-secret system configuration only\n");
+  system_append(backup, sizeof(backup), &used,
+                "excluded: SSH private keys, update private keys, package payload secrets, disk data\n");
+  snprintf(line, sizeof(line), "created-defaults: %d\n\n", created);
+  system_append(backup, sizeof(backup), &used, line);
+  system_append_file_preview(backup, sizeof(backup), &used, "os-release",
+                             ORIZON_OS_RELEASE_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "machine-id",
+                             ORIZON_MACHINE_ID_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "hostname",
+                             ORIZON_HOSTNAME_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "profile",
+                             "/system/profile");
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "data-layout",
+                             "/system/data-layout");
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "fstab",
+                             ORIZON_FSTAB_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "network",
+                             "/system/network.conf");
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "services",
+                             ORIZON_SERVICES_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "service-state",
+                             ORIZON_SERVICE_STATE_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "rescue",
+                             ORIZON_RESCUE_CONF_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "admin-guide",
+                             ORIZON_ADMIN_GUIDE_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "admin-notes",
+                             ORIZON_ADMIN_NOTES_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "home-profile",
+                             ORIZON_HOME_PROFILE_PATH);
+
+  write_rc = system_write_text_file(ORIZON_ADMIN_BACKUP_PATH, backup);
+  save_rc = vfs_persist_save();
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "system backup: %s\npath: " ORIZON_ADMIN_BACKUP_PATH
+             "\nbytes: %lu\ncreated-defaults: %d\npersistence-save: %s\n"
+             "read: cat " ORIZON_ADMIN_BACKUP_PATH "\n",
+             defaults_rc == 0 && write_rc == 0 ? "PASS" : "WARN",
+             (unsigned long)strlen(backup), created,
+             save_rc == 0 ? "ok" : "unavailable");
+  }
+  return defaults_rc == 0 && write_rc == 0 ? 0 : -EIO;
+}
+
 void orizon_system_format_rescue(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -793,17 +1054,21 @@ void orizon_system_format_rescue(char *out, size_t out_size) {
            "write-scope: non-destructive VFS defaults only unless another command says otherwise\n"
            "recommended order:\n"
            "  1. system status\n"
-           "  2. report save\n"
-           "  3. system doctor             # audit roots/config/init without writes\n"
-           "  4. system services           # inspect simple init/service policy\n"
-           "  5. system logs               # inspect boot/service/init evidence\n"
-           "  6. persist status && persist slots\n"
-           "  7. persist restore previous  # only if the current state is broken\n"
-           "  8. system repair             # recreate missing /system,/home,/logs defaults\n"
+           "  2. system health\n"
+           "  3. system snapshot           # write shareable admin state\n"
+           "  4. system backup             # export non-secret config\n"
+           "  5. report save\n"
+           "  6. system doctor             # audit roots/config/init without writes\n"
+           "  7. system services           # inspect simple init/service policy\n"
+           "  8. system logs               # inspect boot/service/init evidence\n"
+           "  9. persist status && persist slots\n"
+           " 10. persist restore previous  # only if the current state is broken\n"
+           " 11. system repair             # recreate missing /system,/home,/logs defaults\n"
            "installed-only helpers:\n"
            "  boot-check, repair-boot, update status, bootguard, rollback-status\n"
            "logs:\n"
            "  /logs/init.log, /logs/service.log, /logs/boot.log, /workspace/.orizon/rescue-report.txt\n"
+           "  /workspace/.orizon/system-snapshot.txt, /workspace/.orizon/admin-backup.txt\n"
            "report: " ORIZON_RESCUE_REPORT_PATH "\n");
 }
 

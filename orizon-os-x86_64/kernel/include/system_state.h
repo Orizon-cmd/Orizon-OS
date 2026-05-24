@@ -20,8 +20,11 @@ void orizon_system_format_services(char *out, size_t out_size);
 void orizon_system_format_doctor(char *out, size_t out_size);
 void orizon_system_format_firstboot(char *out, size_t out_size);
 void orizon_system_format_logs(char *out, size_t out_size);
+void orizon_system_format_health(char *out, size_t out_size);
 int orizon_system_run_boot_tasks(char *out, size_t out_size);
 int orizon_system_mark_firstboot_done(char *out, size_t out_size);
 int orizon_system_repair(char *out, size_t out_size);
+int orizon_system_write_snapshot(char *out, size_t out_size);
+int orizon_system_write_admin_backup(char *out, size_t out_size);
 
 #endif /* _SYSTEM_STATE_H */

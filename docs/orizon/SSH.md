@@ -116,8 +116,9 @@ console locale.
 - Canal session: Orizon accepte `session`, `pty-req`, `shell` et `exec`, expose
   un shell distant de diagnostic avec `help`, `ls`, `cd`, `cat`, `head`, `tail`,
   `touch`, `mkdir`, `rm`, `write`, `append`, `system status`,
-  `system services`, `system logs`, `system firstboot`, `system repair`,
-  `rescue`, `hostname`, `hostname set <name>`, `logs`, `net`,
+  `system health`, `system snapshot`, `system backup`, `system services`,
+  `system logs`, `system firstboot`, `system repair`, `rescue`, `hostname`,
+  `hostname set <name>`, `logs`, `net`,
   `net check`, `net daily`, `net tcp`, `net tls`, `net diag`, `route`, `dns`, `ping`, `usb`, `wifi`, `ps`,
   `security`, `security policy`, `security audit`, `security keys`,
   `security doctor`, `pkg`, `update`, `update status`, `storage`,
@@ -162,11 +163,15 @@ console locale.
   toute installation.
 - Etat installe/live: `system status` distingue live ISO et boot installe,
   affiche hostname, first-boot, racines persistantes, fichiers initiaux et
-  etat init/logs. `system services` montre la petite politique services,
-  `system doctor` audite sans ecrire, et `system init` rafraichit
-  `/system/boot-state` plus `/logs/init.log`. `system repair` recree seulement
-  les defaults manquants et ecrit `/workspace/.orizon/rescue-report.txt`;
-  `rescue` affiche la checklist de recuperation sans installation.
+  etat init/logs. `system health` donne un resume PASS/WARN, `system snapshot`
+  ecrit `/workspace/.orizon/system-snapshot.txt`, et `system backup` exporte
+  la configuration non sensible vers `/workspace/.orizon/admin-backup.txt`
+  sans cle privee SSH/update ni donnees disque. `system services` montre la
+  petite politique services, `system doctor` audite sans ecrire, et
+  `system init` rafraichit `/system/boot-state` plus `/logs/init.log`.
+  `system repair` recree seulement les defaults manquants et ecrit
+  `/workspace/.orizon/rescue-report.txt`; `rescue` affiche la checklist de
+  recuperation sans installation.
   `hostname set <name>` persiste `/system/hostname`, et `firstboot done`
   marque la premiere session installee comme revue.
 - Commandes admin distantes: `exec` sait modifier la politique auth avec

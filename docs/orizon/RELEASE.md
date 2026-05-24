@@ -101,8 +101,9 @@ artifacts/source-artifact-sync.json
 - If the ZimaOS build fails before compile, check ZimaOS disk space and Docker
   availability first.
 - If the VM smoke fails after boot, capture `logs network`, `logs ssh`,
-  `system logs`, `security audit`, `report save`, and the script output before
-  changing behavior.
+  `system health`, `system snapshot`, `system backup`, `system logs`,
+  `security audit`, `report save`, and the script output before changing
+  behavior.
 - If package/update network commands fail, run `net check`, `net daily`, and
   `net tcp raw.githubusercontent.com 443 attempts 2` in the VM.
 

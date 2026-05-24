@@ -37,9 +37,10 @@ work.
   Operators can inspect and recover with `persist status`, `persist slots`,
   `persist save`, `persist restore previous`, and `persist repair`.
 - Installed/live lifecycle: `system status`, `system init`,
-  `system services`, `system doctor`, `system repair`, `rescue`,
-  `hostname set <name>`, and `firstboot done` document first boot, record
-  `/system/boot-state`, write `/logs/init.log`, expose a small service policy,
+  `system health`, `system snapshot`, `system backup`, `system services`,
+  `system doctor`, `system repair`, `rescue`, `hostname set <name>`, and
+  `firstboot done` document first boot, record `/system/boot-state`, write
+  `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
@@ -87,8 +88,12 @@ work.
 - Installed VM UX: `system init` now records both boot-state and service-state,
   `system services` exposes the current mini service policy, `system logs`
   gathers boot/service/init evidence, `system firstboot` guides the first
-  installed boot checklist, and `system repair` recreates missing admin defaults
-  like MOTD, fstab map, rescue policy, admin guide and home profile without
+  installed boot checklist, `system health` gives a concise PASS/WARN operator
+  summary, `system snapshot` writes
+  `/workspace/.orizon/system-snapshot.txt`, `system backup` exports non-secret
+  configuration to `/workspace/.orizon/admin-backup.txt`, and `system repair`
+  recreates missing admin defaults like MOTD, os-release, machine-id, fstab map,
+  rescue policy, admin guide, admin notes and home profile without
   repartitioning or installing.
 - Update/rollback: installed systems fetch a signed GitHub manifest, verify
   SHA-256 payloads, refresh the ESP, and use Limine fallback metadata for

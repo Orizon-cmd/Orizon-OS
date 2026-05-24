@@ -30,6 +30,11 @@ $commands = @(
   "security keys",
   "security doctor",
   "system status",
+  "system health",
+  "system snapshot",
+  "cat /workspace/.orizon/system-snapshot.txt",
+  "system backup",
+  "cat /workspace/.orizon/admin-backup.txt",
   "system services",
   "system logs",
   "system doctor",
@@ -169,6 +174,21 @@ run_cmd() {
       ;;
     "system status")
       grep -q "Orizon system status" "`$OUT" && grep -q "boot-mode:" "`$OUT" || { echo "missing system status output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "system health")
+      grep -q "Orizon system health" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing system health output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "system snapshot")
+      grep -q "system snapshot:" "`$OUT" && grep -q "system-snapshot.txt" "`$OUT" || { echo "missing system snapshot output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "cat /workspace/.orizon/system-snapshot.txt")
+      grep -q "Orizon system snapshot" "`$OUT" && grep -q "== health ==" "`$OUT" || { echo "missing system snapshot file"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "system backup")
+      grep -q "system backup:" "`$OUT" && grep -q "admin-backup.txt" "`$OUT" || { echo "missing system backup output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "cat /workspace/.orizon/admin-backup.txt")
+      grep -q "Orizon admin backup" "`$OUT" && grep -q "excluded: SSH private keys" "`$OUT" || { echo "missing admin backup file"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system services")
       grep -q "Orizon init/services" "`$OUT" && grep -q "services:" "`$OUT" || { echo "missing system services output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
