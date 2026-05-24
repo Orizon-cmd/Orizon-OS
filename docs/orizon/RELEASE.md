@@ -56,6 +56,16 @@ Run a short VM smoke when the change affects runtime behavior:
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --disk-bus sata --boot-timeout 90 --ssh-timeout 45
 ```
 
+The matrix writes per-case logs plus:
+
+```text
+artifacts/vm-matrix/matrix-summary.md
+artifacts/vm-matrix/matrix-summary.json
+```
+
+Statuses are explicit: `PASS` means SSH/runtime checks passed, `WARN` means a
+limited boot/framebuffer result such as bridge IP discovery missing, `FAIL`
+means the case failed, and `SKIP` is reserved for intentionally omitted checks.
 Do not run the full matrix unless the task explicitly asks for it.
 
 ## GitHub CI
@@ -67,9 +77,20 @@ python scripts/orizon/ci_release_guard.py --output-dir artifacts
 ```
 
 It centralizes quick checks, tracked-secret scan, release validation, release
-notes preview, and artifact synchronization summaries. CI should fail clearly
-when any tracked release artifact is out of sync with the manifest or
-`release.txt`.
+notes preview, artifact synchronization summaries, and a diff-aware
+source/artifact check. CI should fail clearly when any tracked release artifact
+is out of sync with the manifest or `release.txt`, or when runtime source under
+`orizon-os-x86_64/` changes without refreshed `Orizon-OS.iso`,
+`updates/x86_64/kernel.elf`, `manifest.txt`, `manifest.sig`, and `release.txt`.
+
+The guard writes these diagnostics:
+
+```text
+artifacts/release-summary.md
+artifacts/release-artifacts.json
+artifacts/source-artifact-sync.md
+artifacts/source-artifact-sync.json
+```
 
 ## Failure Triage
 

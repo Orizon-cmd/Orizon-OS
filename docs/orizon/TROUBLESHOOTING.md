@@ -26,6 +26,11 @@ If the issue only appears in a running VM:
 python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --disk-bus sata --boot-timeout 90 --ssh-timeout 45
 ```
 
+Read `artifacts/vm-matrix/matrix-summary.md` first. Use the per-case `.log`
+file when the summary says `FAIL` or `WARN`. `WARN` is useful evidence, not a
+pass: it usually means the VM reached framebuffer but the SSH portion could not
+be proven, for example on bridge networking without discoverable guest IP.
+
 Inside Orizon over SSH or console:
 
 ```text

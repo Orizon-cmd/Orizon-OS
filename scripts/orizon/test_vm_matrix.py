@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import re
 import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from common import connect_ssh, load_json, parse_env_file, read_required, run_command, run_sudo_command
@@ -20,6 +22,11 @@ MATRIX_CASES = {
     "bridge-virtio": {"network_name": "", "network_model": "virtio"},
     "bridge-rtl8139": {"network_name": "", "network_model": "rtl8139"},
 }
+
+STATUS_PASS = "PASS"
+STATUS_WARN = "WARN"
+STATUS_FAIL = "FAIL"
+STATUS_SKIP = "SKIP"
 
 KEYMAP = {" ": "KEY_SPACE", "\n": "KEY_ENTER", "-": "KEY_MINUS"}
 for _ch in "abcdefghijklmnopqrstuvwxyz0123456789":
@@ -244,6 +251,78 @@ def capture_framebuffer_smoke(client, sudo_password: str, vm_name: str) -> tuple
     except (ValueError, IndexError):
         size = 0
     return size > 4096, size
+
+
+def matrix_result(case_name: str, status: str, detail: str, cfg: dict, ip: str = "") -> dict[str, str]:
+    return {
+        "case": case_name,
+        "status": status,
+        "detail": detail,
+        "ip": ip,
+        "vm_name": cfg.get("name", ""),
+        "network_model": cfg.get("network_model", ""),
+        "network_name": cfg.get("network_name", "") or "bridge",
+        "disk_bus": cfg.get("disk_bus", "sata"),
+        "disk_path": cfg.get("remote_disk_path", ""),
+    }
+
+
+def write_case_log(output_dir: Path | None, case_name: str, lines: list[str]) -> None:
+    if not output_dir:
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", case_name)
+    (output_dir / f"{safe_name}.log").write_text(
+        "\n".join(lines).rstrip() + "\n",
+        encoding="utf-8",
+    )
+
+
+def write_matrix_report(output_dir: Path | None, results: list[dict[str, str]]) -> None:
+    if not output_dir:
+        return
+    output_dir.mkdir(parents=True, exist_ok=True)
+    counts = {status: 0 for status in (STATUS_PASS, STATUS_WARN, STATUS_FAIL, STATUS_SKIP)}
+    for row in results:
+        counts[row["status"]] = counts.get(row["status"], 0) + 1
+    payload = {
+        "generated_utc": datetime.now(timezone.utc).isoformat(),
+        "counts": counts,
+        "results": results,
+        "hardware_validation": "not-claimed",
+    }
+    (output_dir / "matrix-summary.json").write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    lines = [
+        "# Orizon VM Matrix Summary",
+        "",
+        "Real hardware validation: not claimed.",
+        "",
+        "## Counts",
+        "",
+        f"- PASS: {counts.get(STATUS_PASS, 0)}",
+        f"- WARN: {counts.get(STATUS_WARN, 0)}",
+        f"- FAIL: {counts.get(STATUS_FAIL, 0)}",
+        f"- SKIP: {counts.get(STATUS_SKIP, 0)}",
+        "",
+        "## Cases",
+        "",
+        "| Case | Status | Network | Disk | IP | Detail |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in results:
+        network = f"{row['network_model']}/{row['network_name']}"
+        detail = row["detail"].replace("|", "\\|")
+        lines.append(
+            f"| `{row['case']}` | {row['status']} | `{network}` | "
+            f"`{row['disk_bus']}` | `{row['ip'] or '-'}` | {detail} |"
+        )
+    (output_dir / "matrix-summary.md").write_text(
+        "\n".join(lines) + "\n",
+        encoding="utf-8",
+    )
 
 
 def domif_mac(client, sudo_password: str, vm_name: str) -> str:
@@ -519,7 +598,18 @@ def main() -> int:
         action="store_true",
         help="Also verify framebuffer screenshot, SSH reboot, post-reboot SSH, and SSH shutdown.",
     )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("artifacts/vm-matrix"),
+        help="Directory for per-case logs and matrix-summary.{json,md}. Use '-' to disable.",
+    )
     args = parser.parse_args()
+    output_dir = args.output_dir
+    if output_dir and str(output_dir) == "-":
+        output_dir = None
+    elif output_dir and not output_dir.is_absolute():
+        output_dir = Path.cwd() / output_dir
 
     env_config = parse_env_file(Path(args.env_file))
     base_config = load_json(Path(args.vm_config))
@@ -540,7 +630,7 @@ def main() -> int:
                 "Run scripts/orizon/build_x86_64_on_zimaos.py first."
             )
 
-        results: list[tuple[str, str, str]] = []
+        results: list[dict[str, str]] = []
         for case_name in cases:
             if case_name not in MATRIX_CASES:
                 raise ValueError(f"Unknown matrix case: {case_name}")
@@ -548,88 +638,119 @@ def main() -> int:
                 matrix_config(base_config, case_name, MATRIX_CASES[case_name]),
                 args.disk_bus,
             )
+            case_log: list[str] = []
             print(
                 f"=== {case_name} ({cfg['network_model']} / {cfg['network_name'] or 'bridge'} / disk={args.disk_bus}) ==="
             )
-            define_vm(client, sudo_password, cfg)
-            state, _vnc = deploy_remote_tree(
-                client=client,
-                sudo_password=sudo_password,
-                vm_name=cfg["name"],
-                remote_disk=cfg["remote_disk_path"],
-                disk_size=cfg.get("disk_size", "8G"),
-                remote_tree_dir=args.remote_source_dir,
-                start_vm=True,
+            case_log.append(
+                f"case={case_name} network={cfg['network_model']}/{cfg['network_name'] or 'bridge'} disk={cfg.get('disk_bus', 'sata')}"
             )
-            if state.strip().lower() != "running":
-                results.append((case_name, "fail", f"state={state.strip()}"))
-                continue
-            boot_and_start_ssh(client, sudo_password, cfg["name"], args.password)
-            mac = domif_mac(client, sudo_password, cfg["name"])
-            ip = ""
-            ip = find_guest_ip(
-                client,
-                sudo_password,
-                cfg,
-                cfg["name"],
-                mac,
-                args.boot_timeout,
-            )
-            if not ip:
-                if cfg["network_name"]:
-                    detail = "guest IP unavailable from libvirt lease table"
-                    results.append((case_name, "fail", detail))
-                    print(f"FAIL: {detail}")
-                    continue
-                ok, size = capture_framebuffer_smoke(client, sudo_password, cfg["name"])
-                status = "boot-only" if ok else "fail"
-                detail = (
-                    f"framebuffer={'ok' if ok else 'missing'} bytes={size}; "
-                    "ssh skipped because bridge guest IP was not discoverable "
-                    "from virsh arp or host neighbor tables"
+            try:
+                define_vm(client, sudo_password, cfg)
+                state, _vnc = deploy_remote_tree(
+                    client=client,
+                    sudo_password=sudo_password,
+                    vm_name=cfg["name"],
+                    remote_disk=cfg["remote_disk_path"],
+                    disk_size=cfg.get("disk_size", "8G"),
+                    remote_tree_dir=args.remote_source_dir,
+                    start_vm=True,
                 )
-                results.append((case_name, status, detail))
-                print(f"{status.upper()}: {detail}")
-                if args.include_lifecycle:
-                    run_sudo_command(
-                        client,
-                        sudo_password,
-                        f"virsh destroy {cfg['name']} || true",
-                        check=False,
-                    )
-                continue
-            configure_ssh_console(
-                client,
-                sudo_password,
-                cfg["name"],
-                args.password,
-                rounds=1,
-            )
-            output = run_ssh_checks(
-                client,
-                ip,
-                args.password,
-                timeout=args.ssh_timeout,
-                include_update=args.include_update,
-            )
-            print(output)
-            if args.include_lifecycle:
-                lifecycle = run_lifecycle_checks(
+                case_log.append(f"domstate={state.strip()}")
+                if state.strip().lower() != "running":
+                    detail = f"state={state.strip()}"
+                    results.append(matrix_result(case_name, STATUS_FAIL, detail, cfg))
+                    case_log.append(f"{STATUS_FAIL}: {detail}")
+                    continue
+                boot_and_start_ssh(client, sudo_password, cfg["name"], args.password)
+                mac = domif_mac(client, sudo_password, cfg["name"])
+                case_log.append(f"mac={mac}")
+                ip = find_guest_ip(
                     client,
                     sudo_password,
                     cfg,
+                    cfg["name"],
+                    mac,
+                    args.boot_timeout,
+                )
+                if not ip:
+                    if cfg["network_name"]:
+                        detail = "guest IP unavailable from libvirt lease table"
+                        results.append(matrix_result(case_name, STATUS_FAIL, detail, cfg))
+                        case_log.append(f"{STATUS_FAIL}: {detail}")
+                        print(f"{STATUS_FAIL}: {detail}")
+                        continue
+                    ok, size = capture_framebuffer_smoke(client, sudo_password, cfg["name"])
+                    status = STATUS_WARN if ok else STATUS_FAIL
+                    detail = (
+                        f"framebuffer={'ok' if ok else 'missing'} bytes={size}; "
+                        "ssh skipped because bridge guest IP was not discoverable "
+                        "from virsh arp or host neighbor tables"
+                    )
+                    results.append(matrix_result(case_name, status, detail, cfg))
+                    case_log.append(f"{status}: {detail}")
+                    print(f"{status}: {detail}")
+                    if args.include_lifecycle:
+                        run_sudo_command(
+                            client,
+                            sudo_password,
+                            f"virsh destroy {cfg['name']} || true",
+                            check=False,
+                        )
+                    continue
+                case_log.append(f"guest-ip={ip}")
+                configure_ssh_console(
+                    client,
+                    sudo_password,
+                    cfg["name"],
+                    args.password,
+                    rounds=1,
+                )
+                output = run_ssh_checks(
+                    client,
                     ip,
                     args.password,
-                    boot_timeout=args.boot_timeout,
-                    ssh_timeout=args.ssh_timeout,
+                    timeout=args.ssh_timeout,
+                    include_update=args.include_update,
                 )
-                print(lifecycle)
-            results.append((case_name, "ok", ip))
+                case_log.append(output)
+                print(output)
+                if args.include_lifecycle:
+                    lifecycle = run_lifecycle_checks(
+                        client,
+                        sudo_password,
+                        cfg,
+                        ip,
+                        args.password,
+                        boot_timeout=args.boot_timeout,
+                        ssh_timeout=args.ssh_timeout,
+                    )
+                    case_log.append(lifecycle)
+                    print(lifecycle)
+                results.append(
+                    matrix_result(
+                        case_name,
+                        STATUS_PASS,
+                        "ssh diagnostics passed",
+                        cfg,
+                        ip,
+                    )
+                )
+            except Exception as exc:
+                detail = f"{type(exc).__name__}: {exc}"
+                results.append(matrix_result(case_name, STATUS_FAIL, detail, cfg))
+                case_log.append(f"{STATUS_FAIL}: {detail}")
+                print(f"{STATUS_FAIL}: {case_name}: {detail}")
+            finally:
+                write_case_log(output_dir, case_name, case_log)
 
         print("=== matrix summary ===")
-        for case_name, status, detail in results:
-            print(f"{case_name}: {status} {detail}")
-        return 1 if any(status == "fail" for _, status, _ in results) else 0
+        for row in results:
+            print(f"{row['case']}: {row['status']} {row['detail']}")
+        write_matrix_report(output_dir, results)
+        if output_dir:
+            print(f"matrix reports: {output_dir}")
+        return 1 if any(row["status"] == STATUS_FAIL for row in results) else 0
     finally:
         client.close()
 

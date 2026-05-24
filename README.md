@@ -730,11 +730,16 @@ python scripts/orizon/quick_check.py
 ```
 
 Le point d'entree utilise par GitHub Actions ajoute les release notes et un
-resume d'artefacts lisible:
+resume d'artefacts lisible. Il verifie aussi qu'un changement de source runtime
+est accompagne des artefacts release attendus:
 
 ```powershell
 python scripts/orizon/ci_release_guard.py --output-dir artifacts
 ```
+
+Les rapports `artifacts/source-artifact-sync.md` et
+`artifacts/source-artifact-sync.json` expliquent les changements source et les
+artefacts vus par la CI.
 
 Backends disponibles:
 

@@ -29,8 +29,9 @@ python scripts/orizon/test_update_rollback_vm.py
 `test_vm_matrix.py --cases all --include-lifecycle` runs NAT and bridge
 profiles. NAT cases are SSH-validated. Bridge cases now try `virsh` ARP and
 host neighbor-table discovery; if no IP is discoverable, they still perform a
-boot/framebuffer smoke and report `boot-only` instead of silently pretending
-that SSH was tested.
+boot/framebuffer smoke and report `WARN` instead of silently pretending that
+SSH was tested. Per-case logs and `matrix-summary.{md,json}` are written under
+`artifacts/vm-matrix/`.
 
 `quick_check.py` runs `git diff --check`, Python syntax checks for all
 `scripts/orizon/*.py`, the tracked-secret scan, PowerShell syntax checks when
@@ -42,7 +43,8 @@ combined output.
 without duplicating release validation, then runs the strict release validator,
 generates release notes, and writes `artifacts/release-summary.md` plus
 `artifacts/release-artifacts.json` so stale ISO/kernel/manifest/signature
-failures are obvious in CI logs.
+failures are obvious in CI logs. It also writes `source-artifact-sync.{md,json}`
+and fails CI when runtime source changes without refreshed release artifacts.
 
 Expected release artifacts:
 

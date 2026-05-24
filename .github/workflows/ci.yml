@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,6 +31,8 @@ jobs:
           python-version: "3.x"
 
       - name: Run CI release guard
+        env:
+          ORIZON_CI_CHANGED_FROM: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           mkdir -p artifacts
           python scripts/orizon/ci_release_guard.py --output-dir artifacts
@@ -64,6 +68,8 @@ jobs:
             artifacts/release-notes.md
             artifacts/release-summary.md
             artifacts/release-artifacts.json
+            artifacts/source-artifact-sync.md
+            artifacts/source-artifact-sync.json
             artifacts/source-build.log
           if-no-files-found: ignore
           retention-days: 7

@@ -96,6 +96,10 @@ first-class suspect before changing OS code.
 - `python scripts/orizon/build_x86_64_on_zimaos.py --deploy-vm`
 - `python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle`
 
+`test_vm_matrix.py` writes per-case logs and `matrix-summary.{md,json}` under
+`artifacts/vm-matrix/`. Treat `PASS` as validated in VM, `WARN` as partial
+evidence such as bridge framebuffer-only, and `FAIL` as a blocker.
+
 ## VNC Access
 
 While `orizon-dev` is running, the libvirt display on ZimaOS is currently
