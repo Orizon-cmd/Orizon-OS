@@ -113,6 +113,10 @@ work.
   tracked-secret scan, and GitHub CI uses `ci_release_guard.py` to upload
   quick-check logs, generated release-note previews, strict release validation
   logs, and artifact synchronization summaries.
+- Documentation/release alignment: `CHANGELOG.md`, this status page,
+  `RELEASE.md`, `COMMANDS.md`, `TROUBLESHOOTING.md`, and subsystem pages are
+  the intended source of truth after each completed block. Docs-only changes do
+  not require regenerated ISO artifacts; runtime source changes do.
 - Hardware reports: `report next`, `hw next`, and `report save` produce a
   non-destructive capture plan and `/workspace/hardware-report.txt`.
 
@@ -177,6 +181,7 @@ credentials, or captured passwords.
 ## Documentation Map
 
 - Start/resume: [START_HERE.md](START_HERE.md)
+- Changelog: [../../CHANGELOG.md](../../CHANGELOG.md)
 - Commands: [COMMANDS.md](COMMANDS.md)
 - Release and CI: [RELEASE.md](RELEASE.md)
 - VM/ZimaOS troubleshooting: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)

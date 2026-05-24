@@ -115,10 +115,13 @@ python scripts/orizon/quick_check.py
 ## Files To Open First
 
 - [README.md](../../README.md)
+- [CHANGELOG.md](../../CHANGELOG.md)
 - [docs/orizon/STATUS.md](STATUS.md)
 - [docs/orizon/COMMANDS.md](COMMANDS.md)
 - [docs/orizon/ROADMAP.md](ROADMAP.md)
 - [docs/orizon/UPDATE.md](UPDATE.md)
+- [docs/orizon/INSTALL.md](INSTALL.md)
+- [docs/orizon/PACKAGES.md](PACKAGES.md)
 - [docs/orizon/NETWORK.md](NETWORK.md)
 - [docs/orizon/SECURITY.md](SECURITY.md)
 - [docs/orizon/RELEASE.md](RELEASE.md)

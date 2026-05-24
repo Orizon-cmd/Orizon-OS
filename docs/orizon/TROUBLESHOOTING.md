@@ -60,6 +60,7 @@ tail /workspace/hardware-report.txt
 | DHCP is missing | `net status`, `net daily`, `logs network` | Use NAT e1000e first; avoid bridge until host IP discovery is clear |
 | DNS/TCP fails | `dns raw.githubusercontent.com`, `net tcp raw.githubusercontent.com 443 attempts 2` | Re-run DHCP, inspect gateway/DNS, then retry update/pkg |
 | Release validation fails | `release.txt`, `manifest.txt`, `manifest.sig`, `Orizon-OS.iso` hashes | Rebuild with `orizon_update.py --mode zimaos-iso`; do not edit hashes by hand |
+| Docs and release notes disagree | `CHANGELOG.md`, `docs/orizon/STATUS.md`, `docs/orizon/RELEASE.md` | Align the human docs first; rebuild artifacts only if runtime source changed |
 | Secret scan fails | `python scripts/orizon/check_no_secrets.py` | Remove or ignore local-only secrets; never commit private key material |
 | Security state looks wrong | `security`, `security audit`, `cat /system/security-policy`, `cat /system/security-state` | Check VFS policy denials, host-key state, and release-required key rotations |
 | Package install fails | `pkg audit`, `pkg doctor`, `pkg cache`, `pkg history`, `logs security` | Check dependency/version/path policy; use `pkg simulate` before real install |

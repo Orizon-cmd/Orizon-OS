@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Aligned the documentation/release map after the VM/ZimaOS stabilization
+  blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
+  now point to the same implemented/prepared/not-validated boundary.
+- Added security posture v2 diagnostics with VFS policy state files,
+  policy-denial counters, key-rotation posture, and `security doctor` snapshots.
+- Improved package manager v5 diagnostics with signed remote-index sidecar
+  posture, cached upgrade plans, transaction state, and clearer `pkg doctor`
+  output.
+- Improved installed VM system administration with firstboot, service/log
+  state, system health/snapshot/backup, repair, and rescue workflows.
+- Strengthened the VM matrix and CI release guard with stricter PASS/WARN/FAIL
+  reporting, source/artifact synchronization checks, and clearer release logs.
 - Added persistent root snapshot/restore tooling for `/workspace`, `/home`, `/system`, `/packages`, and `/logs`.
 - Added installed-system lifecycle commands for live vs installed state, first boot, rescue, hostname, and repair.
 - Added installed-system UX v2 with service-state/logs, firstboot checklist, MOTD/fstab/rescue/admin defaults, and `system logs`.

@@ -71,6 +71,24 @@ limited boot/framebuffer result such as bridge IP discovery missing, `FAIL`
 means the case failed, and `SKIP` is reserved for intentionally omitted checks.
 Do not run the full matrix unless the task explicitly asks for it.
 
+## Documentation And Changelog Rule
+
+Every block that changes user-visible behavior should update the nearest
+operator docs before the commit lands:
+
+- `CHANGELOG.md` for the short human history.
+- `docs/orizon/STATUS.md` for implemented, VM-ready, prepared, and missing
+  boundaries.
+- `docs/orizon/COMMANDS.md` for command syntax and quick validation commands.
+- The subsystem page such as `SSH.md`, `UPDATE.md`, `INSTALL.md`,
+  `PACKAGES.md`, `SECURITY.md`, or `NETWORK.md`.
+- `docs/orizon/TROUBLESHOOTING.md` when the change affects failure triage.
+
+If the change only edits docs, keep release artifacts untouched and run
+`quick_check.py` plus `validate-release`. If runtime source changes, rebuild
+with `zimaos-iso` and commit source, docs, ISO, update payloads, manifest,
+signature, and `release.txt` together.
+
 ## GitHub CI
 
 The GitHub release guard entrypoint is:

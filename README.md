@@ -785,12 +785,19 @@ La premiere commande reconstruit `orizon-os-x86_64`, deploie le resultat sur
 ## Arborescence Utile
 
 - `orizon-os-x86_64/` : noyau et image de demarrage `x86_64`
+- `CHANGELOG.md` : historique court des blocs VM/ZimaOS termines et limites
+  importantes
 - `docs/orizon/START_HERE.md` : page de reprise avec etat courant, limites et
   prochaine validation
 - `docs/orizon/STATUS.md` : tableau court des fonctions implementees, preparees
   et non validees materiellement
 - `docs/orizon/COMMANDS.md` : aide-memoire des commandes terminal utiles
 - `docs/orizon/RELEASE.md` : checklist release, artefacts, CI et erreurs
+- `docs/orizon/SECURITY.md` : posture SSH/VFS/update/package et limites de
+  securite
+- `docs/orizon/PACKAGES.md` : format `.opkg`, commandes `pkg`, signatures et
+  rollback paquet
+- `docs/orizon/INSTALL.md` : installateur, preflight VM et limites dual boot
 - `docs/orizon/TROUBLESHOOTING.md` : diagnostic VM/ZimaOS par symptome
 - `docs/orizon/` : notes de projet et labo ZimaOS
 - `scripts/orizon/` : update portable, build, deploiement VM, acces VNC et SSH

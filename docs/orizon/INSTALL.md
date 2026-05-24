@@ -8,6 +8,8 @@ Do not treat VM install success as Lenovo or physical-PC validation.
 For VM install failure triage, use [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 For release artifact publishing after installer changes, use
 [RELEASE.md](RELEASE.md).
+Installer behavior changes should also update `CHANGELOG.md`, `STATUS.md`, and
+`COMMANDS.md` so the safe VM-only boundary remains visible.
 
 1. boot the live ISO,
 2. run `install`,

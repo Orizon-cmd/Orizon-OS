@@ -100,6 +100,19 @@ first-class suspect before changing OS code.
 `artifacts/vm-matrix/`. Treat `PASS` as validated in VM, `WARN` as partial
 evidence such as bridge framebuffer-only, and `FAIL` as a blocker.
 
+## Validation Tiers
+
+- Docs-only or script-only edits: run `python scripts/orizon/quick_check.py`
+  and `python scripts/orizon/orizon_update.py --mode validate-release`.
+- Runtime kernel/source edits: run `python scripts/orizon/orizon_update.py
+  --mode zimaos-iso`, then quick check and release validation.
+- Runtime behavior edits that affect SSH, networking, packages, install,
+  update, storage, or security: add a short smoke such as `python
+  scripts/orizon/test_vm_matrix.py --cases nat-e1000e --disk-bus sata
+  --boot-timeout 90 --ssh-timeout 45`.
+- Full matrix: run only when explicitly requested. It is useful for broad VM
+  confidence, but still does not validate Lenovo or any other real machine.
+
 ## VNC Access
 
 While `orizon-dev` is running, the libvirt display on ZimaOS is currently

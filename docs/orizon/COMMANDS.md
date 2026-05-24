@@ -26,6 +26,9 @@ python scripts/orizon/test_vm_matrix.py --cases nat-e1000e --include-lifecycle
 python scripts/orizon/test_update_rollback_vm.py
 ```
 
+Human release notes live in `CHANGELOG.md`; generated CI/release previews come
+from `scripts/orizon/release_notes.py` and `updates/x86_64/release.txt`.
+
 `test_vm_matrix.py --cases all --include-lifecycle` runs NAT and bridge
 profiles. NAT cases are SSH-validated. Bridge cases now try `virsh` ARP and
 host neighbor-table discovery; if no IP is discoverable, they still perform a

@@ -5,6 +5,8 @@ about what is implemented and what is only a guardrail.
 For the full implemented/prepared/not-validated boundary, see
 [STATUS.md](STATUS.md). For release secret-scan behavior, see
 [RELEASE.md](RELEASE.md).
+Security behavior changes should also update `CHANGELOG.md`, this page, and
+the relevant command docs before publishing.
 
 ## Implemented Now
 

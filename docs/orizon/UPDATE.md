@@ -8,6 +8,9 @@ For the exact implemented/prepared/not-implemented boundary, see
 logic after Orizon early boot; true firmware `BootNext` is still future work.
 For publishing update artifacts, use [RELEASE.md](RELEASE.md). For VM update
 failures, use [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+When update, rollback, package-index, or trust-root behavior changes, update
+`CHANGELOG.md`, `STATUS.md`, `SECURITY.md`, and this page before publishing the
+release artifacts.
 
 Status: active for installed systems. The in-OS `update` command is hidden from
 `help` in live boot and refuses to run without the installed marker at

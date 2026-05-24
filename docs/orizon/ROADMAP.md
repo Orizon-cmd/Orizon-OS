@@ -54,7 +54,10 @@
   guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
   operator command checklist separate from the long-form subsystem notes.
   `STATUS.md` is the compact truth table for implemented, VM-ready, prepared,
-  not-yet-implemented, and not-yet-hardware-validated work.
+  not-yet-implemented, and not-yet-hardware-validated work. `RELEASE.md`,
+  `TROUBLESHOOTING.md`, and `CHANGELOG.md` now define the docs/release loop so
+  every block records what changed, how to validate it, and which artifacts
+  should or should not move.
 - Staged remote-management base: `ssh start/status/algorithms/stop`, TCP/22
   listener, SSH banner, server/client `KEXINIT`, X25519, RSA host-key
   signature, `ECDH_REPLY`, key derivation, `NEWKEYS`, encrypted
@@ -68,8 +71,10 @@
   listener recovery, anti-bruteforce lockout, config reload, per-install RSA
   host-key generation and persistent host-key file management in
   `/system/ssh_host_rsa.key`, `/system/ssh.conf`, and `/logs/ssh.log`, plus
-  `security policy/audit/keys/doctor` diagnostics, explicit SSH host-key
-  rotation, and audit redaction for password/write/Wi-Fi credential commands.
+  `security policy/audit/keys/doctor` diagnostics, VFS policy v2 state files
+  under `/system/security-policy` and `/system/security-state`, explicit SSH
+  host-key rotation, release-required update/package root rotation posture, and
+  audit redaction for password/write/Wi-Fi credential commands.
 - Hardware base: PS/2 and USB HID keyboard input, USB root-port rescans,
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
   families, persistent `/logs/usb.log` capture with family/support/blocker
