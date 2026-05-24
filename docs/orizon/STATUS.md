@@ -45,13 +45,14 @@ work.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.
-- Package manager v4: `pkg status`, `pkg audit`, `pkg cache`, `pkg search`,
-  `pkg remote`, `pkg remote verify`, `pkg upgrade plan`, `pkg simulate`,
-  `pkg verify`, `pkg history`, installed-only
+- Package manager v5: `pkg status`, `pkg audit`, `pkg doctor`, `pkg cache`,
+  `pkg search`, `pkg remote`, `pkg remote verify`, `pkg upgrade plan`,
+  `pkg simulate`, `pkg verify`, `pkg history`, installed-only
   `pkg update/upgrade/install/remove`, and `pkg rollback <name>` are present.
   Package rollback is local transaction recovery, not full boot-level rollback.
-  Detached package repository signatures are not implemented yet; package index
-  trust still falls back to the signed update manifest pins.
+  Detached package repository signatures are prepared through
+  `/workspace/.orizon/package-index.sig`; missing sidecars are WARN and package
+  index trust still falls back to the signed update manifest pins.
 - Console usability: framebuffer scrollback with `z`/`s`, persistent command
   history, autocomplete, `less <file>`, `tail`, `help shell`, simple `;`
   command grouping, `>`/`>>` redirection, and diagnostic pipes to
@@ -68,7 +69,8 @@ work.
 - Security guardrails: generic SSH writes are path-scoped, `/workspace/.orizon`
   remains internal OS state, common secret-bearing names are blocked for SSH and
   package payloads, signed update manifests are mandatory, package indexes are
-  pinned by the signed manifest, and release checks run a tracked-secret scan.
+  pinned by the signed manifest, package-index sidecar signatures are checked
+  when cached, and release checks run a tracked-secret scan.
 - Wired VM networking: e1000/e1000e, RTL8139, and VirtIO-net are the current
   daily VM NIC paths. NAT smoke tests are the normal quick gate. `net check`,
   `net daily`, retrying `net tcp <host> [port] [attempts <1-5>]`, `net tls`,
@@ -139,8 +141,8 @@ work.
 - Automatic Windows BCD/UEFI boot entry creation for dual boot.
 - In-OS partition shrink/create assistant for making free space beside an
   existing OS.
-- Detached package repository signatures and package-key rotation separate
-  from the signed OS manifest.
+- Publishing detached package repository signatures for every package release
+  and adding package-key rotation separate from the signed OS manifest.
 - Full boot-level package rollback.
 - Full ACPI shutdown parsing and complete ACPI namespace walking.
 

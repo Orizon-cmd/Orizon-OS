@@ -22,6 +22,7 @@ pkg help
 pkg list
 pkg status
 pkg audit
+pkg doctor
 pkg cache
 pkg search orizon
 pkg remote
@@ -42,9 +43,11 @@ pkg rollback orizon-hello
 
 `pkg update`, `pkg upgrade`, `pkg install`, `pkg remove`, and `pkg rollback`
 are available only after Orizon OS has been installed to disk. Live boot can
-inspect, audit, search, create, hash, verify and simulate package files, but it refuses
+inspect, audit, diagnose, search, create, hash, verify and simulate package files, but it refuses
 persistent package changes because the live ISO is not the installed system.
-`pkg audit` checks package database/cache consistency, `pkg cache` prints cache
+`pkg audit` checks package database/cache consistency, `pkg doctor` adds a v5
+safety summary for directories, transactions, remote index state and package
+repo signature state, and `pkg cache` prints cache
 paths and counters, and `pkg simulate <file>` prints a dry-run install/upgrade
 plan without writing files.
 `pkg upgrade plan` remains safe in live boot: it reads the cached signed remote
@@ -53,9 +56,10 @@ without mutating files. `pkg update` and `pkg upgrade` are intentionally thin
 wrappers around the signed system `update` flow: the package index is
 authenticated by the signed OS manifest, pinned package repository commit, and
 pinned package-index SHA-256. `pkg remote verify` validates the cached index
-shape, paths, hashes, sizes and duplicate names. Detached package repository
-signatures are not implemented yet; the current fallback is the signed update
-manifest pinning the package index.
+shape, paths, hashes, sizes and duplicate names, then checks the prepared
+detached sidecar `/workspace/.orizon/package-index.sig` when it exists. If that
+sidecar is absent, Orizon reports WARN and keeps the signed manifest pin as the
+honest fallback.
 
 ## Package Format
 
@@ -66,6 +70,7 @@ orizon-package 1
 name orizon-hello
 version 0.1.0
 depends orizon-core core-x86_64
+depends orizon-packages text-payload-v5
 sha256 <sha256 of every byte after the payload line>
 payload:
 file /system/share/orizon-hello.txt
@@ -124,7 +129,10 @@ Installed package state is stored under:
 /workspace/.orizon/pkgdb/packages
 /workspace/.orizon/pkgdb/removed
 /workspace/.orizon/pkgdb/cache
+/workspace/.orizon/pkgdb/transaction.state
+/workspace/.orizon/pkgdb/upgrade.plan
 /workspace/.orizon/package-index
+/workspace/.orizon/package-index.sig
 ```
 
 The current VFS still stores real persistence through `/workspace`. Because of
@@ -157,9 +165,13 @@ verify the internal payload SHA-256 before installation.
 `pkg search <query>` searches builtin, installed and cached remote package
 metadata. `pkg remote` prints the cached signed package index and makes clear
 when it is not available yet. `pkg remote verify` writes
-`/workspace/.orizon/pkgdb/cache/remote.status` with the last validation result.
-`pkg audit` reports invalid stored packages, orphan metadata, missing metadata,
-rollback snapshots, remote-index status and a PASS/WARN/FAIL summary. `pkg cache`
+`/workspace/.orizon/pkgdb/cache/remote.status` and
+`/workspace/.orizon/pkgdb/cache/remote.sig.status` with the last validation
+results. `pkg audit` reports invalid stored packages, orphan metadata, missing
+metadata, rollback snapshots, remote-index status and a PASS/WARN/FAIL summary.
+`pkg doctor` adds a broader non-destructive v5 health check for database
+directories, the last transaction, cached upgrade plan, script policy and
+signature fallback. `pkg cache`
 prints the package database/cache layout and is useful for CI logs.
 `pkg simulate <file>` parses a package, validates dependencies, lists scripts/files, shows the
 install/upgrade action and confirms that the run is dry-run only.
@@ -180,7 +192,8 @@ Package install now keeps a previous package manifest in memory while applying
 an upgrade. If payload replay or metadata update fails, Orizon removes the
 partial new payload and restores the previous package payload/metadata when it
 exists. History entries include explicit `installed` / `upgraded` /
-`removed` / `rollback` events with `transaction=v4-N`, rollback and result
-fields. Remove rollback is persistent across reboots through the package
-database, but it is still a local package transaction guard, not a full
-boot-level package rollback.
+`removed` / `rollback` events with `transaction=v5-N`, rollback and result
+fields. The latest write operation also updates
+`/workspace/.orizon/pkgdb/transaction.state`. Remove rollback is persistent
+across reboots through the package database, but it is still a local package
+transaction guard, not a full boot-level package rollback.

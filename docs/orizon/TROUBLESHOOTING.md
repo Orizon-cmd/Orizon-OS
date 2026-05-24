@@ -59,7 +59,7 @@ tail /workspace/hardware-report.txt
 | DNS/TCP fails | `dns raw.githubusercontent.com`, `net tcp raw.githubusercontent.com 443 attempts 2` | Re-run DHCP, inspect gateway/DNS, then retry update/pkg |
 | Release validation fails | `release.txt`, `manifest.txt`, `manifest.sig`, `Orizon-OS.iso` hashes | Rebuild with `orizon_update.py --mode zimaos-iso`; do not edit hashes by hand |
 | Secret scan fails | `python scripts/orizon/check_no_secrets.py` | Remove or ignore local-only secrets; never commit private key material |
-| Package install fails | `pkg audit`, `pkg cache`, `pkg history`, `logs security` | Check dependency/version/path policy; use `pkg simulate` before real install |
+| Package install fails | `pkg audit`, `pkg doctor`, `pkg cache`, `pkg history`, `logs security` | Check dependency/version/path policy; use `pkg simulate` before real install |
 | Update/rollback state is confusing | `update status`, `bootguard`, `rollback-status` | Remember current rollback is Limine pseudo-A/B, not true BootNext/full A/B |
 | Persistence looks wrong | `persist status`, `persist slots`, `system doctor` | Use `persist restore previous` only if current state is broken |
 | Storage VM read test fails | `storage diag`, `storage vmcheck`, `disk identify`, `disk read-test last` | Keep test non-destructive; note AHCI/NVMe/VirtIO path in the report |

@@ -3070,6 +3070,7 @@ static void ssh_shell_print_pkg(const char *args) {
              "Orizon packages\r\n"
              "  pkg status             show package manager state\r\n"
              "  pkg audit              audit package db/cache consistency\r\n"
+             "  pkg doctor             diagnose package v5 safety state\r\n"
              "  pkg cache              show package cache details\r\n"
              "  pkg list               list builtin/installed packages\r\n"
              "  pkg search <query>     search builtin/installed/remote packages\r\n"
@@ -3091,6 +3092,8 @@ static void ssh_shell_print_pkg(const char *args) {
     orizon_pkg_list(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "audit")) {
     orizon_pkg_audit(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "doctor")) {
+    orizon_pkg_doctor(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "cache")) {
     orizon_pkg_cache(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "search")) {
@@ -4364,6 +4367,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  usb rescan           rescan USB root ports\r\n"
         "  ps|pkg|update        show system/update/package state\r\n"
         "  pkg help             show package search/verify/install/update commands\r\n"
+        "  pkg audit|doctor     audit or diagnose package v5 state\r\n"
         "  pkg upgrade plan     show signed package upgrade plan\r\n"
         "  pkg search|remote    inspect local and signed remote package metadata\r\n"
         "  storage|storage diag|storage vmcheck show storage and read-only VM checks\r\n"
@@ -5837,7 +5841,8 @@ void ssh_format_security(char *buf, size_t size) {
            "internal-state-write=/workspace/.orizon:blocked\n"
            "update.manifest-policy: required manifest.sig "
            "rsa-pkcs1-sha256 key=orizon-update-root-2026-05 state=\"%s\"\n"
-           "packages.remote-index: signed-manifest-sha256-pinned\n"
+           "packages.remote-index: signed-manifest-sha256-pinned "
+           "detached-sidecar=prepared warn-if-missing\n"
            "packages.script-policy: safe-paths=/system,/home,/packages,"
            "/logs,/tmp,/workspace sensitive-paths=blocked "
            "internal-state=/workspace/.orizon:blocked\n"
@@ -5936,7 +5941,7 @@ void ssh_format_security_keys(char *buf, size_t size) {
                    "  update-root: id=orizon-update-root-2026-05 "
                    "storage=compiled-public-key rotation=requires-new-release\n"
                    "  package-index: signed-manifest-sha256-pinned "
-                   "detached-package-repo-signature=not-yet\n");
+                   "detached-sidecar=prepared warn-if-missing\n");
   ssh_shell_append(buf, size, &used, hostkey);
 }
 
@@ -5984,6 +5989,9 @@ void ssh_format_security_doctor(char *buf, size_t size) {
                        "manifest.sig required with compiled root key");
   SECURITY_DOCTOR_LINE("package.policy", "PASS",
                        "package paths/scripts are scoped");
+  SECURITY_DOCTOR_LINE("package.signature", "WARN",
+                       "sidecar prepared; fallback is signed manifest pin");
+  warnings++;
   SECURITY_DOCTOR_LINE("release.secrets", "PASS",
                        "tracked secret scan is part of release validation");
   SECURITY_DOCTOR_LINE("user-admin-split", "WARN",

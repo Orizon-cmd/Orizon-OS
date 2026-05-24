@@ -249,6 +249,7 @@ package commands remain:
 pkg list
 pkg status
 pkg audit
+pkg doctor
 pkg cache
 pkg search <query>
 pkg remote
@@ -272,6 +273,9 @@ Installed package metadata lives in:
 ```text
 /workspace/.orizon/pkgdb
 /workspace/.orizon/package-index
+/workspace/.orizon/package-index.sig
+/workspace/.orizon/pkgdb/transaction.state
+/workspace/.orizon/pkgdb/upgrade.plan
 /system/packages
 /system/installed
 ```
@@ -282,12 +286,16 @@ owned by a package and stores a persistent remove snapshot for
 `pkg rollback <name>`. Local package install has a transaction guard: if
 replaying the new payload or updating package metadata fails, Orizon removes the
 partial new payload and restores the previous package payload/metadata when one
-exists. `pkg remote verify` validates the cached package index shape and records
-the result in `/workspace/.orizon/pkgdb/cache/remote.status`. `pkg upgrade
-plan` is a read-only comparison between the cached signed index and installed
-package metadata; `pkg audit`, `pkg cache`, and `pkg simulate <file.opkg>` are
-also non-destructive helpers for CI/VM diagnostics. `pkg upgrade` prints that
-plan and then enters the same signed update path as `pkg update`.
+exists. `pkg remote verify` validates the cached package index shape, records
+the result in `/workspace/.orizon/pkgdb/cache/remote.status`, and checks the
+prepared detached sidecar `/workspace/.orizon/package-index.sig` when present.
+Missing sidecars are reported as WARN and still fall back to the signed update
+manifest pin. `pkg upgrade plan` is a read-only comparison between the cached
+signed index and installed package metadata; it also writes
+`/workspace/.orizon/pkgdb/upgrade.plan` for diagnostics. `pkg audit`,
+`pkg doctor`, `pkg cache`, and `pkg simulate <file.opkg>` are also
+non-destructive helpers for CI/VM diagnostics. `pkg upgrade` prints that plan
+and then enters the same signed update path as `pkg update`.
 This is not yet a full boot-level package rollback.
 
 ## Live Boot Behavior

@@ -177,6 +177,7 @@ blocks it.
 pkg status
 pkg list
 pkg audit
+pkg doctor
 pkg cache
 pkg search orizon
 pkg remote
@@ -197,11 +198,13 @@ pkg rollback orizon-hello
 
 `pkg update`, `pkg upgrade`, `pkg install`, `pkg remove`, and `pkg rollback`
 are installed-disk only. `pkg sample`, `pkg hash`, `pkg verify`, `pkg search`,
-`pkg audit`, `pkg cache`, `pkg simulate`, `pkg remote`, `pkg remote verify`,
-and `pkg upgrade plan` are safe in the live ISO and over SSH. The remote
-package index is authenticated through the signed system manifest, package
-repository commit pin, and package-index SHA-256 pin; detached package repo
-signatures are still future work.
+`pkg audit`, `pkg doctor`, `pkg cache`, `pkg simulate`, `pkg remote`,
+`pkg remote verify`, and `pkg upgrade plan` are safe in the live ISO and over
+SSH. The remote package index is authenticated through the signed system
+manifest, package repository commit pin, and package-index SHA-256 pin.
+Detached package repo signatures are prepared through
+`/workspace/.orizon/package-index.sig`; missing sidecars are reported as WARN
+and still fall back to the signed manifest pin.
 
 ## SSH
 

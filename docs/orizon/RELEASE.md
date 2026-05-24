@@ -31,6 +31,9 @@ updates/x86_64/release.txt
 `manifest.txt` carries payload metadata and package-index pins.
 `manifest.sig` is the detached signed manifest metadata. `release.txt` is the
 human-readable cross-check of ISO, payload, manifest, and signature hashes.
+Package repository sidecars such as `/workspace/.orizon/package-index.sig` are
+runtime package-cache inputs, not OS release artifacts yet; missing sidecars
+must remain a WARN/fallback, not a hidden PASS.
 
 ## Normal Release Flow
 

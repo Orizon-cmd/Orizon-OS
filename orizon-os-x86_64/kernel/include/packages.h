@@ -15,6 +15,7 @@ int orizon_pkg_install_buffer(const char *source_name, const void *data,
 int orizon_pkg_list(char *out, size_t out_size);
 int orizon_pkg_status(char *out, size_t out_size);
 int orizon_pkg_audit(char *out, size_t out_size);
+int orizon_pkg_doctor(char *out, size_t out_size);
 int orizon_pkg_cache(char *out, size_t out_size);
 int orizon_pkg_search(const char *query, char *out, size_t out_size);
 int orizon_pkg_remote(char *out, size_t out_size);

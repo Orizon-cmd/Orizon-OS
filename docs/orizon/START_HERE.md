@@ -47,7 +47,8 @@ design note.
 - Base security is visible with `security`. SSH has password auth disabled until
   configured, lockout/audit enabled, a persistent host key, generic remote file
   writes limited to `/workspace`, `/home`, `/logs`, and `/packages`, and signed
-  update manifests are mandatory.
+  update manifests are mandatory. Package repo sidecar signatures are checked
+  when cached and reported as WARN/fallback when absent.
 - The local framebuffer console can scroll long outputs with `z` up and `s`
   down on an empty prompt. Use `less <file>` for full-screen local paging with
   `z/s`, arrows, space, `g/G`, and `q`; SSH `cat /workspace/hardware-report.txt`
@@ -88,7 +89,7 @@ python scripts/orizon/quick_check.py
 
 - ZimaOS VM smoke, when requested: boot, DHCP, SSH, ping, DNS, `system status`,
   `system health`, `system snapshot`, `system backup`, `rescue`, `pkg status`,
-  `update status`, `report save`, `install-plan`,
+  `pkg doctor`, `update status`, `report save`, `install-plan`,
   `security`, `selftest crypto`, and `hostkey` on e1000e, VirtIO-net, and RTL8139 NAT
   first.
 - ZimaOS VM lifecycle smoke, when requested: `python scripts/orizon/test_vm_matrix.py

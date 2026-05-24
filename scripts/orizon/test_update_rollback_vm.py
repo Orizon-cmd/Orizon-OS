@@ -328,6 +328,7 @@ def main() -> int:
           ("bootguard", "bootguard-recover:"),
           ("bootguard", "ab-slots: prepared=no"),
           ("pkg status", "remote-index-auth signed-update-manifest-sha256-pinned"),
+          ("pkg doctor", "pkg doctor:"),
           ("pkg remote", "cached-index=yes"),
           ("pkg remote verify", "remote-index-valid=yes"),
           ("pkg upgrade plan", "pkg upgrade plan:"),

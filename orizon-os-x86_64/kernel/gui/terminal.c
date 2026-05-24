@@ -3426,6 +3426,7 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg list          - List installed packages\n");
   term_puts_t(term, "  pkg status        - Show package manager state\n");
   term_puts_t(term, "  pkg audit         - Audit package db/cache consistency\n");
+  term_puts_t(term, "  pkg doctor        - Diagnose package v5 safety state\n");
   term_puts_t(term, "  pkg cache         - Show package cache details\n");
   term_puts_t(term, "  pkg search <query> - Search builtin/installed/remote packages\n");
   term_puts_t(term, "  pkg remote        - Show cached signed remote package index\n");
@@ -3486,6 +3487,12 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 
   if (term_command_is(args, "audit")) {
     orizon_pkg_audit(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+
+  if (term_command_is(args, "doctor")) {
+    orizon_pkg_doctor(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -6141,6 +6148,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  persist [status|slots|save|repair|restore] - Manage data snapshots\n");
     term_puts_t(term, "\033[33mPackages:\033[0m\n");
     term_puts_t(term, "  pkg list/status - Show installed package data\n");
+    term_puts_t(term, "  pkg audit/doctor - Audit or diagnose package v5 state\n");
     term_puts_t(term, "  pkg search <q>  - Search builtin/installed/remote packages\n");
     term_puts_t(term, "  pkg remote      - Show cached signed remote package index\n");
     term_puts_t(term, "  pkg remote verify - Validate cached remote index\n");

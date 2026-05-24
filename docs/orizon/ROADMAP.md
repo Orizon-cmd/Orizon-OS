@@ -30,13 +30,15 @@
   validation once the refreshed kernel reaches the shell, `bootguard`
   diagnostics, and automatic main-slot restore when the rollback boot entry is
   selected during a pending update.
-- Package manager v4 foundation with `pkg list`, `pkg status`, `pkg audit`,
-  `pkg cache`, `pkg search`, `pkg remote`, `pkg remote verify`,
-  `pkg upgrade plan`, `pkg simulate`, `pkg info`, `pkg sample`, `pkg hash`,
-  `pkg verify`, installed-only `pkg update/upgrade/install/remove`, signed
-  package-index cache validation, `pre-remove`/`post-remove` scripts, explicit
-  transaction history events, and local `pkg rollback <name>` for the last
-  removed package snapshot.
+- Package manager v5 foundation with `pkg list`, `pkg status`, `pkg audit`,
+  `pkg doctor`, `pkg cache`, `pkg search`, `pkg remote`,
+  `pkg remote verify`, `pkg upgrade plan`, `pkg simulate`, `pkg info`,
+  `pkg sample`, `pkg hash`, `pkg verify`, installed-only
+  `pkg update/upgrade/install/remove`, signed package-index cache validation,
+  prepared package-index sidecar signature checks, cached upgrade plans,
+  `pre-remove`/`post-remove` scripts, explicit transaction history/state
+  events, and local `pkg rollback <name>` for the last removed package
+  snapshot.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
   redirection, diagnostic pipes to `grep/head/tail/wc/tee/less`, persistent
@@ -104,8 +106,9 @@
    `BootNext` writing, or add bootloader-native boot-count integration, so
    firmware can automatically select rollback even when the refreshed kernel
    never reaches Orizon early boot.
-2. Add detached package repository signatures and key rotation; the package
-   index is already pinned through the signed OS manifest.
+2. Publish detached package repository signatures in the package repo and add
+   key rotation; Orizon already detects `/workspace/.orizon/package-index.sig`
+   when cached and still falls back to the signed OS manifest pin when absent.
 3. Continue network hardening beyond the current `net check` / `net daily` /
    retrying `net tcp` / `net tls` / `net diag` split with deeper per-phase
    counters, packet-loss stats, and host-side bridge discovery when the ZimaOS

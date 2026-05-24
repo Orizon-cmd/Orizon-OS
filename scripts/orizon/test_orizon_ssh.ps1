@@ -53,6 +53,7 @@ $commands = @(
   "ps",
   "pkg status",
   "pkg audit",
+  "pkg doctor",
   "pkg cache",
   "pkg help",
   "pkg search orizon",
@@ -291,6 +292,9 @@ run_cmd() {
       ;;
     "pkg audit")
       grep -q "pkg audit:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing pkg audit output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg doctor")
+      grep -q "pkg doctor:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing pkg doctor output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg cache")
       grep -q "pkg cache:" "`$OUT" && grep -q "package-repo-signature" "`$OUT" || { echo "missing pkg cache output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

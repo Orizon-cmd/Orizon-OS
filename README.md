@@ -499,10 +499,10 @@ Details:
 Orizon OS contient maintenant une premiere base de gestionnaire de paquets.
 Le format est volontairement simple: un fichier texte `.opkg` contient `name`,
 `version`, un `sha256` du payload, des blocs `file` a installer, puis un
-bloc `post-install` minimal. La couche v4 ajoute recherche, verification de
-l'index distant signe en cache, `pkg upgrade plan`, audit/cache, simulation
-dry-run, scripts `pre-remove`/`post-remove`, historique transactionnel, et
-rollback local apres suppression.
+bloc `post-install` minimal. La couche v5 ajoute recherche, verification de
+l'index distant signe en cache, `pkg upgrade plan`, `pkg doctor`, audit/cache,
+simulation dry-run, scripts `pre-remove`/`post-remove`, historique
+transactionnel, et rollback local apres suppression.
 
 Commandes disponibles:
 
@@ -510,6 +510,7 @@ Commandes disponibles:
 pkg list
 pkg status
 pkg audit
+pkg doctor
 pkg cache
 pkg search orizon
 pkg remote
@@ -529,7 +530,7 @@ pkg rollback orizon-hello
 ```
 
 `pkg update`, `pkg upgrade`, `pkg install`, `pkg remove` et `pkg rollback` sont
-reserves a un OS installe sur disque. `pkg audit`, `pkg cache`,
+reserves a un OS installe sur disque. `pkg audit`, `pkg doctor`, `pkg cache`,
 `pkg simulate <file>` et `pkg upgrade plan` restent non destructifs et peuvent
 tourner depuis le live ISO. Les paquets installes sont stockes dans
 `/workspace/.orizon/pkgdb`, puis rejoues au boot pour restaurer les fichiers
@@ -537,11 +538,15 @@ systeme en RAM comme `/system/share/...`. `pkg verify` controle le hash payload
 et les dependances simples `depends`; `pkg install` restaure l'ancien paquet si
 l'installation echoue avant la fin. `pkg remove` conserve un snapshot dans
 `/workspace/.orizon/pkgdb/removed`, que `pkg rollback <name>` peut restaurer.
-`pkg remote verify` ecrit aussi `/workspace/.orizon/pkgdb/cache/remote.status`.
+`pkg remote verify` ecrit aussi `/workspace/.orizon/pkgdb/cache/remote.status`
+et `/workspace/.orizon/pkgdb/cache/remote.sig.status`. `pkg upgrade plan`
+met en cache le dernier plan dans `/workspace/.orizon/pkgdb/upgrade.plan`, et
+les operations d'ecriture exposent `/workspace/.orizon/pkgdb/transaction.state`.
 `pkg info <name>` affiche les metadonnees, dependances, scripts et fichiers
-possedes par un paquet. Il n'y a pas encore de signature detachee separee pour
-le depot packages: l'authentification passe par le manifest update signe, le
-commit du depot packages et le SHA-256 epingle de l'index.
+possedes par un paquet. La signature detachee du depot packages est preparee
+via `/workspace/.orizon/package-index.sig`; si ce sidecar n'est pas present,
+Orizon l'indique en WARN et retombe honnetement sur le manifest update signe,
+le commit du depot packages et le SHA-256 epingle de l'index.
 
 Le depot officiel de paquets est:
 

@@ -375,6 +375,7 @@ def run_ssh_checks(
         ("net tcp raw.githubusercontent.com 443 attempts 2", "tcp retry summary: PASS"),
         ("pkg status", "Orizon package manager"),
         ("pkg audit", "pkg audit:"),
+        ("pkg doctor", "summary:"),
         ("pkg cache", "pkg cache:"),
         ("pkg help", "pkg simulate"),
         ("pkg search orizon", "pkg search:"),
