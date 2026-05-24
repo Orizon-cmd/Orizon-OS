@@ -6,6 +6,7 @@
 #include "../include/i2c_hid.h"
 #include "../include/acpi.h"
 #include "../include/bootinfo.h"
+#include "../include/desktop.h"
 #include "../include/input_layout.h"
 #include "../include/klog.h"
 #include "../include/kmalloc.h"
@@ -116,6 +117,7 @@ typedef struct terminal {
   char install_data_partition_name[24];
   char install_data_partition_summary[128];
   char install_hostname[64];
+  char install_desktop[32];
   
   /* History */
   char history[TERM_HISTORY_MAX][256];
@@ -869,7 +871,7 @@ static void term_complete_command(terminal_t *term, const char *prefix,
                                   size_t prefix_len) {
   static const char *commands[] = {
       "about", "append", "boot-check", "bootguard", "cat", "cd", "clear", "cp", "date",
-      "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
+      "desktop", "disks", "disk", "dmesg", "dns", "dualboot-check", "edit", "echo", "find",
       "backup", "doctor", "firstboot", "free", "gpt", "grep", "head", "health", "help", "history", "hostname", "hw", "id", "init",
       "install", "install-plan", "install-status",
       "input", "journal", "keyboard", "less", "ls", "mkdir", "mounts", "mv", "persist",
@@ -3434,14 +3436,15 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg upgrade plan  - Show signed package upgrade plan\n");
   term_puts_t(term, "  pkg info <name>   - Show package metadata/files\n");
   term_puts_t(term, "  pkg history       - Show package install/remove history\n");
-  term_puts_t(term, "  pkg sample        - Create a sample .opkg package\n");
+  term_puts_t(term, "  pkg sample [desktop] - Create a sample .opkg package\n");
   term_puts_t(term, "  pkg hash <file>   - Print package payload sha256\n");
   term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
   term_puts_t(term, "  pkg simulate <file> - Dry-run install/upgrade without writes\n");
   if (term_install_already_complete()) {
     term_puts_t(term, "  pkg update        - Run signed update package refresh\n");
     term_puts_t(term, "  pkg upgrade       - Plan then run signed package refresh\n");
-    term_puts_t(term, "  pkg install <file> - Install a verified local package\n");
+    term_puts_t(term,
+                "  pkg install <file|orizon-desktop-hypr> - Install a verified package\n");
     term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
     term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
   } else {
@@ -3450,12 +3453,18 @@ static void term_pkg_help(terminal_t *term) {
     term_puts_t(term,
                 "  pkg upgrade       - Available after disk install only\n");
     term_puts_t(term,
-                "  pkg install <file> - Available after disk install only\n");
+                "  pkg install <file|orizon-desktop-hypr> - Available after disk install only\n");
     term_puts_t(term,
                 "  pkg remove <name> - Available after disk install only\n");
     term_puts_t(term,
                 "  pkg rollback <name> - Available after disk install only\n");
   }
+}
+
+static int term_pkg_desktop_name(const char *name) {
+  return term_command_is(name, ORIZON_DESKTOP_PACKAGE) ||
+         term_command_is(name, "desktop") || term_command_is(name, "hypr") ||
+         term_command_is(name, "hyprland");
 }
 
 static void term_run_pkg(terminal_t *term, const char *cmd) {
@@ -3565,7 +3574,13 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
   }
 
   if (term_command_is(args, "sample")) {
-    orizon_pkg_write_sample(report, sizeof(report));
+    const char *sample_args = term_skip_spaces(args + 6);
+    if (term_command_is(sample_args, "desktop") ||
+        term_command_is(sample_args, "orizon-desktop-hypr")) {
+      orizon_pkg_write_desktop_sample(report, sizeof(report));
+    } else {
+      orizon_pkg_write_sample(report, sizeof(report));
+    }
     term_puts_t(term, report);
     return;
   }
@@ -3642,7 +3657,13 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     if (*requested == '\0') {
-      term_puts_t(term, "usage: pkg install <file>\n");
+      term_puts_t(term, "usage: pkg install <file|orizon-desktop-hypr>\n");
+      return;
+    }
+    if (term_pkg_desktop_name(requested)) {
+      orizon_pkg_install_named(requested, report, sizeof(report));
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
+      term_puts_t(term, report);
       return;
     }
     if (resolve_path(term->cwd, requested, path, sizeof(path)) < 0) {
@@ -3650,6 +3671,7 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     orizon_pkg_install_file(path, report, sizeof(report));
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     term_puts_t(term, report);
     return;
   }
@@ -3665,7 +3687,10 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       term_puts_t(term, "usage: pkg remove <name>\n");
       return;
     }
-    orizon_pkg_remove(name, report, sizeof(report));
+    orizon_pkg_remove(term_pkg_desktop_name(name) ? ORIZON_DESKTOP_PACKAGE
+                                                  : name,
+                      report, sizeof(report));
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     term_puts_t(term, report);
     return;
   }
@@ -3681,12 +3706,267 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       term_puts_t(term, "usage: pkg rollback <name>\n");
       return;
     }
-    orizon_pkg_rollback(name, report, sizeof(report));
+    orizon_pkg_rollback(term_pkg_desktop_name(name) ? ORIZON_DESKTOP_PACKAGE
+                                                    : name,
+                        report, sizeof(report));
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     term_puts_t(term, report);
     return;
   }
 
   term_puts_t(term, "pkg: unknown command. Try 'pkg help'.\n");
+}
+
+static void term_run_desktop(terminal_t *term, const char *cmd) {
+  static char report[4096];
+  const char *args = term_skip_spaces(cmd + 7);
+
+  if (*args == '\0' || term_command_is(args, "status")) {
+    gui_desktop_format_status(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "help")) {
+    term_puts_t(term, "\033[1;36mOrizon desktop\033[0m\n");
+    term_puts_t(term, "  desktop status          - Show desktop/session state\n");
+    term_puts_t(term, "  desktop config          - Show Hyprland-style config template\n");
+    term_puts_t(term, "  desktop enable          - Enable optional desktop profile\n");
+    term_puts_t(term, "  desktop disable         - Disable desktop profile\n");
+    term_puts_t(term, "  desktop doctor          - Check desktop install/config state\n");
+    term_puts_t(term, "  desktop logs            - Show desktop events\n");
+    term_puts_t(term, "  desktop shortcuts       - Show keys and commands\n");
+    term_puts_t(term, "  desktop session         - Show session theme/wallpaper/layout\n");
+    term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
+    term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
+    term_puts_t(term, "  desktop theme <name>    - Set session theme\n");
+    term_puts_t(term, "  desktop wallpaper <name> - Set symbolic wallpaper\n");
+    term_puts_t(term, "  desktop layout <name>   - Set floating/tiling/monocle layout\n");
+    term_puts_t(term, "  desktop bar on|off|toggle - Configure desktop bar\n");
+    term_puts_t(term, "  desktop launcher [show|hide|toggle] - Control launcher\n");
+    term_puts_t(term, "  desktop launch terminal - Launch terminal app\n");
+    term_puts_t(term, "  desktop workspace [n]   - Show or switch workspace\n");
+    term_puts_t(term, "  desktop move terminal <n> - Move terminal to workspace\n");
+    term_puts_t(term, "  desktop reset           - Disable and restore default policy\n");
+    term_puts_t(term, "  desktop write-config    - Rewrite Hypr-style user config\n");
+    term_puts_t(term, "  desktop open terminal   - Open the terminal window\n");
+    term_puts_t(term, "  desktop close terminal  - Close the terminal window\n");
+    term_puts_t(term, "  desktop package         - Write installable desktop .opkg\n");
+    term_puts_t(term, "Shortcuts: F1 opens terminal, F2 closes it.\n");
+    return;
+  }
+  if (term_command_is(args, "config")) {
+    orizon_desktop_format_config(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "doctor") || term_command_is(args, "check")) {
+    orizon_desktop_format_doctor(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "logs") || term_command_is(args, "log")) {
+    orizon_desktop_format_log(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "shortcuts") || term_command_is(args, "keys")) {
+    orizon_desktop_format_shortcuts(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "session") || term_command_is(args, "settings")) {
+    orizon_desktop_format_session(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
+    orizon_desktop_format_apps(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "windows") || term_command_is(args, "window")) {
+    gui_desktop_format_windows(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "workspaces")) {
+    gui_desktop_format_workspaces(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "workspace")) {
+    const char *value = term_skip_spaces(args + 9);
+    int workspace;
+    if (*value == '\0') {
+      gui_desktop_format_workspaces(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_parse_uint(value, &workspace) < 0 ||
+        gui_desktop_switch_workspace(workspace) < 0) {
+      term_puts_t(term, "usage: desktop workspace <1-3>\n");
+      return;
+    }
+    snprintf(report, sizeof(report), "desktop: workspace %d active\n",
+             workspace);
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "move")) {
+    const char *target = term_skip_spaces(args + 4);
+    int workspace;
+    if (!term_command_is(target, "terminal")) {
+      term_puts_t(term, "usage: desktop move terminal <1-3>\n");
+      return;
+    }
+    target = term_skip_spaces(target + 8);
+    if (term_parse_uint(target, &workspace) < 0 ||
+        gui_desktop_move_terminal_to_workspace(workspace) < 0) {
+      term_puts_t(term, "usage: desktop move terminal <1-3>\n");
+      return;
+    }
+    snprintf(report, sizeof(report), "desktop: terminal moved to workspace %d\n",
+             workspace);
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "theme")) {
+    const char *value = term_skip_spaces(args + 5);
+    if (*value == '\0') {
+      term_puts_t(term, "usage: desktop theme <graphite|moss|ember|frost>\n");
+      return;
+    }
+    orizon_desktop_set_session_option("theme", value, report,
+                                      sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "wallpaper")) {
+    const char *value = term_skip_spaces(args + 9);
+    if (*value == '\0') {
+      term_puts_t(term, "usage: desktop wallpaper <aurora|dawn|noir|moss>\n");
+      return;
+    }
+    orizon_desktop_set_session_option("wallpaper", value, report,
+                                      sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "layout")) {
+    const char *value = term_skip_spaces(args + 6);
+    if (*value == '\0') {
+      term_puts_t(term, "usage: desktop layout <floating|tiling|monocle>\n");
+      return;
+    }
+    orizon_desktop_set_session_option("layout", value, report,
+                                      sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "bar")) {
+    const char *value = term_skip_spaces(args + 3);
+    orizon_desktop_session_t session;
+    if (term_command_is(value, "toggle")) {
+      orizon_desktop_load_session(&session);
+      value = session.bar_enabled ? "off" : "on";
+    }
+    if (*value == '\0') {
+      term_puts_t(term, "usage: desktop bar on|off|toggle\n");
+      return;
+    }
+    orizon_desktop_set_session_option("bar", value, report, sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "launcher")) {
+    const char *value = term_skip_spaces(args + 8);
+    if (*value == '\0' || term_command_is(value, "show") ||
+        term_command_is(value, "open")) {
+      gui_desktop_show_launcher();
+      term_puts_t(term, "desktop: launcher open\n");
+      return;
+    }
+    if (term_command_is(value, "hide") || term_command_is(value, "close")) {
+      gui_desktop_hide_launcher();
+      term_puts_t(term, "desktop: launcher closed\n");
+      return;
+    }
+    if (term_command_is(value, "toggle")) {
+      gui_desktop_toggle_launcher();
+      term_puts_t(term, "desktop: launcher toggled\n");
+      return;
+    }
+    term_puts_t(term, "usage: desktop launcher [show|hide|toggle]\n");
+    return;
+  }
+  if (term_command_is(args, "launch")) {
+    const char *app = term_skip_spaces(args + 6);
+    if (term_command_is(app, "terminal") ||
+        term_command_is(app, "orizon-terminal")) {
+      gui_desktop_open_terminal();
+      term_puts_t(term, "desktop: launched terminal\n");
+      return;
+    }
+    term_puts_t(term, "desktop launch: known apps: terminal\n");
+    return;
+  }
+  if (term_command_is(args, "apply") || term_command_is(args, "reload")) {
+    gui_desktop_reload_session();
+    term_puts_t(term, "desktop: session reloaded\n");
+    return;
+  }
+  if (term_command_is(args, "write-config") ||
+      term_command_is(args, "regen-config")) {
+    orizon_desktop_write_user_config(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "reset")) {
+    orizon_desktop_reset(report, sizeof(report));
+    gui_desktop_set_enabled(0);
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "enable") || term_command_is(args, "install")) {
+    orizon_desktop_set_enabled(1, report, sizeof(report));
+    gui_desktop_set_enabled(1);
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "disable") || term_command_is(args, "off")) {
+    orizon_desktop_set_enabled(0, report, sizeof(report));
+    gui_desktop_set_enabled(0);
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "open") ||
+      term_command_is(args, "open terminal") ||
+      term_command_is(args, "terminal")) {
+    gui_desktop_open_terminal();
+    term_puts_t(term, "desktop: terminal open\n");
+    return;
+  }
+  if (term_command_is(args, "close") ||
+      term_command_is(args, "close terminal")) {
+    gui_desktop_close_terminal();
+    term_puts_t(term, "desktop: terminal closed; press F1 or click to reopen\n");
+    return;
+  }
+  if (term_command_is(args, "toggle")) {
+    gui_desktop_toggle_terminal();
+    term_puts_t(term, "desktop: terminal toggled\n");
+    return;
+  }
+  if (term_command_is(args, "package") || term_command_is(args, "sample")) {
+    orizon_pkg_write_desktop_sample(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  term_puts_t(term, "desktop: unknown command. Try 'desktop help'.\n");
 }
 
 static void term_print_net_status(terminal_t *term) {
@@ -4814,13 +5094,18 @@ static void term_run_install_plan(terminal_t *term, const char *cmd) {
   char disk_name[24];
   const char *args = term_skip_spaces(cmd + strlen("install-plan"));
   const char *mode = "manual-later";
+  const char *desktop_profile = "none";
   int disk_index = -1;
   int data_partition = -1;
   int count;
 
+  if (strstr(args, "desktop") || strstr(args, "hypr")) {
+    desktop_profile = ORIZON_DESKTOP_PROFILE;
+  }
   if (*args != '\0') {
     if (term_command_is(args, "manual") ||
-        term_command_is(args, "manual-later")) {
+        term_command_is(args, "manual-later") ||
+        term_command_is(args, "desktop")) {
       mode = "manual-later";
     } else if (term_command_is(args, "dual-boot-esp")) {
       mode = "dual-boot-esp";
@@ -4836,12 +5121,12 @@ static void term_run_install_plan(terminal_t *term, const char *cmd) {
       }
       if (term_parse_uint(part_arg, &data_partition) < 0) {
         term_puts_t(term,
-                    "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\n");
+                    "usage: install-plan [manual|manual desktop|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\n");
         return;
       }
     } else {
       term_puts_t(term,
-                  "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\n");
+                  "usage: install-plan [manual|manual desktop|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\n");
       return;
     }
   }
@@ -4865,6 +5150,7 @@ static void term_run_install_plan(terminal_t *term, const char *cmd) {
   config.keyboard = input_keyboard_layout();
   config.disk_mode = mode;
   config.hostname = "orizon-vm";
+  config.desktop_profile = desktop_profile;
   config.disk_index = disk_index;
   config.disk_name = disk_name;
   config.data_partition_index = data_partition;
@@ -4982,25 +5268,25 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, "This guided installer can install Orizon OS to disk.\n");
     term_puts_t(term,
                 "dual-boot-data reuses one partition for Orizon while preserving the rest of the disk.\n\n");
-    term_puts_t(term, "[1/7] Language\n");
+    term_puts_t(term, "[1/8] Language\n");
     term_puts_t(term, "  1. Francais\n");
     term_puts_t(term, "  2. English\n");
     term_puts_t(term, "Choice: ");
     break;
   case 1:
-    term_puts_t(term, "[2/7] Keyboard layout\n");
+    term_puts_t(term, "[2/8] Keyboard layout\n");
     term_puts_t(term, "  1. fr-azerty\n");
     term_puts_t(term, "  2. us-qwerty\n");
     term_puts_t(term, "Choice: ");
     break;
   case 2:
-    term_puts_t(term, "[3/7] Target disk\n");
+    term_puts_t(term, "[3/8] Target disk\n");
     term_print_disks(term);
     term_puts_t(term, "  m. manual-later (do not write disk)\n");
     term_puts_t(term, "Choose target disk number, or m: ");
     break;
   case 3:
-    term_puts_t(term, "[4/7] Disk strategy\n");
+    term_puts_t(term, "[4/8] Disk strategy\n");
     term_puts_t(term,
                 "  1. dual-boot-data (preserve disk, use selected partition for Orizon)\n");
     term_puts_t(term,
@@ -5010,19 +5296,29 @@ static void term_install_prompt(terminal_t *term) {
     term_puts_t(term, "Choice [1]: ");
     break;
   case 4:
-    term_puts_t(term, "[5/7] Orizon data partition\n");
+    term_puts_t(term, "[5/8] Orizon data partition\n");
     term_puts_t(term,
                 "Choose the empty/prepared partition Orizon may claim and overwrite.\n");
     term_print_partitions(term);
     term_puts_t(term, "Partition number: ");
     break;
   case 5:
-    term_puts_t(term, "[6/7] Hostname\n");
+    term_puts_t(term, "[6/8] Hostname\n");
     term_puts_t(term, "Hostname [orizon-os]: ");
     break;
-  case 6: {
+  case 6:
+    term_puts_t(term, "[7/8] Desktop environment\n");
+    term_puts_t(term,
+                "Install optional Hyprland-style desktop profile now?\n");
+    term_puts_t(term,
+                "  1. no  - keep the minimal console base (default)\n");
+    term_puts_t(term,
+                "  2. yes - install " ORIZON_DESKTOP_PACKAGE " profile\n");
+    term_puts_t(term, "Choice [1]: ");
+    break;
+  case 7: {
     char line[160];
-    term_puts_t(term, "[7/7] Summary\n");
+    term_puts_t(term, "[8/8] Summary\n");
     snprintf(line, sizeof(line), "  Language: %s\n", term->install_language);
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Keyboard: %s\n", term->install_keyboard);
@@ -5033,6 +5329,8 @@ static void term_install_prompt(terminal_t *term) {
                  : term->install_disk_summary);
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Hostname: %s\n", term->install_hostname);
+    term_puts_t(term, line);
+    snprintf(line, sizeof(line), "  Desktop:  %s\n", term->install_desktop);
     term_puts_t(term, line);
     snprintf(line, sizeof(line), "  Mode:     %s\n", term->install_disk_mode);
     term_puts_t(term, line);
@@ -5114,6 +5412,7 @@ static void term_install_write_plan(terminal_t *term) {
   config.keyboard = term->install_keyboard;
   config.disk_mode = term->install_disk_mode;
   config.hostname = term->install_hostname;
+  config.desktop_profile = term->install_desktop;
   config.disk_index = term->install_disk_index;
   config.disk_name = term->install_disk_name;
   config.data_partition_index = term->install_data_partition_index;
@@ -5127,6 +5426,8 @@ static void term_install_write_plan(terminal_t *term) {
            "language %s\n"
            "keyboard %s\n"
            "hostname %s\n"
+           "desktop %s\n"
+           "desktop-package %s\n"
            "disk-mode %s\n"
            "disk-index %d\n"
            "disk-name %s\n"
@@ -5139,7 +5440,8 @@ static void term_install_write_plan(terminal_t *term) {
            "write-mode %s\n"
            "next reboot-installed-disk\n",
            term->install_language, term->install_keyboard,
-           term->install_hostname, term->install_disk_mode,
+           term->install_hostname, term->install_desktop,
+           ORIZON_DESKTOP_PACKAGE, term->install_disk_mode,
            term->install_disk_index, disk_name, disk_summary,
            term->install_data_partition_index, data_name, data_summary,
            storage_available() ? storage_status() : "unavailable",
@@ -5157,9 +5459,10 @@ static void term_install_write_plan(terminal_t *term) {
                              : "destructive-full-disk")));
 
   snprintf(state, sizeof(state),
-           "install configured: language=%s keyboard=%s disk=%s hostname=%s\n",
+           "install configured: language=%s keyboard=%s disk=%s hostname=%s desktop=%s\n",
            term->install_language, term->install_keyboard,
-           term->install_disk_mode, term->install_hostname);
+           term->install_disk_mode, term->install_hostname,
+           term->install_desktop);
 
   if (term_write_text_file("/workspace/.orizon/install-plan", plan) < 0 ||
       term_write_text_file("/workspace/.orizon/install-state", state) < 0 ||
@@ -5181,6 +5484,21 @@ static void term_install_write_plan(terminal_t *term) {
                        "Home directory for Orizon OS user files.\n");
   term_write_text_file("/packages/README.txt",
                        "Local package cache and installed package metadata.\n");
+  if (strcmp(term->install_disk_mode, "manual-later") == 0) {
+    term_write_text_file("/workspace/.orizon/desktop-profile",
+                         term->install_desktop);
+  } else if (strcmp(term->install_desktop, ORIZON_DESKTOP_PROFILE) == 0) {
+    char desktop_status[512];
+    orizon_desktop_set_enabled(1, desktop_status, sizeof(desktop_status));
+    gui_desktop_set_enabled(1);
+    term_write_text_file("/workspace/.orizon/desktop-profile",
+                         term->install_desktop);
+    term_write_text_file("/workspace/.orizon/desktop-state",
+                         desktop_status);
+  } else {
+    orizon_desktop_set_enabled(0, NULL, 0);
+    term_write_text_file("/workspace/.orizon/desktop-profile", "none\n");
+  }
 
   if (strcmp(term->install_disk_mode, "manual-later") == 0) {
     vfs_persist_save();
@@ -5207,7 +5525,8 @@ static void term_install_write_plan(terminal_t *term) {
       term_write_text_file("/workspace/.orizon/dualboot-prepared",
                            "dual boot ESP prepared\n"
                            "boot-file /EFI/Orizon/BOOTX64.EFI\n"
-                           "data not-installed\n");
+                           "data not-installed\n"
+                           "desktop see-install-plan\n");
       term_write_text_file("/workspace/.orizon/install-state",
                            "dual boot ESP prepared\n");
       term_install_finish(term, 1);
@@ -5223,10 +5542,11 @@ static void term_install_write_plan(terminal_t *term) {
     }
     snprintf(marker, sizeof(marker),
              "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
-             "mode=%s\ndata-partition=%s\n"
+             "desktop=%s\nmode=%s\ndata-partition=%s\n"
              "next=shutdown-remove-installer\n",
              term->install_language, term->install_keyboard,
-             term->install_hostname, term->install_disk_mode, data_name);
+             term->install_hostname, term->install_desktop,
+             term->install_disk_mode, data_name);
     term_write_text_file("/workspace/.orizon/installed", marker);
     term_write_text_file("/workspace/.orizon/install-state",
                          "install complete\nnext shutdown-remove-installer\n");
@@ -5386,6 +5706,23 @@ static void term_install_submit(terminal_t *term, const char *line) {
     term_install_prompt(term);
     return;
   case 6:
+    if (*value == '\0' || term_install_value_is(value, "1", "no", "n") ||
+        term_install_value_is(value, "non", "none", "console")) {
+      strcpy(term->install_desktop, "none");
+    } else if (term_install_value_is(value, "2", "yes", "y") ||
+               term_install_value_is(value, "oui", "desktop", "hypr") ||
+               term_install_value_is(value, "hyprland",
+                                     ORIZON_DESKTOP_PROFILE, NULL)) {
+      strcpy(term->install_desktop, ORIZON_DESKTOP_PROFILE);
+    } else {
+      term_puts_t(term, "Choose 1/no or 2/yes.\n");
+      term_install_prompt(term);
+      return;
+    }
+    term->install_step++;
+    term_install_prompt(term);
+    return;
+  case 7:
     if (strcmp(term->install_disk_mode, "manual-later") == 0 &&
         (strcmp(value, "SAVE") == 0 || strcmp(value, "save") == 0)) {
       term_install_write_plan(term);
@@ -5461,6 +5798,7 @@ static void term_start_installer(terminal_t *term) {
   term->install_data_partition_name[0] = '\0';
   term->install_data_partition_summary[0] = '\0';
   strcpy(term->install_hostname, "orizon-os");
+  strcpy(term->install_desktop, "none");
   term_puts_t(term, "\n");
   term_install_prompt(term);
 }
@@ -6155,17 +6493,21 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pkg upgrade plan - Show signed upgrade plan\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
     term_puts_t(term, "  pkg history    - Show package transaction history\n");
-    term_puts_t(term, "  pkg sample      - Create a sample .opkg package\n");
+    term_puts_t(term, "  pkg sample [desktop] - Create a sample .opkg package\n");
     term_puts_t(term, "  pkg hash <file> - Print package payload sha256\n");
     term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  pkg update      - Refresh packages through signed update\n");
       term_puts_t(term, "  pkg upgrade     - Plan then refresh packages through signed update\n");
-      term_puts_t(term, "  pkg install <file> - Install a verified package\n");
+      term_puts_t(term,
+                  "  pkg install <file|orizon-desktop-hypr> - Install a verified package\n");
       term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
       term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
+    term_puts_t(term,
+                "  desktop [status|enable|disable|config|doctor|logs|package] - Optional Hyprland-style desktop\n");
+    term_puts_t(term, "  desktop open terminal / close terminal - Control desktop terminal window\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
     term_puts_t(term, "  system [status|health|snapshot|backup|init|services|logs|doctor|repair|rescue|firstboot done] - Installed/live admin\n");
     term_puts_t(term, "  system health - Concise PASS/WARN installed-state summary\n");
@@ -6245,7 +6587,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  ssh start/status/algorithms/stop - Manage TCP/22 SSH listener\n");
     term_puts_t(term, "  ping <host> / dns <host> / route - Network diagnostics\n");
     term_puts_t(term, "  install   - Start guided disk installer\n");
-    term_puts_t(term, "  install-plan [mode] - Save non-destructive installer preflight report\n");
+    term_puts_t(term, "  install-plan [mode] [desktop] - Save installer preflight report\n");
     term_puts_t(term, "  install-status - Show installer plan/state\n");
     term_puts_t(term, "  boot-check - Verify installed disk boot files\n");
     term_puts_t(term, "  dualboot-check - Verify /EFI/Orizon side-by-side boot files\n");
@@ -7008,6 +7350,8 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     static char buf[4096];
     orizon_update_rollback_status(buf, sizeof(buf));
     term_puts_t(term, buf);
+  } else if (term_command_is(cmd, "desktop")) {
+    term_run_desktop(term, cmd);
   } else if (term_command_is(cmd, "pkg")) {
     term_run_pkg(term, cmd);
   } else if (term_command_is(cmd, "selftest")) {

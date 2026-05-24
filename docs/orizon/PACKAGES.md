@@ -28,6 +28,7 @@ pkg audit
 pkg doctor
 pkg cache
 pkg search orizon
+pkg search desktop
 pkg remote
 pkg remote verify
 pkg upgrade plan
@@ -36,10 +37,15 @@ pkg upgrade
 pkg info orizon-hello
 pkg history
 pkg sample
+pkg sample desktop
+pkg info orizon-desktop-hypr
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
 pkg simulate /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
+pkg install orizon-desktop-hypr
+pkg remove orizon-desktop-hypr
+pkg rollback orizon-desktop-hypr
 pkg remove orizon-hello
 pkg rollback orizon-hello
 ```
@@ -63,6 +69,31 @@ shape, paths, hashes, sizes and duplicate names, then checks the prepared
 detached sidecar `/workspace/.orizon/package-index.sig` when it exists. If that
 sidecar is absent, Orizon reports WARN and keeps the signed manifest pin as the
 honest fallback.
+
+`pkg search desktop` and `pkg info orizon-desktop-hypr` expose the optional
+desktop package even before it is installed. `pkg sample desktop` creates
+`/workspace/packages/orizon-desktop-hypr.opkg`. That optional package installs
+the first Orizon desktop profile:
+`/system/desktop.conf`, `/system/desktop-session.conf`,
+`/home/orizon/.config/hypr/orizon-hypr.conf`, and
+`/system/share/orizon-desktop-hypr.conf`. It is Hyprland-style configuration
+for Orizon's compositor, not upstream Hyprland/Wayland yet. After an installed
+VM boot:
+
+```text
+pkg install orizon-desktop-hypr
+desktop status
+desktop session
+desktop doctor
+```
+
+The named install path generates the local `.opkg`, installs it, then enables
+the profile with a package hook. Removing the package disables the desktop
+policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
+desktop package snapshot. The generated desktop package is currently version
+`0.2.0` because it includes both policy/config files and the persisted session
+settings used by `desktop theme`, `desktop wallpaper`, `desktop bar`, and the
+launcher.
 
 ## Package Format
 

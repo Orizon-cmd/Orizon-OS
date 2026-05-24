@@ -72,6 +72,22 @@ void gui_compose(void);
 void gui_main_loop(void);
 int gui_timer_irq_active(void);
 int gui_timer_fallback_active(void);
+void gui_desktop_set_enabled(int enabled);
+int gui_desktop_enabled(void);
+void gui_desktop_open_terminal(void);
+void gui_desktop_close_terminal(void);
+void gui_desktop_toggle_terminal(void);
+int gui_desktop_terminal_visible(void);
+void gui_desktop_show_launcher(void);
+void gui_desktop_hide_launcher(void);
+void gui_desktop_toggle_launcher(void);
+int gui_desktop_launcher_visible(void);
+void gui_desktop_reload_session(void);
+int gui_desktop_switch_workspace(int workspace);
+int gui_desktop_move_terminal_to_workspace(int workspace);
+void gui_desktop_format_workspaces(char *out, size_t out_size);
+void gui_desktop_format_windows(char *out, size_t out_size);
+void gui_desktop_format_status(char *out, size_t out_size);
 
 /* Direct framebuffer access for low-level debug */
 extern uint32_t *g_fb_ptr;

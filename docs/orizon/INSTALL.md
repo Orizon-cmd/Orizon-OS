@@ -14,7 +14,7 @@ Installer behavior changes should also update `CHANGELOG.md`, `STATUS.md`, and
 1. boot the live ISO,
 2. run `install`,
 3. collect language, keyboard, target disk, disk strategy, optional data
-   partition, and hostname,
+   partition, hostname, and the optional desktop choice,
 4. write an installation plan under `/workspace/.orizon/`,
 5. choose `dual-boot-data`, `dual-boot-esp`, or `guided-full-disk`,
 6. in `dual-boot-data`, add side-by-side files under `/EFI/Orizon` on the
@@ -58,6 +58,8 @@ The guided flow currently asks for:
 - data partition: required only for `dual-boot-data`; this must be an
   empty/prepared partition that Orizon may overwrite
 - hostname, defaulting to `orizon-os`
+- optional desktop: default `none`; choosing yes installs the
+  `orizon-desktop-hypr` Hyprland-style profile
 - explicit confirmation: `DUALDATA disk0 partN` for installed dual boot,
   `DUALBOOT disk0` for side-by-side ESP only, or `ERASE disk0` for full-disk
   installation
@@ -99,6 +101,27 @@ It writes runtime/staging state:
 /system/hostname
 /system/locale
 /system/keyboard
+/system/desktop.conf
+/system/desktop-session.conf
+/home/orizon/.config/hypr/orizon-hypr.conf
+```
+
+The desktop prompt is optional and disabled by default. It does not install the
+real upstream Hyprland compositor yet; it installs Orizon's Hyprland-style
+desktop profile, which can open and close the terminal window with F1/F2, open
+the launcher with F3, and persist simple theme/wallpaper/bar settings in
+`/system/desktop-session.conf`. The same profile can be installed later through
+packages:
+
+```text
+desktop package
+pkg install orizon-desktop-hypr
+pkg verify /workspace/packages/orizon-desktop-hypr.opkg
+pkg simulate /workspace/packages/orizon-desktop-hypr.opkg
+pkg install /workspace/packages/orizon-desktop-hypr.opkg
+desktop session
+desktop apps
+desktop doctor
 ```
 
 After the first installed boot, use the lifecycle commands before doing

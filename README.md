@@ -53,6 +53,13 @@ le developpement noyau:
   payload, installation de fichiers et script post-install minimal
 - depot officiel de paquets GitHub `Orizon-Packages`, lu par `update` pour
   installer des composants separes du kernel
+- premier profil bureau optionnel, inspire de Hyprland, desactive par defaut:
+  choix dans l'installateur, commandes `desktop`, paquet
+  `orizon-desktop-hypr`, config `/system/desktop.conf`,
+  `/system/desktop-session.conf` et
+  `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
+  workspaces runtime, lanceur F3 et terminal F1/F2; ce n'est pas encore le vrai
+  Hyprland/Wayland
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
   en plein ecran, `tail`, `help shell`, commandes groupees avec `;`, sorties
   redirigees `>`/`>>`, pipes simples vers `grep/head/tail/wc/tee/less`,
@@ -96,9 +103,21 @@ L'installation sur disque se lance depuis la console:
 install
 ```
 
-L'assistant demande la langue, le clavier, le mode disque et le hostname, puis
+L'assistant demande la langue, le clavier, le mode disque, le hostname et le
+choix optionnel du bureau, puis
 peut preparer Orizon OS sur le disque cible. Le flux affiche les disques
 detectes (`disk0`, `disk1`, etc.) avec type, taille et modele.
+
+Le bureau reste absent par defaut. Si tu le choisis pendant l'installation, ou
+si tu l'ajoutes plus tard avec `pkg install orizon-desktop-hypr`, Orizon genere
+et installe le paquet local `orizon-desktop-hypr`, puis active un profil inspire
+de Hyprland. `desktop doctor`, `desktop logs` et `desktop shortcuts` servent a
+le diagnostiquer/configurer. `desktop session`, `desktop theme`, `desktop
+wallpaper`, `desktop bar` et `desktop launcher` reglent la session persistante.
+`desktop workspace <n>` et `desktop move terminal <n>` donnent le premier socle
+de workspaces facon Hyprland, et `desktop windows` expose les fenetres/layers
+connus du compositeur. La premiere action utile est simple et volontaire: F1
+ouvre le terminal du bureau, F2 le ferme, F3 affiche le lanceur.
 
 Le mode recommande pour une machine qui contient deja Windows/Linux est
 `dual-boot-data`: il detecte la GPT existante, trouve l'ESP FAT32, affiche les
@@ -795,6 +814,8 @@ La premiere commande reconstruit `orizon-os-x86_64`, deploie le resultat sur
 - `docs/orizon/RELEASE.md` : checklist release, artefacts, CI et erreurs
 - `docs/orizon/SECURITY.md` : posture SSH/VFS/update/package et limites de
   securite
+- `docs/orizon/DESKTOP.md` : profil bureau optionnel inspire de Hyprland,
+  commandes `desktop`, paquet et limites actuelles
 - `docs/orizon/PACKAGES.md` : format `.opkg`, commandes `pkg`, signatures et
   rollback paquet
 - `docs/orizon/INSTALL.md` : installateur, preflight VM et limites dual boot

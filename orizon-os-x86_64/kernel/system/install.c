@@ -761,8 +761,10 @@ static int fat32_format_esp(uint64_t start_lba, uint32_t total_sectors,
 
   snprintf(install_text, sizeof(install_text),
            "Orizon OS installed\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
+           "desktop=%s\n"
            "next=shutdown-remove-installer\n",
-           config->language, config->keyboard, config->hostname);
+           config->language, config->keyboard, config->hostname,
+           config->desktop_profile ? config->desktop_profile : "none");
 
   payload.kernel = boot_kernel_image();
   payload.kernel_size = boot_kernel_image_size();
@@ -889,6 +891,9 @@ int orizon_install_format_plan(const orizon_install_config_t *config,
   append_report(report, report_size, line);
   snprintf(line, sizeof(line), "hostname: %s",
            config->hostname ? config->hostname : "(unset)");
+  append_report(report, report_size, line);
+  snprintf(line, sizeof(line), "desktop: %s",
+           config->desktop_profile ? config->desktop_profile : "none");
   append_report(report, report_size, line);
   snprintf(line, sizeof(line), "mode: %s", mode);
   append_report(report, report_size, line);
@@ -2256,10 +2261,12 @@ static int orizon_install_dualboot_prepare(
   snprintf(install_text, sizeof(install_text),
            "Orizon OS dual boot files\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
            "mode=dual-boot-esp\n"
+           "desktop=%s\n"
            "boot-file=/EFI/Orizon/BOOTX64.EFI\n"
            "data=not-installed\n"
            "next=firmware-boot-file-or-boot-entry\n",
-           config->language, config->keyboard, config->hostname);
+           config->language, config->keyboard, config->hostname,
+           config->desktop_profile ? config->desktop_profile : "none");
   payload.kernel = boot_kernel_image();
   payload.kernel_size = boot_kernel_image_size();
   payload.efi = boot_efi_image();
@@ -2338,11 +2345,13 @@ static int orizon_install_dualboot_data_prepare(
   snprintf(install_text, sizeof(install_text),
            "Orizon OS dual boot install\nlanguage=%s\nkeyboard=%s\nhostname=%s\n"
            "mode=dual-boot-data\n"
+           "desktop=%s\n"
            "boot-file=/EFI/Orizon/BOOTX64.EFI\n"
            "data-partition=part%d\n"
            "update=enabled-after-first-data-save\n"
            "next=firmware-boot-file-or-boot-entry\n",
            config->language, config->keyboard, config->hostname,
+           config->desktop_profile ? config->desktop_profile : "none",
            config->data_partition_index);
   payload.kernel = boot_kernel_image();
   payload.kernel_size = boot_kernel_image_size();

@@ -39,6 +39,14 @@
   `pre-remove`/`post-remove` scripts, explicit transaction history/state
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
+- Optional desktop profile foundation: `desktop status/config/doctor/logs`,
+  `desktop session/apps/theme/wallpaper/bar/launcher`,
+  `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
+  and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
+  profile. It is disabled by default, persists session settings, and currently
+  focuses on terminal open/close, a first launcher/status-bar layer, and
+  diagnostic window/workspace plumbing, not the real upstream Hyprland/Wayland
+  stack yet.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
   redirection, diagnostic pipes to `grep/head/tail/wc/tee/less`, persistent

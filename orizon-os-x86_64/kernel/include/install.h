@@ -12,6 +12,7 @@ typedef struct {
   const char *keyboard;
   const char *disk_mode;
   const char *hostname;
+  const char *desktop_profile;
   int disk_index;
   const char *disk_name;
   int data_partition_index;

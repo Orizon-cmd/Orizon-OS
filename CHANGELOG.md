@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Added the first optional Hyprland-style desktop profile with installer
+  choice, `desktop` commands, `orizon-desktop-hypr` package generation, and
+  F1/F2 terminal open/close support in the compositor.
+- Extended the desktop package flow with named `pkg install
+  orizon-desktop-hypr`, package enable/disable hooks, `desktop doctor`,
+  `desktop logs`, `desktop shortcuts`, `desktop reset`, and package search/info
+  discovery.
+- Added a persisted desktop session layer with `desktop session`, theme,
+  wallpaper, bar, launcher controls, F3 launcher toggle, and package payload
+  version `0.2.0` for `/system/desktop-session.conf`.
+- Added initial Hyprland-style workspace commands for the Orizon compositor:
+  `desktop workspace`, `desktop workspace <n>`, and
+  `desktop move terminal <n>`.
+- Added `desktop windows` and `desktop layout <name>` as the first diagnostic
+  seam for future compositor window management.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

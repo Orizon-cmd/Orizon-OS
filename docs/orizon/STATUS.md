@@ -42,6 +42,15 @@ work.
   `firstboot done` document first boot, record `/system/boot-state`, write
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
+- Optional desktop profile: `desktop status/config/doctor/logs/shortcuts`,
+  `desktop session/apps/windows/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop enable/disable/reset/package`, `pkg sample desktop`, and
+  `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
+  desktop profile. It is disabled by default, selectable during installation,
+  package installable later, persists `/system/desktop-session.conf`, and
+  currently supports terminal F1/F2, launcher F3, runtime workspace switch,
+  terminal move commands, and a diagnostic window/layer list in the Orizon
+  compositor.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.
@@ -153,6 +162,9 @@ work.
   and adding package-key rotation separate from the signed OS manifest.
 - Full boot-level package rollback.
 - Full ACPI shutdown parsing and complete ACPI namespace walking.
+- Real upstream Hyprland/Wayland/wlroots integration, GPU acceleration,
+  launcher/status bar, and full tiling window management. The current desktop
+  is an Orizon Hyprland-style profile, not upstream Hyprland.
 
 ## Safe Operator Loop
 

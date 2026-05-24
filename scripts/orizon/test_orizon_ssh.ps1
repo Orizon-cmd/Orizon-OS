@@ -57,6 +57,7 @@ $commands = @(
   "pkg cache",
   "pkg help",
   "pkg search orizon",
+  "pkg search desktop",
   "pkg remote",
   "pkg remote verify",
   "pkg upgrade plan",
@@ -64,6 +65,29 @@ $commands = @(
   "pkg simulate /workspace/packages/orizon-hello.opkg",
   "pkg verify /workspace/packages/orizon-hello.opkg",
   "pkg install /workspace/packages/orizon-hello.opkg",
+  "desktop status",
+  "desktop config",
+  "desktop session",
+  "desktop apps",
+  "desktop windows",
+  "desktop workspace",
+  "desktop workspace 2",
+  "desktop move terminal 2",
+  "desktop shortcuts",
+  "desktop doctor",
+  "desktop logs",
+  "desktop theme moss",
+  "desktop wallpaper dawn",
+  "desktop layout tiling",
+  "desktop bar toggle",
+  "desktop apply",
+  "desktop launcher show",
+  "desktop launch terminal",
+  "pkg info orizon-desktop-hypr",
+  "desktop package",
+  "pkg simulate /workspace/packages/orizon-desktop-hypr.opkg",
+  "pkg verify /workspace/packages/orizon-desktop-hypr.opkg",
+  "pkg install orizon-desktop-hypr",
   "update status",
   "storage",
   "storage diag",
@@ -302,6 +326,9 @@ run_cmd() {
     "pkg search orizon")
       grep -q "pkg search:" "`$OUT" && grep -q "builtin orizon-core" "`$OUT" || { echo "missing pkg search output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "pkg search desktop")
+      grep -q "orizon-desktop-hypr" "`$OUT" || { echo "missing desktop package search output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "pkg remote")
       grep -q "package remote:" "`$OUT" || { echo "missing pkg remote output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -316,6 +343,66 @@ run_cmd() {
       ;;
     "pkg install /workspace/packages/orizon-hello.opkg")
       grep -q "unavailable in live boot" "`$OUT" || { echo "pkg install did not return live-boot guard"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop status")
+      grep -q "Orizon desktop" "`$OUT" && grep -q "hyprland-inspired" "`$OUT" || { echo "missing desktop status"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop config")
+      grep -q "Hyprland-style" "`$OUT" || { echo "missing desktop config"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop session")
+      grep -q "Orizon desktop session" "`$OUT" && grep -q "theme:" "`$OUT" || { echo "missing desktop session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop apps")
+      grep -q "Orizon desktop apps" "`$OUT" && grep -q "terminal" "`$OUT" || { echo "missing desktop apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop windows")
+      grep -q "Orizon desktop windows" "`$OUT" && grep -q "layout:" "`$OUT" || { echo "missing desktop windows"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop workspace")
+      grep -q "Orizon desktop workspaces" "`$OUT" && grep -q "active:" "`$OUT" || { echo "missing desktop workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop workspace 2")
+      grep -q "desktop: workspace 2 active" "`$OUT" || { echo "missing desktop workspace switch"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop move terminal 2")
+      grep -q "desktop: terminal moved to workspace 2" "`$OUT" || { echo "missing desktop terminal move"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop shortcuts")
+      grep -q "F1" "`$OUT" && grep -q "F2" "`$OUT" || { echo "missing desktop shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop doctor")
+      grep -q "desktop doctor:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop doctor"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop logs")
+      grep -q "desktop log:" "`$OUT" || { echo "missing desktop logs"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop theme moss"|"desktop wallpaper dawn"|"desktop layout tiling"|"desktop bar toggle")
+      grep -q "desktop session: updated" "`$OUT" || { echo "missing desktop session update"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop apply")
+      grep -q "desktop: session reloaded" "`$OUT" || { echo "missing desktop apply output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop launcher show")
+      grep -q "desktop: launcher open" "`$OUT" || { echo "missing desktop launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop launch terminal")
+      grep -q "desktop: launched terminal" "`$OUT" || { echo "missing desktop launch output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg info orizon-desktop-hypr")
+      grep -q "orizon-desktop-hypr" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop package")
+      grep -q "orizon-desktop-hypr.opkg" "`$OUT" || { echo "missing desktop package output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg simulate /workspace/packages/orizon-desktop-hypr.opkg")
+      grep -q "pkg simulate:" "`$OUT" && grep -q "dry-run" "`$OUT" || { echo "missing desktop pkg simulate output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg verify /workspace/packages/orizon-desktop-hypr.opkg")
+      grep -q "package verify: OK" "`$OUT" || { echo "missing desktop pkg verify output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg install orizon-desktop-hypr")
+      grep -Eq "unavailable in live boot|pkg named install: orizon-desktop-hypr" "`$OUT" || { echo "missing named desktop package install output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pci bars")
       grep -q "PCI devices:" "`$OUT" || { echo "missing PCI diagnostics"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

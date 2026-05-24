@@ -18,6 +18,7 @@
  */
 
 #include "../include/packages.h"
+#include "../include/desktop.h"
 #include "../include/rsa.h"
 #include "../include/sha256.h"
 #include "../include/string.h"
@@ -109,6 +110,7 @@ static const builtin_package_t builtin_packages[] = {
     {"orizon-scheduler", "process-accounting", "builtin"},
     {"orizon-updater", "installed-esp-writer", "builtin"},
     {"orizon-packages", "text-payload-v5", "builtin"},
+    {"orizon-desktop-base", "hyprland-style-profile-runtime", "optional"},
 };
 
 static const uint8_t pkg_repo_root_n[PKG_REMOTE_SIG_BYTES] = {
@@ -333,6 +335,13 @@ static const builtin_package_t *find_builtin_package(const char *name) {
     }
   }
   return NULL;
+}
+
+static int pkg_name_is_desktop_alias(const char *name) {
+  return name && (strcmp(name, ORIZON_DESKTOP_PACKAGE) == 0 ||
+                  strcmp(name, "desktop") == 0 ||
+                  strcmp(name, "hypr") == 0 ||
+                  strcmp(name, "hyprland") == 0);
 }
 
 static int pkg_path_safe(const char *path) {
@@ -2057,6 +2066,18 @@ static int pkg_install_loaded(const char *source_name, const char *data,
                                 "previous-payload-on-failure", "db-failed");
     return -6;
   }
+  if (strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE) == 0) {
+    char desktop_status[512];
+    if (orizon_desktop_set_enabled(1, desktop_status,
+                                   sizeof(desktop_status)) == 0) {
+      pkg_append_line(report, report_size,
+                      "desktop hook: optional profile enabled");
+      pkg_append(report, report_size, desktop_status);
+    } else {
+      pkg_append_line(report, report_size,
+                      "desktop hook: WARN profile enable failed");
+    }
+  }
   if (had_old) {
     snprintf(line, sizeof(line), "Replaced previous version %s", old_pkg.version);
     pkg_append_line(report, report_size, line);
@@ -2076,6 +2097,43 @@ static int pkg_install_loaded(const char *source_name, const char *data,
   snprintf(line, sizeof(line), "Installed %s %s", pkg.name, pkg.version);
   pkg_append_line(report, report_size, line);
   return 0;
+}
+
+int orizon_pkg_install_named(const char *name, char *report,
+                             size_t report_size) {
+  char generated[640];
+  char install_report[4096];
+  int rc;
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  if (!pkg_name_is_desktop_alias(name)) {
+    pkg_append_line(report, report_size,
+                    "pkg install: unknown named package");
+    pkg_append_line(report, report_size,
+                    "available named package: " ORIZON_DESKTOP_PACKAGE);
+    pkg_append_line(report, report_size,
+                    "hint: use pkg install <file> for local .opkg files");
+    return -1;
+  }
+
+  pkg_append_line(report, report_size,
+                  "pkg named install: " ORIZON_DESKTOP_PACKAGE);
+  rc = orizon_pkg_write_desktop_sample(generated, sizeof(generated));
+  pkg_append(report, report_size, generated);
+  if (rc < 0) {
+    pkg_append_line(report, report_size,
+                    "pkg install: failed to prepare desktop package");
+    return rc;
+  }
+  rc = orizon_pkg_install_file(ORIZON_DESKTOP_PACKAGE_PATH, install_report,
+                               sizeof(install_report));
+  pkg_append(report, report_size, install_report);
+  return rc;
 }
 
 int orizon_pkg_install_file(const char *path, char *report, size_t report_size) {
@@ -2782,6 +2840,14 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
     pkg_append_line(out, out_size, line);
     matches++;
   }
+  if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
+      pkg_text_matches_query("desktop hypr hyprland optional", query)) {
+    snprintf(line, sizeof(line),
+             "available %s 0.2.0 optional install='pkg install %s'",
+             ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
+    pkg_append_line(out, out_size, line);
+    matches++;
+  }
 
   count = vfs_readdir(PKG_DB_INSTALLED, entries, 64);
   if (count > 0) {
@@ -2868,6 +2934,23 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
                           meta_path, sizeof(meta_path)) < 0 ||
       pkg_read_file(meta_path, meta, sizeof(meta), NULL) < 0 ||
       pkg_read_file(manifest_path, pkg_buf, sizeof(pkg_buf), &size) < 0) {
+    if (pkg_name_is_desktop_alias(name)) {
+      pkg_append_line(out, out_size, "Orizon package");
+      pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
+      pkg_append_line(out, out_size, "version 0.2.0");
+      pkg_append_line(out, out_size, "state available optional");
+      pkg_append_line(out, out_size,
+                      "type local generated package; not installed yet");
+      pkg_append_line(out, out_size,
+                      "install pkg install " ORIZON_DESKTOP_PACKAGE);
+      pkg_append_line(out, out_size,
+                      "sample desktop package writes " ORIZON_DESKTOP_PACKAGE_PATH);
+      pkg_append_line(out, out_size,
+                      "depends orizon-core core-x86_64; orizon-packages text-payload-v5; orizon-desktop-base hyprland-style-profile-runtime");
+      pkg_append_line(out, out_size,
+                      "payload /system/desktop.conf /system/desktop-session.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
+      return 0;
+    }
     pkg_append_line(out, out_size, "pkg info: package not installed");
     return -2;
   }
@@ -2995,6 +3078,18 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
   if (post_remove_result < 0) {
     pkg_append_line(report, report_size,
                     "pkg remove: WARN post-remove script failed");
+  }
+  if (strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE) == 0) {
+    char desktop_status[512];
+    if (orizon_desktop_set_enabled(0, desktop_status,
+                                   sizeof(desktop_status)) == 0) {
+      pkg_append_line(report, report_size,
+                      "desktop hook: optional profile disabled");
+      pkg_append(report, report_size, desktop_status);
+    } else {
+      pkg_append_line(report, report_size,
+                      "desktop hook: WARN profile disable failed");
+    }
   }
   snprintf(line, sizeof(line),
            "removed %s %s transaction=%s-%lu rollback=available", pkg.name,
@@ -3342,6 +3437,99 @@ int orizon_pkg_write_sample(char *report, size_t report_size) {
                   "Sample package written to /workspace/packages/orizon-hello.opkg");
   pkg_append_line(report, report_size,
                   "Run: pkg install /workspace/packages/orizon-hello.opkg");
+  vfs_persist_save();
+  return 0;
+}
+
+int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
+  static const char desktop_payload[] =
+      "file " ORIZON_DESKTOP_CONFIG_PATH "\n"
+      "# Orizon desktop policy v1\n"
+      "enabled yes\n"
+      "profile " ORIZON_DESKTOP_PROFILE "\n"
+      "package " ORIZON_DESKTOP_PACKAGE "\n"
+      "session orizon-compositor\n"
+      "terminal default-open\n"
+      "shortcut-open-terminal F1\n"
+      "shortcut-close-terminal F2\n"
+      "note upstream-hyprland-not-embedded-yet\n"
+      "content-end\n"
+      "file " ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
+      "# Orizon Hyprland-style desktop profile\n"
+      "$mod = SUPER\n"
+      "monitor = ,preferred,auto,1\n"
+      "general:gaps_in = 6\n"
+      "general:gaps_out = 12\n"
+      "general:border_size = 2\n"
+      "decoration:rounding = 8\n"
+      "animations:enabled = true\n"
+      "bind = $mod, RETURN, exec, orizon-terminal\n"
+      "bind = $mod, Q, closewindow\n"
+      "bind = F1, exec, desktop open terminal\n"
+      "bind = F2, exec, desktop close terminal\n"
+      "content-end\n"
+      "file " ORIZON_DESKTOP_TEMPLATE_PATH "\n"
+      "# Orizon Hyprland-style package template\n"
+      "install = optional\n"
+      "open-terminal = F1\n"
+      "close-terminal = F2\n"
+      "status-command = desktop status\n"
+      "content-end\n"
+      "file " ORIZON_DESKTOP_SESSION_PATH "\n"
+      "# Orizon desktop session v1\n"
+      "theme graphite\n"
+      "wallpaper aurora\n"
+      "layout floating\n"
+      "bar yes\n"
+      "launcher yes\n"
+      "autostart-terminal yes\n"
+      "focus follows-mouse no\n"
+      "content-end\n"
+      "post-install\n"
+      "mkdir /workspace/packages\n"
+      "append " ORIZON_DESKTOP_LOG_PATH " orizon-desktop-hypr installed\n"
+      "echo post-install: desktop enabled; reboot or run desktop enable\n"
+      "end-post-install\n"
+      "pre-remove\n"
+      "echo pre-remove: orizon-desktop-hypr cleanup starting\n"
+      "end-pre-remove\n"
+      "post-remove\n"
+      "write " ORIZON_DESKTOP_CONFIG_PATH " enabled no\n"
+      "append " ORIZON_DESKTOP_LOG_PATH " orizon-desktop-hypr removed\n"
+      "end-post-remove\n";
+  char hash[SHA256_HEX_SIZE];
+  char header[288];
+  char path[] = ORIZON_DESKTOP_PACKAGE_PATH;
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  sha256_buffer_hex(desktop_payload, sizeof(desktop_payload) - 1, hash);
+  snprintf(header, sizeof(header),
+           "orizon-package 1\n"
+           "name " ORIZON_DESKTOP_PACKAGE "\n"
+           "version 0.2.0\n"
+           "depends orizon-core core-x86_64\n"
+           "depends orizon-packages text-payload-v5\n"
+           "depends orizon-desktop-base hyprland-style-profile-runtime\n"
+           "sha256 %s\n"
+           "payload:\n",
+           hash);
+  if (pkg_write_blob_internal(path, header, strlen(header)) < 0 ||
+      pkg_append_text_internal(path, desktop_payload) < 0) {
+    pkg_append_line(report, report_size,
+                    "pkg sample desktop: cannot write package");
+    return -1;
+  }
+  pkg_append_line(report, report_size,
+                  "Desktop package written to " ORIZON_DESKTOP_PACKAGE_PATH);
+  pkg_append_line(report, report_size,
+                  "Run after install: pkg install " ORIZON_DESKTOP_PACKAGE_PATH);
+  pkg_append_line(report, report_size,
+                  "Then: desktop status | desktop session | desktop launch terminal");
   vfs_persist_save();
   return 0;
 }

@@ -83,6 +83,31 @@ system firstboot
 firstboot done
 hostname
 hostname set orizon-vm
+desktop status
+desktop config
+desktop session
+desktop apps
+desktop windows
+desktop workspace
+desktop workspace 2
+desktop move terminal 2
+desktop shortcuts
+desktop doctor
+desktop logs
+desktop enable
+desktop disable
+desktop reset
+desktop write-config
+desktop theme moss
+desktop wallpaper dawn
+desktop layout tiling
+desktop bar toggle
+desktop apply
+desktop launcher show
+desktop launch terminal
+desktop open terminal
+desktop close terminal
+desktop package
 boot-check
 dualboot-check
 repair-boot
@@ -122,7 +147,7 @@ reruns the idempotent boot tasks, writes
 `/system/boot-state`, `/system/service-state`, `/logs/init.log`, and
 `/logs/service.log`, and persists roots when possible.
 `system services` shows the small service policy (`persistence`, `bootlog`,
-`network`, `ssh`, `package-db`, `update-bootguard`, `firstboot`) without
+`network`, `ssh`, `desktop`, `package-db`, `update-bootguard`, `firstboot`) without
 pretending to be a full service manager. `system logs` prints the boot-state,
 service-state, init log, and service log in one place. `system firstboot`
 prints the first installed boot checklist before `firstboot done` marks it as
@@ -135,6 +160,17 @@ recreates only missing defaults under `/workspace/.orizon`, `/home/orizon`,
 `/system/admin-notes.txt`, `/home/orizon/.profile`, then writes
 `/workspace/.orizon/rescue-report.txt`.
 `hostname set <name>` persists `/system/hostname`.
+
+`desktop` controls the optional first desktop profile. It is Hyprland-style,
+not upstream Hyprland/Wayland yet. The live ISO keeps it disabled by default.
+Use `desktop enable` or `pkg install orizon-desktop-hypr` to start the
+compositor desktop session. `desktop session` manages theme/wallpaper/bar
+state, `desktop layout <name>` updates the prepared layout profile,
+`desktop apps` lists launcher entries, `desktop windows` lists compositor
+windows/layers, `desktop workspace <n>` switches runtime workspaces,
+`desktop move terminal <n>` moves the terminal window, F1 opens the terminal,
+F2 closes it, and F3 toggles the launcher overlay. See
+[DESKTOP.md](DESKTOP.md).
 
 ## Network And Update
 
@@ -183,18 +219,22 @@ pkg audit
 pkg doctor
 pkg cache
 pkg search orizon
+pkg search desktop
 pkg remote
 pkg remote verify
 pkg upgrade plan
 pkg update
 pkg upgrade
 pkg info <name>
+pkg info orizon-desktop-hypr
 pkg history
 pkg sample
+pkg sample desktop
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
 pkg simulate /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
+pkg install orizon-desktop-hypr
 pkg remove orizon-hello
 pkg rollback orizon-hello
 ```
@@ -208,6 +248,14 @@ manifest, package repository commit pin, and package-index SHA-256 pin.
 Detached package repo signatures are prepared through
 `/workspace/.orizon/package-index.sig`; missing sidecars are reported as WARN
 and still fall back to the signed manifest pin.
+
+`pkg sample desktop` writes `/workspace/packages/orizon-desktop-hypr.opkg`,
+the optional desktop package. It installs `/system/desktop.conf`,
+`/system/desktop-session.conf`, and the Hyprland-style user config under
+`/home/orizon/.config/hypr/`.
+On an installed VM, `pkg install orizon-desktop-hypr` generates and installs
+that package by name, `pkg remove orizon-desktop-hypr` disables it, and
+`pkg rollback orizon-desktop-hypr` restores the last removed snapshot.
 
 ## SSH
 

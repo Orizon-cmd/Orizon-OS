@@ -8,6 +8,8 @@
 
 #include "../include/ssh.h"
 #include "../include/aes_gcm.h"
+#include "../include/desktop.h"
+#include "../include/gui.h"
 #include "../include/install.h"
 #include "../include/kmalloc.h"
 #include "../include/klog.h"
@@ -3127,6 +3129,13 @@ static void ssh_shell_print_hostname(const char *args) {
   ssh_shell_prompt();
 }
 
+static int ssh_pkg_desktop_name(const char *name) {
+  return ssh_shell_command_is(name, ORIZON_DESKTOP_PACKAGE) ||
+         ssh_shell_command_is(name, "desktop") ||
+         ssh_shell_command_is(name, "hypr") ||
+         ssh_shell_command_is(name, "hyprland");
+}
+
 static void ssh_shell_print_pkg(const char *args) {
   static char out[SSH_CHANNEL_TEXT_BUF];
   static char path[MAX_PATH];
@@ -3150,13 +3159,13 @@ static void ssh_shell_print_pkg(const char *args) {
              "  pkg upgrade plan       show signed package upgrade plan\r\n"
              "  pkg info <name>        show package metadata/files\r\n"
              "  pkg history            show install/remove history\r\n"
-             "  pkg sample             create /workspace/packages/orizon-hello.opkg\r\n"
+             "  pkg sample [desktop]   create a sample .opkg package\r\n"
              "  pkg hash <file>        print package payload sha256\r\n"
              "  pkg verify <file>      verify package hash/dependencies\r\n"
              "  pkg simulate <file>    dry-run install/upgrade without writes\r\n"
              "  pkg update             run signed package refresh through update\r\n"
              "  pkg upgrade            plan then run signed package refresh\r\n"
-             "  pkg install <file>     install a verified package after disk install\r\n"
+             "  pkg install <file|orizon-desktop-hypr> install a verified package after disk install\r\n"
              "  pkg remove <name>      remove an installed package\r\n"
              "  pkg rollback <name>    restore last removed package snapshot\r\n");
   } else if (ssh_shell_command_is(sub, "list")) {
@@ -3206,7 +3215,13 @@ static void ssh_shell_print_pkg(const char *args) {
   } else if (ssh_shell_command_is(sub, "history")) {
     orizon_pkg_history(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "sample")) {
-    orizon_pkg_write_sample(out, sizeof(out));
+    const char *sample_args = ssh_shell_skip_spaces(sub + 6);
+    if (ssh_shell_command_is(sample_args, "desktop") ||
+        ssh_shell_command_is(sample_args, "orizon-desktop-hypr")) {
+      orizon_pkg_write_desktop_sample(out, sizeof(out));
+    } else {
+      orizon_pkg_write_sample(out, sizeof(out));
+    }
   } else if (ssh_shell_command_is(sub, "hash")) {
     if (ssh_shell_resolve_path(sub + 4, path, sizeof(path)) < 0) {
       snprintf(out, sizeof(out), "usage: pkg hash <file>\r\n");
@@ -3241,10 +3256,16 @@ static void ssh_shell_print_pkg(const char *args) {
     if (!ssh_install_already_complete()) {
       snprintf(out, sizeof(out),
                "pkg install: unavailable in live boot. Install Orizon OS first.\r\n");
+    } else if (ssh_pkg_desktop_name(ssh_shell_skip_spaces(sub + 7))) {
+      orizon_pkg_install_named(ssh_shell_skip_spaces(sub + 7), out,
+                               sizeof(out));
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
     } else if (ssh_shell_resolve_path(sub + 7, path, sizeof(path)) < 0) {
-      snprintf(out, sizeof(out), "usage: pkg install <file>\r\n");
+      snprintf(out, sizeof(out),
+               "usage: pkg install <file|orizon-desktop-hypr>\r\n");
     } else {
       orizon_pkg_install_file(path, out, sizeof(out));
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
     }
   } else if (ssh_shell_command_is(sub, "remove")) {
     if (!ssh_install_already_complete()) {
@@ -3253,7 +3274,10 @@ static void ssh_shell_print_pkg(const char *args) {
     } else if (!ssh_shell_read_token(sub + 6, token, sizeof(token))) {
       snprintf(out, sizeof(out), "usage: pkg remove <name>\r\n");
     } else {
-      orizon_pkg_remove(token, out, sizeof(out));
+      orizon_pkg_remove(ssh_pkg_desktop_name(token) ? ORIZON_DESKTOP_PACKAGE
+                                                    : token,
+                        out, sizeof(out));
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
     }
   } else if (ssh_shell_command_is(sub, "rollback")) {
     if (!ssh_install_already_complete()) {
@@ -3262,10 +3286,206 @@ static void ssh_shell_print_pkg(const char *args) {
     } else if (!ssh_shell_read_token(sub + 8, token, sizeof(token))) {
       snprintf(out, sizeof(out), "usage: pkg rollback <name>\r\n");
     } else {
-      orizon_pkg_rollback(token, out, sizeof(out));
+      orizon_pkg_rollback(ssh_pkg_desktop_name(token) ? ORIZON_DESKTOP_PACKAGE
+                                                      : token,
+                          out, sizeof(out));
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
     }
   } else {
     snprintf(out, sizeof(out), "pkg: unknown command. Try 'pkg help'.\r\n");
+  }
+  if (strlen(out) + 2 < sizeof(out)) {
+    strcat(out, "\r\n");
+  }
+  ssh_queue_channel_text(out);
+  ssh_shell_prompt();
+}
+
+static void ssh_shell_print_desktop(const char *args) {
+  static char out[4096];
+  const char *sub = ssh_shell_skip_spaces(args);
+
+  out[0] = '\0';
+  if (*sub == '\0' || ssh_shell_command_is(sub, "status")) {
+    gui_desktop_format_status(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "help")) {
+    snprintf(out, sizeof(out),
+             "Orizon desktop\r\n"
+             "  desktop status          show desktop/session state\r\n"
+             "  desktop config          show Hyprland-style config template\r\n"
+             "  desktop enable          enable optional desktop profile\r\n"
+             "  desktop disable         disable desktop profile\r\n"
+             "  desktop doctor          check desktop install/config state\r\n"
+             "  desktop logs            show desktop events\r\n"
+             "  desktop shortcuts       show keys and commands\r\n"
+             "  desktop session         show theme/wallpaper/layout\r\n"
+             "  desktop apps            list desktop launcher apps\r\n"
+             "  desktop windows         list compositor windows/layers\r\n"
+             "  desktop theme <name>    set session theme\r\n"
+             "  desktop wallpaper <name> set symbolic wallpaper\r\n"
+             "  desktop layout <name>   set floating/tiling/monocle layout\r\n"
+             "  desktop bar on|off|toggle configure desktop bar\r\n"
+             "  desktop launcher [show|hide|toggle] control launcher\r\n"
+             "  desktop launch terminal launch terminal app\r\n"
+             "  desktop workspace [n]   show or switch workspace\r\n"
+             "  desktop move terminal <n> move terminal to workspace\r\n"
+             "  desktop reset           disable and restore default policy\r\n"
+             "  desktop write-config    rewrite Hypr-style user config\r\n"
+             "  desktop open terminal   open local terminal window\r\n"
+             "  desktop close terminal  close local terminal window\r\n"
+             "  desktop package         write installable desktop .opkg\r\n");
+  } else if (ssh_shell_command_is(sub, "config")) {
+    orizon_desktop_format_config(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "doctor") ||
+             ssh_shell_command_is(sub, "check")) {
+    orizon_desktop_format_doctor(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "logs") ||
+             ssh_shell_command_is(sub, "log")) {
+    orizon_desktop_format_log(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "shortcuts") ||
+             ssh_shell_command_is(sub, "keys")) {
+    orizon_desktop_format_shortcuts(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "session") ||
+             ssh_shell_command_is(sub, "settings")) {
+    orizon_desktop_format_session(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "apps") ||
+             ssh_shell_command_is(sub, "launcher apps")) {
+    orizon_desktop_format_apps(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "windows") ||
+             ssh_shell_command_is(sub, "window")) {
+    gui_desktop_format_windows(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "workspaces")) {
+    gui_desktop_format_workspaces(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "workspace")) {
+    const char *value = ssh_shell_skip_spaces(sub + 9);
+    uint32_t workspace;
+    if (*value == '\0') {
+      gui_desktop_format_workspaces(out, sizeof(out));
+    } else if (ssh_shell_parse_uint(value, &workspace) < 0 ||
+               gui_desktop_switch_workspace((int)workspace) < 0) {
+      snprintf(out, sizeof(out), "usage: desktop workspace <1-3>\r\n");
+    } else {
+      snprintf(out, sizeof(out), "desktop: workspace %u active\r\n",
+               (unsigned)workspace);
+    }
+  } else if (ssh_shell_command_is(sub, "move")) {
+    const char *target = ssh_shell_skip_spaces(sub + 4);
+    uint32_t workspace;
+    if (!ssh_shell_command_is(target, "terminal")) {
+      snprintf(out, sizeof(out), "usage: desktop move terminal <1-3>\r\n");
+    } else {
+      target = ssh_shell_skip_spaces(target + 8);
+      if (ssh_shell_parse_uint(target, &workspace) < 0 ||
+          gui_desktop_move_terminal_to_workspace((int)workspace) < 0) {
+        snprintf(out, sizeof(out), "usage: desktop move terminal <1-3>\r\n");
+      } else {
+        snprintf(out, sizeof(out),
+                 "desktop: terminal moved to workspace %u\r\n",
+                 (unsigned)workspace);
+      }
+    }
+  } else if (ssh_shell_command_is(sub, "theme")) {
+    const char *value = ssh_shell_skip_spaces(sub + 5);
+    if (*value == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop theme <graphite|moss|ember|frost>\r\n");
+    } else {
+      orizon_desktop_set_session_option("theme", value, out, sizeof(out));
+      gui_desktop_reload_session();
+    }
+  } else if (ssh_shell_command_is(sub, "wallpaper")) {
+    const char *value = ssh_shell_skip_spaces(sub + 9);
+    if (*value == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop wallpaper <aurora|dawn|noir|moss>\r\n");
+    } else {
+      orizon_desktop_set_session_option("wallpaper", value, out,
+                                        sizeof(out));
+      gui_desktop_reload_session();
+    }
+  } else if (ssh_shell_command_is(sub, "layout")) {
+    const char *value = ssh_shell_skip_spaces(sub + 6);
+    if (*value == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop layout <floating|tiling|monocle>\r\n");
+    } else {
+      orizon_desktop_set_session_option("layout", value, out, sizeof(out));
+      gui_desktop_reload_session();
+    }
+  } else if (ssh_shell_command_is(sub, "bar")) {
+    const char *value = ssh_shell_skip_spaces(sub + 3);
+    orizon_desktop_session_t session;
+    if (ssh_shell_command_is(value, "toggle")) {
+      orizon_desktop_load_session(&session);
+      value = session.bar_enabled ? "off" : "on";
+    }
+    if (*value == '\0') {
+      snprintf(out, sizeof(out), "usage: desktop bar on|off|toggle\r\n");
+    } else {
+      orizon_desktop_set_session_option("bar", value, out, sizeof(out));
+      gui_desktop_reload_session();
+    }
+  } else if (ssh_shell_command_is(sub, "launcher")) {
+    const char *value = ssh_shell_skip_spaces(sub + 8);
+    if (*value == '\0' || ssh_shell_command_is(value, "show") ||
+        ssh_shell_command_is(value, "open")) {
+      gui_desktop_show_launcher();
+      snprintf(out, sizeof(out), "desktop: launcher open\r\n");
+    } else if (ssh_shell_command_is(value, "hide") ||
+               ssh_shell_command_is(value, "close")) {
+      gui_desktop_hide_launcher();
+      snprintf(out, sizeof(out), "desktop: launcher closed\r\n");
+    } else if (ssh_shell_command_is(value, "toggle")) {
+      gui_desktop_toggle_launcher();
+      snprintf(out, sizeof(out), "desktop: launcher toggled\r\n");
+    } else {
+      snprintf(out, sizeof(out),
+               "usage: desktop launcher [show|hide|toggle]\r\n");
+    }
+  } else if (ssh_shell_command_is(sub, "launch")) {
+    const char *app = ssh_shell_skip_spaces(sub + 6);
+    if (ssh_shell_command_is(app, "terminal") ||
+        ssh_shell_command_is(app, "orizon-terminal")) {
+      gui_desktop_open_terminal();
+      snprintf(out, sizeof(out), "desktop: launched terminal\r\n");
+    } else {
+      snprintf(out, sizeof(out), "desktop launch: known apps: terminal\r\n");
+    }
+  } else if (ssh_shell_command_is(sub, "apply") ||
+             ssh_shell_command_is(sub, "reload")) {
+    gui_desktop_reload_session();
+    snprintf(out, sizeof(out), "desktop: session reloaded\r\n");
+  } else if (ssh_shell_command_is(sub, "write-config") ||
+             ssh_shell_command_is(sub, "regen-config")) {
+    orizon_desktop_write_user_config(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "reset")) {
+    orizon_desktop_reset(out, sizeof(out));
+    gui_desktop_set_enabled(0);
+  } else if (ssh_shell_command_is(sub, "enable") ||
+             ssh_shell_command_is(sub, "install")) {
+    orizon_desktop_set_enabled(1, out, sizeof(out));
+    gui_desktop_set_enabled(1);
+  } else if (ssh_shell_command_is(sub, "disable") ||
+             ssh_shell_command_is(sub, "off")) {
+    orizon_desktop_set_enabled(0, out, sizeof(out));
+    gui_desktop_set_enabled(0);
+  } else if (ssh_shell_command_is(sub, "open") ||
+             ssh_shell_command_is(sub, "open terminal") ||
+             ssh_shell_command_is(sub, "terminal")) {
+    gui_desktop_open_terminal();
+    snprintf(out, sizeof(out), "desktop: terminal open\r\n");
+  } else if (ssh_shell_command_is(sub, "close") ||
+             ssh_shell_command_is(sub, "close terminal")) {
+    gui_desktop_close_terminal();
+    snprintf(out, sizeof(out), "desktop: terminal closed\r\n");
+  } else if (ssh_shell_command_is(sub, "toggle")) {
+    gui_desktop_toggle_terminal();
+    snprintf(out, sizeof(out), "desktop: terminal toggled\r\n");
+  } else if (ssh_shell_command_is(sub, "package") ||
+             ssh_shell_command_is(sub, "sample")) {
+    orizon_pkg_write_desktop_sample(out, sizeof(out));
+  } else {
+    snprintf(out, sizeof(out), "desktop: unknown command. Try 'desktop help'.\r\n");
   }
   if (strlen(out) + 2 < sizeof(out)) {
     strcat(out, "\r\n");
@@ -3433,13 +3653,18 @@ static void ssh_shell_print_install_plan(const char *args) {
   size_t used = 0;
   const char *sub = ssh_shell_skip_spaces(args);
   const char *mode = "manual-later";
+  const char *desktop_profile = "none";
   int disk_index = -1;
   int data_partition = -1;
   int count;
 
+  if (strstr(sub, "desktop") || strstr(sub, "hypr")) {
+    desktop_profile = ORIZON_DESKTOP_PROFILE;
+  }
   if (*sub != '\0') {
     if (ssh_shell_command_is(sub, "manual") ||
-        ssh_shell_command_is(sub, "manual-later")) {
+        ssh_shell_command_is(sub, "manual-later") ||
+        ssh_shell_command_is(sub, "desktop")) {
       mode = "manual-later";
     } else if (ssh_shell_command_is(sub, "dual-boot-esp")) {
       mode = "dual-boot-esp";
@@ -3456,14 +3681,14 @@ static void ssh_shell_print_install_plan(const char *args) {
       }
       if (ssh_shell_parse_uint(part_arg, &parsed) < 0) {
         ssh_queue_channel_text(
-            "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\r\n");
+            "usage: install-plan [manual|manual desktop|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\r\n");
         ssh_shell_prompt();
         return;
       }
       data_partition = (int)parsed;
     } else {
       ssh_queue_channel_text(
-          "usage: install-plan [manual|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\r\n");
+          "usage: install-plan [manual|manual desktop|dual-boot-esp|dual-boot-data <part>|guided-full-disk]\r\n");
       ssh_shell_prompt();
       return;
     }
@@ -3488,6 +3713,7 @@ static void ssh_shell_print_install_plan(const char *args) {
   config.keyboard = "ssh";
   config.disk_mode = mode;
   config.hostname = "orizon-vm";
+  config.desktop_profile = desktop_profile;
   config.disk_index = disk_index;
   config.disk_name = disk_name;
   config.data_partition_index = data_partition;
@@ -4367,7 +4593,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, security, security policy, security audit, security keys, security doctor, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, desktop, desktop status, desktop doctor, desktop package, security, security policy, security audit, security keys, security doctor, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -4423,6 +4649,9 @@ static void ssh_remote_shell_execute(const char *line) {
         "  system init          run idempotent boot tasks and write init log\r\n"
         "  system repair        recreate missing default roots/config safely\r\n"
         "  rescue               show non-destructive recovery checklist\r\n"
+        "  desktop help         show optional Hyprland-style desktop commands\r\n"
+        "  desktop doctor       check optional desktop config/package state\r\n"
+        "  desktop package      write /workspace/packages/orizon-desktop-hypr.opkg\r\n"
         "  hostname [set name]  show or persist hostname\r\n"
         "  ls [path]            list files\r\n"
         "  cd <path>            change directory\r\n"
@@ -4440,6 +4669,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  usb rescan           rescan USB root ports\r\n"
         "  ps|pkg|update        show system/update/package state\r\n"
         "  pkg help             show package search/verify/install/update commands\r\n"
+        "  pkg sample desktop   create optional desktop package\r\n"
         "  pkg audit|doctor     audit or diagnose package v5 state\r\n"
         "  pkg upgrade plan     show signed package upgrade plan\r\n"
         "  pkg search|remote    inspect local and signed remote package metadata\r\n"
@@ -4454,6 +4684,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  hw next              show future hardware capture plan\r\n"
         "  report save|next     write report or show hardware capture plan\r\n"
         "  install-plan [mode]  save non-destructive installer preflight report\r\n"
+        "  install-plan manual desktop  include optional desktop in the plan\r\n"
         "  free                 show heap state\r\n"
         "  bootguard [confirm|recover] show/confirm/arm rollback fallback\r\n"
         "  rollback             restore the currently booted payload on installed VM\r\n"
@@ -4686,6 +4917,10 @@ static void ssh_remote_shell_execute(const char *line) {
     ssh_shell_print_pkg(line + 3);
     return;
   }
+  if (ssh_shell_command_is(line, "desktop")) {
+    ssh_shell_print_desktop(line + 7);
+    return;
+  }
   if (ssh_shell_command_is(line, "update") ||
       ssh_shell_command_is(line, "orizon-update")) {
     ssh_shell_print_update(line + (line[0] == 'u' ? 6 : 13));
@@ -4851,7 +5086,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, desktop, desktop status, desktop doctor, desktop package, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "health") == 0) {
@@ -4903,6 +5138,8 @@ static void ssh_remote_exec_execute(const uint8_t *command,
     ssh_shell_print_ps();
   } else if (ssh_shell_command_is(cmd, "pkg")) {
     ssh_shell_print_pkg(cmd + 3);
+  } else if (ssh_shell_command_is(cmd, "desktop")) {
+    ssh_shell_print_desktop(cmd + 7);
   } else if (ssh_shell_command_is(cmd, "update") ||
              ssh_shell_command_is(cmd, "orizon-update")) {
     ssh_shell_print_update(cmd + (cmd[0] == 'u' ? 6 : 13));

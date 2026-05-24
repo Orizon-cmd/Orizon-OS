@@ -8,6 +8,7 @@
 #include "../include/gui.h"
 #include "../include/acpi.h"
 #include "../include/bootinfo.h"
+#include "../include/desktop.h"
 #include "../include/i2c_hid.h"
 #include "../include/input_layout.h"
 #include "../include/klog.h"
@@ -59,6 +60,14 @@ static int mouse_x = 0;
 static int mouse_y = 0;
 static int prev_buttons = 0;
 static int needs_redraw = 1;
+static int desktop_mode_enabled = 0;
+static int desktop_terminal_visible = 1;
+static int desktop_launcher_visible = 0;
+static orizon_desktop_session_t desktop_session = {
+    "graphite", "aurora", "floating", 1, 1, 1};
+static int desktop_workspace_count = 3;
+static int desktop_active_workspace = 1;
+static int desktop_terminal_workspace = 1;
 static int splash_ticks_remaining = SPLASH_TICKS;
 static int timer_irq_seen = 0;
 static int timer_fallback_polling = 0;
@@ -96,8 +105,32 @@ static void draw_centered_string(int y, const char *text, color_t color) {
 }
 
 static void draw_background(void) {
-  fb_fill_gradient_v(0, 0, (int)screen_width, (int)screen_height,
-                     COLOR_BG_TOP, COLOR_BG_BOTTOM);
+  color_t top = COLOR_BG_TOP;
+  color_t bottom = COLOR_BG_BOTTOM;
+  color_t accent = COLOR_PANEL_ACCENT;
+
+  if (desktop_mode_enabled) {
+    if (strcmp(desktop_session.wallpaper, "dawn") == 0) {
+      top = MAKE_COLOR(35, 27, 24);
+      bottom = MAKE_COLOR(74, 54, 45);
+    } else if (strcmp(desktop_session.wallpaper, "noir") == 0) {
+      top = MAKE_COLOR(4, 7, 12);
+      bottom = MAKE_COLOR(14, 18, 26);
+    } else if (strcmp(desktop_session.wallpaper, "moss") == 0) {
+      top = MAKE_COLOR(10, 24, 20);
+      bottom = MAKE_COLOR(22, 48, 38);
+    }
+    if (strcmp(desktop_session.theme, "moss") == 0) {
+      accent = MAKE_COLOR(88, 190, 132);
+    } else if (strcmp(desktop_session.theme, "ember") == 0) {
+      accent = MAKE_COLOR(242, 132, 74);
+    } else if (strcmp(desktop_session.theme, "frost") == 0) {
+      accent = MAKE_COLOR(98, 210, 232);
+    }
+  }
+
+  fb_fill_gradient_v(0, 0, (int)screen_width, (int)screen_height, top,
+                     bottom);
 
   /* Two large soft accents keep the shell feeling intentional without
      adding extra UI machinery. */
@@ -106,7 +139,8 @@ static void draw_background(void) {
   fb_fill_rect_alpha(48, (int)screen_height - 220, 180, 140,
                      MAKE_ARGB(16, 42, 92, 168));
   fb_fill_rect_alpha(0, TOP_BAR_HEIGHT, (int)screen_width, 1,
-                     MAKE_ARGB(60, 84, 158, 255));
+                     MAKE_ARGB(60, (accent >> 16) & 0xff,
+                               (accent >> 8) & 0xff, accent & 0xff));
 }
 
 static void draw_top_bar(void) {
@@ -115,7 +149,14 @@ static void draw_top_bar(void) {
   fb_fill_rect_alpha(0, 0, (int)screen_width, TOP_BAR_HEIGHT,
                      MAKE_ARGB(212, 8, 12, 20));
   font_draw_string(18, 8, "Orizon OS", COLOR_TEXT_PRIMARY);
-  font_draw_string(110, 8, "Core Development Base", COLOR_TEXT_SECONDARY);
+  if (desktop_mode_enabled) {
+    char title[128];
+    snprintf(title, sizeof(title), "Hyprland-style Desktop | %s/%s",
+             desktop_session.theme, desktop_session.wallpaper);
+    font_draw_string(110, 8, title, COLOR_TEXT_SECONDARY);
+  } else {
+    font_draw_string(110, 8, "Core Development Base", COLOR_TEXT_SECONDARY);
+  }
 
   snprintf(resolution, sizeof(resolution), "%lux%lu x86_64",
            (unsigned long)screen_width, (unsigned long)screen_height);
@@ -132,6 +173,10 @@ static void draw_footer(void) {
 
   if (i2c_hid_deferred_probe == 1) {
     hint = "Lenovo I2C-HID probe selected. Boot UI is visible first; driver probe runs after startup.";
+  } else if (desktop_mode_enabled && core_services_done) {
+    hint = desktop_terminal_visible
+               ? "Desktop profile active. F2 closes the terminal; 'desktop status' shows session state."
+               : "Desktop profile active. Press F1, t, Enter or click to open the terminal.";
   } else if (boot_stage_hint && boot_stage_hint[0]) {
     hint = boot_stage_hint;
   } else if (boot_cmdline_has("orizon.safe=1")) {
@@ -141,6 +186,21 @@ static void draw_footer(void) {
   fb_fill_rect_alpha(0, y, (int)screen_width, FOOTER_HEIGHT,
                      MAKE_ARGB(200, 8, 12, 20));
   font_draw_string(18, y + 6, hint, COLOR_TEXT_SECONDARY);
+}
+
+static int desktop_clamp_workspace(int workspace) {
+  if (workspace < 1) {
+    return 1;
+  }
+  if (workspace > desktop_workspace_count) {
+    return desktop_workspace_count;
+  }
+  return workspace;
+}
+
+static int desktop_terminal_on_active_workspace(void) {
+  return desktop_terminal_visible &&
+         desktop_terminal_workspace == desktop_active_workspace;
 }
 
 static void draw_shell_frame(void) {
@@ -185,6 +245,139 @@ static void draw_console_scene(void) {
                      "Terminal initialization failed.", COLOR_RED);
   }
 
+  draw_footer();
+}
+
+static void draw_desktop_card(int x, int y, int width, int height,
+                              const char *title, const char *body,
+                              const char *hint) {
+  draw_shadow_panel(x, y, width, height);
+  fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(228, 12, 17, 28));
+  fb_draw_rect(x, y, width, height, COLOR_PANEL_EDGE);
+  fb_fill_rect(x, y, 4, height, COLOR_PANEL_ACCENT);
+  font_draw_string(x + 18, y + 18, title, COLOR_TEXT_PRIMARY);
+  font_draw_string(x + 18, y + 46, body, COLOR_TEXT_SECONDARY);
+  if (hint && hint[0]) {
+    font_draw_string(x + 18, y + height - 28, hint, COLOR_TEXT_MUTED);
+  }
+}
+
+static void draw_desktop_status_bar(void) {
+  char line[160];
+  int y = TOP_BAR_HEIGHT + 8;
+
+  if (!desktop_session.bar_enabled) {
+    return;
+  }
+  fb_fill_rect_alpha(36, y, (int)screen_width - 72, 28,
+                     MAKE_ARGB(168, 8, 12, 20));
+  snprintf(line, sizeof(line),
+           "WS %d/%d  layout=%s  F1 Terminal  F2 Close  F3 Launcher  terminal=ws%d",
+           desktop_active_workspace, desktop_workspace_count,
+           desktop_session.layout, desktop_terminal_workspace);
+  font_draw_string(52, y + 7, line, COLOR_TEXT_SECONDARY);
+}
+
+static void draw_desktop_launcher(void) {
+  int width = 520;
+  int height = 232;
+  int x = ((int)screen_width - width) / 2;
+  int y = TOP_BAR_HEIGHT + 96;
+
+  if (!desktop_launcher_visible) {
+    return;
+  }
+  draw_shadow_panel(x, y, width, height);
+  fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(238, 10, 15, 24));
+  fb_draw_rect(x, y, width, height, COLOR_PANEL_EDGE);
+  fb_fill_rect(x, y, 5, height, COLOR_PANEL_ACCENT);
+  font_draw_string(x + 24, y + 22, "Orizon Launcher", COLOR_TEXT_PRIMARY);
+  font_draw_string(x + 24, y + 52,
+                   "1 / Enter: Terminal   Esc: close launcher",
+                   COLOR_TEXT_SECONDARY);
+  font_draw_string(x + 24, y + 88,
+                   "Terminal      desktop launch terminal",
+                   COLOR_TEXT_PRIMARY);
+  font_draw_string(x + 24, y + 116,
+                   "Settings      desktop session",
+                   COLOR_TEXT_SECONDARY);
+  font_draw_string(x + 24, y + 144,
+                   "Packages      pkg search desktop",
+                   COLOR_TEXT_SECONDARY);
+  font_draw_string(x + 24, y + 180,
+                   "Next: file manager, bar widgets and true tiling.",
+                   COLOR_TEXT_MUTED);
+}
+
+static void draw_desktop_scene(void) {
+  int card_w = 360;
+  int card_h = 112;
+  int start_x = 48;
+  int start_y = TOP_BAR_HEIGHT + 86;
+  char session_line[128];
+  char workspace_line[128];
+
+  draw_background();
+  draw_top_bar();
+  draw_desktop_status_bar();
+  font_draw_string(48, TOP_BAR_HEIGHT + 24, "Orizon Desktop",
+                   COLOR_TEXT_PRIMARY);
+  snprintf(session_line, sizeof(session_line),
+           "Hyprland-style profile | theme=%s wallpaper=%s layout=%s",
+           desktop_session.theme, desktop_session.wallpaper,
+           desktop_session.layout);
+  font_draw_string(48, TOP_BAR_HEIGHT + 48, session_line,
+                   COLOR_TEXT_SECONDARY);
+  snprintf(workspace_line, sizeof(workspace_line),
+           "workspace %d/%d | terminal workspace %d",
+           desktop_active_workspace, desktop_workspace_count,
+           desktop_terminal_workspace);
+  font_draw_string(48, TOP_BAR_HEIGHT + 68, workspace_line,
+                   COLOR_TEXT_MUTED);
+
+  draw_desktop_card(start_x, start_y, card_w, card_h, "Terminal",
+                    desktop_terminal_on_active_workspace()
+                        ? "Open here: Orizon console window"
+                        : (desktop_terminal_visible
+                               ? "Open on another workspace"
+                               : "Closed: press F1, t or click"),
+                    "F2 closes, F1 opens");
+  draw_desktop_card(start_x + card_w + 24, start_y, card_w, card_h,
+                    "Config",
+                    "/system/desktop-session.conf",
+                    "desktop session/layout/theme");
+  draw_desktop_card(start_x, start_y + card_h + 22, card_w, card_h,
+                    "Package",
+                    ORIZON_DESKTOP_PACKAGE,
+                    "desktop package writes installable .opkg");
+  draw_desktop_card(start_x + card_w + 24, start_y + card_h + 22, card_w,
+                    card_h, "Launcher",
+                    desktop_launcher_visible ? "Open: app launcher"
+                                             : "Closed: press F3",
+                    "desktop apps lists entries");
+
+  if (desktop_terminal_on_active_workspace()) {
+    draw_shell_frame();
+    if (main_terminal) {
+      term_render(main_terminal);
+    } else {
+      font_draw_string(shell_x + PANEL_PADDING,
+                       shell_y + PANEL_TITLE_HEIGHT + 14,
+                       "Terminal initialization failed.", COLOR_RED);
+    }
+  } else {
+    draw_centered_string((int)screen_height / 2 + 56,
+                         desktop_terminal_visible ? "Workspace is empty"
+                                                  : "Terminal is closed",
+                         COLOR_TEXT_PRIMARY);
+    draw_centered_string((int)screen_height / 2 + 80,
+                         desktop_terminal_visible
+                             ? "Use 'desktop workspace <n>' or 'desktop move terminal <n>'."
+                             : "Press F1, t, Enter, Space or click the desktop to open it.",
+                         COLOR_TEXT_SECONDARY);
+  }
+
+  draw_desktop_launcher();
   draw_footer();
 }
 
@@ -269,6 +462,36 @@ static void keyboard_callback(int key) {
     return;
   }
 
+  if (desktop_mode_enabled) {
+    if (key == KEY_F3) {
+      gui_desktop_toggle_launcher();
+      return;
+    }
+    if (desktop_launcher_visible) {
+      if (key == KEY_ESC) {
+        gui_desktop_hide_launcher();
+      } else if (key == '\n' || key == '\r' || key == ' ' || key == '1') {
+        gui_desktop_open_terminal();
+        gui_desktop_hide_launcher();
+      }
+      return;
+    }
+    if (key == KEY_F1 || key == 't' || key == 'T') {
+      gui_desktop_open_terminal();
+      return;
+    }
+    if (key == KEY_F2) {
+      gui_desktop_close_terminal();
+      return;
+    }
+    if (!desktop_terminal_on_active_workspace()) {
+      if (key == '\n' || key == '\r' || key == ' ') {
+        gui_desktop_open_terminal();
+      }
+      return;
+    }
+  }
+
   if (main_terminal) {
     term_handle_key(main_terminal, key);
     needs_redraw = 1;
@@ -291,9 +514,16 @@ static void poll_input_state(void) {
   if (left_click && splash_ticks_remaining > 0) {
     splash_ticks_remaining = 0;
     needs_redraw = 1;
+  } else if (left_click && splash_ticks_remaining <= 0 &&
+             desktop_mode_enabled && desktop_launcher_visible) {
+    gui_desktop_hide_launcher();
+  } else if (left_click && splash_ticks_remaining <= 0 &&
+             desktop_mode_enabled && !desktop_terminal_on_active_workspace()) {
+    gui_desktop_open_terminal();
   }
 
-  if (wheel != 0 && splash_ticks_remaining <= 0 && main_terminal) {
+  if (wheel != 0 && splash_ticks_remaining <= 0 && main_terminal &&
+      (!desktop_mode_enabled || desktop_terminal_on_active_workspace())) {
     term_scroll_view(main_terminal, -wheel * 3);
     needs_redraw = 1;
   }
@@ -348,6 +578,9 @@ void gui_compose(void) {
 
   if (splash_ticks_remaining > 0) {
     draw_splash();
+  } else if (desktop_mode_enabled) {
+    draw_desktop_scene();
+    draw_cursor(mouse_x, mouse_y);
   } else {
     draw_console_scene();
     draw_cursor(mouse_x, mouse_y);
@@ -355,6 +588,189 @@ void gui_compose(void) {
 
   fb_swap_buffers();
   needs_redraw = 0;
+}
+
+void gui_desktop_set_enabled(int enabled) {
+  desktop_mode_enabled = enabled ? 1 : 0;
+  gui_desktop_reload_session();
+  if (desktop_mode_enabled) {
+    desktop_active_workspace = desktop_clamp_workspace(desktop_active_workspace);
+    desktop_terminal_workspace =
+        desktop_clamp_workspace(desktop_terminal_workspace);
+    desktop_terminal_visible = desktop_session.autostart_terminal ? 1 : 0;
+  } else {
+    desktop_launcher_visible = 0;
+  }
+  needs_redraw = 1;
+}
+
+int gui_desktop_enabled(void) {
+  return desktop_mode_enabled;
+}
+
+void gui_desktop_open_terminal(void) {
+  desktop_terminal_workspace = desktop_active_workspace;
+  desktop_terminal_visible = 1;
+  desktop_launcher_visible = 0;
+  needs_redraw = 1;
+}
+
+void gui_desktop_close_terminal(void) {
+  if (!desktop_mode_enabled) {
+    return;
+  }
+  desktop_terminal_visible = 0;
+  needs_redraw = 1;
+}
+
+void gui_desktop_toggle_terminal(void) {
+  if (!desktop_mode_enabled) {
+    return;
+  }
+  desktop_terminal_visible = desktop_terminal_visible ? 0 : 1;
+  needs_redraw = 1;
+}
+
+int gui_desktop_terminal_visible(void) {
+  return desktop_terminal_visible;
+}
+
+void gui_desktop_show_launcher(void) {
+  if (!desktop_mode_enabled || !desktop_session.launcher_enabled) {
+    return;
+  }
+  desktop_launcher_visible = 1;
+  needs_redraw = 1;
+}
+
+void gui_desktop_hide_launcher(void) {
+  desktop_launcher_visible = 0;
+  needs_redraw = 1;
+}
+
+void gui_desktop_toggle_launcher(void) {
+  if (!desktop_mode_enabled || !desktop_session.launcher_enabled) {
+    return;
+  }
+  desktop_launcher_visible = desktop_launcher_visible ? 0 : 1;
+  needs_redraw = 1;
+}
+
+int gui_desktop_launcher_visible(void) {
+  return desktop_launcher_visible;
+}
+
+int gui_desktop_switch_workspace(int workspace) {
+  if (workspace < 1 || workspace > desktop_workspace_count) {
+    return -1;
+  }
+  desktop_active_workspace = workspace;
+  desktop_launcher_visible = 0;
+  needs_redraw = 1;
+  return 0;
+}
+
+int gui_desktop_move_terminal_to_workspace(int workspace) {
+  if (workspace < 1 || workspace > desktop_workspace_count) {
+    return -1;
+  }
+  desktop_terminal_workspace = workspace;
+  needs_redraw = 1;
+  return 0;
+}
+
+void gui_desktop_format_workspaces(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  used += snprintf(out + used, out_size - used,
+                   "Orizon desktop workspaces\n"
+                   "active: %d\n"
+                   "count: %d\n"
+                   "terminal: %s workspace=%d on-active=%s\n",
+                   desktop_active_workspace, desktop_workspace_count,
+                   desktop_terminal_visible ? "open" : "closed",
+                   desktop_terminal_workspace,
+                   desktop_terminal_on_active_workspace() ? "yes" : "no");
+  for (int i = 1; i <= desktop_workspace_count && used < out_size; i++) {
+    used += snprintf(out + used, out_size - used, "workspace %d: %s%s\n", i,
+                     (desktop_terminal_visible && desktop_terminal_workspace == i)
+                         ? "terminal"
+                         : "empty",
+                     i == desktop_active_workspace ? " active" : "");
+  }
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "commands: desktop workspace <1-%d> | desktop move terminal <1-%d>\n",
+             desktop_workspace_count, desktop_workspace_count);
+  }
+}
+
+void gui_desktop_format_windows(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "Orizon desktop windows\n"
+           "layout: %s\n"
+           "known-windows: 1\n"
+           "terminal: %s workspace=%d active-workspace=%d focused=%s\n"
+           "launcher: %s overlay=yes workspace=global\n"
+           "bar: %s layer=top\n"
+           "commands: desktop launch terminal | desktop close terminal | "
+           "desktop move terminal <1-%d> | desktop layout <floating|tiling|monocle>\n"
+           "limits: one managed app today; true tiling and Wayland clients are future work\n",
+           desktop_session.layout, desktop_terminal_visible ? "open" : "closed",
+           desktop_terminal_workspace, desktop_active_workspace,
+           desktop_terminal_on_active_workspace() ? "yes" : "no",
+           desktop_launcher_visible ? "open" : "closed",
+           desktop_session.bar_enabled ? "visible" : "hidden",
+           desktop_workspace_count);
+}
+
+void gui_desktop_reload_session(void) {
+  if (orizon_desktop_load_session(&desktop_session) < 0) {
+    snprintf(desktop_session.theme, sizeof(desktop_session.theme), "%s",
+             "graphite");
+    snprintf(desktop_session.wallpaper, sizeof(desktop_session.wallpaper),
+             "%s", "aurora");
+    snprintf(desktop_session.layout, sizeof(desktop_session.layout), "%s",
+             "floating");
+    desktop_session.bar_enabled = 1;
+    desktop_session.launcher_enabled = 1;
+    desktop_session.autostart_terminal = 1;
+  }
+  if (!desktop_session.launcher_enabled) {
+    desktop_launcher_visible = 0;
+  }
+  needs_redraw = 1;
+}
+
+void gui_desktop_format_status(char *out, size_t out_size) {
+  char base[1400];
+  const char *session;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  orizon_desktop_format_status(base, sizeof(base));
+  session = desktop_mode_enabled ? "active" : "inactive";
+  snprintf(out, out_size,
+           "%scompositor-session: %s\nterminal-window: %s\n"
+           "launcher-window: %s\nbar: %s\nruntime-theme: %s\n"
+           "runtime-wallpaper: %s\nruntime-layout: %s\n"
+           "workspace-active: %d\nworkspace-count: %d\n"
+           "terminal-workspace: %d\nterminal-on-active-workspace: %s\n",
+           base, session, desktop_terminal_visible ? "open" : "closed",
+           desktop_launcher_visible ? "open" : "closed",
+           desktop_session.bar_enabled ? "visible" : "hidden",
+           desktop_session.theme, desktop_session.wallpaper,
+           desktop_session.layout, desktop_active_workspace,
+           desktop_workspace_count, desktop_terminal_workspace,
+           desktop_terminal_on_active_workspace() ? "yes" : "no");
 }
 
 static void gui_show_boot_stage(const char *stage) {
@@ -396,6 +812,7 @@ static void gui_run_deferred_core_services(void) {
       !boot_cmdline_has("orizon.minimal=1")) {
     gui_show_boot_stage("Loading persistent workspace from disk...");
     vfs_persist_load();
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     gui_show_boot_stage("Running installed/live init tasks...");
     orizon_system_run_boot_tasks(NULL, 0);
     gui_show_boot_stage("Preparing package and keyboard state...");

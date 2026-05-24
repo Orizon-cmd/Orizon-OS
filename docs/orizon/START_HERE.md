@@ -34,6 +34,13 @@ design note.
 - Installer preflight is exportable with `install-plan`, which writes the
   non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
   review before any disk write.
+- The optional first desktop profile is available through `desktop status`,
+  `desktop session`, `desktop apps`, `desktop doctor`, the guided installer
+  desktop prompt, `pkg sample desktop`, and `pkg install orizon-desktop-hypr`.
+  It is Hyprland-style Orizon compositor plumbing, disabled by default, persists
+  `/system/desktop-session.conf`, and starts with F1/F2 terminal open/close plus
+  F3 launcher, `desktop windows`, and runtime workspace commands rather than
+  real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`
   gives a PASS/WARN summary, `system snapshot` writes
   `/workspace/.orizon/system-snapshot.txt`, `system backup` exports non-secret
@@ -118,6 +125,7 @@ python scripts/orizon/quick_check.py
 - [CHANGELOG.md](../../CHANGELOG.md)
 - [docs/orizon/STATUS.md](STATUS.md)
 - [docs/orizon/COMMANDS.md](COMMANDS.md)
+- [docs/orizon/DESKTOP.md](DESKTOP.md)
 - [docs/orizon/ROADMAP.md](ROADMAP.md)
 - [docs/orizon/UPDATE.md](UPDATE.md)
 - [docs/orizon/INSTALL.md](INSTALL.md)

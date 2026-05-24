@@ -4,6 +4,7 @@
 
 #include "../include/system_state.h"
 #include "../include/bootinfo.h"
+#include "../include/desktop.h"
 #include "../include/klog.h"
 #include "../include/storage.h"
 #include "../include/string.h"
@@ -37,6 +38,7 @@ static const char *system_default_services =
     "bootlog installed\n"
     "network manual\n"
     "ssh manual\n"
+    "desktop optional\n"
     "package-db installed\n"
     "update-bootguard installed\n";
 
@@ -167,6 +169,32 @@ static int system_write_default_file(const char *path, const char *text,
   return system_write_text_file(path, text);
 }
 
+static int system_ensure_line(const char *path, const char *line,
+                              int *created) {
+  char buf[1024];
+  file_t *f;
+
+  if (!path || !line) {
+    return -EINVAL;
+  }
+  if (system_read_text_file(path, buf, sizeof(buf)) > 0 && strstr(buf, line)) {
+    return 0;
+  }
+  f = vfs_open(path, O_CREAT | O_WRONLY | O_APPEND);
+  if (!f) {
+    return -EIO;
+  }
+  if (vfs_write(f, line, strlen(line)) < 0) {
+    vfs_close(f);
+    return -EIO;
+  }
+  vfs_close(f);
+  if (created) {
+    (*created)++;
+  }
+  return 0;
+}
+
 static void system_trim_first_line(char *buf) {
   if (!buf) {
     return;
@@ -235,6 +263,7 @@ static int system_hostname_valid(const char *name) {
 static void system_ensure_dirs(int *created) {
   const char *dirs[] = {
       "/workspace", "/workspace/.orizon", "/home", "/home/orizon",
+      "/home/orizon/.config", "/home/orizon/.config/hypr",
       "/system", "/system/share", "/system/firmware", "/packages",
       "/logs"};
 
@@ -303,6 +332,10 @@ static int system_ensure_defaults(int *created) {
                                 created) < 0) {
     rc = -1;
   }
+  if (system_ensure_line(ORIZON_SERVICES_PATH, "desktop optional\n",
+                         created) < 0) {
+    rc = -1;
+  }
   if (system_write_default_file(ORIZON_SERVICE_STATE_PATH,
                                 "service-state: not-recorded\n", created) <
       0) {
@@ -342,6 +375,15 @@ static int system_ensure_defaults(int *created) {
   if (system_write_default_file("/logs/README.txt",
                                 "Persistent boot, install and update logs.\n",
                                 created) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_CONFIG_PATH) && created) {
+    (*created)++;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_SESSION_PATH) && created) {
+    (*created)++;
+  }
+  if (orizon_desktop_ensure_defaults() < 0) {
     rc = -1;
   }
   if (system_write_default_file(
@@ -409,6 +451,7 @@ static void system_format_service_state_text(char *out, size_t out_size,
            "  bootlog policy=installed state=%s\n"
            "  network policy=manual state=configured-on-demand\n"
            "  ssh policy=manual state=configured-on-demand\n"
+           "  desktop policy=optional state=%s\n"
            "  package-db policy=installed state=%s\n"
            "  update-bootguard policy=installed state=%s\n"
            "  firstboot policy=installed state=%s\n",
@@ -418,6 +461,7 @@ static void system_format_service_state_text(char *out, size_t out_size,
            vfs_persist_available() ? "active" : "memory-only",
            installed ? (klog_boot_persisted() ? "saved" : "pending")
                      : "live-skip",
+           orizon_desktop_is_enabled() ? "enabled" : "disabled",
            vfs_exists("/system/installed") ? "present" : "live-or-pending",
            installed ? "available" : "installed-only",
            installed ? (vfs_exists(ORIZON_FIRSTBOOT_DONE_PATH) ? "done"
@@ -487,6 +531,13 @@ void orizon_system_format_services(char *out, size_t out_size) {
            "  ssh policy=manual config=/system/ssh.conf:%s hostkey=/system/ssh_host_rsa.key:%s\n",
            system_ok_missing("/system/ssh.conf"),
            system_ok_missing("/system/ssh_host_rsa.key"));
+  system_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "  desktop policy=optional state=%s config=%s session=%s user-config=%s profile=" ORIZON_DESKTOP_PROFILE "\n",
+           orizon_desktop_is_enabled() ? "enabled" : "disabled",
+           system_ok_missing(ORIZON_DESKTOP_CONFIG_PATH),
+           system_ok_missing(ORIZON_DESKTOP_SESSION_PATH),
+           system_ok_missing(ORIZON_DESKTOP_USER_CONFIG_PATH));
   system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "  package-db policy=installed state=%s\n",
            vfs_exists("/system/installed") ? "present" : "live-or-pending");
@@ -560,6 +611,9 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
   DOCTOR_CHECK("fstab map", system_path_ok(ORIZON_FSTAB_PATH));
   DOCTOR_CHECK("network config", system_path_ok("/system/network.conf"));
   DOCTOR_CHECK("services config", system_path_ok(ORIZON_SERVICES_PATH));
+  DOCTOR_CHECK("desktop config", system_path_ok(ORIZON_DESKTOP_CONFIG_PATH));
+  DOCTOR_CHECK("desktop session",
+               system_path_ok(ORIZON_DESKTOP_SESSION_PATH));
   DOCTOR_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
   DOCTOR_CHECK("rescue config", system_path_ok(ORIZON_RESCUE_CONF_PATH));
   DOCTOR_CHECK("admin guide", system_path_ok(ORIZON_ADMIN_GUIDE_PATH));
@@ -751,10 +805,12 @@ void orizon_system_format_status(char *out, size_t out_size) {
            system_path_ok(ORIZON_FSTAB_PATH) ? "ok" : "missing");
   system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "  network=%s services=%s admin-notes=%s data-layout=%s "
+           "  network=%s services=%s desktop=%s desktop-session=%s admin-notes=%s data-layout=%s "
            "install-marker=%s\n",
            system_path_ok("/system/network.conf") ? "ok" : "missing",
            system_path_ok(ORIZON_SERVICES_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_DESKTOP_CONFIG_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_DESKTOP_SESSION_PATH) ? "ok" : "missing",
            system_path_ok(ORIZON_ADMIN_NOTES_PATH) ? "ok" : "missing",
            system_path_ok("/system/data-layout") ? "ok" : "missing",
            installed ? "present" : "absent");
@@ -815,7 +871,9 @@ void orizon_system_format_firstboot(char *out, size_t out_size) {
   system_append(out, out_size, &used,
                 "  7. system doctor     # audit required roots and config\n");
   system_append(out, out_size, &used,
-                "  8. report save       # export hardware/network evidence\n");
+                "  8. desktop status    # review optional desktop profile\n");
+  system_append(out, out_size, &used,
+                "  9. report save       # export hardware/network evidence\n");
   if (installed && !done) {
     system_append(out, out_size, &used,
                   "finish: run 'firstboot done' after reviewing the checklist.\n");
@@ -896,6 +954,9 @@ void orizon_system_format_health(char *out, size_t out_size) {
   HEALTH_CHECK("machine-id", system_path_ok(ORIZON_MACHINE_ID_PATH));
   HEALTH_CHECK("os-release", system_path_ok(ORIZON_OS_RELEASE_PATH));
   HEALTH_CHECK("service policy", system_path_ok(ORIZON_SERVICES_PATH));
+  HEALTH_CHECK("desktop config", system_path_ok(ORIZON_DESKTOP_CONFIG_PATH));
+  HEALTH_CHECK("desktop session",
+               system_path_ok(ORIZON_DESKTOP_SESSION_PATH));
   HEALTH_CHECK("boot state", system_path_ok(ORIZON_BOOT_STATE_PATH));
   HEALTH_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
   HEALTH_CHECK("init log", system_path_ok(ORIZON_INIT_LOG_PATH));
@@ -1016,6 +1077,17 @@ int orizon_system_write_admin_backup(char *out, size_t out_size) {
   system_append_file_preview(backup, sizeof(backup), &used, "services",
                              ORIZON_SERVICES_PATH);
   system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "desktop",
+                             ORIZON_DESKTOP_CONFIG_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used,
+                             "desktop-session",
+                             ORIZON_DESKTOP_SESSION_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used,
+                             "desktop-user-config",
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
   system_append_file_preview(backup, sizeof(backup), &used, "service-state",
                              ORIZON_SERVICE_STATE_PATH);
   system_append(backup, sizeof(backup), &used, "\n");
@@ -1061,11 +1133,14 @@ void orizon_system_format_rescue(char *out, size_t out_size) {
            "  6. system doctor             # audit roots/config/init without writes\n"
            "  7. system services           # inspect simple init/service policy\n"
            "  8. system logs               # inspect boot/service/init evidence\n"
-           "  9. persist status && persist slots\n"
-           " 10. persist restore previous  # only if the current state is broken\n"
-           " 11. system repair             # recreate missing /system,/home,/logs defaults\n"
+           "  9. desktop status            # inspect optional desktop profile\n"
+           " 10. persist status && persist slots\n"
+           " 11. persist restore previous  # only if the current state is broken\n"
+           " 12. system repair             # recreate missing /system,/home,/logs defaults\n"
            "installed-only helpers:\n"
            "  boot-check, repair-boot, update status, bootguard, rollback-status\n"
+           "desktop:\n"
+           "  desktop enable|disable, desktop session, desktop apps, desktop package, pkg install orizon-desktop-hypr\n"
            "logs:\n"
            "  /logs/init.log, /logs/service.log, /logs/boot.log, /workspace/.orizon/rescue-report.txt\n"
            "  /workspace/.orizon/system-snapshot.txt, /workspace/.orizon/admin-backup.txt\n"
