@@ -1773,7 +1773,9 @@ static void term_print_input_status(terminal_t *term) {
 
   term_puts_t(term, "Pointer support:\n");
   term_puts_t(term, "  PS/2 mouse/touchpad: supported when firmware exposes i8042\n");
-  term_puts_t(term, "  USB HID keyboard: supported; generic USB mouse is still pending\n");
+  term_puts_t(term, "  USB HID keyboard: supported\n");
+  term_puts_t(term, "  USB HID mouse/tablet: boot mouse and QEMU usb-tablet reports supported\n");
+  term_puts_t(term, "  Desktop pointer detail: use 'desktop pointer'\n");
   if (boot_cmdline_has("orizon.i2chid=1")) {
     term_puts_t(term, "  I2C-HID: Lenovo ELAN/Wacom probe selected; multitouch parser pending\n");
   } else {
@@ -3730,32 +3732,65 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "\033[1;36mOrizon desktop\033[0m\n");
     term_puts_t(term, "  desktop status          - Show desktop/session state\n");
     term_puts_t(term, "  desktop config          - Show Hyprland-style config template\n");
+    term_puts_t(term, "  desktop config doctor   - Validate Hyprland-style user config\n");
+    term_puts_t(term, "  desktop config apply    - Apply supported config keys to session/settings\n");
     term_puts_t(term, "  desktop enable          - Enable optional desktop profile\n");
     term_puts_t(term, "  desktop disable         - Disable desktop profile\n");
     term_puts_t(term, "  desktop doctor          - Check desktop install/config state\n");
     term_puts_t(term, "  desktop logs            - Show desktop events\n");
     term_puts_t(term, "  desktop shortcuts       - Show keys and commands\n");
     term_puts_t(term, "  desktop session         - Show session theme/wallpaper/layout\n");
+    term_puts_t(term, "  desktop settings        - Show system-wide desktop settings\n");
+    term_puts_t(term, "  desktop settings set <key> <value> - Update /system/desktop-settings.conf\n");
+    term_puts_t(term, "  desktop settings preset <name> - Apply compact/cozy/performance settings\n");
+    term_puts_t(term, "  desktop settings doctor - Validate system-wide desktop settings\n");
+    term_puts_t(term, "  desktop pointer         - Show cursor and HID mouse/tablet diagnostics\n");
     term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
+    term_puts_t(term, "  desktop profiles        - List themes/wallpapers/layouts\n");
+    term_puts_t(term, "  desktop preset <name>   - Apply graphite/moss/ember/frost/focus preset\n");
+    term_puts_t(term, "  desktop binds           - Show Hyprland-style binds/dispatchers\n");
+    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/killactive/fullscreen/pseudo\n");
+    term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like clients/workspaces/dispatch facade\n");
+    term_puts_t(term, "  desktop autostart       - Show or configure startup apps\n");
     term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
     term_puts_t(term, "  desktop theme <name>    - Set session theme\n");
     term_puts_t(term, "  desktop wallpaper <name> - Set symbolic wallpaper\n");
-    term_puts_t(term, "  desktop layout <name>   - Set floating/tiling/monocle layout\n");
+    term_puts_t(term, "  desktop layout <name>   - Set dwindle/master/monocle layout\n");
+    term_puts_t(term, "  desktop focus on|off|toggle - Configure focus-follows-mouse\n");
     term_puts_t(term, "  desktop bar on|off|toggle - Configure desktop bar\n");
     term_puts_t(term, "  desktop launcher [show|hide|toggle] - Control launcher\n");
-    term_puts_t(term, "  desktop launch terminal - Launch terminal app\n");
+    term_puts_t(term, "  desktop launch terminal - Spawn terminal client\n");
+    term_puts_t(term, "  desktop killactive      - Close focused tiled client\n");
+    term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
     term_puts_t(term, "  desktop workspace [n]   - Show or switch workspace\n");
-    term_puts_t(term, "  desktop move terminal <n> - Move terminal to workspace\n");
+    term_puts_t(term, "  desktop dispatch movetoworkspace <n|+1|-1> - Move focused client\n");
+    term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext - Hyprland-like client actions\n");
     term_puts_t(term, "  desktop reset           - Disable and restore default policy\n");
     term_puts_t(term, "  desktop write-config    - Rewrite Hypr-style user config\n");
-    term_puts_t(term, "  desktop open terminal   - Open the terminal window\n");
-    term_puts_t(term, "  desktop close terminal  - Close the terminal window\n");
+    term_puts_t(term, "  desktop open terminal   - Compat alias for dispatch exec terminal\n");
+    term_puts_t(term, "  desktop close terminal  - Compat alias for killactive\n");
     term_puts_t(term, "  desktop package         - Write installable desktop .opkg\n");
-    term_puts_t(term, "Shortcuts: F1 opens terminal, F2 closes it.\n");
+    term_puts_t(term, "Shortcuts: F1 exec terminal, F2 killactive, F3 launcher.\n");
     return;
   }
   if (term_command_is(args, "config")) {
-    orizon_desktop_format_config(report, sizeof(report));
+    const char *config_args = term_skip_spaces(args + 6);
+    if (*config_args == '\0' || term_command_is(config_args, "show") ||
+        term_command_is(config_args, "template")) {
+      orizon_desktop_format_config(report, sizeof(report));
+    } else if (term_command_is(config_args, "doctor") ||
+               term_command_is(config_args, "check") ||
+               term_command_is(config_args, "validate")) {
+      orizon_desktop_format_config_doctor(report, sizeof(report));
+    } else if (term_command_is(config_args, "apply") ||
+               term_command_is(config_args, "import") ||
+               term_command_is(config_args, "reload")) {
+      orizon_desktop_apply_hypr_config(report, sizeof(report));
+      gui_desktop_reload_session();
+    } else {
+      snprintf(report, sizeof(report),
+               "usage: desktop config [show|doctor|apply]\n");
+    }
     term_puts_t(term, report);
     return;
   }
@@ -3774,13 +3809,206 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
-  if (term_command_is(args, "session") || term_command_is(args, "settings")) {
+  if (term_command_is(args, "settings")) {
+    const char *settings_args = term_skip_spaces(args + 8);
+    if (*settings_args == '\0' || term_command_is(settings_args, "show") ||
+        term_command_is(settings_args, "status")) {
+      orizon_desktop_format_settings(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "repair") ||
+        term_command_is(settings_args, "defaults") ||
+        term_command_is(settings_args, "reset")) {
+      orizon_desktop_repair_settings(report, sizeof(report));
+      gui_desktop_reload_session();
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "presets") ||
+        term_command_is(settings_args, "profiles")) {
+      orizon_desktop_format_settings_presets(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "doctor") ||
+        term_command_is(settings_args, "check")) {
+      orizon_desktop_format_settings_doctor(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "preset") ||
+        term_command_is(settings_args, "profile")) {
+      const char *preset = term_skip_spaces(
+          settings_args + (term_command_is(settings_args, "preset") ? 6 : 7));
+      if (*preset == '\0') {
+        term_puts_t(term,
+                    "usage: desktop settings preset <default|compact|cozy|performance|accessibility|locked>\n");
+        return;
+      }
+      orizon_desktop_apply_settings_preset(preset, report, sizeof(report));
+      gui_desktop_reload_session();
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "set")) {
+      const char *key = term_skip_spaces(settings_args + 3);
+      const char *value = key;
+      char key_buf[48];
+      size_t key_len;
+      while (*value && *value != ' ') {
+        value++;
+      }
+      key_len = (size_t)(value - key);
+      if (*value == ' ') {
+        value = term_skip_spaces(value);
+      }
+      if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+        term_puts_t(term,
+                    "usage: desktop settings set <key> <value>\n");
+        return;
+      }
+      memcpy(key_buf, key, key_len);
+      key_buf[key_len] = '\0';
+      orizon_desktop_set_setting(key_buf, value, report, sizeof(report));
+      gui_desktop_reload_session();
+      term_puts_t(term, report);
+      return;
+    }
+    term_puts_t(term,
+                "usage: desktop settings [show|doctor|presets|preset <name>|repair|set <key> <value>]\n");
+    return;
+  }
+  if (term_command_is(args, "session")) {
     orizon_desktop_format_session(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "pointer") || term_command_is(args, "cursor") ||
+      term_command_is(args, "mouse")) {
+    gui_desktop_format_pointer(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     orizon_desktop_format_apps(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "binds") || term_command_is(args, "bind")) {
+    gui_desktop_format_binds(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "hyprctl")) {
+    const char *hypr = term_skip_spaces(args + 7);
+    if (*hypr == '\0' || term_command_is(hypr, "help")) {
+      term_puts_t(term,
+                  "usage: desktop hyprctl clients|workspaces|activewindow|monitors|dispatch <d> [args]|reload\n");
+      return;
+    }
+    if (term_command_is(hypr, "clients")) {
+      gui_desktop_format_windows(report, sizeof(report));
+    } else if (term_command_is(hypr, "workspaces")) {
+      gui_desktop_format_workspaces(report, sizeof(report));
+    } else if (term_command_is(hypr, "activewindow")) {
+      gui_desktop_format_activewindow(report, sizeof(report));
+    } else if (term_command_is(hypr, "monitors")) {
+      gui_desktop_format_monitors(report, sizeof(report));
+    } else if (term_command_is(hypr, "reload")) {
+      gui_desktop_reload_session();
+      snprintf(report, sizeof(report), "ok\n");
+    } else if (term_command_is(hypr, "dispatch")) {
+      const char *dispatch = term_skip_spaces(hypr + 8);
+      const char *dispatch_args = dispatch;
+      while (*dispatch_args && *dispatch_args != ' ') {
+        dispatch_args++;
+      }
+      if (*dispatch_args == ' ') {
+        size_t dispatch_len = (size_t)(dispatch_args - dispatch);
+        char name[32];
+        if (dispatch_len >= sizeof(name)) {
+          dispatch_len = sizeof(name) - 1;
+        }
+        memcpy(name, dispatch, dispatch_len);
+        name[dispatch_len] = '\0';
+        dispatch_args = term_skip_spaces(dispatch_args);
+        gui_desktop_dispatch(name, dispatch_args, report, sizeof(report));
+      } else {
+        gui_desktop_dispatch(dispatch, "", report, sizeof(report));
+      }
+    } else {
+      snprintf(report, sizeof(report), "hyprctl: unknown command\n");
+    }
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "dispatch")) {
+    const char *dispatch = term_skip_spaces(args + 8);
+    const char *dispatch_args = dispatch;
+    while (*dispatch_args && *dispatch_args != ' ') {
+      dispatch_args++;
+    }
+    if (*dispatch_args == ' ') {
+      size_t dispatch_len = (size_t)(dispatch_args - dispatch);
+      char name[32];
+      if (dispatch_len >= sizeof(name)) {
+        dispatch_len = sizeof(name) - 1;
+      }
+      memcpy(name, dispatch, dispatch_len);
+      name[dispatch_len] = '\0';
+      dispatch_args = term_skip_spaces(dispatch_args);
+      gui_desktop_dispatch(name, dispatch_args, report, sizeof(report));
+    } else {
+      gui_desktop_dispatch(dispatch, "", report, sizeof(report));
+    }
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "profiles") || term_command_is(args, "themes")) {
+    orizon_desktop_format_profiles(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "preset") || term_command_is(args, "profile")) {
+    const char *value =
+        term_skip_spaces(args + (term_command_is(args, "preset") ? 6 : 7));
+    if (*value == '\0') {
+      term_puts_t(term,
+                  "usage: desktop preset <graphite|moss|ember|frost|focus>\n");
+      return;
+    }
+    orizon_desktop_apply_preset(value, report, sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "autostart")) {
+    const char *value = term_skip_spaces(args + 9);
+    orizon_desktop_session_t session;
+    if (*value == '\0') {
+      orizon_desktop_format_autostart(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (!term_command_is(value, "terminal")) {
+      term_puts_t(term,
+                  "usage: desktop autostart terminal on|off|toggle\n");
+      return;
+    }
+    value = term_skip_spaces(value + 8);
+    if (term_command_is(value, "toggle")) {
+      orizon_desktop_load_session(&session);
+      value = session.autostart_terminal ? "off" : "on";
+    }
+    if (*value == '\0') {
+      term_puts_t(term,
+                  "usage: desktop autostart terminal on|off|toggle\n");
+      return;
+    }
+    orizon_desktop_set_session_option("autostart-terminal", value, report,
+                                      sizeof(report));
+    gui_desktop_reload_session();
     term_puts_t(term, report);
     return;
   }
@@ -3830,6 +4058,23 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "focus-window")) {
+    const char *value = term_skip_spaces(args + 12);
+    int rc;
+    if (*value == '\0' || term_command_is(value, "next") ||
+        term_command_is(value, "right") || term_command_is(value, "down")) {
+      rc = gui_desktop_focus_next_client();
+    } else if (term_command_is(value, "prev") || term_command_is(value, "left") ||
+               term_command_is(value, "up")) {
+      rc = gui_desktop_focus_prev_client();
+    } else {
+      term_puts_t(term, "usage: desktop focus-window next|prev\n");
+      return;
+    }
+    term_puts_t(term, rc == 0 ? "desktop: focus changed\n"
+                              : "desktop: no client to focus\n");
+    return;
+  }
   if (term_command_is(args, "theme")) {
     const char *value = term_skip_spaces(args + 5);
     if (*value == '\0') {
@@ -3857,11 +4102,27 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   if (term_command_is(args, "layout")) {
     const char *value = term_skip_spaces(args + 6);
     if (*value == '\0') {
-      term_puts_t(term, "usage: desktop layout <floating|tiling|monocle>\n");
+      term_puts_t(term, "usage: desktop layout <dwindle|master|monocle>\n");
       return;
     }
     orizon_desktop_set_session_option("layout", value, report,
                                       sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "focus")) {
+    const char *value = term_skip_spaces(args + 5);
+    orizon_desktop_session_t session;
+    if (term_command_is(value, "toggle")) {
+      orizon_desktop_load_session(&session);
+      value = session.focus_follows_mouse ? "off" : "on";
+    }
+    if (*value == '\0') {
+      term_puts_t(term, "usage: desktop focus on|off|toggle\n");
+      return;
+    }
+    orizon_desktop_set_session_option("focus", value, report, sizeof(report));
     gui_desktop_reload_session();
     term_puts_t(term, report);
     return;
@@ -3907,11 +4168,28 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *app = term_skip_spaces(args + 6);
     if (term_command_is(app, "terminal") ||
         term_command_is(app, "orizon-terminal")) {
-      gui_desktop_open_terminal();
-      term_puts_t(term, "desktop: launched terminal\n");
+      if (gui_desktop_spawn_terminal_client() == 0) {
+        term_puts_t(term, "desktop: launched terminal\n");
+      } else {
+        term_puts_t(term, "desktop: client limit reached\n");
+      }
       return;
     }
     term_puts_t(term, "desktop launch: known apps: terminal\n");
+    return;
+  }
+  if (term_command_is(args, "spawn") || term_command_is(args, "exec")) {
+    const char *app = term_skip_spaces(args + (term_command_is(args, "spawn") ? 5 : 4));
+    if (term_command_is(app, "terminal") ||
+        term_command_is(app, "orizon-terminal")) {
+      if (gui_desktop_spawn_terminal_client() == 0) {
+        term_puts_t(term, "desktop: spawned terminal client\n");
+      } else {
+        term_puts_t(term, "desktop: client limit reached\n");
+      }
+      return;
+    }
+    term_puts_t(term, "desktop exec: known apps: terminal\n");
     return;
   }
   if (term_command_is(args, "apply") || term_command_is(args, "reload")) {
@@ -3952,8 +4230,16 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "close") ||
       term_command_is(args, "close terminal")) {
-    gui_desktop_close_terminal();
-    term_puts_t(term, "desktop: terminal closed; press F1 or click to reopen\n");
+    gui_desktop_close_active_client();
+    term_puts_t(term, "desktop: active client closed\n");
+    return;
+  }
+  if (term_command_is(args, "killactive")) {
+    if (gui_desktop_close_active_client() == 0) {
+      term_puts_t(term, "desktop: active client closed\n");
+    } else {
+      term_puts_t(term, "desktop: no active client\n");
+    }
     return;
   }
   if (term_command_is(args, "toggle")) {
@@ -6506,8 +6792,8 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term,
-                "  desktop [status|enable|disable|config|doctor|logs|package] - Optional Hyprland-style desktop\n");
-    term_puts_t(term, "  desktop open terminal / close terminal - Control desktop terminal window\n");
+                "  desktop [status|settings|enable|disable|config|doctor|logs|package] - Optional Hyprland-style desktop\n");
+    term_puts_t(term, "  desktop dispatch exec terminal / killactive - Tiled desktop clients\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
     term_puts_t(term, "  system [status|health|snapshot|backup|init|services|logs|doctor|repair|rescue|firstboot done] - Installed/live admin\n");
     term_puts_t(term, "  system health - Concise PASS/WARN installed-state summary\n");
@@ -7483,6 +7769,54 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
   } else {
     term_puts_t(term, cmd);
     term_puts_t(term, ": command not found\n");
+  }
+}
+
+void term_render_in_rect(terminal_t *term, int x, int y, int width,
+                         int height) {
+  int cols;
+  int rows;
+  int base_x;
+  int base_y;
+  static int blink = 0;
+
+  if (!term || !term->visible || width <= TERM_PADDING * 2 ||
+      height <= TERM_PADDING * 2) {
+    return;
+  }
+
+  cols = (width - TERM_PADDING * 2) / TERM_CHAR_W;
+  rows = (height - TERM_PADDING * 2) / TERM_CHAR_H;
+  if (cols > TERM_COLS) {
+    cols = TERM_COLS;
+  }
+  if (rows > TERM_ROWS) {
+    rows = TERM_ROWS;
+  }
+  if (cols <= 0 || rows <= 0) {
+    return;
+  }
+
+  base_x = x + TERM_PADDING;
+  base_y = y + TERM_PADDING;
+  fb_fill_rect(x, y, width, height, term_colors[0]);
+  for (int row = 0; row < rows; row++) {
+    for (int col = 0; col < cols; col++) {
+      char ch;
+      uint8_t fg;
+      uint8_t bg;
+      term_get_render_cell(term, row, col, &ch, &fg, &bg);
+      term_draw_char(base_x + col * TERM_CHAR_W, base_y + row * TERM_CHAR_H,
+                     ch, term_colors[fg & 0xF], term_colors[bg & 0xF]);
+    }
+  }
+
+  blink++;
+  if (!term->pager_mode && term->scroll_offset == 0 && (blink / 15) % 2 == 0 &&
+      term->cursor_x < cols && term->cursor_y < rows) {
+    int cx = base_x + term->cursor_x * TERM_CHAR_W;
+    int cy = base_y + term->cursor_y * TERM_CHAR_H;
+    fb_fill_rect(cx, cy + TERM_CHAR_H - 2, TERM_CHAR_W, 2, term_colors[7]);
   }
 }
 

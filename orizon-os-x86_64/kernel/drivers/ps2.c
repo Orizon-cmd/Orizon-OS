@@ -151,6 +151,21 @@ static void ps2_apply_mouse_delta(int dx, int dy, int buttons, int wheel) {
   }
 }
 
+static void ps2_apply_mouse_absolute(int x, int y, int buttons, int wheel) {
+  ps2_mouse_x = x;
+  ps2_mouse_y = y;
+
+  if (ps2_mouse_x < 0) ps2_mouse_x = 0;
+  if (ps2_mouse_x >= mouse_max_x) ps2_mouse_x = mouse_max_x - 1;
+  if (ps2_mouse_y < 0) ps2_mouse_y = 0;
+  if (ps2_mouse_y >= mouse_max_y) ps2_mouse_y = mouse_max_y - 1;
+
+  ps2_mouse_buttons = buttons & 0x07;
+  if (wheel != 0) {
+    ps2_mouse_wheel_delta += wheel;
+  }
+}
+
 /* ===================================================================== */
 /* PS/2 Controller Helper Functions                                      */
 /* ===================================================================== */
@@ -610,6 +625,24 @@ int ps2_consume_mouse_wheel(void) {
 
 void ps2_inject_mouse_relative(int dx, int dy, int buttons, int wheel) {
   ps2_apply_mouse_delta(dx, dy, buttons, wheel);
+  ps2_mouse_packets++;
+}
+
+void ps2_set_mouse_absolute(int x, int y, int buttons, int wheel) {
+  ps2_apply_mouse_absolute(x, y, buttons, wheel);
+  ps2_mouse_packets++;
+}
+
+void ps2_set_mouse_absolute_scaled(uint16_t x, uint16_t y, uint16_t max_x,
+                                   uint16_t max_y, int buttons, int wheel) {
+  int sx;
+  int sy;
+  uint32_t range_x = max_x ? max_x : 0x7fff;
+  uint32_t range_y = max_y ? max_y : 0x7fff;
+
+  sx = (int)(((uint32_t)x * (uint32_t)(mouse_max_x - 1)) / range_x);
+  sy = (int)(((uint32_t)y * (uint32_t)(mouse_max_y - 1)) / range_y);
+  ps2_apply_mouse_absolute(sx, sy, buttons, wheel);
   ps2_mouse_packets++;
 }
 

@@ -103,14 +103,28 @@ It writes runtime/staging state:
 /system/keyboard
 /system/desktop.conf
 /system/desktop-session.conf
+/system/desktop-settings.conf
+/system/desktop-binds.conf
+/system/desktop-autostart.conf
+/system/desktop-rules.conf
+/system/desktop-monitors.conf
+/system/desktop-runtime.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
 ```
 
 The desktop prompt is optional and disabled by default. It does not install the
 real upstream Hyprland compositor yet; it installs Orizon's Hyprland-style
-desktop profile, which can open and close the terminal window with F1/F2, open
-the launcher with F3, and persist simple theme/wallpaper/bar settings in
-`/system/desktop-session.conf`. The same profile can be installed later through
+desktop profile, which can dispatch terminal clients with F1, kill the active
+tiled client with F2, open the launcher with F3, toggle fullscreen with F4,
+toggle pseudo tiling with F5, cycle focus with F6, switch workspaces with F7/F8,
+and persist theme/wallpaper/layout/bar/focus settings in
+`/system/desktop-session.conf`. System-wide desktop settings such as gaps,
+border size, rounding, animations, shadows, terminal, launcher, keyboard, and
+pointer policy are created in `/system/desktop-settings.conf` at the same time.
+`desktop config apply` also generates inspectable runtime hints for binds,
+autostart, rules, monitors, env/workspace/source intent under `/system`.
+The model is closer to Hyprland dispatchers and automatic tiling than to a
+mouse-drag window desktop. The same profile can be installed later through
 packages:
 
 ```text
@@ -120,7 +134,24 @@ pkg verify /workspace/packages/orizon-desktop-hypr.opkg
 pkg simulate /workspace/packages/orizon-desktop-hypr.opkg
 pkg install /workspace/packages/orizon-desktop-hypr.opkg
 desktop session
+desktop settings
+desktop settings presets
+desktop settings doctor
+desktop settings preset compact
+desktop settings set gaps-in 10
 desktop apps
+desktop profiles
+desktop preset moss
+desktop binds
+desktop dispatch exec terminal
+desktop hyprctl clients
+desktop dispatch fullscreen
+desktop dispatch pseudo
+desktop dispatch cyclenext
+desktop dispatch movetoworkspace 2
+desktop dispatch workspace +1
+desktop focus toggle
+desktop autostart
 desktop doctor
 ```
 

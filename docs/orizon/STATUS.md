@@ -42,15 +42,21 @@ work.
   `firstboot done` document first boot, record `/system/boot-state`, write
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
-- Optional desktop profile: `desktop status/config/doctor/logs/shortcuts`,
-  `desktop session/apps/windows/theme/wallpaper/layout/bar/launcher/workspace`,
+- Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts`,
+  `desktop session/settings/settings preset/settings doctor/pointer/apps/profiles/preset/focus/autostart/windows/binds/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
-  package installable later, persists `/system/desktop-session.conf`, and
-  currently supports terminal F1/F2, launcher F3, runtime workspace switch,
-  terminal move commands, and a diagnostic window/layer list in the Orizon
-  compositor.
+  package installable later, persists `/system/desktop-session.conf` plus
+  `/system/desktop-settings.conf` plus generated `/system/desktop-binds.conf`
+  and related runtime hint files, and
+  currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
+  workspace switch, relative workspace dispatch, dispatcher-style
+  movetoworkspace/movefocus/cyclenext/swapnext, fullscreen/pseudo/pinned client
+  state, autostart terminal policy, profile discovery, presets,
+  focus-follows-mouse policy, Hyprland-style config import/runtime files, pointer diagnostics, tiled client diagnostics, and
+  `dwindle`/`master`/`monocle` placement in the
+  Orizon compositor.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.

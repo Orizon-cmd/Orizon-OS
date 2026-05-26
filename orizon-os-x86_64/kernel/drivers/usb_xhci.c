@@ -1026,11 +1026,16 @@ static int xhci_setup_usb_net_fail(const usb_net_info_t *info,
   return -1;
 }
 
-static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t *out_mps,
-                          uint8_t *out_interval, uint8_t *out_iface, uint8_t *out_cfg) {
+static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep,
+                          uint16_t *out_mps, uint8_t *out_interval,
+                          uint8_t *out_iface, uint8_t *out_cfg,
+                          uint8_t *out_subclass,
+                          uint8_t *out_protocol) {
   uint16_t i = 0;
   uint8_t cur_iface = 0xFF;
   uint8_t cur_cfg = 1;
+  uint8_t cur_subclass = 0;
+  uint8_t cur_protocol = 0;
   while (i + 2 <= len) {
     uint8_t dlen = buf[i];
     uint8_t dtype = buf[i + 1];
@@ -1041,12 +1046,17 @@ static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
       cur_cfg = buf[i + 5];
     } else if (dtype == 4 && dlen >= 9) {
       uint8_t cls = buf[i + 5];
+      uint8_t sub = buf[i + 6];
       uint8_t proto = buf[i + 7];
-      /* Relaxed check: Accept any HID Keyboard (Proto 1) or just HID (Class 3) */
-      if (cls == 3 && (proto == 1 || proto == 0)) {
+      /* Accept boot keyboard, boot mouse, and QEMU-style generic HID tablet. */
+      if (cls == 3 && (proto == 1 || proto == 2 || proto == 0)) {
         cur_iface = buf[i + 2];
+        cur_subclass = sub;
+        cur_protocol = proto;
       } else {
         cur_iface = 0xFF;
+        cur_subclass = 0;
+        cur_protocol = 0;
       }
     } else if (dtype == 5 && dlen >= 7) {
       if (cur_iface != 0xFF) {
@@ -1059,6 +1069,12 @@ static int xhci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
           *out_interval = buf[i + 6];
           *out_iface = cur_iface;
           *out_cfg = cur_cfg;
+          if (out_subclass) {
+            *out_subclass = cur_subclass;
+          }
+          if (out_protocol) {
+            *out_protocol = cur_protocol;
+          }
           return 0;
         }
       }
@@ -1226,6 +1242,8 @@ static int xhci_setup_keyboard(uint32_t port) {
   uint32_t saved_ep0_idx = ep0_idx;
   void *saved_dev_ctx = dev_ctx;
   void *enum_dev_ctx = NULL;
+  uint8_t hid_subclass = 0;
+  uint8_t hid_protocol = 0;
 
   xhci_active_port = port;
   xhci_set_phase(XHCI_PHASE_RESET);
@@ -1397,7 +1415,9 @@ static int xhci_setup_keyboard(uint32_t port) {
   }
 
   xhci_set_phase(XHCI_PHASE_HID_PARSE);
-  if (xhci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval, &interface_num, &config_value) != 0) {
+  if (xhci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval,
+                     &interface_num, &config_value, &hid_subclass,
+                     &hid_protocol) != 0) {
     device_slot = saved_device_slot;
     ep0_ring = saved_ep0_ring;
     ep0_cycle = saved_ep0_cycle;
@@ -1426,7 +1446,9 @@ static int xhci_setup_keyboard(uint32_t port) {
     return -1;
   }
   
-  /* Try Set_Protocol and Set_Idle (ignore errors - some keyboards don't support them) */
+  usb_set_hid_boot_protocol(hid_subclass, hid_protocol, intr_mps);
+
+  /* Try Set_Protocol and Set_Idle (ignore errors - some HID devices don't support them) */
   serial_puts("[xHCI] Sending Set_Protocol...\n");
   int proto_result = xhci_ctrl_transfer(0x21, 0x0B, 0, interface_num, NULL, 0);
   serial_puts(proto_result == 0 ? "[xHCI] Set_Protocol OK\n" : "[xHCI] Set_Protocol failed (ignored)\n");
@@ -1486,7 +1508,7 @@ static int xhci_setup_keyboard(uint32_t port) {
   dev_ctx = enum_dev_ctx;
   xhci_keyboard_ready = 1;
   xhci_set_phase(XHCI_PHASE_READY);
-  serial_puts("[xHCI] Keyboard setup complete!\n");
+  serial_puts("[xHCI] HID input setup complete!\n");
   return 0;
 }
 

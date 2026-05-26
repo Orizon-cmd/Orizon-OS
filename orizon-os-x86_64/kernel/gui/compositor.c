@@ -38,6 +38,7 @@
 #define SPLASH_TICKS 180
 #define TIMER_BOOT_FALLBACK_LOOPS 8000
 #define TIMER_FALLBACK_IDLE_PAUSES 20000
+#define DESKTOP_MAX_CLIENTS 8
 
 #define COLOR_BG_TOP MAKE_COLOR(10, 14, 24)
 #define COLOR_BG_BOTTOM MAKE_COLOR(22, 28, 42)
@@ -64,10 +65,29 @@ static int desktop_mode_enabled = 0;
 static int desktop_terminal_visible = 1;
 static int desktop_launcher_visible = 0;
 static orizon_desktop_session_t desktop_session = {
-    "graphite", "aurora", "floating", 1, 1, 1};
+    "graphite", "aurora", "dwindle", 1, 1, 1, 0};
+static orizon_desktop_settings_t desktop_settings = {
+    1, 6, 12, 2, 8, 1, 1, 0, 0, "orizon-terminal", "builtin", "top", "us",
+    "flat"};
 static int desktop_workspace_count = 3;
 static int desktop_active_workspace = 1;
+static int desktop_previous_workspace = 1;
 static int desktop_terminal_workspace = 1;
+typedef struct {
+  int id;
+  int workspace;
+  int visible;
+  int terminal_backed;
+  int fullscreen;
+  int pseudo;
+  int pinned;
+  char title[48];
+  char app_id[32];
+} desktop_client_t;
+
+static desktop_client_t desktop_clients[DESKTOP_MAX_CLIENTS];
+static int desktop_next_client_id = 1;
+static int desktop_focused_client_id = 0;
 static int splash_ticks_remaining = SPLASH_TICKS;
 static int timer_irq_seen = 0;
 static int timer_fallback_polling = 0;
@@ -175,8 +195,8 @@ static void draw_footer(void) {
     hint = "Lenovo I2C-HID probe selected. Boot UI is visible first; driver probe runs after startup.";
   } else if (desktop_mode_enabled && core_services_done) {
     hint = desktop_terminal_visible
-               ? "Desktop profile active. F2 closes the terminal; 'desktop status' shows session state."
-               : "Desktop profile active. Press F1, t, Enter or click to open the terminal.";
+               ? "Desktop profile active. F2 closes, F4 fullscreen, F5 pseudo, F6 cycles focus."
+               : "Desktop profile active. Press F1, t or Enter to spawn a tiled terminal.";
   } else if (boot_stage_hint && boot_stage_hint[0]) {
     hint = boot_stage_hint;
   } else if (boot_cmdline_has("orizon.safe=1")) {
@@ -198,9 +218,289 @@ static int desktop_clamp_workspace(int workspace) {
   return workspace;
 }
 
-static int desktop_terminal_on_active_workspace(void) {
-  return desktop_terminal_visible &&
-         desktop_terminal_workspace == desktop_active_workspace;
+static int desktop_parse_int_arg(const char *value, int *out) {
+  int sign = 1;
+  int n = 0;
+  int seen = 0;
+
+  if (!value || !out) {
+    return -1;
+  }
+  while (*value == ' ') {
+    value++;
+  }
+  if (*value == '+') {
+    value++;
+  } else if (*value == '-') {
+    sign = -1;
+    value++;
+  }
+  while (*value >= '0' && *value <= '9') {
+    seen = 1;
+    n = n * 10 + (*value - '0');
+    value++;
+  }
+  if (!seen) {
+    return -1;
+  }
+  *out = n * sign;
+  return 0;
+}
+
+static int desktop_parse_workspace_arg(const char *value, int *workspace) {
+  int n = 0;
+  const char *v = value ? value : "";
+
+  if (!workspace) {
+    return -1;
+  }
+  while (*v == ' ') {
+    v++;
+  }
+  if (strcmp(v, "previous") == 0 || strcmp(v, "prev") == 0) {
+    *workspace = desktop_clamp_workspace(desktop_previous_workspace);
+    return 0;
+  }
+  if (v[0] == 'e' && (v[1] == '+' || v[1] == '-')) {
+    v++;
+  }
+  if (v[0] == '+' || v[0] == '-') {
+    if (desktop_parse_int_arg(v, &n) < 0) {
+      return -1;
+    }
+    *workspace = desktop_clamp_workspace(desktop_active_workspace + n);
+    return 0;
+  }
+  if (desktop_parse_int_arg(v, &n) < 0) {
+    return -1;
+  }
+  if (n < 1 || n > desktop_workspace_count) {
+    return -1;
+  }
+  *workspace = n;
+  return 0;
+}
+
+static int desktop_client_on_workspace(const desktop_client_t *client,
+                                       int workspace) {
+  if (!client || !client->visible) {
+    return 0;
+  }
+  return client->pinned || client->workspace == workspace;
+}
+
+static int desktop_client_index_by_id(int id) {
+  if (id <= 0) {
+    return -1;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && desktop_clients[i].id == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int desktop_focused_client_index(void) {
+  int idx = desktop_client_index_by_id(desktop_focused_client_id);
+  if (idx >= 0 &&
+      desktop_client_on_workspace(&desktop_clients[idx],
+                                  desktop_active_workspace)) {
+    return idx;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_client_on_workspace(&desktop_clients[i],
+                                    desktop_active_workspace)) {
+      desktop_focused_client_id = desktop_clients[i].id;
+      return i;
+    }
+  }
+  desktop_focused_client_id = 0;
+  return -1;
+}
+
+static int desktop_focused_client_is_terminal(void) {
+  int idx = desktop_focused_client_index();
+  return idx >= 0 && desktop_clients[idx].terminal_backed;
+}
+
+static int desktop_client_count_on_workspace(int workspace) {
+  int count = 0;
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_client_on_workspace(&desktop_clients[i], workspace)) {
+      count++;
+    }
+  }
+  return count;
+}
+
+static int desktop_nth_client_on_workspace(int workspace, int nth) {
+  int seen = 0;
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (!desktop_client_on_workspace(&desktop_clients[i], workspace)) {
+      continue;
+    }
+    if (seen == nth) {
+      return i;
+    }
+    seen++;
+  }
+  return -1;
+}
+
+static int desktop_spawn_client(const char *title, const char *app_id,
+                                int terminal_backed) {
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (!desktop_clients[i].visible) {
+      desktop_clients[i].id = desktop_next_client_id++;
+      desktop_clients[i].workspace = desktop_active_workspace;
+      desktop_clients[i].visible = 1;
+      desktop_clients[i].terminal_backed = terminal_backed ? 1 : 0;
+      desktop_clients[i].fullscreen = 0;
+      desktop_clients[i].pseudo = 0;
+      desktop_clients[i].pinned = 0;
+      snprintf(desktop_clients[i].title, sizeof(desktop_clients[i].title),
+               "%s", title ? title : "client");
+      snprintf(desktop_clients[i].app_id, sizeof(desktop_clients[i].app_id),
+               "%s", app_id ? app_id : "orizon-client");
+      desktop_focused_client_id = desktop_clients[i].id;
+      if (terminal_backed) {
+        desktop_terminal_visible = 1;
+        desktop_terminal_workspace = desktop_active_workspace;
+      }
+      desktop_launcher_visible = 0;
+      needs_redraw = 1;
+      return desktop_clients[i].id;
+    }
+  }
+  return -1;
+}
+
+static void desktop_ensure_terminal_client(void) {
+  int has_terminal = 0;
+
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && desktop_clients[i].terminal_backed) {
+      has_terminal = 1;
+      if (desktop_terminal_visible) {
+        desktop_terminal_workspace = desktop_clients[i].workspace;
+      }
+      break;
+    }
+  }
+  if (!has_terminal && desktop_terminal_visible) {
+    desktop_spawn_client("Terminal", "orizon-terminal", 1);
+  }
+}
+
+static void desktop_sync_terminal_compat(void) {
+  desktop_terminal_visible = 0;
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && desktop_clients[i].terminal_backed) {
+      desktop_terminal_visible = 1;
+      desktop_terminal_workspace = desktop_clients[i].workspace;
+      if (desktop_focused_client_id == desktop_clients[i].id) {
+        desktop_terminal_workspace = desktop_clients[i].workspace;
+        return;
+      }
+    }
+  }
+}
+
+static int desktop_focus_relative(int delta) {
+  int count = desktop_client_count_on_workspace(desktop_active_workspace);
+  int focused_idx = desktop_focused_client_index();
+  int focused_pos = 0;
+
+  if (count <= 0) {
+    return -1;
+  }
+  if (focused_idx >= 0) {
+    for (int pos = 0; pos < count; pos++) {
+      if (desktop_nth_client_on_workspace(desktop_active_workspace, pos) ==
+          focused_idx) {
+        focused_pos = pos;
+        break;
+      }
+    }
+  }
+  focused_pos = (focused_pos + delta + count) % count;
+  focused_idx =
+      desktop_nth_client_on_workspace(desktop_active_workspace, focused_pos);
+  if (focused_idx < 0) {
+    return -1;
+  }
+  desktop_focused_client_id = desktop_clients[focused_idx].id;
+  desktop_sync_terminal_compat();
+  needs_redraw = 1;
+  return 0;
+}
+
+static int desktop_swap_relative(int delta) {
+  int count = desktop_client_count_on_workspace(desktop_active_workspace);
+  int focused_idx = desktop_focused_client_index();
+  int focused_pos = -1;
+  int other_idx;
+  desktop_client_t tmp;
+
+  if (count <= 1 || focused_idx < 0) {
+    return -1;
+  }
+  for (int pos = 0; pos < count; pos++) {
+    if (desktop_nth_client_on_workspace(desktop_active_workspace, pos) ==
+        focused_idx) {
+      focused_pos = pos;
+      break;
+    }
+  }
+  if (focused_pos < 0) {
+    return -1;
+  }
+  other_idx = desktop_nth_client_on_workspace(
+      desktop_active_workspace, (focused_pos + delta + count) % count);
+  if (other_idx < 0 || other_idx == focused_idx) {
+    return -1;
+  }
+  tmp = desktop_clients[focused_idx];
+  desktop_clients[focused_idx] = desktop_clients[other_idx];
+  desktop_clients[other_idx] = tmp;
+  desktop_focused_client_id = tmp.id;
+  desktop_sync_terminal_compat();
+  needs_redraw = 1;
+  return 0;
+}
+
+static int desktop_toggle_active_fullscreen(void) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].fullscreen = desktop_clients[idx].fullscreen ? 0 : 1;
+  needs_redraw = 1;
+  return desktop_clients[idx].fullscreen;
+}
+
+static int desktop_toggle_active_pseudo(void) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].pseudo = desktop_clients[idx].pseudo ? 0 : 1;
+  needs_redraw = 1;
+  return desktop_clients[idx].pseudo;
+}
+
+static int desktop_toggle_active_pin(void) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].pinned = desktop_clients[idx].pinned ? 0 : 1;
+  needs_redraw = 1;
+  return desktop_clients[idx].pinned;
 }
 
 static void draw_shell_frame(void) {
@@ -248,20 +548,6 @@ static void draw_console_scene(void) {
   draw_footer();
 }
 
-static void draw_desktop_card(int x, int y, int width, int height,
-                              const char *title, const char *body,
-                              const char *hint) {
-  draw_shadow_panel(x, y, width, height);
-  fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(228, 12, 17, 28));
-  fb_draw_rect(x, y, width, height, COLOR_PANEL_EDGE);
-  fb_fill_rect(x, y, 4, height, COLOR_PANEL_ACCENT);
-  font_draw_string(x + 18, y + 18, title, COLOR_TEXT_PRIMARY);
-  font_draw_string(x + 18, y + 46, body, COLOR_TEXT_SECONDARY);
-  if (hint && hint[0]) {
-    font_draw_string(x + 18, y + height - 28, hint, COLOR_TEXT_MUTED);
-  }
-}
-
 static void draw_desktop_status_bar(void) {
   char line[160];
   int y = TOP_BAR_HEIGHT + 8;
@@ -272,9 +558,10 @@ static void draw_desktop_status_bar(void) {
   fb_fill_rect_alpha(36, y, (int)screen_width - 72, 28,
                      MAKE_ARGB(168, 8, 12, 20));
   snprintf(line, sizeof(line),
-           "WS %d/%d  layout=%s  F1 Terminal  F2 Close  F3 Launcher  terminal=ws%d",
+           "WS %d/%d  layout=%s  gaps=%d/%d border=%d  F1 term F2 kill F3 launcher F4 full F5 pseudo",
            desktop_active_workspace, desktop_workspace_count,
-           desktop_session.layout, desktop_terminal_workspace);
+           desktop_session.layout, desktop_settings.gaps_in,
+           desktop_settings.gaps_out, desktop_settings.border_size);
   font_draw_string(52, y + 7, line, COLOR_TEXT_SECONDARY);
 }
 
@@ -309,14 +596,177 @@ static void draw_desktop_launcher(void) {
                    COLOR_TEXT_MUTED);
 }
 
+static void desktop_dwindle_rect(int target, int count, int x, int y, int width,
+                                 int height, int *rx, int *ry, int *rw,
+                                 int *rh) {
+  int cur_x = x;
+  int cur_y = y;
+  int cur_w = width;
+  int cur_h = height;
+
+  if (count <= 1) {
+    *rx = x;
+    *ry = y;
+    *rw = width;
+    *rh = height;
+    return;
+  }
+  for (int i = 0; i < count; i++) {
+    if (i == count - 1) {
+      *rx = cur_x;
+      *ry = cur_y;
+      *rw = cur_w;
+      *rh = cur_h;
+      return;
+    }
+    if (cur_w >= cur_h) {
+      int first_w = cur_w / 2;
+      if (i == target) {
+        *rx = cur_x;
+        *ry = cur_y;
+        *rw = first_w;
+        *rh = cur_h;
+        return;
+      }
+      cur_x += first_w;
+      cur_w -= first_w;
+    } else {
+      int first_h = cur_h / 2;
+      if (i == target) {
+        *rx = cur_x;
+        *ry = cur_y;
+        *rw = cur_w;
+        *rh = first_h;
+        return;
+      }
+      cur_y += first_h;
+      cur_h -= first_h;
+    }
+  }
+  *rx = cur_x;
+  *ry = cur_y;
+  *rw = cur_w;
+  *rh = cur_h;
+}
+
+static void desktop_master_rect(int target, int count, int x, int y, int width,
+                                int height, int *rx, int *ry, int *rw,
+                                int *rh) {
+  int master_w;
+  int stack_count;
+  int stack_h;
+
+  if (count <= 1 || target == 0) {
+    *rx = x;
+    *ry = y;
+    *rw = count <= 1 ? width : (width * 58) / 100;
+    *rh = height;
+    return;
+  }
+
+  master_w = (width * 58) / 100;
+  stack_count = count - 1;
+  stack_h = height / stack_count;
+  *rx = x + master_w;
+  *ry = y + (target - 1) * stack_h;
+  *rw = width - master_w;
+  *rh = target == count - 1 ? height - (target - 1) * stack_h : stack_h;
+}
+
+static void draw_desktop_client_tile(const desktop_client_t *client, int x,
+                                     int y, int width, int height,
+                                     int focused) {
+  char title[128];
+  color_t border = focused ? COLOR_PANEL_ACCENT : COLOR_PANEL_EDGE;
+  int inner_x = x + 8;
+  int inner_y = y + 30;
+  int inner_w = width - 16;
+  int inner_h = height - 38;
+  int render_x;
+  int render_y;
+  int render_w;
+  int render_h;
+  int border_count = desktop_settings.border_size;
+
+  if (!client || width < 80 || height < 64) {
+    return;
+  }
+  if (desktop_settings.shadows_enabled) {
+    draw_shadow_panel(x, y, width, height);
+  }
+  fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(226, 10, 15, 24));
+  if (border_count < 1) {
+    border_count = 1;
+  }
+  for (int i = 0; i < border_count && width - i * 2 > 4 &&
+                  height - i * 2 > 4;
+       i++) {
+    fb_draw_rect(x + i, y + i, width - i * 2, height - i * 2, border);
+  }
+  snprintf(title, sizeof(title), "%s  id=%d  app=%s  ws=%d%s%s%s%s",
+           client->title, client->id, client->app_id, client->workspace,
+           client->fullscreen ? "  fullscreen" : "",
+           client->pseudo ? "  pseudo" : "",
+           client->pinned ? "  pinned" : "",
+           focused ? "  focused" : "");
+  font_draw_string(x + 10, y + 10, title,
+                   focused ? COLOR_TEXT_PRIMARY : COLOR_TEXT_SECONDARY);
+
+  render_x = inner_x;
+  render_y = inner_y;
+  render_w = inner_w;
+  render_h = inner_h;
+  if (client->pseudo && !client->fullscreen && inner_w > 120 &&
+      inner_h > 96) {
+    render_x += inner_w / 10;
+    render_y += inner_h / 10;
+    render_w = (inner_w * 8) / 10;
+    render_h = (inner_h * 8) / 10;
+    fb_draw_rect(render_x - 4, render_y - 4, render_w + 8, render_h + 8,
+                 COLOR_TEXT_MUTED);
+    font_draw_string(inner_x, inner_y + inner_h - 14,
+                     "pseudo tiled surface: tile kept, content constrained",
+                     COLOR_TEXT_MUTED);
+  }
+
+  if (client->terminal_backed && focused && main_terminal && render_w > 48 &&
+      render_h > 48) {
+    term_render_in_rect(main_terminal, render_x, render_y, render_w, render_h);
+  } else if (client->terminal_backed) {
+    font_draw_string(render_x, render_y + 8, "terminal surface",
+                     COLOR_TEXT_PRIMARY);
+    font_draw_string(render_x, render_y + 32,
+                     "shared backend; focus with dispatch movefocus",
+                     COLOR_TEXT_SECONDARY);
+  } else {
+    font_draw_string(render_x, render_y + 8, "prepared surface",
+                     COLOR_TEXT_PRIMARY);
+    font_draw_string(render_x, render_y + 32,
+                     "future native Orizon desktop app",
+                     COLOR_TEXT_SECONDARY);
+  }
+}
+
 static void draw_desktop_scene(void) {
-  int card_w = 360;
-  int card_h = 112;
-  int start_x = 48;
-  int start_y = TOP_BAR_HEIGHT + 86;
   char session_line[128];
   char workspace_line[128];
+  int outer_gap = desktop_settings.gaps_out;
+  int inner_gap = desktop_settings.gaps_in;
+  int area_x = 44 + outer_gap;
+  int area_y = TOP_BAR_HEIGHT + 92;
+  int area_w = (int)screen_width - 88 - outer_gap * 2;
+  int area_h = (int)screen_height - area_y - FOOTER_HEIGHT - 18 - outer_gap;
+  int client_count;
+  int focused_idx;
 
+  if (area_w < 120) {
+    area_w = 120;
+  }
+  if (area_h < 80) {
+    area_h = 80;
+  }
+
+  desktop_ensure_terminal_client();
   draw_background();
   draw_top_bar();
   draw_desktop_status_bar();
@@ -329,52 +779,55 @@ static void draw_desktop_scene(void) {
   font_draw_string(48, TOP_BAR_HEIGHT + 48, session_line,
                    COLOR_TEXT_SECONDARY);
   snprintf(workspace_line, sizeof(workspace_line),
-           "workspace %d/%d | terminal workspace %d",
+           "workspace %d/%d | clients=%d | layout=%s | settings=%s",
            desktop_active_workspace, desktop_workspace_count,
-           desktop_terminal_workspace);
+           desktop_client_count_on_workspace(desktop_active_workspace),
+           desktop_session.layout, ORIZON_DESKTOP_SETTINGS_PATH);
   font_draw_string(48, TOP_BAR_HEIGHT + 68, workspace_line,
                    COLOR_TEXT_MUTED);
 
-  draw_desktop_card(start_x, start_y, card_w, card_h, "Terminal",
-                    desktop_terminal_on_active_workspace()
-                        ? "Open here: Orizon console window"
-                        : (desktop_terminal_visible
-                               ? "Open on another workspace"
-                               : "Closed: press F1, t or click"),
-                    "F2 closes, F1 opens");
-  draw_desktop_card(start_x + card_w + 24, start_y, card_w, card_h,
-                    "Config",
-                    "/system/desktop-session.conf",
-                    "desktop session/layout/theme");
-  draw_desktop_card(start_x, start_y + card_h + 22, card_w, card_h,
-                    "Package",
-                    ORIZON_DESKTOP_PACKAGE,
-                    "desktop package writes installable .opkg");
-  draw_desktop_card(start_x + card_w + 24, start_y + card_h + 22, card_w,
-                    card_h, "Launcher",
-                    desktop_launcher_visible ? "Open: app launcher"
-                                             : "Closed: press F3",
-                    "desktop apps lists entries");
-
-  if (desktop_terminal_on_active_workspace()) {
-    draw_shell_frame();
-    if (main_terminal) {
-      term_render(main_terminal);
-    } else {
-      font_draw_string(shell_x + PANEL_PADDING,
-                       shell_y + PANEL_TITLE_HEIGHT + 14,
-                       "Terminal initialization failed.", COLOR_RED);
-    }
-  } else {
+  client_count = desktop_client_count_on_workspace(desktop_active_workspace);
+  focused_idx = desktop_focused_client_index();
+  if (client_count <= 0) {
     draw_centered_string((int)screen_height / 2 + 56,
-                         desktop_terminal_visible ? "Workspace is empty"
-                                                  : "Terminal is closed",
+                         "Workspace is empty",
                          COLOR_TEXT_PRIMARY);
     draw_centered_string((int)screen_height / 2 + 80,
-                         desktop_terminal_visible
-                             ? "Use 'desktop workspace <n>' or 'desktop move terminal <n>'."
-                             : "Press F1, t, Enter, Space or click the desktop to open it.",
+                         "Use 'desktop dispatch exec terminal' or press F1.",
                          COLOR_TEXT_SECONDARY);
+  } else if (focused_idx >= 0 && desktop_clients[focused_idx].fullscreen) {
+    draw_desktop_client_tile(&desktop_clients[focused_idx], area_x, area_y,
+                             area_w, area_h, 1);
+  } else if (strcmp(desktop_session.layout, "monocle") == 0) {
+    if (focused_idx >= 0) {
+      draw_desktop_client_tile(&desktop_clients[focused_idx], area_x, area_y,
+                               area_w, area_h, 1);
+    }
+  } else {
+    int pos = 0;
+    for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+      int rx;
+      int ry;
+      int rw;
+      int rh;
+      if (!desktop_client_on_workspace(&desktop_clients[i],
+                                       desktop_active_workspace)) {
+        continue;
+      }
+      if (strcmp(desktop_session.layout, "master") == 0) {
+        desktop_master_rect(pos, client_count, area_x, area_y, area_w, area_h,
+                            &rx, &ry, &rw, &rh);
+      } else {
+        desktop_dwindle_rect(pos, client_count, area_x, area_y, area_w, area_h,
+                             &rx, &ry, &rw, &rh);
+      }
+      draw_desktop_client_tile(&desktop_clients[i], rx + inner_gap,
+                               ry + inner_gap, rw - inner_gap * 2,
+                               rh - inner_gap * 2,
+                               desktop_clients[i].id ==
+                                   desktop_focused_client_id);
+      pos++;
+    }
   }
 
   draw_desktop_launcher();
@@ -471,22 +924,44 @@ static void keyboard_callback(int key) {
       if (key == KEY_ESC) {
         gui_desktop_hide_launcher();
       } else if (key == '\n' || key == '\r' || key == ' ' || key == '1') {
-        gui_desktop_open_terminal();
+        gui_desktop_spawn_terminal_client();
         gui_desktop_hide_launcher();
       }
       return;
     }
     if (key == KEY_F1 || key == 't' || key == 'T') {
-      gui_desktop_open_terminal();
+      gui_desktop_spawn_terminal_client();
       return;
     }
     if (key == KEY_F2) {
-      gui_desktop_close_terminal();
+      gui_desktop_close_active_client();
       return;
     }
-    if (!desktop_terminal_on_active_workspace()) {
+    if (key == KEY_F4) {
+      desktop_toggle_active_fullscreen();
+      return;
+    }
+    if (key == KEY_F5) {
+      desktop_toggle_active_pseudo();
+      return;
+    }
+    if (key == KEY_F6) {
+      gui_desktop_focus_next_client();
+      return;
+    }
+    if (key == KEY_F7) {
+      gui_desktop_switch_workspace(
+          desktop_clamp_workspace(desktop_active_workspace + 1));
+      return;
+    }
+    if (key == KEY_F8) {
+      gui_desktop_switch_workspace(
+          desktop_clamp_workspace(desktop_active_workspace - 1));
+      return;
+    }
+    if (!desktop_focused_client_is_terminal()) {
       if (key == '\n' || key == '\r' || key == ' ') {
-        gui_desktop_open_terminal();
+        gui_desktop_spawn_terminal_client();
       }
       return;
     }
@@ -517,13 +992,10 @@ static void poll_input_state(void) {
   } else if (left_click && splash_ticks_remaining <= 0 &&
              desktop_mode_enabled && desktop_launcher_visible) {
     gui_desktop_hide_launcher();
-  } else if (left_click && splash_ticks_remaining <= 0 &&
-             desktop_mode_enabled && !desktop_terminal_on_active_workspace()) {
-    gui_desktop_open_terminal();
   }
 
   if (wheel != 0 && splash_ticks_remaining <= 0 && main_terminal &&
-      (!desktop_mode_enabled || desktop_terminal_on_active_workspace())) {
+      (!desktop_mode_enabled || desktop_focused_client_is_terminal())) {
     term_scroll_view(main_terminal, -wheel * 3);
     needs_redraw = 1;
   }
@@ -598,6 +1070,7 @@ void gui_desktop_set_enabled(int enabled) {
     desktop_terminal_workspace =
         desktop_clamp_workspace(desktop_terminal_workspace);
     desktop_terminal_visible = desktop_session.autostart_terminal ? 1 : 0;
+    desktop_ensure_terminal_client();
   } else {
     desktop_launcher_visible = 0;
   }
@@ -609,26 +1082,35 @@ int gui_desktop_enabled(void) {
 }
 
 void gui_desktop_open_terminal(void) {
-  desktop_terminal_workspace = desktop_active_workspace;
-  desktop_terminal_visible = 1;
+  int found = -1;
+
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && desktop_clients[i].terminal_backed) {
+      found = i;
+      break;
+    }
+  }
+  if (found < 0) {
+    gui_desktop_spawn_terminal_client();
+    return;
+  }
+  desktop_clients[found].workspace = desktop_active_workspace;
+  desktop_focused_client_id = desktop_clients[found].id;
+  desktop_sync_terminal_compat();
   desktop_launcher_visible = 0;
   needs_redraw = 1;
 }
 
 void gui_desktop_close_terminal(void) {
-  if (!desktop_mode_enabled) {
-    return;
-  }
-  desktop_terminal_visible = 0;
-  needs_redraw = 1;
+  gui_desktop_close_active_client();
 }
 
 void gui_desktop_toggle_terminal(void) {
-  if (!desktop_mode_enabled) {
-    return;
+  if (desktop_client_count_on_workspace(desktop_active_workspace) > 0) {
+    gui_desktop_close_active_client();
+  } else {
+    gui_desktop_spawn_terminal_client();
   }
-  desktop_terminal_visible = desktop_terminal_visible ? 0 : 1;
-  needs_redraw = 1;
 }
 
 int gui_desktop_terminal_visible(void) {
@@ -664,23 +1146,226 @@ int gui_desktop_switch_workspace(int workspace) {
   if (workspace < 1 || workspace > desktop_workspace_count) {
     return -1;
   }
+  if (workspace != desktop_active_workspace) {
+    desktop_previous_workspace = desktop_active_workspace;
+  }
   desktop_active_workspace = workspace;
   desktop_launcher_visible = 0;
+  desktop_focused_client_index();
+  desktop_sync_terminal_compat();
   needs_redraw = 1;
   return 0;
 }
 
 int gui_desktop_move_terminal_to_workspace(int workspace) {
+  int idx = desktop_focused_client_index();
+
   if (workspace < 1 || workspace > desktop_workspace_count) {
     return -1;
   }
-  desktop_terminal_workspace = workspace;
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].workspace = workspace;
+  desktop_focused_client_id = desktop_clients[idx].id;
+  desktop_sync_terminal_compat();
   needs_redraw = 1;
   return 0;
 }
 
+int gui_desktop_spawn_terminal_client(void) {
+  return desktop_spawn_client("Terminal", "orizon-terminal", 1) > 0 ? 0 : -1;
+}
+
+int gui_desktop_close_active_client(void) {
+  int idx;
+
+  if (!desktop_mode_enabled) {
+    return -1;
+  }
+  idx = desktop_focused_client_index();
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].visible = 0;
+  desktop_clients[idx].id = 0;
+  desktop_clients[idx].workspace = 0;
+  desktop_clients[idx].terminal_backed = 0;
+  desktop_clients[idx].fullscreen = 0;
+  desktop_clients[idx].pseudo = 0;
+  desktop_clients[idx].pinned = 0;
+  desktop_clients[idx].title[0] = '\0';
+  desktop_clients[idx].app_id[0] = '\0';
+  desktop_focused_client_id = 0;
+  desktop_focused_client_index();
+  desktop_sync_terminal_compat();
+  needs_redraw = 1;
+  return 0;
+}
+
+int gui_desktop_focus_next_client(void) {
+  return desktop_focus_relative(1);
+}
+
+int gui_desktop_focus_prev_client(void) {
+  return desktop_focus_relative(-1);
+}
+
+int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
+                         size_t out_size) {
+  uint32_t workspace = 0;
+  const char *a = args ? args : "";
+
+  if (out && out_size) {
+    out[0] = '\0';
+  }
+  while (*a == ' ') {
+    a++;
+  }
+  if (!dispatcher || !dispatcher[0]) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: usage exec terminal | killactive | "
+               "workspace <n|+1|-1|previous> | movetoworkspace <n> | "
+               "movefocus next|prev | fullscreen | pseudo | pin | swapnext\n");
+    }
+    return -1;
+  }
+  if (strcmp(dispatcher, "exec") == 0) {
+    if (strcmp(a, "terminal") == 0 || strcmp(a, "orizon-terminal") == 0 ||
+        strcmp(a, "kitty") == 0) {
+      if (gui_desktop_spawn_terminal_client() == 0) {
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: exec terminal client spawned\n");
+        }
+        return 0;
+      }
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: client limit reached\n");
+      }
+      return -1;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: exec supports terminal today\n");
+    }
+    return -1;
+  }
+  if (strcmp(dispatcher, "killactive") == 0 || strcmp(dispatcher, "close") == 0) {
+    if (gui_desktop_close_active_client() == 0) {
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: killed active client\n");
+      }
+      return 0;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: no active client\n");
+    }
+    return -1;
+  }
+  if (strcmp(dispatcher, "workspace") == 0) {
+    int target = 0;
+    if (desktop_parse_workspace_arg(a, &target) == 0 &&
+        gui_desktop_switch_workspace(target) == 0) {
+      workspace = (uint32_t)target;
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: workspace %u\n",
+                 (unsigned)workspace);
+      }
+      return 0;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: workspace expects 1-%d\n",
+               desktop_workspace_count);
+    }
+    return -1;
+  }
+  if (strcmp(dispatcher, "movetoworkspace") == 0 ||
+      strcmp(dispatcher, "movetoworkspacesilent") == 0) {
+    int target = 0;
+    if (desktop_parse_workspace_arg(a, &target) == 0 &&
+        gui_desktop_move_terminal_to_workspace(target) == 0) {
+      workspace = (uint32_t)target;
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: moved active to workspace %u\n",
+                 (unsigned)workspace);
+      }
+      return 0;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: movetoworkspace expects active client and 1-%d\n",
+               desktop_workspace_count);
+    }
+    return -1;
+  }
+  if (strcmp(dispatcher, "movefocus") == 0) {
+    int rc = (strcmp(a, "prev") == 0 || strcmp(a, "l") == 0 ||
+              strcmp(a, "u") == 0)
+                 ? gui_desktop_focus_prev_client()
+                 : gui_desktop_focus_next_client();
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: movefocus %s\n",
+               rc == 0 ? "ok" : "no-client");
+    }
+    return rc;
+  }
+  if (strcmp(dispatcher, "cyclenext") == 0) {
+    int rc = (strcmp(a, "prev") == 0 || strcmp(a, "previous") == 0 ||
+              strcmp(a, "-1") == 0)
+                 ? gui_desktop_focus_prev_client()
+                 : gui_desktop_focus_next_client();
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: cyclenext %s\n",
+               rc == 0 ? "ok" : "no-client");
+    }
+    return rc;
+  }
+  if (strcmp(dispatcher, "swapnext") == 0) {
+    int rc = (strcmp(a, "prev") == 0 || strcmp(a, "previous") == 0 ||
+              strcmp(a, "-1") == 0)
+                 ? desktop_swap_relative(-1)
+                 : desktop_swap_relative(1);
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: swapnext %s\n",
+               rc == 0 ? "ok" : "needs-two-clients");
+    }
+    return rc;
+  }
+  if (strcmp(dispatcher, "fullscreen") == 0) {
+    int state = desktop_toggle_active_fullscreen();
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: fullscreen %s\n",
+               state < 0 ? "no-client" : (state ? "on" : "off"));
+    }
+    return state < 0 ? -1 : 0;
+  }
+  if (strcmp(dispatcher, "pseudo") == 0 || strcmp(dispatcher, "pseudotile") == 0) {
+    int state = desktop_toggle_active_pseudo();
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: pseudo %s\n",
+               state < 0 ? "no-client" : (state ? "on" : "off"));
+    }
+    return state < 0 ? -1 : 0;
+  }
+  if (strcmp(dispatcher, "pin") == 0) {
+    int state = desktop_toggle_active_pin();
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: pin %s\n",
+               state < 0 ? "no-client" : (state ? "on" : "off"));
+    }
+    return state < 0 ? -1 : 0;
+  }
+  if (out && out_size) {
+    snprintf(out, out_size, "desktop dispatch: unknown '%s'\n", dispatcher);
+  }
+  return -1;
+}
+
 void gui_desktop_format_workspaces(char *out, size_t out_size) {
   size_t used = 0;
+  char label[96];
 
   if (!out || out_size == 0) {
     return;
@@ -690,45 +1375,181 @@ void gui_desktop_format_workspaces(char *out, size_t out_size) {
                    "Orizon desktop workspaces\n"
                    "active: %d\n"
                    "count: %d\n"
-                   "terminal: %s workspace=%d on-active=%s\n",
-                   desktop_active_workspace, desktop_workspace_count,
-                   desktop_terminal_visible ? "open" : "closed",
-                   desktop_terminal_workspace,
-                   desktop_terminal_on_active_workspace() ? "yes" : "no");
+                   "model: dynamic workspaces with dwindle tiling\n",
+                   desktop_active_workspace, desktop_workspace_count);
   for (int i = 1; i <= desktop_workspace_count && used < out_size; i++) {
+    int count = desktop_client_count_on_workspace(i);
+    snprintf(label, sizeof(label), "%d client%s", count,
+             count == 1 ? "" : "s");
     used += snprintf(out + used, out_size - used, "workspace %d: %s%s\n", i,
-                     (desktop_terminal_visible && desktop_terminal_workspace == i)
-                         ? "terminal"
-                         : "empty",
+                     count > 0 ? label : "empty",
                      i == desktop_active_workspace ? " active" : "");
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "commands: desktop workspace <1-%d> | desktop move terminal <1-%d>\n",
+             "dispatch: desktop dispatch workspace <1-%d|+1|-1|previous> | "
+             "desktop dispatch movetoworkspace <1-%d|+1|-1>\n",
              desktop_workspace_count, desktop_workspace_count);
   }
 }
 
 void gui_desktop_format_windows(char *out, size_t out_size) {
+  size_t used = 0;
+  int total = 0;
+  int focused_idx;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  focused_idx = desktop_focused_client_index();
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      total++;
+    }
+  }
+  used += snprintf(out + used, out_size - used,
+                   "Orizon desktop windows\n"
+                   "layout-engine: %s dynamic tiling\n"
+                   "configured-layout: %s\n"
+                   "known-windows: %d\n"
+                   "active-workspace: %d\n"
+                   "focused-client: %d\n"
+                   "launcher: %s overlay=yes workspace=global\n"
+                   "bar: %s layer=top\n",
+                   strcmp(desktop_session.layout, "master") == 0
+                       ? "master"
+                       : (strcmp(desktop_session.layout, "monocle") == 0
+                              ? "monocle"
+                              : "dwindle"),
+                   desktop_session.layout, total, desktop_active_workspace,
+                   focused_idx >= 0 ? desktop_clients[focused_idx].id : 0,
+                   desktop_launcher_visible ? "open" : "closed",
+                   desktop_session.bar_enabled ? "visible" : "hidden");
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS && used < out_size; i++) {
+    if (!desktop_clients[i].visible) {
+      continue;
+    }
+    used += snprintf(out + used, out_size - used,
+                     "client id=%d title=\"%s\" app=%s workspace=%d tiled=yes "
+                     "floating=no fullscreen=%s pseudo=%s pinned=%s "
+                     "focused=%s backend=%s\n",
+                     desktop_clients[i].id, desktop_clients[i].title,
+                     desktop_clients[i].app_id, desktop_clients[i].workspace,
+                     desktop_clients[i].fullscreen ? "yes" : "no",
+                     desktop_clients[i].pseudo ? "yes" : "no",
+                     desktop_clients[i].pinned ? "yes" : "no",
+                     desktop_clients[i].id == desktop_focused_client_id ? "yes"
+                                                                         : "no",
+                     desktop_clients[i].terminal_backed ? "terminal"
+                                                        : "prepared");
+  }
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "dispatch: exec terminal | killactive | movefocus next|prev | "
+             "cyclenext | swapnext | fullscreen | pseudo | pin | "
+             "workspace <n|+1|-1> | movetoworkspace <n|+1|-1>\n"
+             "limits: no mouse-drag window moving; true Wayland clients are future work\n");
+  }
+}
+
+void gui_desktop_format_activewindow(char *out, size_t out_size) {
+  int idx;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  idx = desktop_focused_client_index();
+  if (idx < 0) {
+    snprintf(out, out_size,
+             "activewindow:\n"
+             "  address: 0x0\n"
+             "  mapped: false\n"
+             "  reason: no focused tiled client\n");
+    return;
+  }
+  snprintf(out, out_size,
+           "activewindow:\n"
+           "  address: 0x%x\n"
+           "  mapped: true\n"
+           "  title: %s\n"
+           "  class: %s\n"
+           "  workspace: %d\n"
+           "  floating: false\n"
+           "  fullscreen: %s\n"
+           "  pseudo: %s\n"
+           "  pinned: %s\n"
+           "  xwayland: false\n",
+           desktop_clients[idx].id, desktop_clients[idx].title,
+           desktop_clients[idx].app_id, desktop_clients[idx].workspace,
+           desktop_clients[idx].fullscreen ? "true" : "false",
+           desktop_clients[idx].pseudo ? "true" : "false",
+           desktop_clients[idx].pinned ? "true" : "false");
+}
+
+void gui_desktop_format_monitors(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
   }
   snprintf(out, out_size,
-           "Orizon desktop windows\n"
-           "layout: %s\n"
-           "known-windows: 1\n"
-           "terminal: %s workspace=%d active-workspace=%d focused=%s\n"
-           "launcher: %s overlay=yes workspace=global\n"
-           "bar: %s layer=top\n"
-           "commands: desktop launch terminal | desktop close terminal | "
-           "desktop move terminal <1-%d> | desktop layout <floating|tiling|monocle>\n"
-           "limits: one managed app today; true tiling and Wayland clients are future work\n",
-           desktop_session.layout, desktop_terminal_visible ? "open" : "closed",
-           desktop_terminal_workspace, desktop_active_workspace,
-           desktop_terminal_on_active_workspace() ? "yes" : "no",
-           desktop_launcher_visible ? "open" : "closed",
-           desktop_session.bar_enabled ? "visible" : "hidden",
-           desktop_workspace_count);
+           "Monitor 0 (Orizon framebuffer):\n"
+           "\t%lux%lu@60.00 at 0x0\n"
+           "\tdescription: Orizon VM framebuffer\n"
+           "\tmake: Orizon\n"
+           "\tmodel: framebuffer\n"
+           "\tactive workspace: %d\n"
+           "\tscale: %d\n"
+           "\treserved: 0 %d 0 %d\n",
+           (unsigned long)screen_width, (unsigned long)screen_height,
+           desktop_active_workspace, ui_scale, TOP_BAR_HEIGHT, FOOTER_HEIGHT);
+}
+
+void gui_desktop_format_binds(char *out, size_t out_size) {
+  char cfg[2048];
+  size_t used = 0;
+  file_t *f;
+  ssize_t n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  used += snprintf(out + used, out_size - used,
+                   "Orizon desktop binds\n"
+                   "style: Hyprland-like bind/dispatcher model\n"
+                   "runtime: %s\n",
+                   ORIZON_DESKTOP_BINDS_PATH);
+
+  cfg[0] = '\0';
+  f = vfs_open(ORIZON_DESKTOP_BINDS_PATH, O_RDONLY);
+  if (f) {
+    n = vfs_read(f, cfg, sizeof(cfg) - 1);
+    vfs_close(f);
+    if (n > 0) {
+      cfg[n] = '\0';
+      used += snprintf(out + used, out_size - used, "\n== configured ==\n%s",
+                       cfg);
+    }
+  }
+  if (cfg[0] == '\0' && used < out_size) {
+    used += snprintf(out + used, out_size - used,
+                     "\n== built-in fallback ==\n"
+                     "$mod=SUPER\n"
+                     "bind $mod, RETURN, exec terminal\n"
+                     "bind $mod, Q, killactive\n"
+                     "bind $mod, D, launcher toggle\n"
+                     "bind $mod, M, fullscreen\n"
+                     "bind $mod, P, pseudo\n"
+                     "bind $mod, 1/2/3, workspace 1/2/3\n"
+                     "bind $mod SHIFT, 1/2/3, movetoworkspace 1/2/3\n");
+  }
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "\ndispatch: desktop dispatch <dispatcher> [args]\n"
+             "supported: exec, killactive, workspace, movetoworkspace, movefocus, "
+             "cyclenext, swapnext, fullscreen, pseudo, pin\n"
+             "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
+  }
 }
 
 void gui_desktop_reload_session(void) {
@@ -738,10 +1559,33 @@ void gui_desktop_reload_session(void) {
     snprintf(desktop_session.wallpaper, sizeof(desktop_session.wallpaper),
              "%s", "aurora");
     snprintf(desktop_session.layout, sizeof(desktop_session.layout), "%s",
-             "floating");
+             "dwindle");
     desktop_session.bar_enabled = 1;
     desktop_session.launcher_enabled = 1;
     desktop_session.autostart_terminal = 1;
+    desktop_session.focus_follows_mouse = 0;
+  }
+  if (orizon_desktop_load_settings(&desktop_settings) < 0) {
+    desktop_settings.scale = 1;
+    desktop_settings.gaps_in = 6;
+    desktop_settings.gaps_out = 12;
+    desktop_settings.border_size = 2;
+    desktop_settings.rounding = 8;
+    desktop_settings.animations_enabled = 1;
+    desktop_settings.shadows_enabled = 1;
+    desktop_settings.idle_timeout_seconds = 0;
+    desktop_settings.lock_on_idle = 0;
+    snprintf(desktop_settings.default_terminal,
+             sizeof(desktop_settings.default_terminal), "%s",
+             "orizon-terminal");
+    snprintf(desktop_settings.launcher_provider,
+             sizeof(desktop_settings.launcher_provider), "%s", "builtin");
+    snprintf(desktop_settings.bar_position,
+             sizeof(desktop_settings.bar_position), "%s", "top");
+    snprintf(desktop_settings.keyboard_layout,
+             sizeof(desktop_settings.keyboard_layout), "%s", "us");
+    snprintf(desktop_settings.pointer_profile,
+             sizeof(desktop_settings.pointer_profile), "%s", "flat");
   }
   if (!desktop_session.launcher_enabled) {
     desktop_launcher_visible = 0;
@@ -752,25 +1596,67 @@ void gui_desktop_reload_session(void) {
 void gui_desktop_format_status(char *out, size_t out_size) {
   char base[1400];
   const char *session;
+  int client_count;
 
   if (!out || out_size == 0) {
     return;
   }
   orizon_desktop_format_status(base, sizeof(base));
   session = desktop_mode_enabled ? "active" : "inactive";
+  client_count = desktop_client_count_on_workspace(desktop_active_workspace);
   snprintf(out, out_size,
            "%scompositor-session: %s\nterminal-window: %s\n"
            "launcher-window: %s\nbar: %s\nruntime-theme: %s\n"
            "runtime-wallpaper: %s\nruntime-layout: %s\n"
+           "runtime-focus-follows-mouse: %s\n"
+           "runtime-settings: %s\n"
+           "runtime-gaps: in=%d out=%d border=%d rounding=%d animations=%s shadows=%s\n"
+           "tiling-engine: %s\n"
+           "manual-window-drag: no\n"
            "workspace-active: %d\nworkspace-count: %d\n"
-           "terminal-workspace: %d\nterminal-on-active-workspace: %s\n",
+           "workspace-clients: %d\nfocused-client: %d\n",
            base, session, desktop_terminal_visible ? "open" : "closed",
            desktop_launcher_visible ? "open" : "closed",
            desktop_session.bar_enabled ? "visible" : "hidden",
            desktop_session.theme, desktop_session.wallpaper,
-           desktop_session.layout, desktop_active_workspace,
-           desktop_workspace_count, desktop_terminal_workspace,
-           desktop_terminal_on_active_workspace() ? "yes" : "no");
+           desktop_session.layout,
+           desktop_session.focus_follows_mouse ? "yes" : "no",
+           ORIZON_DESKTOP_SETTINGS_PATH, desktop_settings.gaps_in,
+           desktop_settings.gaps_out, desktop_settings.border_size,
+           desktop_settings.rounding,
+           desktop_settings.animations_enabled ? "yes" : "no",
+           desktop_settings.shadows_enabled ? "yes" : "no",
+           strcmp(desktop_session.layout, "master") == 0
+               ? "master"
+               : (strcmp(desktop_session.layout, "monocle") == 0 ? "monocle"
+                                                                  : "dwindle"),
+           desktop_active_workspace,
+           desktop_workspace_count, client_count, desktop_focused_client_id);
+}
+
+void gui_desktop_format_pointer(char *out, size_t out_size) {
+  char ps2[256];
+  char usb[320];
+  char i2c[256];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+
+  ps2_format_status(ps2, sizeof(ps2));
+  usb_format_status(usb, sizeof(usb));
+  i2c_hid_format_status(i2c, sizeof(i2c));
+  snprintf(out, out_size,
+           "Orizon desktop pointer\n"
+           "cursor: x=%d y=%d buttons=%d profile=%s focus-follows-mouse=%s\n"
+           "window-moving: keyboard-dispatch-only manual-drag=no\n"
+           "ps2: %s\n"
+           "usb-hid: %s\n"
+           "i2c-hid: %s\n"
+           "vm-note: QEMU/libvirt usb-tablet and boot mouse reports are routed "
+           "to the compositor pointer when their HID endpoint is selected.\n",
+           mouse_x, mouse_y, prev_buttons, desktop_settings.pointer_profile,
+           desktop_session.focus_follows_mouse ? "yes" : "no", ps2, usb, i2c);
 }
 
 static void gui_show_boot_stage(const char *stage) {

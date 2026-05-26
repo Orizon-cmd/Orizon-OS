@@ -35,12 +35,17 @@ design note.
   non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
   review before any disk write.
 - The optional first desktop profile is available through `desktop status`,
-  `desktop session`, `desktop apps`, `desktop doctor`, the guided installer
+  `desktop session`, `desktop settings`, `desktop settings preset`, `desktop settings doctor`, `desktop apps`, `desktop doctor`, the guided installer
   desktop prompt, `pkg sample desktop`, and `pkg install orizon-desktop-hypr`.
   It is Hyprland-style Orizon compositor plumbing, disabled by default, persists
-  `/system/desktop-session.conf`, and starts with F1/F2 terminal open/close plus
-  F3 launcher, `desktop windows`, and runtime workspace commands rather than
-  real upstream Hyprland.
+  `/system/desktop-session.conf` plus `/system/desktop-settings.conf` and
+  generated `/system/desktop-binds.conf` runtime hints, and starts with F1 exec terminal, F2
+  killactive, F3 launcher, F4 fullscreen, F5 pseudo, F6 focus cycle,
+  F7/F8 workspace navigation, `desktop profiles`, `desktop preset`,
+  `desktop focus`, `desktop binds`, `desktop dispatch`, `desktop hyprctl`,
+  `desktop autostart`,
+  `desktop windows`, and runtime tiled workspace/client-state commands rather
+  than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`
   gives a PASS/WARN summary, `system snapshot` writes
   `/workspace/.orizon/system-snapshot.txt`, `system backup` exports non-secret

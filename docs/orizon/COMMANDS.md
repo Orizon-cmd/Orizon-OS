@@ -85,12 +85,41 @@ hostname
 hostname set orizon-vm
 desktop status
 desktop config
+desktop config doctor
+desktop config apply
 desktop session
+desktop settings
+desktop settings presets
+desktop settings doctor
+desktop settings preset compact
+desktop settings set gaps-in 10
+desktop settings set border-size 3
+desktop settings repair
+desktop pointer
 desktop apps
+desktop profiles
+desktop preset moss
+desktop binds
+desktop dispatch exec terminal
+desktop hyprctl clients
+desktop hyprctl activewindow
+desktop hyprctl monitors
+desktop autostart
+desktop autostart terminal off
+desktop autostart terminal on
+desktop dispatch fullscreen
+desktop dispatch pseudo
+desktop dispatch pin
+desktop dispatch cyclenext
+desktop dispatch swapnext
 desktop windows
 desktop workspace
 desktop workspace 2
-desktop move terminal 2
+desktop dispatch movetoworkspace 2
+desktop dispatch workspace 2
+desktop dispatch workspace previous
+desktop dispatch workspace +1
+desktop dispatch movefocus next
 desktop shortcuts
 desktop doctor
 desktop logs
@@ -100,11 +129,13 @@ desktop reset
 desktop write-config
 desktop theme moss
 desktop wallpaper dawn
-desktop layout tiling
+desktop layout master
+desktop focus toggle
 desktop bar toggle
 desktop apply
 desktop launcher show
 desktop launch terminal
+desktop killactive
 desktop open terminal
 desktop close terminal
 desktop package
@@ -164,12 +195,29 @@ recreates only missing defaults under `/workspace/.orizon`, `/home/orizon`,
 `desktop` controls the optional first desktop profile. It is Hyprland-style,
 not upstream Hyprland/Wayland yet. The live ISO keeps it disabled by default.
 Use `desktop enable` or `pkg install orizon-desktop-hypr` to start the
-compositor desktop session. `desktop session` manages theme/wallpaper/bar
-state, `desktop layout <name>` updates the prepared layout profile,
-`desktop apps` lists launcher entries, `desktop windows` lists compositor
-windows/layers, `desktop workspace <n>` switches runtime workspaces,
-`desktop move terminal <n>` moves the terminal window, F1 opens the terminal,
-F2 closes it, and F3 toggles the launcher overlay. See
+compositor desktop session. `desktop config doctor` validates the Hyprland-style
+user config, and `desktop config apply` imports the supported subset into the
+session/settings files plus generated runtime hint files such as
+`/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
+`/system/desktop-rules.conf`, `/system/desktop-monitors.conf`, and
+`/system/desktop-runtime.conf`. `desktop settings` manages the system-wide
+`/system/desktop-settings.conf` layer created by the installer/package and
+stores compositor defaults such as gaps, border size, rounding, animations,
+shadows, terminal, launcher, keyboard, and pointer policy. `desktop settings
+presets`, `desktop settings preset <name>`, and `desktop settings doctor` add a
+safer profile/validation layer for that system file. `desktop session`
+manages theme/wallpaper/bar/focus state, `desktop preset <name>` applies a saved
+symbolic session, `desktop pointer` shows cursor and HID mouse/tablet
+diagnostics, `desktop layout <dwindle|master|monocle>` updates the
+prepared layout profile, `desktop binds` shows the generated Hyprland-style dispatcher
+map, `desktop dispatch <dispatcher> [args]` runs `exec`, `killactive`,
+`workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
+`fullscreen`, `pseudo`, and `pin`, `desktop hyprctl ...` exposes
+a small Hyprland-like facade for clients/workspaces/monitors/activewindow/dispatch,
+`desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
+`desktop apps` lists launcher entries, `desktop windows` lists tiled
+clients/layers, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
+terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation. See
 [DESKTOP.md](DESKTOP.md).
 
 ## Network And Update
@@ -251,7 +299,8 @@ and still fall back to the signed manifest pin.
 
 `pkg sample desktop` writes `/workspace/packages/orizon-desktop-hypr.opkg`,
 the optional desktop package. It installs `/system/desktop.conf`,
-`/system/desktop-session.conf`, and the Hyprland-style user config under
+`/system/desktop-session.conf`, `/system/desktop-settings.conf`, generated
+desktop runtime hint files, and the Hyprland-style user config under
 `/home/orizon/.config/hypr/`.
 On an installed VM, `pkg install orizon-desktop-hypr` generates and installs
 that package by name, `pkg remove orizon-desktop-hypr` disables it, and

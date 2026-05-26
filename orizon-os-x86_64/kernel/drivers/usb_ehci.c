@@ -258,11 +258,16 @@ static int ehci_control_transfer(uint8_t addr, uint8_t req_type, uint8_t req,
   return 0;
 }
 
-static int ehci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t *out_mps,
-                          uint8_t *out_interval, uint8_t *out_iface, uint8_t *out_cfg) {
+static int ehci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep,
+                          uint16_t *out_mps, uint8_t *out_interval,
+                          uint8_t *out_iface, uint8_t *out_cfg,
+                          uint8_t *out_subclass,
+                          uint8_t *out_protocol) {
   uint16_t i = 0;
   uint8_t cur_iface = 0xFF;
   uint8_t cur_cfg = 1;
+  uint8_t cur_subclass = 0;
+  uint8_t cur_protocol = 0;
   while (i + 2 <= len) {
     uint8_t dlen = buf[i];
     uint8_t dtype = buf[i + 1];
@@ -275,10 +280,14 @@ static int ehci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
       uint8_t cls = buf[i + 5];
       uint8_t sub = buf[i + 6];
       uint8_t proto = buf[i + 7];
-      if (cls == 3 && sub == 1 && proto == 1) {
+      if (cls == 3 && (proto == 1 || proto == 2 || proto == 0)) {
         cur_iface = buf[i + 2];
+        cur_subclass = sub;
+        cur_protocol = proto;
       } else {
         cur_iface = 0xFF;
+        cur_subclass = 0;
+        cur_protocol = 0;
       }
     } else if (dtype == 5 && dlen >= 7) {
       if (cur_iface != 0xFF) {
@@ -290,6 +299,12 @@ static int ehci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
           *out_interval = buf[i + 6];
           *out_iface = cur_iface;
           *out_cfg = cur_cfg;
+          if (out_subclass) {
+            *out_subclass = cur_subclass;
+          }
+          if (out_protocol) {
+            *out_protocol = cur_protocol;
+          }
           return 0;
         }
       }
@@ -302,6 +317,8 @@ static int ehci_parse_hid(uint8_t *buf, uint16_t len, uint8_t *out_ep, uint16_t 
 static int ehci_setup_keyboard(uint32_t port) {
   uint32_t portsc_off = ehci_op_base + 0x44 + (port * 4);
   uint32_t portsc = ehci_read32(portsc_off);
+  uint8_t hid_subclass = 0;
+  uint8_t hid_protocol = 0;
   if ((portsc & 0x1) == 0) {
     return -1;
   }
@@ -358,13 +375,16 @@ static int ehci_setup_keyboard(uint32_t port) {
   }
   usb_note_device("ehci", (uint8_t)(port + 1), dev_desc, cfg, total);
 
-  if (ehci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval, &interface_num, &config_value) != 0) {
+  if (ehci_parse_hid(cfg, total, &intr_ep, &intr_mps, &intr_interval,
+                     &interface_num, &config_value, &hid_subclass,
+                     &hid_protocol) != 0) {
     return -1;
   }
 
   if (ehci_control_transfer(device_addr, 0x00, 9, config_value, 0, NULL, 0) != 0) {
     return -1;
   }
+  usb_set_hid_boot_protocol(hid_subclass, hid_protocol, intr_mps);
   ehci_control_transfer(device_addr, 0x21, 0x0B, 0, interface_num, NULL, 0);
   ehci_control_transfer(device_addr, 0x21, 0x0A, 0, interface_num, NULL, 0);
 

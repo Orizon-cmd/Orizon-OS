@@ -533,10 +533,12 @@ void orizon_system_format_services(char *out, size_t out_size) {
            system_ok_missing("/system/ssh_host_rsa.key"));
   system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "  desktop policy=optional state=%s config=%s session=%s user-config=%s profile=" ORIZON_DESKTOP_PROFILE "\n",
+           "  desktop policy=optional state=%s config=%s session=%s settings=%s binds=%s user-config=%s profile=" ORIZON_DESKTOP_PROFILE "\n",
            orizon_desktop_is_enabled() ? "enabled" : "disabled",
            system_ok_missing(ORIZON_DESKTOP_CONFIG_PATH),
            system_ok_missing(ORIZON_DESKTOP_SESSION_PATH),
+           system_ok_missing(ORIZON_DESKTOP_SETTINGS_PATH),
+           system_ok_missing(ORIZON_DESKTOP_BINDS_PATH),
            system_ok_missing(ORIZON_DESKTOP_USER_CONFIG_PATH));
   system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "  package-db policy=installed state=%s\n",
@@ -614,6 +616,14 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
   DOCTOR_CHECK("desktop config", system_path_ok(ORIZON_DESKTOP_CONFIG_PATH));
   DOCTOR_CHECK("desktop session",
                system_path_ok(ORIZON_DESKTOP_SESSION_PATH));
+  DOCTOR_CHECK("desktop settings",
+               system_path_ok(ORIZON_DESKTOP_SETTINGS_PATH));
+  DOCTOR_CHECK("desktop binds", system_path_ok(ORIZON_DESKTOP_BINDS_PATH));
+  DOCTOR_CHECK("desktop autostart",
+               system_path_ok(ORIZON_DESKTOP_AUTOSTART_PATH));
+  DOCTOR_CHECK("desktop rules", system_path_ok(ORIZON_DESKTOP_RULES_PATH));
+  DOCTOR_CHECK("desktop monitors",
+               system_path_ok(ORIZON_DESKTOP_MONITORS_PATH));
   DOCTOR_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
   DOCTOR_CHECK("rescue config", system_path_ok(ORIZON_RESCUE_CONF_PATH));
   DOCTOR_CHECK("admin guide", system_path_ok(ORIZON_ADMIN_GUIDE_PATH));
@@ -805,12 +815,14 @@ void orizon_system_format_status(char *out, size_t out_size) {
            system_path_ok(ORIZON_FSTAB_PATH) ? "ok" : "missing");
   system_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "  network=%s services=%s desktop=%s desktop-session=%s admin-notes=%s data-layout=%s "
+           "  network=%s services=%s desktop=%s desktop-session=%s desktop-settings=%s desktop-binds=%s admin-notes=%s data-layout=%s "
            "install-marker=%s\n",
            system_path_ok("/system/network.conf") ? "ok" : "missing",
            system_path_ok(ORIZON_SERVICES_PATH) ? "ok" : "missing",
            system_path_ok(ORIZON_DESKTOP_CONFIG_PATH) ? "ok" : "missing",
            system_path_ok(ORIZON_DESKTOP_SESSION_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_DESKTOP_SETTINGS_PATH) ? "ok" : "missing",
+           system_path_ok(ORIZON_DESKTOP_BINDS_PATH) ? "ok" : "missing",
            system_path_ok(ORIZON_ADMIN_NOTES_PATH) ? "ok" : "missing",
            system_path_ok("/system/data-layout") ? "ok" : "missing",
            installed ? "present" : "absent");
@@ -957,6 +969,9 @@ void orizon_system_format_health(char *out, size_t out_size) {
   HEALTH_CHECK("desktop config", system_path_ok(ORIZON_DESKTOP_CONFIG_PATH));
   HEALTH_CHECK("desktop session",
                system_path_ok(ORIZON_DESKTOP_SESSION_PATH));
+  HEALTH_CHECK("desktop settings",
+               system_path_ok(ORIZON_DESKTOP_SETTINGS_PATH));
+  HEALTH_CHECK("desktop binds", system_path_ok(ORIZON_DESKTOP_BINDS_PATH));
   HEALTH_CHECK("boot state", system_path_ok(ORIZON_BOOT_STATE_PATH));
   HEALTH_CHECK("service state", system_path_ok(ORIZON_SERVICE_STATE_PATH));
   HEALTH_CHECK("init log", system_path_ok(ORIZON_INIT_LOG_PATH));
@@ -1085,6 +1100,13 @@ int orizon_system_write_admin_backup(char *out, size_t out_size) {
                              ORIZON_DESKTOP_SESSION_PATH);
   system_append(backup, sizeof(backup), &used, "\n");
   system_append_file_preview(backup, sizeof(backup), &used,
+                             "desktop-settings",
+                             ORIZON_DESKTOP_SETTINGS_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used, "desktop-binds",
+                             ORIZON_DESKTOP_BINDS_PATH);
+  system_append(backup, sizeof(backup), &used, "\n");
+  system_append_file_preview(backup, sizeof(backup), &used,
                              "desktop-user-config",
                              ORIZON_DESKTOP_USER_CONFIG_PATH);
   system_append(backup, sizeof(backup), &used, "\n");
@@ -1140,7 +1162,7 @@ void orizon_system_format_rescue(char *out, size_t out_size) {
            "installed-only helpers:\n"
            "  boot-check, repair-boot, update status, bootguard, rollback-status\n"
            "desktop:\n"
-           "  desktop enable|disable, desktop session, desktop apps, desktop package, pkg install orizon-desktop-hypr\n"
+           "  desktop enable|disable, desktop session, desktop settings, desktop apps, desktop package, pkg install orizon-desktop-hypr\n"
            "logs:\n"
            "  /logs/init.log, /logs/service.log, /logs/boot.log, /workspace/.orizon/rescue-report.txt\n"
            "  /workspace/.orizon/system-snapshot.txt, /workspace/.orizon/admin-backup.txt\n"

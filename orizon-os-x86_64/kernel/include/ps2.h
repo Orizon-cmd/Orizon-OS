@@ -63,6 +63,9 @@ int ps2_get_mouse_y(void);
 int ps2_get_mouse_buttons(void);
 int ps2_consume_mouse_wheel(void);
 void ps2_inject_mouse_relative(int dx, int dy, int buttons, int wheel);
+void ps2_set_mouse_absolute(int x, int y, int buttons, int wheel);
+void ps2_set_mouse_absolute_scaled(uint16_t x, uint16_t y, uint16_t max_x,
+                                   uint16_t max_y, int buttons, int wheel);
 void ps2_format_status(char *buf, size_t size);
 
 /* External mouse state (for direct access) */

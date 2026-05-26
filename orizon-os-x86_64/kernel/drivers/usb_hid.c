@@ -120,3 +120,34 @@ void usb_hid_kbd_handle_report(const uint8_t *rep, int len) {
     prev_keys[i] = rep[i + 2];
   }
 }
+
+void usb_hid_mouse_handle_report(const uint8_t *rep, int len, int absolute) {
+  int buttons;
+  int wheel = 0;
+
+  if (!rep || len < 3) {
+    return;
+  }
+
+  buttons = rep[0] & 0x07;
+  if (absolute && len >= 5) {
+    uint16_t x = (uint16_t)(rep[1] | ((uint16_t)rep[2] << 8));
+    uint16_t y = (uint16_t)(rep[3] | ((uint16_t)rep[4] << 8));
+    if (len >= 6) {
+      wheel = (int8_t)rep[5];
+    }
+    /*
+     * QEMU usb-tablet reports an absolute HID pointer. Its logical range is
+     * commonly 0..0x7fff; clamping in the PS/2 shim keeps this safe if a
+     * firmware reports a smaller practical range.
+     */
+    ps2_set_mouse_absolute_scaled(x, y, 0x7fff, 0x7fff, buttons, wheel);
+  } else {
+    int dx = (int8_t)rep[1];
+    int dy = (int8_t)rep[2];
+    if (len >= 4) {
+      wheel = (int8_t)rep[3];
+    }
+    ps2_inject_mouse_relative(dx, dy, buttons, wheel);
+  }
+}

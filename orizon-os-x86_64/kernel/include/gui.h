@@ -85,9 +85,19 @@ int gui_desktop_launcher_visible(void);
 void gui_desktop_reload_session(void);
 int gui_desktop_switch_workspace(int workspace);
 int gui_desktop_move_terminal_to_workspace(int workspace);
+int gui_desktop_spawn_terminal_client(void);
+int gui_desktop_close_active_client(void);
+int gui_desktop_focus_next_client(void);
+int gui_desktop_focus_prev_client(void);
+int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
+                         size_t out_size);
 void gui_desktop_format_workspaces(char *out, size_t out_size);
 void gui_desktop_format_windows(char *out, size_t out_size);
+void gui_desktop_format_activewindow(char *out, size_t out_size);
+void gui_desktop_format_monitors(char *out, size_t out_size);
+void gui_desktop_format_binds(char *out, size_t out_size);
 void gui_desktop_format_status(char *out, size_t out_size);
+void gui_desktop_format_pointer(char *out, size_t out_size);
 
 /* Direct framebuffer access for low-level debug */
 extern uint32_t *g_fb_ptr;

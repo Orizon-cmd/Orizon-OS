@@ -21,6 +21,8 @@ terminal_t *term_create(int x, int y);
 
 /* Render terminal */
 void term_render(terminal_t *term);
+void term_render_in_rect(terminal_t *term, int x, int y, int width,
+                         int height);
 
 /* Handle keyboard input */
 void term_handle_key(terminal_t *term, int key);

@@ -56,9 +56,10 @@ le developpement noyau:
 - premier profil bureau optionnel, inspire de Hyprland, desactive par defaut:
   choix dans l'installateur, commandes `desktop`, paquet
   `orizon-desktop-hypr`, config `/system/desktop.conf`,
-  `/system/desktop-session.conf` et
+  `/system/desktop-session.conf`, `/system/desktop-settings.conf` et
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
-  workspaces runtime, lanceur F3 et terminal F1/F2; ce n'est pas encore le vrai
+  workspaces runtime, dispatchers Hyprland-like, fullscreen/pseudo/pin,
+  lanceur F3, terminal F1/F2 et raccourcis F4-F8; ce n'est pas encore le vrai
   Hyprland/Wayland
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
   en plein ecran, `tail`, `help shell`, commandes groupees avec `;`, sorties
@@ -112,12 +113,34 @@ Le bureau reste absent par defaut. Si tu le choisis pendant l'installation, ou
 si tu l'ajoutes plus tard avec `pkg install orizon-desktop-hypr`, Orizon genere
 et installe le paquet local `orizon-desktop-hypr`, puis active un profil inspire
 de Hyprland. `desktop doctor`, `desktop logs` et `desktop shortcuts` servent a
-le diagnostiquer/configurer. `desktop session`, `desktop theme`, `desktop
-wallpaper`, `desktop bar` et `desktop launcher` reglent la session persistante.
-`desktop workspace <n>` et `desktop move terminal <n>` donnent le premier socle
-de workspaces facon Hyprland, et `desktop windows` expose les fenetres/layers
-connus du compositeur. La premiere action utile est simple et volontaire: F1
-ouvre le terminal du bureau, F2 le ferme, F3 affiche le lanceur.
+le diagnostiquer/configurer. `desktop settings` expose les reglages systeme
+persistants dans `/system/desktop-settings.conf`; `desktop settings set <key>
+<value>` les modifie, et `desktop settings repair` restaure les valeurs
+propres. `desktop settings presets`, `desktop settings preset <name>` et
+`desktop settings doctor` ajoutent des profils systeme et un diagnostic dedie
+pour ce fichier. `desktop config doctor` analyse la config Hyprland-style dans
+`/home/orizon/.config/hypr/orizon-hypr.conf`, et `desktop config apply`
+importe le sous-ensemble supporte vers la session, les settings, et les fichiers
+runtime inspectables `/system/desktop-binds.conf`,
+`/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
+`/system/desktop-monitors.conf`, `/system/desktop-runtime.conf`. `desktop
+session`, `desktop theme`, `desktop
+wallpaper`, `desktop preset`, `desktop focus`, `desktop bar` et
+`desktop launcher` reglent la session persistante.
+`desktop pointer` affiche la position du curseur et les diagnostics PS/2,
+USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
+`usb-tablet`.
+`desktop binds` lit maintenant le runtime de binds genere et
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext`
+installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
+client fullscreen/pseudo/pinned, workspaces relatifs, layouts
+`dwindle/master/monocle`, sans deplacement manuel de fenetres a la souris.
+`desktop windows` expose les clients/layers connus du compositeur. `desktop
+profiles` liste les profils symboliques, `desktop preset <name>` applique une
+session complete, et `desktop autostart terminal on|off|toggle` controle le
+terminal au demarrage. F1 lance un terminal, F2 ferme le client actif, F3
+affiche le lanceur, F4 bascule fullscreen, F5 pseudo, F6 cycle le focus, et
+F7/F8 changent de workspace.
 
 Le mode recommande pour une machine qui contient deja Windows/Linux est
 `dual-boot-data`: il detecte la GPT existante, trouve l'ESP FAT32, affiche les

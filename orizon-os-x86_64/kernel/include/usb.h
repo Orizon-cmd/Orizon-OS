@@ -67,6 +67,9 @@ void usb_rescan(void);
 
 void usb_set_keyboard_callback(usb_keyboard_callback_t cb);
 void usb_hid_kbd_handle_report(const uint8_t *rep, int len);
+void usb_hid_mouse_handle_report(const uint8_t *rep, int len, int absolute);
+void usb_set_hid_boot_protocol(uint8_t subclass, uint8_t protocol,
+                               uint16_t report_size);
 void usb_submit_hid_report(const uint8_t *rep, int len);
 void usb_note_device(const char *controller, uint8_t port,
                      const uint8_t *dev_desc, const uint8_t *cfg,

@@ -30,10 +30,15 @@ static int report_head = 0;
 static int report_tail = 0;
 static unsigned long report_seen = 0;
 static unsigned long key_seen = 0;
+static unsigned long pointer_seen = 0;
+static unsigned long tablet_seen = 0;
 static unsigned long report_dropped = 0;
 static unsigned long usb_seen_devices = 0;
 static usb_device_info_t usb_last_device;
 static usb_net_info_t usb_net;
+static uint8_t hid_subclass = 0;
+static uint8_t hid_protocol = 0xff;
+static uint16_t hid_report_mps = 0;
 
 #define USB_LOG_PATH "/logs/usb.log"
 
@@ -266,6 +271,13 @@ void usb_set_keyboard_callback(usb_keyboard_callback_t cb) {
   keyboard_cb = cb;
 }
 
+void usb_set_hid_boot_protocol(uint8_t subclass, uint8_t protocol,
+                               uint16_t report_size) {
+  hid_subclass = subclass;
+  hid_protocol = protocol;
+  hid_report_mps = report_size;
+}
+
 void usb_hid_handle_key(int key) {
   key_seen++;
   if (keyboard_cb) {
@@ -475,10 +487,15 @@ void usb_format_status(char *buf, size_t size) {
   }
   snprintf(buf, size,
            "xhci=%s ehci=%s hid_reports=%lu hid_keys=%lu queue_drops=%lu "
+           "hid_pointer=%lu hid_tablet=%lu mode=%s/%u/%u/%u "
            "devices=%lu usb_net=%s",
            usb_xhci_ready() ? "ready" : "no",
            usb_ehci_ready() ? "ready" : "no", report_seen, key_seen,
-           report_dropped, usb_seen_devices,
+           report_dropped, pointer_seen, tablet_seen,
+           hid_protocol == 1 ? "keyboard"
+               : (hid_protocol == 2 ? "mouse"
+                                      : (hid_protocol == 0 ? "hid" : "none")),
+           hid_subclass, hid_protocol, hid_report_mps, usb_seen_devices,
            usb_net.present ? usb_net.driver_hint : "none");
 }
 
@@ -672,7 +689,16 @@ void usb_poll(void) {
 
   while (report_tail != report_head) {
     usb_report_t *rep = &report_queue[report_tail];
-    usb_hid_kbd_handle_report(rep->data, rep->len);
+    if (hid_protocol == 2 || (hid_subclass == 1 && rep->len <= 4)) {
+      pointer_seen++;
+      usb_hid_mouse_handle_report(rep->data, rep->len, 0);
+    } else if (hid_protocol == 0 && hid_subclass == 0 && rep->len >= 5) {
+      pointer_seen++;
+      tablet_seen++;
+      usb_hid_mouse_handle_report(rep->data, rep->len, 1);
+    } else {
+      usb_hid_kbd_handle_report(rep->data, rep->len);
+    }
     report_tail = (report_tail + 1) % USB_REPORT_QUEUE_SIZE;
   }
 }

@@ -11,6 +11,12 @@
 #define ORIZON_DESKTOP_USER_CONFIG_PATH "/home/orizon/.config/hypr/orizon-hypr.conf"
 #define ORIZON_DESKTOP_TEMPLATE_PATH "/system/share/orizon-desktop-hypr.conf"
 #define ORIZON_DESKTOP_SESSION_PATH "/system/desktop-session.conf"
+#define ORIZON_DESKTOP_SETTINGS_PATH "/system/desktop-settings.conf"
+#define ORIZON_DESKTOP_BINDS_PATH "/system/desktop-binds.conf"
+#define ORIZON_DESKTOP_AUTOSTART_PATH "/system/desktop-autostart.conf"
+#define ORIZON_DESKTOP_RULES_PATH "/system/desktop-rules.conf"
+#define ORIZON_DESKTOP_MONITORS_PATH "/system/desktop-monitors.conf"
+#define ORIZON_DESKTOP_RUNTIME_PATH "/system/desktop-runtime.conf"
 #define ORIZON_DESKTOP_LOG_PATH "/logs/desktop.log"
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
@@ -23,7 +29,25 @@ typedef struct {
   int bar_enabled;
   int launcher_enabled;
   int autostart_terminal;
+  int focus_follows_mouse;
 } orizon_desktop_session_t;
+
+typedef struct {
+  int scale;
+  int gaps_in;
+  int gaps_out;
+  int border_size;
+  int rounding;
+  int animations_enabled;
+  int shadows_enabled;
+  int idle_timeout_seconds;
+  int lock_on_idle;
+  char default_terminal[32];
+  char launcher_provider[32];
+  char bar_position[16];
+  char keyboard_layout[16];
+  char pointer_profile[16];
+} orizon_desktop_settings_t;
 
 int orizon_desktop_ensure_defaults(void);
 int orizon_desktop_is_enabled(void);
@@ -31,12 +55,27 @@ int orizon_desktop_set_enabled(int enabled, char *status, size_t status_size);
 int orizon_desktop_reset(char *status, size_t status_size);
 int orizon_desktop_write_user_config(char *status, size_t status_size);
 int orizon_desktop_load_session(orizon_desktop_session_t *session);
+int orizon_desktop_load_settings(orizon_desktop_settings_t *settings);
 int orizon_desktop_set_session_option(const char *key, const char *value,
                                       char *status, size_t status_size);
+int orizon_desktop_set_setting(const char *key, const char *value, char *status,
+                               size_t status_size);
+int orizon_desktop_repair_settings(char *status, size_t status_size);
+int orizon_desktop_apply_settings_preset(const char *preset, char *status,
+                                         size_t status_size);
+int orizon_desktop_apply_preset(const char *preset, char *status,
+                                size_t status_size);
+int orizon_desktop_apply_hypr_config(char *status, size_t status_size);
 void orizon_desktop_format_status(char *out, size_t out_size);
 void orizon_desktop_format_config(char *out, size_t out_size);
+void orizon_desktop_format_config_doctor(char *out, size_t out_size);
 void orizon_desktop_format_session(char *out, size_t out_size);
+void orizon_desktop_format_settings(char *out, size_t out_size);
+void orizon_desktop_format_settings_presets(char *out, size_t out_size);
+void orizon_desktop_format_settings_doctor(char *out, size_t out_size);
 void orizon_desktop_format_apps(char *out, size_t out_size);
+void orizon_desktop_format_profiles(char *out, size_t out_size);
+void orizon_desktop_format_autostart(char *out, size_t out_size);
 void orizon_desktop_format_shortcuts(char *out, size_t out_size);
 void orizon_desktop_format_doctor(char *out, size_t out_size);
 void orizon_desktop_format_log(char *out, size_t out_size);

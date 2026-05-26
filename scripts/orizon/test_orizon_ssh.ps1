@@ -67,18 +67,49 @@ $commands = @(
   "pkg install /workspace/packages/orizon-hello.opkg",
   "desktop status",
   "desktop config",
+  "desktop config doctor",
+  "desktop config apply",
   "desktop session",
+  "desktop settings",
+  "desktop settings presets",
+  "desktop settings doctor",
+  "desktop settings preset compact",
+  "desktop settings set gaps-in 10",
+  "desktop settings set border-size 3",
+  "desktop settings repair",
+  "desktop pointer",
   "desktop apps",
+  "desktop profiles",
+  "desktop preset moss",
+  "desktop binds",
+  "desktop autostart",
+  "desktop autostart terminal off",
+  "desktop autostart terminal on",
+  "desktop dispatch exec terminal",
+  "desktop dispatch exec terminal",
+  "desktop dispatch cyclenext",
+  "desktop dispatch swapnext",
+  "desktop dispatch fullscreen",
+  "desktop dispatch pseudo",
+  "desktop dispatch pin",
+  "desktop hyprctl clients",
+  "desktop hyprctl activewindow",
+  "desktop hyprctl monitors",
   "desktop windows",
   "desktop workspace",
+  "desktop dispatch movetoworkspace 2",
+  "desktop dispatch workspace 2",
+  "desktop dispatch workspace previous",
+  "desktop dispatch workspace +1",
   "desktop workspace 2",
-  "desktop move terminal 2",
+  "desktop dispatch movefocus next",
   "desktop shortcuts",
   "desktop doctor",
   "desktop logs",
   "desktop theme moss",
   "desktop wallpaper dawn",
-  "desktop layout tiling",
+  "desktop layout master",
+  "desktop focus toggle",
   "desktop bar toggle",
   "desktop apply",
   "desktop launcher show",
@@ -350,11 +381,80 @@ run_cmd() {
     "desktop config")
       grep -q "Hyprland-style" "`$OUT" || { echo "missing desktop config"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop config doctor")
+      grep -q "Hyprland config doctor" "`$OUT" && grep -q "apply-support:" "`$OUT" || { echo "missing desktop config doctor"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop config apply")
+      grep -q "desktop config apply: applied" "`$OUT" && grep -q "runtime-files:" "`$OUT" || { echo "missing desktop config apply"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop session")
       grep -q "Orizon desktop session" "`$OUT" && grep -q "theme:" "`$OUT" || { echo "missing desktop session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop settings")
+      grep -q "Orizon desktop system settings" "`$OUT" && grep -q "gaps-in:" "`$OUT" || { echo "missing desktop settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop settings presets")
+      grep -q "Orizon desktop settings presets" "`$OUT" && grep -q "performance" "`$OUT" || { echo "missing desktop settings presets"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop settings doctor")
+      grep -q "Orizon desktop settings doctor" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop settings doctor"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop settings preset compact")
+      grep -q "desktop settings preset: applied" "`$OUT" && grep -q "preset: compact" "`$OUT" || { echo "missing desktop settings preset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop settings set gaps-in 10"|"desktop settings set border-size 3")
+      grep -q "desktop settings: updated" "`$OUT" || { echo "missing desktop settings update"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop settings repair")
+      grep -q "desktop settings: repaired" "`$OUT" || { echo "missing desktop settings repair"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop pointer")
+      grep -q "Orizon desktop pointer" "`$OUT" && grep -q "usb-hid:" "`$OUT" || { echo "missing desktop pointer"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop apps")
       grep -q "Orizon desktop apps" "`$OUT" && grep -q "terminal" "`$OUT" || { echo "missing desktop apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop profiles")
+      grep -q "Orizon desktop profiles" "`$OUT" && grep -q "themes:" "`$OUT" || { echo "missing desktop profiles"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop preset moss")
+      grep -q "desktop preset: applied" "`$OUT" && grep -q "preset: moss" "`$OUT" || { echo "missing desktop preset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop binds")
+      grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" && grep -q "killactive" "`$OUT" || { echo "missing desktop binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop autostart")
+      grep -q "Orizon desktop autostart" "`$OUT" && grep -q "terminal:" "`$OUT" || { echo "missing desktop autostart"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop autostart terminal off"|"desktop autostart terminal on")
+      grep -q "desktop session: updated" "`$OUT" || { echo "missing desktop autostart update"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch exec terminal")
+      grep -q "desktop dispatch: exec terminal client spawned" "`$OUT" || { echo "missing desktop dispatch exec"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch cyclenext")
+      grep -q "desktop dispatch: cyclenext" "`$OUT" || { echo "missing desktop dispatch cyclenext"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch swapnext")
+      grep -q "desktop dispatch: swapnext" "`$OUT" || { echo "missing desktop dispatch swapnext"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch fullscreen")
+      grep -q "desktop dispatch: fullscreen" "`$OUT" || { echo "missing desktop dispatch fullscreen"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch pseudo")
+      grep -q "desktop dispatch: pseudo" "`$OUT" || { echo "missing desktop dispatch pseudo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch pin")
+      grep -q "desktop dispatch: pin" "`$OUT" || { echo "missing desktop dispatch pin"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl clients")
+      grep -q "Orizon desktop windows" "`$OUT" || { echo "missing desktop hyprctl clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl activewindow")
+      grep -q "activewindow:" "`$OUT" || { echo "missing desktop hyprctl activewindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl monitors")
+      grep -q "Monitor 0" "`$OUT" || { echo "missing desktop hyprctl monitors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop windows")
       grep -q "Orizon desktop windows" "`$OUT" && grep -q "layout:" "`$OUT" || { echo "missing desktop windows"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -365,8 +465,20 @@ run_cmd() {
     "desktop workspace 2")
       grep -q "desktop: workspace 2 active" "`$OUT" || { echo "missing desktop workspace switch"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
-    "desktop move terminal 2")
-      grep -q "desktop: terminal moved to workspace 2" "`$OUT" || { echo "missing desktop terminal move"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+    "desktop dispatch movetoworkspace 2")
+      grep -q "desktop dispatch: moved active to workspace 2" "`$OUT" || { echo "missing desktop dispatch movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch workspace 2")
+      grep -q "desktop dispatch: workspace 2" "`$OUT" || { echo "missing desktop dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch workspace previous")
+      grep -q "desktop dispatch: workspace 1" "`$OUT" || { echo "missing desktop dispatch workspace previous"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch workspace +1")
+      grep -q "desktop dispatch: workspace 2" "`$OUT" || { echo "missing desktop dispatch workspace relative"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch movefocus next")
+      grep -q "desktop dispatch: movefocus" "`$OUT" || { echo "missing desktop dispatch movefocus"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop shortcuts")
       grep -q "F1" "`$OUT" && grep -q "F2" "`$OUT" || { echo "missing desktop shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -377,7 +489,7 @@ run_cmd() {
     "desktop logs")
       grep -q "desktop log:" "`$OUT" || { echo "missing desktop logs"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
-    "desktop theme moss"|"desktop wallpaper dawn"|"desktop layout tiling"|"desktop bar toggle")
+    "desktop theme moss"|"desktop wallpaper dawn"|"desktop layout master"|"desktop focus toggle"|"desktop bar toggle")
       grep -q "desktop session: updated" "`$OUT" || { echo "missing desktop session update"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop apply")

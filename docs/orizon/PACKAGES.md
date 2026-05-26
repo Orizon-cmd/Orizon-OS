@@ -75,6 +75,10 @@ desktop package even before it is installed. `pkg sample desktop` creates
 `/workspace/packages/orizon-desktop-hypr.opkg`. That optional package installs
 the first Orizon desktop profile:
 `/system/desktop.conf`, `/system/desktop-session.conf`,
+`/system/desktop-settings.conf`,
+`/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
+`/system/desktop-rules.conf`, `/system/desktop-monitors.conf`,
+`/system/desktop-runtime.conf`,
 `/home/orizon/.config/hypr/orizon-hypr.conf`, and
 `/system/share/orizon-desktop-hypr.conf`. It is Hyprland-style configuration
 for Orizon's compositor, not upstream Hyprland/Wayland yet. After an installed
@@ -84,6 +88,13 @@ VM boot:
 pkg install orizon-desktop-hypr
 desktop status
 desktop session
+desktop settings
+desktop settings presets
+desktop settings doctor
+desktop settings preset compact
+desktop config doctor
+desktop config apply
+desktop pointer
 desktop doctor
 ```
 
@@ -91,9 +102,14 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.2.0` because it includes both policy/config files and the persisted session
-settings used by `desktop theme`, `desktop wallpaper`, `desktop bar`, and the
-launcher.
+`0.11.0` because it includes policy/config files, the persisted session settings,
+the system-wide desktop settings layer,
+settings presets/doctor commands, Hyprland-style config doctor/apply import,
+generated bind/autostart/window-rule/monitor/runtime hint files,
+pointer diagnostics, the aligned Hyprland-style key template, preset/focus commands, dispatcher
+commands, fullscreen/pseudo/pinned client state, focus-cycle/swap actions, and
+commands used by `desktop theme`, `desktop wallpaper`, `desktop layout`,
+`desktop autostart`, `desktop bar`, and the launcher.
 
 ## Package Format
 

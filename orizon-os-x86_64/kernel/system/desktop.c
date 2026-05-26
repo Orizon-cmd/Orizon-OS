@@ -39,32 +39,118 @@ static const char *desktop_session_config =
     "# Orizon desktop session v1\n"
     "theme graphite\n"
     "wallpaper aurora\n"
-    "layout floating\n"
+    "layout dwindle\n"
     "bar yes\n"
     "launcher yes\n"
     "autostart-terminal yes\n"
-    "focus follows-mouse no\n";
+    "focus-follows-mouse no\n";
+
+static const char *desktop_settings_config =
+    "# Orizon desktop system settings v1\n"
+    "# Created when the optional desktop is selected during install or via package.\n"
+    "# This is the central settings layer consumed by the Orizon compositor.\n"
+    "scale 1\n"
+    "gaps-in 6\n"
+    "gaps-out 12\n"
+    "border-size 2\n"
+    "rounding 8\n"
+    "animations yes\n"
+    "shadows yes\n"
+    "idle-timeout-seconds 0\n"
+    "lock-on-idle no\n"
+    "default-terminal orizon-terminal\n"
+    "launcher-provider builtin\n"
+    "bar-position top\n"
+    "keyboard-layout us\n"
+    "pointer-profile flat\n";
 
 static const char *desktop_user_config =
     "# Orizon Hyprland-style desktop profile\n"
     "# Syntax intentionally mirrors common Hyprland concepts while the real\n"
     "# Wayland/Hyprland stack is not embedded in Orizon yet.\n"
     "$mod = SUPER\n"
+    "$terminal = orizon-terminal\n"
+    "$menu = orizon-launcher\n"
     "monitor = ,preferred,auto,1\n"
+    "exec-once = terminal\n"
+    "input:kb_layout = us\n"
+    "input:follow_mouse = 0\n"
+    "general:layout = dwindle\n"
     "general:gaps_in = 6\n"
     "general:gaps_out = 12\n"
     "general:border_size = 2\n"
     "decoration:rounding = 8\n"
+    "decoration:shadow:enabled = true\n"
     "animations:enabled = true\n"
     "misc:disable_hyprland_logo = false\n"
     "misc:force_default_wallpaper = 0\n"
-    "bind = $mod, RETURN, exec, orizon-terminal\n"
-    "bind = $mod, Q, closewindow\n"
+    "windowrulev2 = float,class:^(orizon-launcher)$\n"
+    "source = ~/.config/hypr/orizon-local.conf\n"
+    "bind = $mod, RETURN, exec, terminal\n"
+    "bind = $mod, Q, killactive\n"
     "bind = $mod, D, exec, orizon-launcher\n"
+    "bind = $mod, A, exec, desktop autostart\n"
     "bind = $mod, B, exec, desktop bar toggle\n"
+    "bind = $mod, F, exec, desktop focus toggle\n"
+    "bind = $mod, M, fullscreen\n"
+    "bind = $mod, P, pseudo\n"
+    "bind = $mod SHIFT, P, pin\n"
+    "bind = $mod, H, movefocus, l\n"
+    "bind = $mod, L, movefocus, r\n"
+    "bind = $mod, Tab, cyclenext\n"
+    "bind = $mod SHIFT, Tab, swapnext\n"
     "bind = $mod, R, exec, desktop session\n"
+    "bind = $mod, 1, workspace, 1\n"
+    "bind = $mod, 2, workspace, 2\n"
+    "bind = $mod, 3, workspace, 3\n"
+    "bind = $mod SHIFT, 1, movetoworkspace, 1\n"
+    "bind = $mod SHIFT, 2, movetoworkspace, 2\n"
+    "bind = $mod SHIFT, 3, movetoworkspace, 3\n"
     "bind = F1, exec, desktop open terminal\n"
-    "bind = F2, exec, desktop close terminal\n";
+    "bind = F2, killactive\n"
+    "bind = F4, fullscreen\n"
+    "bind = F5, pseudo\n"
+    "dwindle:pseudotile = true\n"
+    "dwindle:preserve_split = true\n";
+
+static const char *desktop_binds_runtime_config =
+    "# Orizon generated Hyprland-style binds v1\n"
+    "# Rewritten by `desktop config apply` from /home/orizon/.config/hypr/orizon-hypr.conf.\n"
+    "source built-in-template\n"
+    "bind = $mod, RETURN, exec, terminal\n"
+    "bind = $mod, Q, killactive\n"
+    "bind = $mod, D, exec, orizon-launcher\n"
+    "bind = $mod, M, fullscreen\n"
+    "bind = $mod, P, pseudo\n"
+    "bind = $mod, 1, workspace, 1\n"
+    "bind = $mod SHIFT, 1, movetoworkspace, 1\n";
+
+static const char *desktop_autostart_runtime_config =
+    "# Orizon generated Hyprland-style autostart v1\n"
+    "# Rewritten by `desktop config apply`.\n"
+    "source built-in-template\n"
+    "exec-once = terminal\n";
+
+static const char *desktop_rules_runtime_config =
+    "# Orizon generated Hyprland-style window rules v1\n"
+    "# Rewritten by `desktop config apply`.\n"
+    "source built-in-template\n"
+    "windowrulev2 = float,class:^(orizon-launcher)$\n";
+
+static const char *desktop_monitors_runtime_config =
+    "# Orizon generated Hyprland-style monitor hints v1\n"
+    "# Rewritten by `desktop config apply`.\n"
+    "source built-in-template\n"
+    "monitor = ,preferred,auto,1\n";
+
+static const char *desktop_runtime_config =
+    "# Orizon generated Hyprland-style runtime state v1\n"
+    "# Rewritten by `desktop config apply`.\n"
+    "source built-in-template\n"
+    "env-count 0\n"
+    "workspace-hints 0\n"
+    "sources 1\n"
+    "source = ~/.config/hypr/orizon-local.conf\n";
 
 static void desktop_append(char *out, size_t out_size, size_t *used,
                            const char *text) {
@@ -177,6 +263,61 @@ static int desktop_bool_value(const char *value, int fallback) {
   return fallback;
 }
 
+static int desktop_parse_int_value(const char *value, int fallback) {
+  int n = 0;
+  int seen = 0;
+
+  if (!value || !value[0]) {
+    return fallback;
+  }
+  while (*value >= '0' && *value <= '9') {
+    seen = 1;
+    n = n * 10 + (*value - '0');
+    value++;
+  }
+  return seen ? n : fallback;
+}
+
+static int desktop_clamp_int(int value, int min, int max) {
+  if (value < min) {
+    return min;
+  }
+  if (value > max) {
+    return max;
+  }
+  return value;
+}
+
+static int desktop_settings_key_known(const char *key) {
+  static const char *keys[] = {
+      "scale",
+      "gaps-in",
+      "gaps-out",
+      "border-size",
+      "rounding",
+      "animations",
+      "shadows",
+      "idle-timeout-seconds",
+      "lock-on-idle",
+      "default-terminal",
+      "launcher-provider",
+      "bar-position",
+      "keyboard-layout",
+      "pointer-profile",
+  };
+  size_t i;
+
+  if (!key || !key[0]) {
+    return 0;
+  }
+  for (i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
+    if (strcmp(key, keys[i]) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static int desktop_session_get_value(const char *text, const char *key,
                                      char *out, size_t out_size,
                                      const char *fallback) {
@@ -216,6 +357,490 @@ static int desktop_session_get_value(const char *text, const char *key,
   return -1;
 }
 
+typedef struct {
+  int parsed_lines;
+  int variables;
+  int monitors;
+  int binds;
+  int supported_binds;
+  int exec_once;
+  int envs;
+  int windowrules;
+  int workspaces;
+  int sources;
+  int supported_settings;
+  int prepared_keywords;
+  int ignored_keywords;
+  int malformed_lines;
+  int applied_settings;
+  int generated_user_config;
+  int runtime_lines;
+} desktop_hypr_summary_t;
+
+typedef struct {
+  char binds[2048];
+  char autostart[768];
+  char rules[1024];
+  char monitors[768];
+  char runtime[1536];
+  size_t binds_used;
+  size_t autostart_used;
+  size_t rules_used;
+  size_t monitors_used;
+  size_t runtime_used;
+} desktop_hypr_runtime_t;
+
+static void desktop_trim_copy(char *out, size_t out_size, const char *start,
+                              int len) {
+  int begin = 0;
+  int end = len;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!start || len <= 0) {
+    return;
+  }
+  while (begin < end &&
+         (start[begin] == ' ' || start[begin] == '\t' ||
+          start[begin] == '\r')) {
+    begin++;
+  }
+  while (end > begin &&
+         (start[end - 1] == ' ' || start[end - 1] == '\t' ||
+          start[end - 1] == '\r')) {
+    end--;
+  }
+  len = end - begin;
+  if (len >= (int)out_size) {
+    len = (int)out_size - 1;
+  }
+  if (len > 0) {
+    memcpy(out, start + begin, (size_t)len);
+  }
+  out[len] = '\0';
+}
+
+static void desktop_strip_inline_comment(char *line) {
+  int quoted = 0;
+
+  if (!line) {
+    return;
+  }
+  for (int i = 0; line[i]; i++) {
+    if (line[i] == '"') {
+      quoted = !quoted;
+    }
+    if (!quoted && line[i] == '#') {
+      line[i] = '\0';
+      return;
+    }
+  }
+}
+
+static const char *desktop_find_char(const char *text, char needle) {
+  if (!text) {
+    return NULL;
+  }
+  while (*text) {
+    if (*text == needle) {
+      return text;
+    }
+    text++;
+  }
+  return NULL;
+}
+
+static int desktop_hypr_key_value(const char *line, char *key,
+                                  size_t key_size, char *value,
+                                  size_t value_size) {
+  const char *eq;
+  const char *comma;
+  const char *split = NULL;
+  int key_len;
+
+  if (!line || !key || !value || key_size == 0 || value_size == 0) {
+    return -1;
+  }
+  key[0] = '\0';
+  value[0] = '\0';
+  eq = desktop_find_char(line, '=');
+  comma = desktop_find_char(line, ',');
+  split = eq ? eq : comma;
+  if (!split) {
+    return -1;
+  }
+  key_len = (int)(split - line);
+  desktop_trim_copy(key, key_size, line, key_len);
+  desktop_trim_copy(value, value_size, split + 1, (int)strlen(split + 1));
+  return key[0] && value[0] ? 0 : -1;
+}
+
+static int desktop_hypr_key_global(const char *key) {
+  return strcmp(key, "bind") == 0 || strcmp(key, "bindm") == 0 ||
+         strcmp(key, "bindr") == 0 || strcmp(key, "monitor") == 0 ||
+         strcmp(key, "env") == 0 || strcmp(key, "exec-once") == 0 ||
+         strcmp(key, "windowrule") == 0 ||
+         strcmp(key, "windowrulev2") == 0 ||
+         strcmp(key, "workspace") == 0 || strcmp(key, "source") == 0 ||
+         key[0] == '$';
+}
+
+static void desktop_hypr_join_key(char sections[][32], int depth,
+                                  const char *key, char *out,
+                                  size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!key) {
+    return;
+  }
+  if (desktop_find_char(key, ':') || desktop_hypr_key_global(key) ||
+      depth <= 0) {
+    snprintf(out, out_size, "%s", key);
+    return;
+  }
+  for (int i = 0; i < depth; i++) {
+    if (!sections[i][0]) {
+      continue;
+    }
+    if (used > 0 && used + 1 < out_size) {
+      out[used++] = ':';
+      out[used] = '\0';
+    }
+    size_t len = strlen(sections[i]);
+    if (used + len >= out_size) {
+      len = out_size - used - 1;
+    }
+    memcpy(out + used, sections[i], len);
+    used += len;
+    out[used] = '\0';
+  }
+  if (used > 0 && used + 1 < out_size) {
+    out[used++] = ':';
+    out[used] = '\0';
+  }
+  snprintf(out + used, out_size - used, "%s", key);
+}
+
+static int desktop_hypr_dispatch_supported(const char *value) {
+  return value &&
+         (strstr(value, "exec") || strstr(value, "killactive") ||
+          strstr(value, "workspace") || strstr(value, "movetoworkspace") ||
+          strstr(value, "movefocus") || strstr(value, "fullscreen") ||
+          strstr(value, "pseudo") || strstr(value, "pin") ||
+          strstr(value, "cyclenext") || strstr(value, "swapnext"));
+}
+
+static int desktop_hypr_copy_token_value(char *out, size_t out_size,
+                                         const char *value) {
+  int len = 0;
+
+  if (!out || out_size == 0 || !value) {
+    return -1;
+  }
+  while (*value == ' ' || *value == '\t') {
+    value++;
+  }
+  while (value[len] && value[len] != ',' && value[len] != ' ' &&
+         value[len] != '\t' && value[len] != '\r') {
+    len++;
+  }
+  desktop_trim_copy(out, out_size, value, len);
+  return desktop_token_safe(out) ? 0 : -1;
+}
+
+static void desktop_hypr_runtime_init(desktop_hypr_runtime_t *runtime) {
+  if (!runtime) {
+    return;
+  }
+  memset(runtime, 0, sizeof(*runtime));
+  desktop_append(runtime->binds, sizeof(runtime->binds), &runtime->binds_used,
+                 "# Orizon generated Hyprland-style binds v1\n"
+                 "source user-config\n");
+  desktop_append(runtime->autostart, sizeof(runtime->autostart),
+                 &runtime->autostart_used,
+                 "# Orizon generated Hyprland-style autostart v1\n"
+                 "source user-config\n");
+  desktop_append(runtime->rules, sizeof(runtime->rules), &runtime->rules_used,
+                 "# Orizon generated Hyprland-style window rules v1\n"
+                 "source user-config\n");
+  desktop_append(runtime->monitors, sizeof(runtime->monitors),
+                 &runtime->monitors_used,
+                 "# Orizon generated Hyprland-style monitor hints v1\n"
+                 "source user-config\n");
+  desktop_append(runtime->runtime, sizeof(runtime->runtime),
+                 &runtime->runtime_used,
+                 "# Orizon generated Hyprland-style runtime state v1\n"
+                 "source user-config\n");
+}
+
+static void desktop_hypr_runtime_append(char *buf, size_t buf_size,
+                                        size_t *used, const char *key,
+                                        const char *value) {
+  char line[256];
+
+  if (!buf || !used || !key || !value || !value[0]) {
+    return;
+  }
+  snprintf(line, sizeof(line), "%s = %s\n", key, value);
+  desktop_append(buf, buf_size, used, line);
+}
+
+static int desktop_hypr_apply_pair(const char *key, const char *value,
+                                   orizon_desktop_session_t *session,
+                                   orizon_desktop_settings_t *settings,
+                                   desktop_hypr_summary_t *summary,
+                                   int apply,
+                                   desktop_hypr_runtime_t *runtime) {
+  char token[48];
+  int supported = 0;
+  int applied = 0;
+
+  if (!key || !value || !summary) {
+    return 0;
+  }
+  if (key[0] == '$') {
+    summary->variables++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "monitor") == 0) {
+    summary->monitors++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->monitors,
+                                  sizeof(runtime->monitors),
+                                  &runtime->monitors_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strncmp(key, "bind", 4) == 0) {
+    summary->binds++;
+    if (desktop_hypr_dispatch_supported(value)) {
+      summary->supported_binds++;
+    }
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->binds, sizeof(runtime->binds),
+                                  &runtime->binds_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "exec-once") == 0) {
+    summary->exec_once++;
+    summary->prepared_keywords++;
+    if (apply && strstr(value, "terminal") && session) {
+      session->autostart_terminal = 1;
+      applied = 1;
+    }
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->autostart,
+                                  sizeof(runtime->autostart),
+                                  &runtime->autostart_used, key, value);
+      summary->runtime_lines++;
+    }
+    summary->applied_settings += applied;
+    return 0;
+  }
+  if (strcmp(key, "env") == 0) {
+    summary->envs++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "windowrule") == 0 || strcmp(key, "windowrulev2") == 0) {
+    summary->windowrules++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->rules, sizeof(runtime->rules),
+                                  &runtime->rules_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "workspace") == 0) {
+    summary->workspaces++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "source") == 0) {
+    summary->sources++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+
+  if (strcmp(key, "general:layout") == 0) {
+    supported = 1;
+    if (apply && session && desktop_hypr_copy_token_value(token, sizeof(token),
+                                                          value) == 0) {
+      snprintf(session->layout, sizeof(session->layout), "%s", token);
+      applied = 1;
+    }
+  } else if (strcmp(key, "general:gaps_in") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->gaps_in =
+          desktop_clamp_int(desktop_parse_int_value(value, settings->gaps_in),
+                            0, 48);
+      applied = 1;
+    }
+  } else if (strcmp(key, "general:gaps_out") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->gaps_out =
+          desktop_clamp_int(desktop_parse_int_value(value, settings->gaps_out),
+                            0, 64);
+      applied = 1;
+    }
+  } else if (strcmp(key, "general:border_size") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->border_size = desktop_clamp_int(
+          desktop_parse_int_value(value, settings->border_size), 0, 8);
+      applied = 1;
+    }
+  } else if (strcmp(key, "decoration:rounding") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->rounding =
+          desktop_clamp_int(desktop_parse_int_value(value, settings->rounding),
+                            0, 24);
+      applied = 1;
+    }
+  } else if (strcmp(key, "decoration:shadow:enabled") == 0 ||
+             strcmp(key, "decoration:drop_shadow") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->shadows_enabled =
+          desktop_bool_value(value, settings->shadows_enabled);
+      applied = 1;
+    }
+  } else if (strcmp(key, "animations:enabled") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->animations_enabled =
+          desktop_bool_value(value, settings->animations_enabled);
+      applied = 1;
+    }
+  } else if (strcmp(key, "input:kb_layout") == 0) {
+    supported = 1;
+    if (apply && settings && desktop_hypr_copy_token_value(
+                               token, sizeof(token), value) == 0) {
+      snprintf(settings->keyboard_layout, sizeof(settings->keyboard_layout),
+               "%s", token);
+      applied = 1;
+    }
+  } else if (strcmp(key, "input:follow_mouse") == 0) {
+    supported = 1;
+    if (apply && session) {
+      session->focus_follows_mouse =
+          desktop_parse_int_value(value, 0) > 0 ||
+          desktop_bool_value(value, session->focus_follows_mouse);
+      applied = 1;
+    }
+  }
+
+  if (supported) {
+    summary->supported_settings++;
+    summary->applied_settings += applied;
+  } else {
+    summary->ignored_keywords++;
+  }
+  return supported;
+}
+
+static int desktop_hypr_scan_config(const char *cfg, int apply,
+                                    desktop_hypr_summary_t *summary,
+                                    orizon_desktop_session_t *session,
+                                    orizon_desktop_settings_t *settings,
+                                    desktop_hypr_runtime_t *runtime) {
+  int pos = 0;
+  int depth = 0;
+  int len;
+  char sections[4][32];
+
+  if (!cfg || !summary) {
+    return -1;
+  }
+  memset(sections, 0, sizeof(sections));
+  len = (int)strlen(cfg);
+  while (pos < len) {
+    int start = pos;
+    int end;
+    char line[224];
+    char key[64];
+    char value[128];
+    char full_key[96];
+
+    while (pos < len && cfg[pos] != '\n') {
+      pos++;
+    }
+    end = pos;
+    if (pos < len && cfg[pos] == '\n') {
+      pos++;
+    }
+    desktop_trim_copy(line, sizeof(line), cfg + start, end - start);
+    desktop_strip_inline_comment(line);
+    desktop_trim_copy(line, sizeof(line), line, (int)strlen(line));
+    if (!line[0]) {
+      continue;
+    }
+    if (strcmp(line, "}") == 0) {
+      if (depth > 0) {
+        depth--;
+      }
+      continue;
+    }
+    if (line[strlen(line) - 1] == '{') {
+      line[strlen(line) - 1] = '\0';
+      desktop_trim_copy(key, sizeof(key), line, (int)strlen(line));
+      if (desktop_token_safe(key) && depth < 4) {
+        snprintf(sections[depth], sizeof(sections[depth]), "%s", key);
+        depth++;
+      } else {
+        summary->malformed_lines++;
+      }
+      continue;
+    }
+    summary->parsed_lines++;
+    if (desktop_hypr_key_value(line, key, sizeof(key), value,
+                               sizeof(value)) < 0) {
+      summary->malformed_lines++;
+      continue;
+    }
+    desktop_hypr_join_key(sections, depth, key, full_key, sizeof(full_key));
+    desktop_hypr_apply_pair(full_key, value, session, settings, summary,
+                            apply, runtime);
+  }
+  return 0;
+}
+
 static int desktop_write_session(const orizon_desktop_session_t *session) {
   char text[384];
 
@@ -230,14 +855,84 @@ static int desktop_write_session(const orizon_desktop_session_t *session) {
            "bar %s\n"
            "launcher %s\n"
            "autostart-terminal %s\n"
-           "focus follows-mouse no\n",
+           "focus-follows-mouse %s\n",
            session->theme[0] ? session->theme : "graphite",
            session->wallpaper[0] ? session->wallpaper : "aurora",
-           session->layout[0] ? session->layout : "floating",
+           session->layout[0] ? session->layout : "dwindle",
            session->bar_enabled ? "yes" : "no",
            session->launcher_enabled ? "yes" : "no",
-           session->autostart_terminal ? "yes" : "no");
+           session->autostart_terminal ? "yes" : "no",
+           session->focus_follows_mouse ? "yes" : "no");
   return desktop_write_text_file(ORIZON_DESKTOP_SESSION_PATH, text);
+}
+
+static void desktop_settings_defaults(orizon_desktop_settings_t *settings) {
+  if (!settings) {
+    return;
+  }
+  memset(settings, 0, sizeof(*settings));
+  settings->scale = 1;
+  settings->gaps_in = 6;
+  settings->gaps_out = 12;
+  settings->border_size = 2;
+  settings->rounding = 8;
+  settings->animations_enabled = 1;
+  settings->shadows_enabled = 1;
+  settings->idle_timeout_seconds = 0;
+  settings->lock_on_idle = 0;
+  snprintf(settings->default_terminal, sizeof(settings->default_terminal),
+           "%s", "orizon-terminal");
+  snprintf(settings->launcher_provider, sizeof(settings->launcher_provider),
+           "%s", "builtin");
+  snprintf(settings->bar_position, sizeof(settings->bar_position), "%s",
+           "top");
+  snprintf(settings->keyboard_layout, sizeof(settings->keyboard_layout), "%s",
+           "us");
+  snprintf(settings->pointer_profile, sizeof(settings->pointer_profile), "%s",
+           "flat");
+}
+
+static int desktop_write_settings(const orizon_desktop_settings_t *settings) {
+  char text[768];
+
+  if (!settings) {
+    return -1;
+  }
+  snprintf(text, sizeof(text),
+           "# Orizon desktop system settings v1\n"
+           "# Created when the optional desktop is selected during install or via package.\n"
+           "# This is the central settings layer consumed by the Orizon compositor.\n"
+           "scale %d\n"
+           "gaps-in %d\n"
+           "gaps-out %d\n"
+           "border-size %d\n"
+           "rounding %d\n"
+           "animations %s\n"
+           "shadows %s\n"
+           "idle-timeout-seconds %d\n"
+           "lock-on-idle %s\n"
+           "default-terminal %s\n"
+           "launcher-provider %s\n"
+           "bar-position %s\n"
+           "keyboard-layout %s\n"
+           "pointer-profile %s\n",
+           desktop_clamp_int(settings->scale, 1, 3),
+           desktop_clamp_int(settings->gaps_in, 0, 48),
+           desktop_clamp_int(settings->gaps_out, 0, 64),
+           desktop_clamp_int(settings->border_size, 0, 8),
+           desktop_clamp_int(settings->rounding, 0, 24),
+           settings->animations_enabled ? "yes" : "no",
+           settings->shadows_enabled ? "yes" : "no",
+           desktop_clamp_int(settings->idle_timeout_seconds, 0, 86400),
+           settings->lock_on_idle ? "yes" : "no",
+           settings->default_terminal[0] ? settings->default_terminal
+                                         : "orizon-terminal",
+           settings->launcher_provider[0] ? settings->launcher_provider
+                                          : "builtin",
+           settings->bar_position[0] ? settings->bar_position : "top",
+           settings->keyboard_layout[0] ? settings->keyboard_layout : "us",
+           settings->pointer_profile[0] ? settings->pointer_profile : "flat");
+  return desktop_write_text_file(ORIZON_DESKTOP_SETTINGS_PATH, text);
 }
 
 static void desktop_ensure_dirs(void) {
@@ -282,6 +977,36 @@ int orizon_desktop_ensure_defaults(void) {
                               desktop_session_config) < 0) {
     rc = -1;
   }
+  if (!vfs_exists(ORIZON_DESKTOP_SETTINGS_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_SETTINGS_PATH,
+                              desktop_settings_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_BINDS_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_BINDS_PATH,
+                              desktop_binds_runtime_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_AUTOSTART_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_AUTOSTART_PATH,
+                              desktop_autostart_runtime_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_RULES_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_RULES_PATH,
+                              desktop_rules_runtime_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_MONITORS_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_MONITORS_PATH,
+                              desktop_monitors_runtime_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_RUNTIME_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH,
+                              desktop_runtime_config) < 0) {
+    rc = -1;
+  }
   return rc;
 }
 
@@ -323,10 +1048,11 @@ int orizon_desktop_load_session(orizon_desktop_session_t *session) {
   memset(session, 0, sizeof(*session));
   snprintf(session->theme, sizeof(session->theme), "%s", "graphite");
   snprintf(session->wallpaper, sizeof(session->wallpaper), "%s", "aurora");
-  snprintf(session->layout, sizeof(session->layout), "%s", "floating");
+  snprintf(session->layout, sizeof(session->layout), "%s", "dwindle");
   session->bar_enabled = 1;
   session->launcher_enabled = 1;
   session->autostart_terminal = 1;
+  session->focus_follows_mouse = 0;
 
   orizon_desktop_ensure_defaults();
   if (desktop_read_text_file(ORIZON_DESKTOP_SESSION_PATH, cfg,
@@ -359,6 +1085,99 @@ int orizon_desktop_load_session(orizon_desktop_session_t *session) {
   if (desktop_session_get_value(cfg, "autostart-terminal", value,
                                 sizeof(value), "yes") == 0) {
     session->autostart_terminal = desktop_bool_value(value, 1);
+  }
+  if (desktop_session_get_value(cfg, "focus-follows-mouse", value,
+                                sizeof(value), "no") == 0) {
+    session->focus_follows_mouse = desktop_bool_value(value, 0);
+  }
+  return 0;
+}
+
+int orizon_desktop_load_settings(orizon_desktop_settings_t *settings) {
+  char cfg[1024];
+  char value[64];
+
+  if (!settings) {
+    return -1;
+  }
+  desktop_settings_defaults(settings);
+  orizon_desktop_ensure_defaults();
+  if (desktop_read_text_file(ORIZON_DESKTOP_SETTINGS_PATH, cfg,
+                             sizeof(cfg)) <= 0) {
+    return -1;
+  }
+  if (desktop_session_get_value(cfg, "scale", value, sizeof(value), "1") ==
+      0) {
+    settings->scale =
+        desktop_clamp_int(desktop_parse_int_value(value, 1), 1, 3);
+  }
+  if (desktop_session_get_value(cfg, "gaps-in", value, sizeof(value), "6") ==
+      0) {
+    settings->gaps_in =
+        desktop_clamp_int(desktop_parse_int_value(value, 6), 0, 48);
+  }
+  if (desktop_session_get_value(cfg, "gaps-out", value, sizeof(value), "12") ==
+      0) {
+    settings->gaps_out =
+        desktop_clamp_int(desktop_parse_int_value(value, 12), 0, 64);
+  }
+  if (desktop_session_get_value(cfg, "border-size", value, sizeof(value),
+                                "2") == 0) {
+    settings->border_size =
+        desktop_clamp_int(desktop_parse_int_value(value, 2), 0, 8);
+  }
+  if (desktop_session_get_value(cfg, "rounding", value, sizeof(value), "8") ==
+      0) {
+    settings->rounding =
+        desktop_clamp_int(desktop_parse_int_value(value, 8), 0, 24);
+  }
+  if (desktop_session_get_value(cfg, "animations", value, sizeof(value),
+                                "yes") == 0) {
+    settings->animations_enabled = desktop_bool_value(value, 1);
+  }
+  if (desktop_session_get_value(cfg, "shadows", value, sizeof(value), "yes") ==
+      0) {
+    settings->shadows_enabled = desktop_bool_value(value, 1);
+  }
+  if (desktop_session_get_value(cfg, "idle-timeout-seconds", value,
+                                sizeof(value), "0") == 0) {
+    settings->idle_timeout_seconds =
+        desktop_clamp_int(desktop_parse_int_value(value, 0), 0, 86400);
+  }
+  if (desktop_session_get_value(cfg, "lock-on-idle", value, sizeof(value),
+                                "no") == 0) {
+    settings->lock_on_idle = desktop_bool_value(value, 0);
+  }
+  if (desktop_session_get_value(cfg, "default-terminal", value, sizeof(value),
+                                settings->default_terminal) == 0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->default_terminal, sizeof(settings->default_terminal),
+             "%s", value);
+  }
+  if (desktop_session_get_value(cfg, "launcher-provider", value,
+                                sizeof(value), settings->launcher_provider) ==
+          0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->launcher_provider, sizeof(settings->launcher_provider),
+             "%s", value);
+  }
+  if (desktop_session_get_value(cfg, "bar-position", value, sizeof(value),
+                                settings->bar_position) == 0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->bar_position, sizeof(settings->bar_position), "%s",
+             value);
+  }
+  if (desktop_session_get_value(cfg, "keyboard-layout", value, sizeof(value),
+                                settings->keyboard_layout) == 0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->keyboard_layout, sizeof(settings->keyboard_layout), "%s",
+             value);
+  }
+  if (desktop_session_get_value(cfg, "pointer-profile", value, sizeof(value),
+                                settings->pointer_profile) == 0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->pointer_profile, sizeof(settings->pointer_profile), "%s",
+             value);
   }
   return 0;
 }
@@ -394,11 +1213,15 @@ int orizon_desktop_set_session_option(const char *key, const char *value,
   } else if (strcmp(key, "autostart-terminal") == 0) {
     session.autostart_terminal =
         desktop_bool_value(value, session.autostart_terminal);
+  } else if (strcmp(key, "focus") == 0 ||
+             strcmp(key, "focus-follows-mouse") == 0) {
+    session.focus_follows_mouse =
+        desktop_bool_value(value, session.focus_follows_mouse);
   } else {
     if (status && status_size) {
       snprintf(status, status_size,
                "desktop session: unknown key '%s'\n"
-               "keys: theme wallpaper layout bar launcher autostart-terminal\n",
+               "keys: theme wallpaper layout bar launcher autostart-terminal focus\n",
                key);
     }
     return -2;
@@ -418,11 +1241,420 @@ int orizon_desktop_set_session_option(const char *key, const char *value,
   return rc;
 }
 
+int orizon_desktop_set_setting(const char *key, const char *value, char *status,
+                               size_t status_size) {
+  orizon_desktop_settings_t settings;
+  int rc;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  if (!key || !key[0] || !value || !value[0] || !desktop_token_safe(key) ||
+      !desktop_token_safe(value)) {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop settings: invalid key/value\n"
+               "allowed: letters, numbers, dash, underscore, dot\n");
+    }
+    return -1;
+  }
+  orizon_desktop_load_settings(&settings);
+  if (strcmp(key, "scale") == 0) {
+    settings.scale =
+        desktop_clamp_int(desktop_parse_int_value(value, settings.scale), 1, 3);
+  } else if (strcmp(key, "gaps-in") == 0) {
+    settings.gaps_in = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.gaps_in), 0, 48);
+  } else if (strcmp(key, "gaps-out") == 0) {
+    settings.gaps_out = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.gaps_out), 0, 64);
+  } else if (strcmp(key, "border-size") == 0) {
+    settings.border_size = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.border_size), 0, 8);
+  } else if (strcmp(key, "rounding") == 0) {
+    settings.rounding = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.rounding), 0, 24);
+  } else if (strcmp(key, "animations") == 0) {
+    settings.animations_enabled =
+        desktop_bool_value(value, settings.animations_enabled);
+  } else if (strcmp(key, "shadows") == 0) {
+    settings.shadows_enabled = desktop_bool_value(value, settings.shadows_enabled);
+  } else if (strcmp(key, "idle-timeout-seconds") == 0) {
+    settings.idle_timeout_seconds = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.idle_timeout_seconds), 0,
+        86400);
+  } else if (strcmp(key, "lock-on-idle") == 0) {
+    settings.lock_on_idle = desktop_bool_value(value, settings.lock_on_idle);
+  } else if (strcmp(key, "default-terminal") == 0) {
+    snprintf(settings.default_terminal, sizeof(settings.default_terminal),
+             "%s", value);
+  } else if (strcmp(key, "launcher-provider") == 0) {
+    snprintf(settings.launcher_provider, sizeof(settings.launcher_provider),
+             "%s", value);
+  } else if (strcmp(key, "bar-position") == 0) {
+    snprintf(settings.bar_position, sizeof(settings.bar_position), "%s",
+             value);
+  } else if (strcmp(key, "keyboard-layout") == 0) {
+    snprintf(settings.keyboard_layout, sizeof(settings.keyboard_layout), "%s",
+             value);
+  } else if (strcmp(key, "pointer-profile") == 0) {
+    snprintf(settings.pointer_profile, sizeof(settings.pointer_profile), "%s",
+             value);
+  } else {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop settings: unknown key '%s'\n"
+               "keys: scale gaps-in gaps-out border-size rounding animations shadows idle-timeout-seconds lock-on-idle default-terminal launcher-provider bar-position keyboard-layout pointer-profile\n",
+               key);
+    }
+    return -2;
+  }
+  rc = desktop_write_settings(&settings);
+  desktop_log_event("settings updated");
+  vfs_persist_save();
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop settings: %s\n"
+             "%s: %s\n"
+             "path: %s\n"
+             "apply: desktop apply or desktop hyprctl reload\n",
+             rc == 0 ? "updated" : "write-failed", key, value,
+             ORIZON_DESKTOP_SETTINGS_PATH);
+  }
+  return rc;
+}
+
+int orizon_desktop_repair_settings(char *status, size_t status_size) {
+  int rc;
+
+  desktop_ensure_dirs();
+  rc = desktop_write_text_file(ORIZON_DESKTOP_SETTINGS_PATH,
+                               desktop_settings_config);
+  desktop_log_event("settings repaired defaults");
+  vfs_persist_save();
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop settings: %s\n"
+             "path: %s\n"
+             "source: built-in defaults\n",
+             rc == 0 ? "repaired" : "write-failed",
+             ORIZON_DESKTOP_SETTINGS_PATH);
+  }
+  return rc;
+}
+
+int orizon_desktop_apply_settings_preset(const char *preset, char *status,
+                                         size_t status_size) {
+  orizon_desktop_settings_t settings;
+  char event[96];
+  int rc;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  if (!preset || !preset[0] || !desktop_token_safe(preset)) {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop settings preset: invalid value\n"
+               "presets: default compact cozy performance accessibility locked\n");
+    }
+    return -1;
+  }
+
+  desktop_settings_defaults(&settings);
+  if (strcmp(preset, "default") == 0 || strcmp(preset, "graphite") == 0) {
+    /* Built-in defaults already loaded. */
+  } else if (strcmp(preset, "compact") == 0) {
+    settings.gaps_in = 2;
+    settings.gaps_out = 4;
+    settings.border_size = 1;
+    settings.rounding = 4;
+    settings.shadows_enabled = 0;
+  } else if (strcmp(preset, "cozy") == 0 ||
+             strcmp(preset, "comfortable") == 0) {
+    settings.gaps_in = 10;
+    settings.gaps_out = 18;
+    settings.border_size = 2;
+    settings.rounding = 12;
+    settings.shadows_enabled = 1;
+  } else if (strcmp(preset, "performance") == 0 ||
+             strcmp(preset, "vm") == 0) {
+    settings.gaps_in = 4;
+    settings.gaps_out = 8;
+    settings.border_size = 1;
+    settings.rounding = 0;
+    settings.animations_enabled = 0;
+    settings.shadows_enabled = 0;
+  } else if (strcmp(preset, "accessibility") == 0 ||
+             strcmp(preset, "large") == 0) {
+    settings.scale = 2;
+    settings.gaps_in = 12;
+    settings.gaps_out = 20;
+    settings.border_size = 4;
+    settings.rounding = 10;
+    settings.animations_enabled = 0;
+    settings.shadows_enabled = 1;
+    snprintf(settings.pointer_profile, sizeof(settings.pointer_profile), "%s",
+             "adaptive");
+  } else if (strcmp(preset, "locked") == 0 ||
+             strcmp(preset, "secure") == 0) {
+    settings.gaps_in = 6;
+    settings.gaps_out = 10;
+    settings.border_size = 2;
+    settings.rounding = 6;
+    settings.idle_timeout_seconds = 300;
+    settings.lock_on_idle = 1;
+    settings.animations_enabled = 0;
+    settings.shadows_enabled = 0;
+  } else {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop settings preset: unknown '%s'\n"
+               "presets: default compact cozy performance accessibility locked\n",
+               preset);
+    }
+    return -2;
+  }
+
+  rc = desktop_write_settings(&settings);
+  snprintf(event, sizeof(event), "settings preset applied name=%s", preset);
+  desktop_log_event(event);
+  vfs_persist_save();
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop settings preset: %s\n"
+             "preset: %s\n"
+             "scale: %d\n"
+             "gaps: in=%d out=%d\n"
+             "border-size: %d\n"
+             "rounding: %d\n"
+             "animations: %s\n"
+             "shadows: %s\n"
+             "idle-timeout-seconds: %d\n"
+             "lock-on-idle: %s\n"
+             "path: %s\n"
+             "apply: desktop hyprctl reload\n",
+             rc == 0 ? "applied" : "write-failed", preset, settings.scale,
+             settings.gaps_in, settings.gaps_out, settings.border_size,
+             settings.rounding, settings.animations_enabled ? "yes" : "no",
+             settings.shadows_enabled ? "yes" : "no",
+             settings.idle_timeout_seconds, settings.lock_on_idle ? "yes" : "no",
+             ORIZON_DESKTOP_SETTINGS_PATH);
+  }
+  return rc;
+}
+
+int orizon_desktop_apply_preset(const char *preset, char *status,
+                                size_t status_size) {
+  orizon_desktop_session_t session;
+  int rc;
+  char event[96];
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  if (!preset || !preset[0] || !desktop_token_safe(preset)) {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop preset: invalid value\n"
+               "known: graphite moss ember frost focus default\n");
+    }
+    return -1;
+  }
+
+  orizon_desktop_load_session(&session);
+  if (strcmp(preset, "default") == 0 || strcmp(preset, "graphite") == 0) {
+    snprintf(session.theme, sizeof(session.theme), "%s", "graphite");
+    snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "aurora");
+    snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
+    session.bar_enabled = 1;
+    session.launcher_enabled = 1;
+    session.autostart_terminal = 1;
+    session.focus_follows_mouse = 0;
+  } else if (strcmp(preset, "moss") == 0) {
+    snprintf(session.theme, sizeof(session.theme), "%s", "moss");
+    snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "moss");
+    snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
+    session.bar_enabled = 1;
+    session.launcher_enabled = 1;
+    session.autostart_terminal = 1;
+    session.focus_follows_mouse = 1;
+  } else if (strcmp(preset, "ember") == 0) {
+    snprintf(session.theme, sizeof(session.theme), "%s", "ember");
+    snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "dawn");
+    snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
+    session.bar_enabled = 1;
+    session.launcher_enabled = 1;
+    session.autostart_terminal = 1;
+    session.focus_follows_mouse = 0;
+  } else if (strcmp(preset, "frost") == 0) {
+    snprintf(session.theme, sizeof(session.theme), "%s", "frost");
+    snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "noir");
+    snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
+    session.bar_enabled = 1;
+    session.launcher_enabled = 1;
+    session.autostart_terminal = 1;
+    session.focus_follows_mouse = 0;
+  } else if (strcmp(preset, "focus") == 0) {
+    snprintf(session.theme, sizeof(session.theme), "%s", "graphite");
+    snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "noir");
+    snprintf(session.layout, sizeof(session.layout), "%s", "monocle");
+    session.bar_enabled = 0;
+    session.launcher_enabled = 1;
+    session.autostart_terminal = 1;
+    session.focus_follows_mouse = 0;
+  } else {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop preset: unknown '%s'\n"
+               "known: graphite moss ember frost focus default\n",
+               preset);
+    }
+    return -2;
+  }
+
+  rc = desktop_write_session(&session);
+  snprintf(event, sizeof(event), "preset applied name=%s", preset);
+  desktop_log_event(event);
+  vfs_persist_save();
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop preset: %s\n"
+             "preset: %s\n"
+             "theme: %s\n"
+             "wallpaper: %s\n"
+             "layout: %s\n"
+             "bar: %s\n"
+             "launcher: %s\n"
+             "autostart-terminal: %s\n"
+             "focus-follows-mouse: %s\n"
+             "path: %s\n",
+             rc == 0 ? "applied" : "write-failed", preset, session.theme,
+             session.wallpaper, session.layout,
+             session.bar_enabled ? "yes" : "no",
+             session.launcher_enabled ? "yes" : "no",
+             session.autostart_terminal ? "yes" : "no",
+             session.focus_follows_mouse ? "yes" : "no",
+             ORIZON_DESKTOP_SESSION_PATH);
+  }
+  return rc;
+}
+
+int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
+  char cfg[4096];
+  char line[256];
+  orizon_desktop_session_t session;
+  orizon_desktop_settings_t settings;
+  desktop_hypr_runtime_t runtime;
+  desktop_hypr_summary_t summary;
+  int n;
+  int rc1;
+  int rc2;
+  int rc_binds;
+  int rc_autostart;
+  int rc_rules;
+  int rc_monitors;
+  int rc_runtime;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  memset(&summary, 0, sizeof(summary));
+  desktop_hypr_runtime_init(&runtime);
+  desktop_ensure_dirs();
+  orizon_desktop_ensure_defaults();
+  if (!vfs_exists(ORIZON_DESKTOP_USER_CONFIG_PATH)) {
+    if (orizon_desktop_write_user_config(NULL, 0) == 0) {
+      summary.generated_user_config = 1;
+    }
+  }
+  n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg, sizeof(cfg));
+  if (n <= 0) {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop config apply: failed\n"
+               "source: %s missing or unreadable\n"
+               "fix: desktop write-config\n",
+               ORIZON_DESKTOP_USER_CONFIG_PATH);
+    }
+    return -1;
+  }
+  orizon_desktop_load_session(&session);
+  orizon_desktop_load_settings(&settings);
+  desktop_hypr_scan_config(cfg, 1, &summary, &session, &settings, &runtime);
+  rc1 = desktop_write_session(&session);
+  rc2 = desktop_write_settings(&settings);
+  rc_binds = desktop_write_text_file(ORIZON_DESKTOP_BINDS_PATH,
+                                     runtime.binds);
+  rc_autostart = desktop_write_text_file(ORIZON_DESKTOP_AUTOSTART_PATH,
+                                         runtime.autostart);
+  rc_rules = desktop_write_text_file(ORIZON_DESKTOP_RULES_PATH,
+                                     runtime.rules);
+  rc_monitors = desktop_write_text_file(ORIZON_DESKTOP_MONITORS_PATH,
+                                        runtime.monitors);
+  rc_runtime = desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH,
+                                       runtime.runtime);
+  desktop_log_event("hypr config applied");
+  vfs_persist_save();
+
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop config apply: %s\n"
+             "source: %s%s\n"
+             "parsed-lines: %d malformed: %d\n"
+             "supported-settings: %d applied: %d prepared-keywords: %d ignored: %d runtime-lines: %d\n"
+             "binds: total=%d supported-dispatchers=%d monitors=%d exec-once=%d env=%d windowrules=%d workspaces=%d sources=%d variables=%d\n"
+             "runtime-files: binds=%s autostart=%s rules=%s monitors=%s state=%s\n"
+             "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
+             "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s\n"
+             "note: monitor/env/windowrule/source are now persisted as Orizon runtime hints; real Wayland outputs remain future work.\n",
+             (rc1 == 0 && rc2 == 0 && rc_binds == 0 && rc_autostart == 0 &&
+              rc_rules == 0 && rc_monitors == 0 && rc_runtime == 0)
+                 ? "applied"
+                 : "write-failed",
+             ORIZON_DESKTOP_USER_CONFIG_PATH,
+             summary.generated_user_config ? " generated-from-template" : "",
+             summary.parsed_lines, summary.malformed_lines,
+             summary.supported_settings, summary.applied_settings,
+             summary.prepared_keywords, summary.ignored_keywords,
+             summary.runtime_lines,
+             summary.binds, summary.supported_binds, summary.monitors,
+             summary.exec_once, summary.envs, summary.windowrules,
+             summary.workspaces, summary.sources, summary.variables,
+             rc_binds == 0 ? ORIZON_DESKTOP_BINDS_PATH : "write-failed",
+             rc_autostart == 0 ? ORIZON_DESKTOP_AUTOSTART_PATH
+                               : "write-failed",
+             rc_rules == 0 ? ORIZON_DESKTOP_RULES_PATH : "write-failed",
+             rc_monitors == 0 ? ORIZON_DESKTOP_MONITORS_PATH
+                              : "write-failed",
+             rc_runtime == 0 ? ORIZON_DESKTOP_RUNTIME_PATH : "write-failed",
+             session.layout,
+             session.autostart_terminal ? "yes" : "no",
+             session.focus_follows_mouse ? "yes" : "no",
+             settings.gaps_in, settings.gaps_out, settings.border_size,
+             settings.rounding,
+             settings.animations_enabled ? "yes" : "no",
+             settings.shadows_enabled ? "yes" : "no",
+             settings.keyboard_layout);
+    if (summary.applied_settings == 0 &&
+        strlen(status) + 80 < status_size) {
+      snprintf(line, sizeof(line),
+               "hint: add general:gaps_in, general:layout, decoration:rounding, animations:enabled, input:kb_layout.\n");
+      strcat(status, line);
+    }
+  }
+  return rc1 == 0 && rc2 == 0 && rc_binds == 0 && rc_autostart == 0 &&
+                 rc_rules == 0 && rc_monitors == 0 && rc_runtime == 0
+             ? 0
+             : -1;
+}
+
 int orizon_desktop_set_enabled(int enabled, char *status, size_t status_size) {
   int rc;
   int user_rc = 0;
 
   desktop_ensure_dirs();
+  orizon_desktop_ensure_defaults();
   rc = desktop_write_text_file(ORIZON_DESKTOP_CONFIG_PATH,
                                enabled ? desktop_enabled_config
                                        : desktop_default_config);
@@ -435,12 +1667,14 @@ int orizon_desktop_set_enabled(int enabled, char *status, size_t status_size) {
   if (status && status_size) {
     snprintf(status, status_size,
              "desktop: %s\nprofile: %s\nconfig: %s\nuser-config: %s\n"
+             "settings: %s\n"
              "terminal-shortcuts: F1=open F2=close\n",
              enabled ? "enabled" : "disabled", ORIZON_DESKTOP_PROFILE,
              rc == 0 ? ORIZON_DESKTOP_CONFIG_PATH : "write-failed",
              enabled ? (user_rc == 0 ? ORIZON_DESKTOP_USER_CONFIG_PATH
                                       : "write-failed")
-                     : "kept-if-present");
+                     : "kept-if-present",
+             ORIZON_DESKTOP_SETTINGS_PATH);
   }
   return rc == 0 && user_rc == 0 ? 0 : -1;
 }
@@ -455,6 +1689,17 @@ int orizon_desktop_reset(char *status, size_t status_size) {
   template_rc = desktop_write_text_file(ORIZON_DESKTOP_TEMPLATE_PATH,
                                         desktop_user_config);
   desktop_write_text_file(ORIZON_DESKTOP_SESSION_PATH, desktop_session_config);
+  desktop_write_text_file(ORIZON_DESKTOP_SETTINGS_PATH,
+                          desktop_settings_config);
+  desktop_write_text_file(ORIZON_DESKTOP_BINDS_PATH,
+                          desktop_binds_runtime_config);
+  desktop_write_text_file(ORIZON_DESKTOP_AUTOSTART_PATH,
+                          desktop_autostart_runtime_config);
+  desktop_write_text_file(ORIZON_DESKTOP_RULES_PATH,
+                          desktop_rules_runtime_config);
+  desktop_write_text_file(ORIZON_DESKTOP_MONITORS_PATH,
+                          desktop_monitors_runtime_config);
+  desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH, desktop_runtime_config);
   desktop_log_event("reset profile=" ORIZON_DESKTOP_PROFILE);
   vfs_persist_save();
   if (status && status_size) {
@@ -464,11 +1709,13 @@ int orizon_desktop_reset(char *status, size_t status_size) {
              "profile: %s\n"
              "config: %s\n"
              "template: %s\n"
+             "settings: %s\n"
              "user-config: kept-if-present %s\n",
              ORIZON_DESKTOP_PROFILE,
              rc == 0 ? ORIZON_DESKTOP_CONFIG_PATH : "write-failed",
              template_rc == 0 ? ORIZON_DESKTOP_TEMPLATE_PATH
                               : "write-failed",
+             ORIZON_DESKTOP_SETTINGS_PATH,
              ORIZON_DESKTOP_USER_CONFIG_PATH);
   }
   return rc == 0 && template_rc == 0 ? 0 : -1;
@@ -516,10 +1763,25 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
   snprintf(line, sizeof(line), "session-config: %s\n",
            ORIZON_DESKTOP_SESSION_PATH);
   desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "settings-config: %s\n",
+           ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "binds-runtime: %s\n",
+           ORIZON_DESKTOP_BINDS_PATH);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "autostart-runtime: %s\n",
+           ORIZON_DESKTOP_AUTOSTART_PATH);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "rules-runtime: %s\n",
+           ORIZON_DESKTOP_RULES_PATH);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "monitor-runtime: %s\n",
+           ORIZON_DESKTOP_MONITORS_PATH);
+  desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
-                 "terminal: F1/open or click desktop; F2/desktop close terminal\n");
+                 "terminal: F1/desktop dispatch exec terminal; F2/killactive\n");
   desktop_append(out, out_size, &used,
-                 "admin: desktop doctor | desktop logs | desktop shortcuts | desktop reset\n");
+                 "admin: desktop settings | desktop doctor | desktop logs | desktop shortcuts | desktop reset\n");
 }
 
 void orizon_desktop_format_config(char *out, size_t out_size) {
@@ -541,6 +1803,84 @@ void orizon_desktop_format_config(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, desktop_user_config);
   desktop_append(out, out_size, &used, "\n== session-default ==\n");
   desktop_append(out, out_size, &used, desktop_session_config);
+  desktop_append(out, out_size, &used, "\n== system-settings-default ==\n");
+  desktop_append(out, out_size, &used, desktop_settings_config);
+  desktop_append(out, out_size, &used, "\n== generated-runtime-files ==\n");
+  desktop_append(out, out_size, &used,
+                 ORIZON_DESKTOP_BINDS_PATH "\n"
+                 ORIZON_DESKTOP_AUTOSTART_PATH "\n"
+                 ORIZON_DESKTOP_RULES_PATH "\n"
+                 ORIZON_DESKTOP_MONITORS_PATH "\n"
+                 ORIZON_DESKTOP_RUNTIME_PATH "\n");
+  desktop_append(out, out_size, &used,
+                 "\ncommands: desktop config doctor | desktop config apply | desktop write-config\n");
+}
+
+void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
+  char cfg[4096];
+  char line[256];
+  size_t used = 0;
+  size_t size = 0;
+  int n;
+  desktop_hypr_summary_t summary;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  memset(&summary, 0, sizeof(summary));
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Orizon desktop Hyprland config doctor\n");
+  snprintf(line, sizeof(line), "path: %s\n",
+           ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append(out, out_size, &used, line);
+  if (vfs_stat(ORIZON_DESKTOP_USER_CONFIG_PATH, &size, NULL) == 0 &&
+      size > 0) {
+    snprintf(line, sizeof(line), "file PASS bytes=%lu\n",
+             (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "file WARN missing; run desktop write-config or desktop config apply\n");
+  }
+  n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                             sizeof(cfg));
+  if (n <= 0) {
+    snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
+    n = (int)strlen(cfg);
+    desktop_append(out, out_size, &used,
+                   "source: built-in template preview\n");
+  } else {
+    desktop_append(out, out_size, &used,
+                   "source: user config\n");
+  }
+  desktop_hypr_scan_config(cfg, 0, &summary, NULL, NULL, NULL);
+  snprintf(line, sizeof(line),
+           "syntax: %s parsed-lines=%d malformed=%d\n",
+           summary.malformed_lines ? "WARN" : "PASS", summary.parsed_lines,
+           summary.malformed_lines);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d exec-once=%d env=%d windowrules=%d workspaces=%d sources=%d\n",
+           summary.variables, summary.monitors, summary.binds,
+           summary.supported_binds, summary.exec_once, summary.envs,
+           summary.windowrules, summary.workspaces, summary.sources);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "apply-support: settings=%d prepared=%d ignored=%d\n",
+           summary.supported_settings, summary.prepared_keywords,
+           summary.ignored_keywords);
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled; animations:enabled; input:kb_layout,follow_mouse; exec-once terminal\n");
+  desktop_append(out, out_size, &used,
+                 "runtime-hints: monitor, bind/bindm/bindr, env, windowrule/windowrulev2, workspace, source -> /system/desktop-*.conf\n");
+  desktop_append(out, out_size, &used,
+                 "apply: desktop config apply  # writes supported values into session/settings\n");
+  snprintf(line, sizeof(line), "summary: %s\n",
+           summary.malformed_lines ? "WARN" : "PASS");
+  desktop_append(out, out_size, &used, line);
 }
 
 void orizon_desktop_format_session(char *out, size_t out_size) {
@@ -571,12 +1911,226 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   snprintf(line, sizeof(line), "autostart-terminal: %s\n",
            session.autostart_terminal ? "yes" : "no");
   desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "focus-follows-mouse: %s\n",
+           session.focus_follows_mouse ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "set: desktop theme <name> | desktop wallpaper <name> | desktop layout <name> | desktop bar on|off\n");
   desktop_append(out, out_size, &used,
+                 "system-settings: desktop settings | desktop settings set <key> <value>\n");
+  desktop_append(out, out_size, &used,
+                 "preset: desktop preset <graphite|moss|ember|frost|focus>\n");
+  desktop_append(out, out_size, &used,
+                 "focus: desktop focus on|off|toggle\n");
+  desktop_append(out, out_size, &used,
+                 "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin\n");
+  desktop_append(out, out_size, &used,
+                 "hyprctl: desktop hyprctl clients|workspaces|activewindow|monitors|dispatch\n");
+  desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch terminal\n");
   desktop_append(out, out_size, &used,
-                 "windows: desktop windows | desktop workspace <n> | desktop move terminal <n>\n");
+                 "windows: desktop windows | desktop workspace <n> | desktop dispatch movetoworkspace <n>\n");
+}
+
+void orizon_desktop_format_settings(char *out, size_t out_size) {
+  orizon_desktop_settings_t settings;
+  char line[192];
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_load_settings(&settings);
+  desktop_append(out, out_size, &used, "Orizon desktop system settings\n");
+  snprintf(line, sizeof(line), "path: %s\n", ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "created-by: installer desktop selection or pkg install " ORIZON_DESKTOP_PACKAGE "\n");
+  snprintf(line, sizeof(line), "scale: %d\n", settings.scale);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "gaps-in: %d\n", settings.gaps_in);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "gaps-out: %d\n", settings.gaps_out);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "border-size: %d\n", settings.border_size);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "rounding: %d\n", settings.rounding);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "animations: %s\n",
+           settings.animations_enabled ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "shadows: %s\n",
+           settings.shadows_enabled ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "idle-timeout-seconds: %d\n",
+           settings.idle_timeout_seconds);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "lock-on-idle: %s\n",
+           settings.lock_on_idle ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "default-terminal: %s\n",
+           settings.default_terminal);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "launcher-provider: %s\n",
+           settings.launcher_provider);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "bar-position: %s\n", settings.bar_position);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "keyboard-layout: %s\n",
+           settings.keyboard_layout);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "pointer-profile: %s\n",
+           settings.pointer_profile);
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "set: desktop settings set <key> <value>\n");
+  desktop_append(out, out_size, &used,
+                 "presets: desktop settings presets | desktop settings preset <name>\n");
+  desktop_append(out, out_size, &used,
+                 "doctor: desktop settings doctor  # validate system settings file\n");
+  desktop_append(out, out_size, &used,
+                 "repair: desktop settings repair  # rewrite safe defaults\n");
+  desktop_append(out, out_size, &used,
+                 "note: this is system-wide desktop policy, not per-window runtime state.\n");
+}
+
+void orizon_desktop_format_settings_presets(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_append(out, out_size, &used, "Orizon desktop settings presets\n");
+  desktop_append(out, out_size, &used,
+                 "default       scale=1 gaps=6/12 border=2 rounding=8 animations=yes shadows=yes\n");
+  desktop_append(out, out_size, &used,
+                 "compact       scale=1 gaps=2/4 border=1 rounding=4 animations=yes shadows=no\n");
+  desktop_append(out, out_size, &used,
+                 "cozy          scale=1 gaps=10/18 border=2 rounding=12 animations=yes shadows=yes\n");
+  desktop_append(out, out_size, &used,
+                 "performance   scale=1 gaps=4/8 border=1 rounding=0 animations=no shadows=no\n");
+  desktop_append(out, out_size, &used,
+                 "accessibility scale=2 gaps=12/20 border=4 rounding=10 animations=no shadows=yes\n");
+  desktop_append(out, out_size, &used,
+                 "locked        scale=1 gaps=6/10 border=2 rounding=6 idle-lock=300s\n");
+  desktop_append(out, out_size, &used,
+                 "aliases: graphite=default, comfortable=cozy, vm=performance, large=accessibility, secure=locked\n");
+  desktop_append(out, out_size, &used,
+                 "apply: desktop settings preset <default|compact|cozy|performance|accessibility|locked>\n");
+}
+
+void orizon_desktop_format_settings_doctor(char *out, size_t out_size) {
+  char cfg[2048];
+  char key[48];
+  char line[192];
+  orizon_desktop_settings_t settings;
+  size_t used = 0;
+  size_t size = 0;
+  int n;
+  int known = 0;
+  int unknown = 0;
+  int malformed = 0;
+  int fail = 0;
+  int warn = 0;
+  int pos = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  orizon_desktop_load_settings(&settings);
+  desktop_append(out, out_size, &used, "Orizon desktop settings doctor\n");
+  snprintf(line, sizeof(line), "path: %s\n", ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append(out, out_size, &used, line);
+
+  if (vfs_stat(ORIZON_DESKTOP_SETTINGS_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "file PASS bytes=%lu\n",
+             (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "file FAIL missing or empty; run desktop settings repair\n");
+    fail = 1;
+  }
+
+  n = desktop_read_text_file(ORIZON_DESKTOP_SETTINGS_PATH, cfg, sizeof(cfg));
+  if (n <= 0) {
+    fail = 1;
+  } else {
+    while (pos < n) {
+      int start = pos;
+      int end;
+      int p;
+      int k = 0;
+
+      while (pos < n && cfg[pos] != '\n') {
+        pos++;
+      }
+      end = pos;
+      if (pos < n && cfg[pos] == '\n') {
+        pos++;
+      }
+      p = start;
+      while (p < end && (cfg[p] == ' ' || cfg[p] == '\t' || cfg[p] == '\r')) {
+        p++;
+      }
+      if (p >= end || cfg[p] == '#') {
+        continue;
+      }
+      while (p < end && cfg[p] != ' ' && cfg[p] != '\t' && cfg[p] != '\r') {
+        if (k + 1 < (int)sizeof(key)) {
+          key[k++] = cfg[p];
+        }
+        p++;
+      }
+      key[k] = '\0';
+      while (p < end && (cfg[p] == ' ' || cfg[p] == '\t' || cfg[p] == '\r')) {
+        p++;
+      }
+      if (k == 0 || p >= end) {
+        malformed++;
+      } else if (desktop_settings_key_known(key)) {
+        known++;
+      } else {
+        unknown++;
+      }
+    }
+  }
+
+  if (known > 0 && unknown == 0 && malformed == 0) {
+    snprintf(line, sizeof(line), "schema PASS known-keys=%d\n", known);
+  } else {
+    snprintf(line, sizeof(line),
+             "schema WARN known-keys=%d unknown-lines=%d malformed-lines=%d\n",
+             known, unknown, malformed);
+    warn = 1;
+  }
+  desktop_append(out, out_size, &used, line);
+  if (settings.scale < 1 || settings.scale > 3 || settings.gaps_in < 0 ||
+      settings.gaps_out < 0 || settings.border_size < 0) {
+    desktop_append(out, out_size, &used, "runtime FAIL invalid clamped values\n");
+    fail = 1;
+  } else {
+    snprintf(line, sizeof(line),
+             "runtime PASS scale=%d gaps=%d/%d border=%d rounding=%d\n",
+             settings.scale, settings.gaps_in, settings.gaps_out,
+             settings.border_size, settings.rounding);
+    desktop_append(out, out_size, &used, line);
+  }
+  snprintf(line, sizeof(line),
+           "policy terminal=%s launcher=%s bar=%s keyboard=%s pointer=%s\n",
+           settings.default_terminal, settings.launcher_provider,
+           settings.bar_position, settings.keyboard_layout,
+           settings.pointer_profile);
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "safe-fix: desktop settings repair | desktop settings preset default\n");
+  snprintf(line, sizeof(line), "summary: %s\n",
+           fail ? "FAIL" : (warn ? "WARN" : "PASS"));
+  desktop_append(out, out_size, &used, line);
 }
 
 void orizon_desktop_format_apps(char *out, size_t out_size) {
@@ -588,15 +2142,74 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
   out[0] = '\0';
   desktop_append(out, out_size, &used, "Orizon desktop apps\n");
   desktop_append(out, out_size, &used,
-                 "terminal  installed=yes command='desktop launch terminal' shortcut=F1\n");
+                 "terminal  installed=yes command='desktop dispatch exec terminal' shortcut=SUPER+Return/F1\n");
   desktop_append(out, out_size, &used,
-                 "settings  prepared=yes command='desktop session' shortcut=SUPER+R\n");
+                 "settings  installed=yes command='desktop settings' shortcut=SUPER+R\n");
   desktop_append(out, out_size, &used,
                  "packages  prepared=yes command='pkg search desktop' shortcut=none\n");
   desktop_append(out, out_size, &used,
                  "launcher  prepared=yes command='desktop launcher' shortcut=SUPER+D\n");
   desktop_append(out, out_size, &used,
                  "next-apps file-manager,status-bar,wallpaper-daemon are not implemented yet\n");
+}
+
+void orizon_desktop_format_profiles(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_append(out, out_size, &used, "Orizon desktop profiles\n");
+  desktop_append(out, out_size, &used,
+                 "presets: graphite moss ember frost focus default\n");
+  desktop_append(out, out_size, &used,
+                 "themes: graphite moss ember frost\n");
+  desktop_append(out, out_size, &used,
+                 "wallpapers: aurora dawn noir moss\n");
+  desktop_append(out, out_size, &used,
+                 "layouts: dwindle master monocle\n");
+  desktop_append(out, out_size, &used,
+                 "apps: terminal enabled; settings/packages prepared\n");
+  desktop_append(out, out_size, &used,
+                 "set: desktop theme <name>; desktop wallpaper <name>; desktop layout <name>\n");
+  desktop_append(out, out_size, &used,
+                 "apply: desktop preset <name>; focus: desktop focus on|off|toggle\n");
+  desktop_append(out, out_size, &used,
+                 "limits: symbolic profiles only; no real Hyprland/wlroots theme loader yet\n");
+}
+
+void orizon_desktop_format_autostart(char *out, size_t out_size) {
+  orizon_desktop_session_t session;
+  size_t used = 0;
+  char line[128];
+  char cfg[768];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_load_session(&session);
+  desktop_append(out, out_size, &used, "Orizon desktop autostart\n");
+  snprintf(line, sizeof(line), "terminal: %s\n",
+           session.autostart_terminal ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "launcher: %s\n",
+           session.launcher_enabled ? "available" : "disabled");
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "commands: desktop autostart terminal on|off|toggle\n");
+  desktop_append(out, out_size, &used,
+                 "path: " ORIZON_DESKTOP_SESSION_PATH "\n");
+  desktop_append(out, out_size, &used,
+                 "hypr-runtime: " ORIZON_DESKTOP_AUTOSTART_PATH "\n");
+  if (desktop_read_text_file(ORIZON_DESKTOP_AUTOSTART_PATH, cfg,
+                             sizeof(cfg)) > 0) {
+    desktop_append(out, out_size, &used, "\n== exec-once ==\n");
+    desktop_append(out, out_size, &used, cfg);
+  }
+  desktop_append(out, out_size, &used,
+                 "limits: terminal autostart is executable; other exec-once entries are recorded as prepared runtime hints\n");
 }
 
 void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
@@ -607,17 +2220,25 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   }
   out[0] = '\0';
   desktop_append(out, out_size, &used, "Orizon desktop shortcuts\n");
-  desktop_append(out, out_size, &used, "F1: open terminal window\n");
-  desktop_append(out, out_size, &used, "F2: close terminal window\n");
+  desktop_append(out, out_size, &used, "F1: dispatch exec terminal\n");
+  desktop_append(out, out_size, &used, "F2: dispatch killactive\n");
   desktop_append(out, out_size, &used, "F3: toggle launcher overlay\n");
+  desktop_append(out, out_size, &used, "F4: dispatch fullscreen\n");
+  desktop_append(out, out_size, &used, "F5: dispatch pseudo\n");
+  desktop_append(out, out_size, &used, "F6: dispatch cyclenext\n");
+  desktop_append(out, out_size, &used, "F7/F8: dispatch workspace +1/-1\n");
   desktop_append(out, out_size, &used,
-                 "click desktop / Enter / Space: reopen terminal when closed\n");
+                 "Enter / Space on empty focus: dispatch exec terminal\n");
   desktop_append(out, out_size, &used,
-                 "Hypr-style template: SUPER+Return terminal, SUPER+Q close, SUPER+D launcher placeholder\n");
+                 "Hypr-style template: SUPER+Return exec terminal, SUPER+Q killactive, SUPER+D launcher\n");
   desktop_append(out, out_size, &used,
-                 "SUPER+B: bar toggle placeholder; SUPER+R: session/settings placeholder\n");
+                 "SUPER+A: autostart settings; SUPER+B: bar toggle placeholder; SUPER+R: session/settings placeholder\n");
   desktop_append(out, out_size, &used,
-                 "workspaces: desktop workspace <n>; desktop move terminal <n>\n");
+                 "SUPER+F: focus toggle placeholder; SUPER+P: profile list placeholder\n");
+  desktop_append(out, out_size, &used,
+                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace\n");
+  desktop_append(out, out_size, &used,
+                 "dispatchers: exec terminal | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }
@@ -680,6 +2301,43 @@ void orizon_desktop_format_doctor(char *out, size_t out_size) {
   } else {
     desktop_append(out, out_size, &used, "session missing FAIL\n");
     fail = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_SETTINGS_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "settings %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_SETTINGS_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "settings missing WARN run desktop settings repair\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_BINDS_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "binds-runtime %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_BINDS_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "binds-runtime missing WARN run desktop config apply\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_AUTOSTART_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "autostart-runtime %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_AUTOSTART_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "autostart-runtime missing WARN run desktop config apply\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_RULES_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "rules-runtime %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_RULES_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  }
+  if (vfs_stat(ORIZON_DESKTOP_MONITORS_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "monitors-runtime %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_MONITORS_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
   }
   if (vfs_stat(ORIZON_DESKTOP_USER_CONFIG_PATH, &size, NULL) == 0 &&
       size > 0) {

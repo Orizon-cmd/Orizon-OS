@@ -17,6 +17,35 @@
   `desktop move terminal <n>`.
 - Added `desktop windows` and `desktop layout <name>` as the first diagnostic
   seam for future compositor window management.
+- Added `desktop profiles` and `desktop autostart terminal on|off|toggle`, and
+  aligned the generated desktop package template as `orizon-desktop-hypr` 0.3.0.
+- Added desktop presets plus `desktop focus on|off|toggle`, expanded the
+  Hyprland-style key template, and bumped `orizon-desktop-hypr` to 0.4.0.
+- Reworked the desktop direction toward Hyprland's tiling model with
+  `dwindle`/`master`/`monocle`, tiled client focus, `desktop binds`, dispatcher
+  commands, no mouse-drag window workflow, and package payload version 0.5.0.
+- Expanded the Hyprland-style dispatcher model with fullscreen, pseudo,
+  pinned, `cyclenext`, `swapnext`, relative workspaces, richer `hyprctl`
+  active-window state, and package payload version 0.6.0.
+- Added the system-wide desktop settings layer at
+  `/system/desktop-settings.conf`, `desktop settings` commands, package/install
+  generation hooks, compositor consumption of gaps/borders/shadows, and package
+  payload version 0.7.0.
+- Added desktop settings presets and validation with `desktop settings
+  presets`, `desktop settings preset <name>`, `desktop settings doctor`, and
+  package payload version 0.8.0.
+- Added VM pointer plumbing for the desktop with USB HID boot mouse and
+  QEMU-style `usb-tablet` reports routed into the compositor cursor,
+  `desktop pointer` diagnostics, and package payload version 0.9.0.
+- Added `desktop config doctor` and `desktop config apply` as a Hyprland-style
+  config bridge: Orizon now parses variables, sections, binds, monitors,
+  exec-once/env/windowrule/workspace/source keywords, applies the supported
+  layout/gaps/borders/rounding/animation/shadow/input subset, and bumps the
+  desktop package payload to version 0.10.0.
+- Persisted generated Hyprland-style runtime files for config-applied binds,
+  autostart, window rules, monitor hints, and env/workspace/source intent under
+  `/system/desktop-*.conf`, exposed them through `desktop binds` and
+  `desktop autostart`, and bumped `orizon-desktop-hypr` to 0.11.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

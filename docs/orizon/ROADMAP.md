@@ -39,14 +39,19 @@
   `pre-remove`/`post-remove` scripts, explicit transaction history/state
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
-- Optional desktop profile foundation: `desktop status/config/doctor/logs`,
-  `desktop session/apps/theme/wallpaper/bar/launcher`,
+- Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs`,
+  `desktop session/settings/settings preset/settings doctor/pointer/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
-  profile. It is disabled by default, persists session settings, and currently
-  focuses on terminal open/close, a first launcher/status-bar layer, and
-  diagnostic window/workspace plumbing, not the real upstream Hyprland/Wayland
-  stack yet.
+  profile. It is disabled by default, persists session/autostart settings plus
+  a system-wide `/system/desktop-settings.conf` layer plus generated
+  `/system/desktop-binds.conf` runtime hints, and
+  currently focuses on dispatcher-driven terminal clients, relative
+  workspaces, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`,
+  a first launcher/status-bar layer, symbolic profile/preset discovery,
+  focus-follows-mouse policy, Hyprland-style config import/runtime files, pointer diagnostics, `dwindle`/`master`/`monocle` placement, and
+  diagnostic tiled client/workspace plumbing, not the real upstream
+  Hyprland/Wayland stack yet.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
   redirection, diagnostic pipes to `grep/head/tail/wc/tee/less`, persistent
@@ -83,7 +88,8 @@
   under `/system/security-policy` and `/system/security-state`, explicit SSH
   host-key rotation, release-required update/package root rotation posture, and
   audit redaction for password/write/Wi-Fi credential commands.
-- Hardware base: PS/2 and USB HID keyboard input, USB root-port rescans,
+- Hardware base: PS/2 keyboard/mouse, USB HID keyboard plus selected USB HID
+  boot mouse/QEMU-tablet input, USB root-port rescans,
   last-device inventory, USB Ethernet descriptor diagnostics for common dongle
   families, persistent `/logs/usb.log` capture with family/support/blocker
   fields, xHCI CDC-ECM raw Ethernet and Realtek RTL815x packet paths,
