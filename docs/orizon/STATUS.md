@@ -52,10 +52,10 @@ work.
   and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative workspace dispatch, dispatcher-style
-  movetoworkspace/movefocus/cyclenext/swapnext/togglesplit/layoutmsg/submap, fullscreen/pseudo/pinned client
+  movetoworkspace/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  runtime keyword/getoption inspection, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  runtime keyword/getoption inspection, split/master ratio controls, explicit orientation hints, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.
 - Installer safety: `install-plan` writes

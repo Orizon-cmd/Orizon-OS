@@ -44,7 +44,8 @@ design note.
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
   `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`,
-  `desktop keyword`, `desktop dispatch`,
+  `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
+  plus split/master ratio layout messages,
   `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
   `desktop windows/clients/activewindow`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.

@@ -183,8 +183,12 @@ desktop hyprctl keyword decoration:rounding 11
 desktop dispatch fullscreen
 desktop dispatch pseudo
 desktop dispatch cyclenext
+desktop dispatch swapwithmaster
+desktop dispatch focusmaster
 desktop dispatch togglesplit
 desktop dispatch layoutmsg splitratio 60
+desktop dispatch layoutmsg masterratio 65
+desktop dispatch layoutmsg orientationleft
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop dispatch movetoworkspace 2

@@ -133,6 +133,10 @@ desktop hyprctl clients
 desktop hyprctl activewindow
 desktop dispatch togglesplit
 desktop dispatch layoutmsg splitratio 60
+desktop dispatch layoutmsg splitratio +5
+desktop dispatch layoutmsg masterratio 65
+desktop dispatch focusmaster
+desktop dispatch swapwithmaster
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop doctor
@@ -142,7 +146,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.16.0` because it includes policy/config files, the persisted session
+`0.17.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings presets/doctor
 commands, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/runtime hint files, runtime inspection
@@ -151,7 +155,7 @@ commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorat
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
-focus-cycle/swap/togglesplit/layoutmsg/submap actions, and commands used by `desktop theme`,
+focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/submap actions, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
 the launcher.
 

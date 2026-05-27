@@ -2843,7 +2843,7 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
   if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
       pkg_text_matches_query("desktop hypr hyprland optional", query)) {
     snprintf(line, sizeof(line),
-             "available %s 0.16.0 optional install='pkg install %s'",
+             "available %s 0.17.0 optional install='pkg install %s'",
              ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
     pkg_append_line(out, out_size, line);
     matches++;
@@ -2937,7 +2937,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     if (pkg_name_is_desktop_alias(name)) {
       pkg_append_line(out, out_size, "Orizon package");
       pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
-      pkg_append_line(out, out_size, "version 0.16.0");
+      pkg_append_line(out, out_size, "version 0.17.0");
       pkg_append_line(out, out_size, "state available optional");
       pkg_append_line(out, out_size,
                       "type local generated package; not installed yet");
@@ -3605,6 +3605,10 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "dispatch-command = desktop dispatch <dispatcher> [args]\n"
       "dispatch-togglesplit-command = desktop dispatch togglesplit\n"
       "dispatch-layoutmsg-command = desktop dispatch layoutmsg <message>\n"
+      "dispatch-focusmaster-command = desktop dispatch focusmaster\n"
+      "dispatch-swapwithmaster-command = desktop dispatch swapwithmaster\n"
+      "dispatch-splitratio-command = desktop dispatch layoutmsg splitratio <10-90|+/-n>\n"
+      "dispatch-masterratio-command = desktop dispatch layoutmsg masterratio <10-90|+/-n>\n"
       "dispatch-submap-command = desktop dispatch submap <name|reset>\n"
       "hyprctl-command = desktop hyprctl <command>\n"
       "hyprctl-version-command = desktop hyprctl version\n"
@@ -3663,7 +3667,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   snprintf(header, sizeof(header),
            "orizon-package 1\n"
            "name " ORIZON_DESKTOP_PACKAGE "\n"
-           "version 0.16.0\n"
+           "version 0.17.0\n"
            "depends orizon-core core-x86_64\n"
            "depends orizon-packages text-payload-v5\n"
            "depends orizon-desktop-base hyprland-style-profile-runtime\n"

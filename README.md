@@ -142,10 +142,11 @@ instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
 `desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
-`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|togglesplit|layoutmsg|submap`
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs, layouts
-`dwindle/master/monocle`, sans deplacement manuel de fenetres a la souris.
+`dwindle/master/monocle`, split/master ratios, orientations explicites
+`orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 `desktop windows`, `desktop clients`, `desktop activewindow` et `desktop
 focus-history` exposent les clients tiles, adresses stables, geometries,
 workspace courant/precedent et `focusHistoryID`. `desktop

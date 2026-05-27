@@ -3766,7 +3766,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop runtime         - Show generated Hyprland-style runtime files\n");
     term_puts_t(term, "  desktop layers          - Show compositor layer model\n");
     term_puts_t(term, "  desktop keyword <k> <v> - Apply one Hyprland-style runtime keyword\n");
-    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/submap/togglesplit\n");
+    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/master/submap/togglesplit\n");
     term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like status/keyword/dispatch facade\n");
     term_puts_t(term, "  desktop autostart       - Show or configure startup apps\n");
     term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
@@ -3781,8 +3781,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
     term_puts_t(term, "  desktop workspace [n]   - Show or switch workspace\n");
     term_puts_t(term, "  desktop dispatch movetoworkspace <n|+1|-1> - Move focused client\n");
-    term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|togglesplit - Hyprland-like actions\n");
-    term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/master actions\n");
+    term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster - Hyprland-like actions\n");
+    term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/masterratio actions\n");
     term_puts_t(term, "  desktop dispatch submap <name|reset> - Set active submap\n");
     term_puts_t(term, "  desktop reset           - Disable and restore default policy\n");
     term_puts_t(term, "  desktop write-config    - Rewrite Hypr-style user config\n");

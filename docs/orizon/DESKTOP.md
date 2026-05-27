@@ -77,8 +77,15 @@ desktop dispatch pseudo
 desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
+desktop dispatch swapwithmaster
+desktop dispatch focusmaster
 desktop dispatch togglesplit
 desktop dispatch layoutmsg splitratio 60
+desktop dispatch layoutmsg splitratio +5
+desktop dispatch layoutmsg masterratio 65
+desktop dispatch layoutmsg mfact -5
+desktop dispatch layoutmsg orientationleft
+desktop dispatch layoutmsg orientationtop
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
@@ -221,8 +228,9 @@ runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
 dispatch movetoworkspace <n>`, and `desktop dispatch movefocus next|prev`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
-`swapnext`. Layout/submap dispatchers now include `togglesplit`,
-`layoutmsg orientationnext|orientationprev|splitratio <10-90>|focusmaster|swapwithmaster`,
+`swapnext`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
+dispatchers now include `togglesplit`,
+`layoutmsg orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
 and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, and `workspace previous` are understood for VM-safe desktop flow.
 

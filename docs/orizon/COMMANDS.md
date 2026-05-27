@@ -148,8 +148,15 @@ desktop dispatch pseudo
 desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
+desktop dispatch swapwithmaster
+desktop dispatch focusmaster
 desktop dispatch togglesplit
 desktop dispatch layoutmsg splitratio 60
+desktop dispatch layoutmsg splitratio +5
+desktop dispatch layoutmsg masterratio 65
+desktop dispatch layoutmsg mfact -5
+desktop dispatch layoutmsg orientationleft
+desktop dispatch layoutmsg orientationtop
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
@@ -263,7 +270,10 @@ animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
-`fullscreen`, `pseudo`, `pin`, `togglesplit`, `layoutmsg`, and `submap`,
+`focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
+`togglesplit`, `layoutmsg`, and `submap`,
+including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
+explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
