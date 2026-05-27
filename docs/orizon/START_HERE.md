@@ -45,7 +45,7 @@ design note.
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
   `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog`,
   `desktop keyword`, `desktop dispatch`,
-  `desktop hyprctl version/systeminfo/activeworkspace/layouts/animations/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
+  `desktop hyprctl version/systeminfo/activeworkspace/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
   `desktop windows`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`

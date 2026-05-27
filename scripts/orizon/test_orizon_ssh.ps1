@@ -91,6 +91,10 @@ $commands = @(
   "desktop systeminfo",
   "desktop layouts",
   "desktop animations",
+  "desktop decorations",
+  "desktop descriptions",
+  "desktop instances",
+  "desktop submap",
   "desktop configerrors",
   "desktop rollinglog",
   "desktop keyword general:gaps_in 9",
@@ -99,6 +103,10 @@ $commands = @(
   "desktop hyprctl activeworkspace",
   "desktop hyprctl layouts",
   "desktop hyprctl animations",
+  "desktop hyprctl decorations",
+  "desktop hyprctl descriptions",
+  "desktop hyprctl instances",
+  "desktop hyprctl submap",
   "desktop hyprctl cursorpos",
   "desktop hyprctl devices",
   "desktop hyprctl splash",
@@ -116,6 +124,11 @@ $commands = @(
   "desktop dispatch exec terminal",
   "desktop dispatch cyclenext",
   "desktop dispatch swapnext",
+  "desktop dispatch togglesplit",
+  "desktop dispatch layoutmsg splitratio 60",
+  "desktop dispatch submap resize",
+  "desktop hyprctl submap",
+  "desktop hyprctl submap reset",
   "desktop dispatch fullscreen",
   "desktop dispatch pseudo",
   "desktop dispatch pin",
@@ -477,6 +490,18 @@ run_cmd() {
     "desktop animations"|"desktop hyprctl animations")
       grep -q "Orizon desktop animations" "`$OUT" && grep -q "animations:enabled" "`$OUT" || { echo "missing desktop animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop decorations"|"desktop hyprctl decorations")
+      grep -q "Orizon desktop decorations" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop descriptions"|"desktop hyprctl descriptions")
+      grep -q "Orizon desktop hyprctl descriptions" "`$OUT" && grep -q "layoutmsg" "`$OUT" || { echo "missing desktop descriptions"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop instances"|"desktop hyprctl instances")
+      grep -q "Orizon desktop instances" "`$OUT" && grep -q "orizon-framebuffer-main" "`$OUT" || { echo "missing desktop instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop submap")
+      grep -q "submap:" "`$OUT" || { echo "missing desktop submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop configerrors"|"desktop hyprctl configerrors")
       grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -521,6 +546,21 @@ run_cmd() {
       ;;
     "desktop dispatch swapnext")
       grep -q "desktop dispatch: swapnext" "`$OUT" || { echo "missing desktop dispatch swapnext"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch togglesplit")
+      grep -q "desktop dispatch: togglesplit" "`$OUT" && grep -q "split=" "`$OUT" || { echo "missing desktop dispatch togglesplit"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg splitratio 60")
+      grep -q "desktop dispatch: layoutmsg splitratio 60" "`$OUT" || { echo "missing desktop dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch submap resize")
+      grep -q "desktop dispatch: submap resize" "`$OUT" || { echo "missing desktop dispatch submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl submap")
+      grep -q "submap:" "`$OUT" || { echo "missing hyprctl submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl submap reset")
+      grep -q "desktop dispatch: submap default" "`$OUT" || { echo "missing hyprctl submap reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch fullscreen")
       grep -q "desktop dispatch: fullscreen" "`$OUT" || { echo "missing desktop dispatch fullscreen"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

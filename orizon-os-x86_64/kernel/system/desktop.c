@@ -95,11 +95,17 @@ static const char *desktop_user_config =
     "bind = $mod, M, fullscreen\n"
     "bind = $mod, P, pseudo\n"
     "bind = $mod SHIFT, P, pin\n"
+    "bind = $mod, J, togglesplit\n"
+    "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
+    "bind = $mod, S, layoutmsg, swapwithmaster\n"
+    "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+    "bind = $mod, R, submap, resize\n"
+    "bind = $mod SHIFT, R, submap, reset\n"
     "bind = $mod, H, movefocus, l\n"
     "bind = $mod, L, movefocus, r\n"
     "bind = $mod, Tab, cyclenext\n"
     "bind = $mod SHIFT, Tab, swapnext\n"
-    "bind = $mod, R, exec, desktop session\n"
+    "bind = $mod, C, exec, desktop session\n"
     "bind = $mod, 1, workspace, 1\n"
     "bind = $mod, 2, workspace, 2\n"
     "bind = $mod, 3, workspace, 3\n"
@@ -110,6 +116,7 @@ static const char *desktop_user_config =
     "bind = F2, killactive\n"
     "bind = F4, fullscreen\n"
     "bind = F5, pseudo\n"
+    "submap = default\n"
     "dwindle:pseudotile = true\n"
     "dwindle:preserve_split = true\n";
 
@@ -122,6 +129,8 @@ static const char *desktop_binds_runtime_config =
     "bind = $mod, D, exec, orizon-launcher\n"
     "bind = $mod, M, fullscreen\n"
     "bind = $mod, P, pseudo\n"
+    "bind = $mod, J, togglesplit\n"
+    "bind = $mod, S, layoutmsg, swapwithmaster\n"
     "bind = $mod, 1, workspace, 1\n"
     "bind = $mod SHIFT, 1, movetoworkspace, 1\n";
 
@@ -149,6 +158,7 @@ static const char *desktop_runtime_config =
     "source built-in-template\n"
     "env-count 0\n"
     "workspace-hints 0\n"
+    "submap = default\n"
     "sources 1\n"
     "source = ~/.config/hypr/orizon-local.conf\n";
 
@@ -368,6 +378,7 @@ typedef struct {
   int windowrules;
   int workspaces;
   int sources;
+  int submaps;
   int supported_settings;
   int prepared_keywords;
   int ignored_keywords;
@@ -484,7 +495,7 @@ static int desktop_hypr_key_global(const char *key) {
          strcmp(key, "windowrule") == 0 ||
          strcmp(key, "windowrulev2") == 0 ||
          strcmp(key, "workspace") == 0 || strcmp(key, "source") == 0 ||
-         key[0] == '$';
+         strcmp(key, "submap") == 0 || key[0] == '$';
 }
 
 static void desktop_hypr_join_key(char sections[][32], int depth,
@@ -533,7 +544,9 @@ static int desktop_hypr_dispatch_supported(const char *value) {
           strstr(value, "workspace") || strstr(value, "movetoworkspace") ||
           strstr(value, "movefocus") || strstr(value, "fullscreen") ||
           strstr(value, "pseudo") || strstr(value, "pin") ||
-          strstr(value, "cyclenext") || strstr(value, "swapnext"));
+          strstr(value, "cyclenext") || strstr(value, "swapnext") ||
+          strstr(value, "togglesplit") || strstr(value, "layoutmsg") ||
+          strstr(value, "submap"));
 }
 
 static int desktop_hypr_key_safe(const char *value) {
@@ -643,7 +656,8 @@ static const char *desktop_hypr_runtime_path_for_key(const char *key) {
     return ORIZON_DESKTOP_RULES_PATH;
   }
   if (strcmp(key, "env") == 0 || strcmp(key, "workspace") == 0 ||
-      strcmp(key, "source") == 0 || key[0] == '$') {
+      strcmp(key, "source") == 0 || strcmp(key, "submap") == 0 ||
+      key[0] == '$') {
     return ORIZON_DESKTOP_RUNTIME_PATH;
   }
   return NULL;
@@ -756,6 +770,16 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
   }
   if (strcmp(key, "source") == 0) {
     summary->sources++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "submap") == 0) {
+    summary->submaps++;
     summary->prepared_keywords++;
     if (apply && runtime) {
       desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
@@ -2005,10 +2029,11 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.malformed_lines);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d exec-once=%d env=%d windowrules=%d workspaces=%d sources=%d\n",
+           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d exec-once=%d env=%d windowrules=%d workspaces=%d sources=%d submaps=%d\n",
            summary.variables, summary.monitors, summary.binds,
            summary.supported_binds, summary.exec_once, summary.envs,
-           summary.windowrules, summary.workspaces, summary.sources);
+           summary.windowrules, summary.workspaces, summary.sources,
+           summary.submaps);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "apply-support: settings=%d prepared=%d ignored=%d\n",
@@ -2018,7 +2043,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled; animations:enabled; input:kb_layout,follow_mouse; exec-once terminal\n");
   desktop_append(out, out_size, &used,
-                 "runtime-hints: monitor, bind/bindm/bindr, env, windowrule/windowrulev2, workspace, source -> /system/desktop-*.conf\n");
+                 "runtime-hints: monitor, bind/bindm/bindr, env, windowrule/windowrulev2, workspace, source, submap -> /system/desktop-*.conf\n");
   desktop_append(out, out_size, &used,
                  "apply: desktop config apply  # writes supported values into session/settings\n");
   snprintf(line, sizeof(line), "summary: %s\n",
@@ -2116,7 +2141,7 @@ void orizon_desktop_format_runtime(char *out, size_t out_size) {
   desktop_append_file_dump(out, out_size, &used, "runtime-state",
                            ORIZON_DESKTOP_RUNTIME_PATH);
   desktop_append(out, out_size, &used,
-                 "commands: desktop keyword <key> <value> | desktop config apply | desktop hyprctl getoption <key>\n");
+                 "commands: desktop keyword <key> <value> | desktop config apply | desktop hyprctl getoption <key> | desktop dispatch submap <name>\n");
 }
 
 void orizon_desktop_format_rules(char *out, size_t out_size) {

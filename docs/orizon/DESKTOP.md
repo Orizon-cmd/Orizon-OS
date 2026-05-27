@@ -38,6 +38,10 @@ desktop devices
 desktop systeminfo
 desktop layouts
 desktop animations
+desktop decorations
+desktop descriptions
+desktop instances
+desktop submap
 desktop configerrors
 desktop rollinglog
 desktop keyword general:gaps_in 9
@@ -46,6 +50,10 @@ desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl animations
+desktop hyprctl decorations
+desktop hyprctl descriptions
+desktop hyprctl instances
+desktop hyprctl submap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -67,6 +75,10 @@ desktop dispatch pseudo
 desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
+desktop dispatch togglesplit
+desktop dispatch layoutmsg splitratio 60
+desktop dispatch submap resize
+desktop hyprctl submap reset
 desktop windows
 desktop workspace
 desktop workspace 2
@@ -120,7 +132,7 @@ restores the last removed desktop package snapshot.
 `desktop config doctor` parses the Hyprland-style user config at
 `/home/orizon/.config/hypr/orizon-hypr.conf`. It understands common Hyprland
 shape such as variables, section blocks, `monitor`, `bind`, `exec-once`, `env`,
-`workspace`, `windowrule`, and `source`, and reports what is supported today,
+`workspace`, `windowrule`, `source`, and `submap`, and reports what is supported today,
 persisted as runtime hints, ignored, or malformed. `desktop config apply`
 imports the supported subset into Orizon's runtime files: layout, gaps, border
 size, rounding, shadows, animations, keyboard layout, focus-follows-mouse, and
@@ -194,21 +206,24 @@ runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop layouts`, `desktop animations`,
-`desktop configerrors`, and `desktop rollinglog` mirror common Hyprland
-inspection habits while staying honest about Orizon's framebuffer backend.
+`desktop configerrors`, `desktop rollinglog`, `desktop decorations`,
+`desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
+Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
-`workspace`, `source`, variables, and binds. `desktop dispatch exec terminal`,
+`workspace`, `source`, `submap`, variables, and binds. `desktop dispatch exec terminal`,
 `desktop dispatch killactive`, `desktop dispatch workspace <n>`, `desktop
 dispatch movetoworkspace <n>`, and `desktop dispatch movefocus next|prev`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
-`swapnext`. Relative workspace targets such as `workspace +1`, `workspace -1`,
-and `workspace previous` are understood for VM-safe desktop flow.
+`swapnext`. Layout/submap dispatchers now include `togglesplit`,
+`layoutmsg orientationnext|orientationprev|splitratio <10-90>|focusmaster|swapwithmaster`,
+and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
+`workspace -1`, and `workspace previous` are understood for VM-safe desktop flow.
 
 `desktop hyprctl
-version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
+version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>

@@ -61,7 +61,7 @@ le developpement noyau:
   workspaces runtime, dispatchers Hyprland-like, fullscreen/pseudo/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, diagnostics
   `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog`, facade
-  `desktop hyprctl version/systeminfo/activeworkspace/layouts/animations/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop hyprctl version/systeminfo/activeworkspace/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2 et raccourcis F4-F8; ce n'est
   pas encore le vrai Hyprland/Wayland
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
@@ -136,11 +136,12 @@ USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
 `desktop version`, `desktop devices`, `desktop systeminfo`, `desktop layouts`,
-`desktop animations`, `desktop configerrors`, `desktop rollinglog`, `desktop
+`desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop
+instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`, `desktop
 keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|activeworkspace|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|activeworkspace|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
-`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext`
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|togglesplit|layoutmsg|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs, layouts
 `dwindle/master/monocle`, sans deplacement manuel de fenetres a la souris.

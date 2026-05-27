@@ -40,17 +40,17 @@
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs`,
-  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/configerrors/rollinglog/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
+  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
   profile. It is disabled by default, persists session/autostart settings plus
   a system-wide `/system/desktop-settings.conf` layer plus generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, relative
-  workspaces, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`,
+  workspaces, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`/`togglesplit`/`layoutmsg`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  keyword/getoption runtime inspection, version/devices/systeminfo/layouts/animations/configerrors/rollinglog/cursorpos diagnostics,
+  keyword/getoption runtime inspection, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/cursorpos diagnostics,
   pointer diagnostics,
   `dwindle`/`master`/`monocle` placement, and
   diagnostic tiled client/workspace plumbing, not the real upstream

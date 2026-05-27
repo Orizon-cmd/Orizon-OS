@@ -104,6 +104,10 @@ desktop devices
 desktop systeminfo
 desktop layouts
 desktop animations
+desktop decorations
+desktop descriptions
+desktop instances
+desktop submap
 desktop configerrors
 desktop rollinglog
 desktop keyword general:gaps_in 9
@@ -112,6 +116,10 @@ desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl animations
+desktop hyprctl decorations
+desktop hyprctl descriptions
+desktop hyprctl instances
+desktop hyprctl submap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -119,6 +127,10 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop dispatch togglesplit
+desktop dispatch layoutmsg splitratio 60
+desktop dispatch submap resize
+desktop hyprctl submap reset
 desktop doctor
 ```
 
@@ -126,15 +138,15 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.14.0` because it includes policy/config files, the persisted session
+`0.15.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings presets/doctor
 commands, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/layouts/animations/configerrors/rollinglog diagnostics, the
-`hyprctl version/systeminfo/activeworkspace/layouts/animations/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog diagnostics, the
+`hyprctl version/systeminfo/activeworkspace/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
-state, focus-cycle/swap actions, and commands used by `desktop theme`,
+state, focus-cycle/swap/togglesplit/layoutmsg/submap actions, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
 the launcher.
 

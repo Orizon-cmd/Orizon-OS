@@ -2843,7 +2843,7 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
   if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
       pkg_text_matches_query("desktop hypr hyprland optional", query)) {
     snprintf(line, sizeof(line),
-             "available %s 0.14.0 optional install='pkg install %s'",
+             "available %s 0.15.0 optional install='pkg install %s'",
              ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
     pkg_append_line(out, out_size, line);
     matches++;
@@ -2937,7 +2937,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     if (pkg_name_is_desktop_alias(name)) {
       pkg_append_line(out, out_size, "Orizon package");
       pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
-      pkg_append_line(out, out_size, "version 0.14.0");
+      pkg_append_line(out, out_size, "version 0.15.0");
       pkg_append_line(out, out_size, "state available optional");
       pkg_append_line(out, out_size,
                       "type local generated package; not installed yet");
@@ -3504,6 +3504,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "source package-template\n"
       "env-count 0\n"
       "workspace-hints 0\n"
+      "submap = default\n"
       "sources 1\n"
       "source = ~/.config/hypr/orizon-local.conf\n"
       "content-end\n"
@@ -3536,11 +3537,17 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "bind = $mod, M, fullscreen\n"
       "bind = $mod, P, pseudo\n"
       "bind = $mod SHIFT, P, pin\n"
+      "bind = $mod, J, togglesplit\n"
+      "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
+      "bind = $mod, S, layoutmsg, swapwithmaster\n"
+      "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+      "bind = $mod, R, submap, resize\n"
+      "bind = $mod SHIFT, R, submap, reset\n"
       "bind = $mod, H, movefocus, l\n"
       "bind = $mod, L, movefocus, r\n"
       "bind = $mod, Tab, cyclenext\n"
       "bind = $mod SHIFT, Tab, swapnext\n"
-      "bind = $mod, R, exec, desktop session\n"
+      "bind = $mod, C, exec, desktop session\n"
       "bind = $mod, 1, workspace, 1\n"
       "bind = $mod, 2, workspace, 2\n"
       "bind = $mod, 3, workspace, 3\n"
@@ -3551,6 +3558,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "bind = F2, killactive\n"
       "bind = F4, fullscreen\n"
       "bind = F5, pseudo\n"
+      "submap = default\n"
       "dwindle:pseudotile = true\n"
       "dwindle:preserve_split = true\n"
       "content-end\n"
@@ -3578,6 +3586,10 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "systeminfo-command = desktop systeminfo\n"
       "layouts-command = desktop layouts\n"
       "animations-command = desktop animations\n"
+      "decorations-command = desktop decorations\n"
+      "descriptions-command = desktop descriptions\n"
+      "instances-command = desktop instances\n"
+      "submap-command = desktop submap\n"
       "configerrors-command = desktop configerrors\n"
       "rollinglog-command = desktop rollinglog\n"
       "binds-runtime = " ORIZON_DESKTOP_BINDS_PATH "\n"
@@ -3588,12 +3600,19 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "settings-path = " ORIZON_DESKTOP_SETTINGS_PATH "\n"
       "focus-command = desktop focus on|off|toggle\n"
       "dispatch-command = desktop dispatch <dispatcher> [args]\n"
+      "dispatch-togglesplit-command = desktop dispatch togglesplit\n"
+      "dispatch-layoutmsg-command = desktop dispatch layoutmsg <message>\n"
+      "dispatch-submap-command = desktop dispatch submap <name|reset>\n"
       "hyprctl-command = desktop hyprctl <command>\n"
       "hyprctl-version-command = desktop hyprctl version\n"
       "hyprctl-systeminfo-command = desktop hyprctl systeminfo\n"
       "hyprctl-activeworkspace-command = desktop hyprctl activeworkspace\n"
       "hyprctl-layouts-command = desktop hyprctl layouts\n"
       "hyprctl-animations-command = desktop hyprctl animations\n"
+      "hyprctl-decorations-command = desktop hyprctl decorations\n"
+      "hyprctl-descriptions-command = desktop hyprctl descriptions\n"
+      "hyprctl-instances-command = desktop hyprctl instances\n"
+      "hyprctl-submap-command = desktop hyprctl submap\n"
       "hyprctl-devices-command = desktop hyprctl devices\n"
       "hyprctl-cursorpos-command = desktop hyprctl cursorpos\n"
       "hyprctl-splash-command = desktop hyprctl splash\n"
@@ -3638,7 +3657,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   snprintf(header, sizeof(header),
            "orizon-package 1\n"
            "name " ORIZON_DESKTOP_PACKAGE "\n"
-           "version 0.14.0\n"
+           "version 0.15.0\n"
            "depends orizon-core core-x86_64\n"
            "depends orizon-packages text-payload-v5\n"
            "depends orizon-desktop-base hyprland-style-profile-runtime\n"

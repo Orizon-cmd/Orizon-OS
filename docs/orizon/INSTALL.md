@@ -152,6 +152,10 @@ desktop devices
 desktop systeminfo
 desktop layouts
 desktop animations
+desktop decorations
+desktop descriptions
+desktop instances
+desktop submap
 desktop configerrors
 desktop rollinglog
 desktop keyword general:gaps_in 9
@@ -162,6 +166,10 @@ desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl animations
+desktop hyprctl decorations
+desktop hyprctl descriptions
+desktop hyprctl instances
+desktop hyprctl submap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -172,6 +180,10 @@ desktop hyprctl keyword decoration:rounding 11
 desktop dispatch fullscreen
 desktop dispatch pseudo
 desktop dispatch cyclenext
+desktop dispatch togglesplit
+desktop dispatch layoutmsg splitratio 60
+desktop dispatch submap resize
+desktop hyprctl submap reset
 desktop dispatch movetoworkspace 2
 desktop dispatch workspace +1
 desktop focus toggle

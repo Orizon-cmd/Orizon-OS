@@ -3750,6 +3750,10 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop systeminfo      - Show compositor/backend/session summary\n");
     term_puts_t(term, "  desktop layouts         - Show available tiling layouts\n");
     term_puts_t(term, "  desktop animations      - Show animation policy placeholders\n");
+    term_puts_t(term, "  desktop decorations     - Show border/shadow/rounding state\n");
+    term_puts_t(term, "  desktop descriptions    - Show hyprctl/dispatcher command descriptions\n");
+    term_puts_t(term, "  desktop instances       - Show compositor instance summary\n");
+    term_puts_t(term, "  desktop submap          - Show active Hyprland-style submap\n");
     term_puts_t(term, "  desktop configerrors    - Show Hyprland-style config parser errors\n");
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
@@ -3761,7 +3765,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop runtime         - Show generated Hyprland-style runtime files\n");
     term_puts_t(term, "  desktop layers          - Show compositor layer model\n");
     term_puts_t(term, "  desktop keyword <k> <v> - Apply one Hyprland-style runtime keyword\n");
-    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/killactive/fullscreen/pseudo\n");
+    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/submap/togglesplit\n");
     term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like status/keyword/dispatch facade\n");
     term_puts_t(term, "  desktop autostart       - Show or configure startup apps\n");
     term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
@@ -3776,7 +3780,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
     term_puts_t(term, "  desktop workspace [n]   - Show or switch workspace\n");
     term_puts_t(term, "  desktop dispatch movetoworkspace <n|+1|-1> - Move focused client\n");
-    term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext - Hyprland-like client actions\n");
+    term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|togglesplit - Hyprland-like actions\n");
+    term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/master actions\n");
+    term_puts_t(term, "  desktop dispatch submap <name|reset> - Set active submap\n");
     term_puts_t(term, "  desktop reset           - Disable and restore default policy\n");
     term_puts_t(term, "  desktop write-config    - Rewrite Hypr-style user config\n");
     term_puts_t(term, "  desktop open terminal   - Compat alias for dispatch exec terminal\n");
@@ -3929,6 +3935,35 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "decorations") ||
+      term_command_is(args, "decoration")) {
+    gui_desktop_format_decorations(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "descriptions") ||
+      term_command_is(args, "description")) {
+    gui_desktop_format_descriptions(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "instances") ||
+      term_command_is(args, "instance")) {
+    gui_desktop_format_instances(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "submap")) {
+    const char *value = term_skip_spaces(args + 6);
+    if (*value == '\0' || term_command_is(value, "show") ||
+        term_command_is(value, "status")) {
+      gui_desktop_format_submap(report, sizeof(report));
+    } else {
+      gui_desktop_dispatch("submap", value, report, sizeof(report));
+    }
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "configerrors") ||
       term_command_is(args, "config-errors")) {
     orizon_desktop_format_config_errors(report, sizeof(report));
@@ -3998,7 +4033,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4023,6 +4058,20 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_layouts(report, sizeof(report));
     } else if (term_command_is(hypr, "animations")) {
       gui_desktop_format_animations(report, sizeof(report));
+    } else if (term_command_is(hypr, "decorations")) {
+      gui_desktop_format_decorations(report, sizeof(report));
+    } else if (term_command_is(hypr, "descriptions")) {
+      gui_desktop_format_descriptions(report, sizeof(report));
+    } else if (term_command_is(hypr, "instances")) {
+      gui_desktop_format_instances(report, sizeof(report));
+    } else if (term_command_is(hypr, "submap")) {
+      const char *value = term_skip_spaces(hypr + 6);
+      if (*value == '\0' || term_command_is(value, "show") ||
+          term_command_is(value, "status")) {
+        gui_desktop_format_submap(report, sizeof(report));
+      } else {
+        gui_desktop_dispatch("submap", value, report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "devices")) {
       gui_desktop_format_devices(report, sizeof(report));
     } else if (term_command_is(hypr, "cursorpos")) {

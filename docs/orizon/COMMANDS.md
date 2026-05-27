@@ -109,6 +109,10 @@ desktop devices
 desktop systeminfo
 desktop layouts
 desktop animations
+desktop decorations
+desktop descriptions
+desktop instances
+desktop submap
 desktop configerrors
 desktop rollinglog
 desktop keyword general:gaps_in 9
@@ -117,6 +121,10 @@ desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl animations
+desktop hyprctl decorations
+desktop hyprctl descriptions
+desktop hyprctl instances
+desktop hyprctl submap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -138,6 +146,10 @@ desktop dispatch pseudo
 desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
+desktop dispatch togglesplit
+desktop dispatch layoutmsg splitratio 60
+desktop dispatch submap resize
+desktop hyprctl submap reset
 desktop windows
 desktop workspace
 desktop workspace 2
@@ -240,13 +252,15 @@ and `desktop runtime` show the generated Hyprland-style runtime files,
 `desktop layers` shows the compositor layer model, `desktop version` identifies
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
-animations`, `desktop configerrors`, and `desktop rollinglog` expose more
+animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
+`desktop submap`, `desktop configerrors`, and `desktop rollinglog` expose more
 Hyprland-like inspection surfaces, `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
-`fullscreen`, `pseudo`, and `pin`, `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/binds/layers/layouts/animations/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
+`fullscreen`, `pseudo`, `pin`, `togglesplit`, `layoutmsg`, and `submap`,
+`desktop hyprctl ...` exposes
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists launcher entries, `desktop windows` lists tiled
 clients/layers, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec

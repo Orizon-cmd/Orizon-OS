@@ -3331,6 +3331,10 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop systeminfo      show compositor/backend/session summary\r\n"
              "  desktop layouts         show available tiling layouts\r\n"
              "  desktop animations      show animation policy placeholders\r\n"
+             "  desktop decorations     show border/shadow/rounding state\r\n"
+             "  desktop descriptions    show hyprctl/dispatcher command descriptions\r\n"
+             "  desktop instances       show compositor instance summary\r\n"
+             "  desktop submap          show active Hyprland-style submap\r\n"
              "  desktop configerrors    show Hyprland-style config parser errors\r\n"
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop apps            list desktop launcher apps\r\n"
@@ -3342,7 +3346,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop runtime         show generated Hyprland-style runtime files\r\n"
              "  desktop layers          show compositor layer model\r\n"
              "  desktop keyword <k> <v> apply one Hyprland-style runtime keyword\r\n"
-             "  desktop dispatch <d>    run exec/workspace/killactive/fullscreen/pseudo\r\n"
+             "  desktop dispatch <d>    run exec/workspace/layoutmsg/submap/togglesplit\r\n"
              "  desktop hyprctl <cmd>   Hyprland-like status/keyword/dispatch facade\r\n"
              "  desktop autostart       show or configure startup apps\r\n"
              "  desktop windows         list compositor windows/layers\r\n"
@@ -3357,7 +3361,9 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop focus-window next|prev change focused client\r\n"
              "  desktop workspace [n]   show or switch workspace\r\n"
              "  desktop dispatch movetoworkspace <n|+1|-1> move focused client\r\n"
-             "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext client actions\r\n"
+             "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|togglesplit client actions\r\n"
+             "  desktop dispatch layoutmsg <msg> orientation/splitratio/master actions\r\n"
+             "  desktop dispatch submap <name|reset> set active submap\r\n"
              "  desktop reset           disable and restore default policy\r\n"
              "  desktop write-config    rewrite Hypr-style user config\r\n"
              "  desktop open terminal   compat alias for dispatch exec terminal\r\n"
@@ -3463,6 +3469,23 @@ static void ssh_shell_print_desktop(const char *args) {
     gui_desktop_format_layouts(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "animations")) {
     gui_desktop_format_animations(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "decorations") ||
+             ssh_shell_command_is(sub, "decoration")) {
+    gui_desktop_format_decorations(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "descriptions") ||
+             ssh_shell_command_is(sub, "description")) {
+    gui_desktop_format_descriptions(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "instances") ||
+             ssh_shell_command_is(sub, "instance")) {
+    gui_desktop_format_instances(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "submap")) {
+    const char *value = ssh_shell_skip_spaces(sub + 6);
+    if (*value == '\0' || ssh_shell_command_is(value, "show") ||
+        ssh_shell_command_is(value, "status")) {
+      gui_desktop_format_submap(out, sizeof(out));
+    } else {
+      gui_desktop_dispatch("submap", value, out, sizeof(out));
+    }
   } else if (ssh_shell_command_is(sub, "configerrors") ||
              ssh_shell_command_is(sub, "config-errors")) {
     orizon_desktop_format_config_errors(out, sizeof(out));
@@ -3512,7 +3535,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3535,6 +3558,20 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_layouts(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "animations")) {
       gui_desktop_format_animations(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "decorations")) {
+      gui_desktop_format_decorations(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "descriptions")) {
+      gui_desktop_format_descriptions(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "instances")) {
+      gui_desktop_format_instances(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "submap")) {
+      const char *value = ssh_shell_skip_spaces(hypr + 6);
+      if (*value == '\0' || ssh_shell_command_is(value, "show") ||
+          ssh_shell_command_is(value, "status")) {
+        gui_desktop_format_submap(out, sizeof(out));
+      } else {
+        gui_desktop_dispatch("submap", value, out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "devices")) {
       gui_desktop_format_devices(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "cursorpos")) {
