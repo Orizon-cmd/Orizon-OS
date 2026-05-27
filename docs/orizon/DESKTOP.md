@@ -35,12 +35,22 @@ desktop runtime
 desktop layers
 desktop version
 desktop devices
+desktop systeminfo
+desktop layouts
+desktop animations
+desktop configerrors
+desktop rollinglog
 desktop keyword general:gaps_in 9
 desktop hyprctl version
+desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
+desktop hyprctl layouts
+desktop hyprctl animations
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
+desktop hyprctl configerrors
+desktop hyprctl rollinglog
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl activewindow
@@ -183,7 +193,10 @@ runtime` expose the generated window-rule, monitor-hint, and aggregated
 runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
-input model. `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
+input model. `desktop systeminfo`, `desktop layouts`, `desktop animations`,
+`desktop configerrors`, and `desktop rollinglog` mirror common Hyprland
+inspection habits while staying honest about Orizon's framebuffer backend.
+`desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
 `workspace`, `source`, variables, and binds. `desktop dispatch exec terminal`,
@@ -195,7 +208,7 @@ dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
 and `workspace previous` are understood for VM-safe desktop flow.
 
 `desktop hyprctl
-version|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|devices|cursorpos|splash|getoption|keyword|reload`
+version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>

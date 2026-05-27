@@ -52,6 +52,9 @@
 - Extended the Hyprland-like facade with `desktop version/devices` plus
   `desktop hyprctl version/activeworkspace/devices/cursorpos/splash`, and
   bumped `orizon-desktop-hypr` to 0.13.0.
+- Added more Hyprland-style inspection surfaces with `desktop
+  systeminfo/layouts/animations/configerrors/rollinglog`, matching `hyprctl`
+  facade commands, and bumped `orizon-desktop-hypr` to 0.14.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

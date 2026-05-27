@@ -71,6 +71,7 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
 void orizon_desktop_format_status(char *out, size_t out_size);
 void orizon_desktop_format_config(char *out, size_t out_size);
 void orizon_desktop_format_config_doctor(char *out, size_t out_size);
+void orizon_desktop_format_config_errors(char *out, size_t out_size);
 void orizon_desktop_format_hypr_option(const char *key, char *out,
                                        size_t out_size);
 void orizon_desktop_format_runtime(char *out, size_t out_size);
@@ -86,5 +87,6 @@ void orizon_desktop_format_autostart(char *out, size_t out_size);
 void orizon_desktop_format_shortcuts(char *out, size_t out_size);
 void orizon_desktop_format_doctor(char *out, size_t out_size);
 void orizon_desktop_format_log(char *out, size_t out_size);
+void orizon_desktop_format_rolling_log(char *out, size_t out_size);
 
 #endif /* _DESKTOP_H */

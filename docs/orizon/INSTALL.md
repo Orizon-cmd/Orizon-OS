@@ -149,14 +149,24 @@ desktop runtime
 desktop layers
 desktop version
 desktop devices
+desktop systeminfo
+desktop layouts
+desktop animations
+desktop configerrors
+desktop rollinglog
 desktop keyword general:gaps_in 9
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl version
+desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
+desktop hyprctl layouts
+desktop hyprctl animations
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
+desktop hyprctl configerrors
+desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
 desktop dispatch fullscreen

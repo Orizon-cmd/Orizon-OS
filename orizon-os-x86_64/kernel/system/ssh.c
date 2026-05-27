@@ -3328,6 +3328,11 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop pointer         show cursor and HID mouse/tablet diagnostics\r\n"
              "  desktop devices         show Hyprland-style input device summary\r\n"
              "  desktop version         show desktop compatibility facade version\r\n"
+             "  desktop systeminfo      show compositor/backend/session summary\r\n"
+             "  desktop layouts         show available tiling layouts\r\n"
+             "  desktop animations      show animation policy placeholders\r\n"
+             "  desktop configerrors    show Hyprland-style config parser errors\r\n"
+             "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop apps            list desktop launcher apps\r\n"
              "  desktop profiles        list themes/wallpapers/layouts\r\n"
              "  desktop preset <name>   apply graphite/moss/ember/frost/focus preset\r\n"
@@ -3451,6 +3456,19 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "version") ||
              ssh_shell_command_is(sub, "about")) {
     gui_desktop_format_hyprctl_version(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "systeminfo") ||
+             ssh_shell_command_is(sub, "system-info")) {
+    gui_desktop_format_systeminfo(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "layouts")) {
+    gui_desktop_format_layouts(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "animations")) {
+    gui_desktop_format_animations(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "configerrors") ||
+             ssh_shell_command_is(sub, "config-errors")) {
+    orizon_desktop_format_config_errors(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "rollinglog") ||
+             ssh_shell_command_is(sub, "rolling-log")) {
+    orizon_desktop_format_rolling_log(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
     orizon_desktop_format_apps(out, sizeof(out));
@@ -3494,9 +3512,11 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|devices|cursorpos|splash|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "systeminfo")) {
+      gui_desktop_format_systeminfo(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "clients")) {
       gui_desktop_format_windows(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "workspaces")) {
@@ -3511,12 +3531,20 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_binds(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layers")) {
       gui_desktop_format_layers(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "layouts")) {
+      gui_desktop_format_layouts(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "animations")) {
+      gui_desktop_format_animations(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "devices")) {
       gui_desktop_format_devices(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "cursorpos")) {
       gui_desktop_format_cursorpos(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "splash")) {
       gui_desktop_format_splash(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "configerrors")) {
+      orizon_desktop_format_config_errors(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "rollinglog")) {
+      orizon_desktop_format_rolling_log(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "getoption")) {
       const char *key = ssh_shell_skip_spaces(hypr + 9);
       if (*key == '\0') {

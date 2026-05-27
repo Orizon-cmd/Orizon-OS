@@ -2026,6 +2026,51 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
 }
 
+void orizon_desktop_format_config_errors(char *out, size_t out_size) {
+  char cfg[4096];
+  char line[256];
+  size_t used = 0;
+  int n;
+  desktop_hypr_summary_t summary;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  memset(&summary, 0, sizeof(summary));
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Hyprland config errors\n");
+  snprintf(line, sizeof(line), "path: %s\n",
+           ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append(out, out_size, &used, line);
+  n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                             sizeof(cfg));
+  if (n <= 0) {
+    snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
+    desktop_append(out, out_size, &used,
+                   "source: built-in template preview\n");
+  } else {
+    desktop_append(out, out_size, &used, "source: user config\n");
+  }
+  desktop_hypr_scan_config(cfg, 0, &summary, NULL, NULL, NULL);
+  snprintf(line, sizeof(line),
+           "summary: %s parsed=%d malformed=%d ignored=%d prepared=%d\n",
+           summary.malformed_lines ? "WARN" : "PASS", summary.parsed_lines,
+           summary.malformed_lines, summary.ignored_keywords,
+           summary.prepared_keywords);
+  desktop_append(out, out_size, &used, line);
+  if (summary.malformed_lines == 0) {
+    desktop_append(out, out_size, &used,
+                   "errors: none in the supported Orizon parser subset\n");
+  } else {
+    desktop_append(out, out_size, &used,
+                   "errors: malformed lines detected; run desktop config doctor for details\n");
+  }
+  desktop_append(out, out_size, &used,
+                 "notes: unsupported but safe Hyprland keywords are reported as ignored/prepared, not hard errors\n");
+}
+
 static void desktop_append_file_dump(char *out, size_t out_size, size_t *used,
                                      const char *title, const char *path) {
   char line[160];
@@ -2221,7 +2266,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl clients|workspaces|activewindow|monitors|binds|layers|getoption|keyword|dispatch\n");
+                 "hyprctl: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch terminal\n");
   desktop_append(out, out_size, &used,
@@ -2678,6 +2723,32 @@ void orizon_desktop_format_log(char *out, size_t out_size) {
   out[0] = '\0';
   desktop_append(out, out_size, &used, "desktop log:\n");
   desktop_append(out, out_size, &used, "path: " ORIZON_DESKTOP_LOG_PATH "\n");
+  n = desktop_read_text_file(ORIZON_DESKTOP_LOG_PATH, log, sizeof(log));
+  if (n <= 0) {
+    desktop_append(out, out_size, &used, "empty\n");
+    return;
+  }
+  desktop_append(out, out_size, &used, log);
+  if (out[0] && out[strlen(out) - 1] != '\n') {
+    desktop_append(out, out_size, &used, "\n");
+  }
+}
+
+void orizon_desktop_format_rolling_log(char *out, size_t out_size) {
+  char log[1536];
+  size_t used = 0;
+  int n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_append(out, out_size, &used,
+                 "Hyprland rolling log\n");
+  desktop_append(out, out_size, &used,
+                 "source: Orizon desktop event log\n");
+  desktop_append(out, out_size, &used,
+                 "path: " ORIZON_DESKTOP_LOG_PATH "\n");
   n = desktop_read_text_file(ORIZON_DESKTOP_LOG_PATH, log, sizeof(log));
   if (n <= 0) {
     desktop_append(out, out_size, &used, "empty\n");

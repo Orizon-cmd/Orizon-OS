@@ -88,12 +88,22 @@ $commands = @(
   "desktop layers",
   "desktop version",
   "desktop devices",
+  "desktop systeminfo",
+  "desktop layouts",
+  "desktop animations",
+  "desktop configerrors",
+  "desktop rollinglog",
   "desktop keyword general:gaps_in 9",
   "desktop hyprctl version",
+  "desktop hyprctl systeminfo",
   "desktop hyprctl activeworkspace",
+  "desktop hyprctl layouts",
+  "desktop hyprctl animations",
   "desktop hyprctl cursorpos",
   "desktop hyprctl devices",
   "desktop hyprctl splash",
+  "desktop hyprctl configerrors",
+  "desktop hyprctl rollinglog",
   "desktop hyprctl getoption general:gaps_in",
   "desktop hyprctl keyword decoration:rounding 11",
   "desktop hyprctl getoption decoration:rounding",
@@ -457,6 +467,21 @@ run_cmd() {
       ;;
     "desktop devices"|"desktop hyprctl devices")
       grep -q "Orizon desktop devices" "`$OUT" && grep -q "manual-window-drag: no" "`$OUT" || { echo "missing desktop devices"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop systeminfo"|"desktop hyprctl systeminfo")
+      grep -q "Orizon desktop systeminfo" "`$OUT" && grep -q "not upstream Hyprland" "`$OUT" || { echo "missing desktop systeminfo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop layouts"|"desktop hyprctl layouts")
+      grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop animations"|"desktop hyprctl animations")
+      grep -q "Orizon desktop animations" "`$OUT" && grep -q "animations:enabled" "`$OUT" || { echo "missing desktop animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop configerrors"|"desktop hyprctl configerrors")
+      grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop rollinglog"|"desktop hyprctl rollinglog")
+      grep -q "Hyprland rolling log" "`$OUT" && grep -q "/logs/desktop.log" "`$OUT" || { echo "missing desktop rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop keyword general:gaps_in 9"|"desktop hyprctl keyword decoration:rounding 11")
       grep -q "desktop keyword: applied" "`$OUT" || { echo "missing desktop keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

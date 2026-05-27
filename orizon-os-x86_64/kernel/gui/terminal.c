@@ -3747,6 +3747,11 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop pointer         - Show cursor and HID mouse/tablet diagnostics\n");
     term_puts_t(term, "  desktop devices         - Show Hyprland-style input device summary\n");
     term_puts_t(term, "  desktop version         - Show desktop compatibility facade version\n");
+    term_puts_t(term, "  desktop systeminfo      - Show compositor/backend/session summary\n");
+    term_puts_t(term, "  desktop layouts         - Show available tiling layouts\n");
+    term_puts_t(term, "  desktop animations      - Show animation policy placeholders\n");
+    term_puts_t(term, "  desktop configerrors    - Show Hyprland-style config parser errors\n");
+    term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
     term_puts_t(term, "  desktop profiles        - List themes/wallpapers/layouts\n");
     term_puts_t(term, "  desktop preset <name>   - Apply graphite/moss/ember/frost/focus preset\n");
@@ -3908,6 +3913,34 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "systeminfo") ||
+      term_command_is(args, "system-info")) {
+    gui_desktop_format_systeminfo(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "layouts")) {
+    gui_desktop_format_layouts(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "animations")) {
+    gui_desktop_format_animations(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "configerrors") ||
+      term_command_is(args, "config-errors")) {
+    orizon_desktop_format_config_errors(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "rollinglog") ||
+      term_command_is(args, "rolling-log")) {
+    orizon_desktop_format_rolling_log(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     orizon_desktop_format_apps(report, sizeof(report));
     term_puts_t(term, report);
@@ -3965,11 +3998,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|devices|cursorpos|splash|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(report, sizeof(report));
+    } else if (term_command_is(hypr, "systeminfo")) {
+      gui_desktop_format_systeminfo(report, sizeof(report));
     } else if (term_command_is(hypr, "clients")) {
       gui_desktop_format_windows(report, sizeof(report));
     } else if (term_command_is(hypr, "workspaces")) {
@@ -3984,12 +4019,20 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_binds(report, sizeof(report));
     } else if (term_command_is(hypr, "layers")) {
       gui_desktop_format_layers(report, sizeof(report));
+    } else if (term_command_is(hypr, "layouts")) {
+      gui_desktop_format_layouts(report, sizeof(report));
+    } else if (term_command_is(hypr, "animations")) {
+      gui_desktop_format_animations(report, sizeof(report));
     } else if (term_command_is(hypr, "devices")) {
       gui_desktop_format_devices(report, sizeof(report));
     } else if (term_command_is(hypr, "cursorpos")) {
       gui_desktop_format_cursorpos(report, sizeof(report));
     } else if (term_command_is(hypr, "splash")) {
       gui_desktop_format_splash(report, sizeof(report));
+    } else if (term_command_is(hypr, "configerrors")) {
+      orizon_desktop_format_config_errors(report, sizeof(report));
+    } else if (term_command_is(hypr, "rollinglog")) {
+      orizon_desktop_format_rolling_log(report, sizeof(report));
     } else if (term_command_is(hypr, "getoption")) {
       const char *key = term_skip_spaces(hypr + 9);
       if (*key == '\0') {

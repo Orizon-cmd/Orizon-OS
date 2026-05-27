@@ -106,12 +106,22 @@ desktop runtime
 desktop layers
 desktop version
 desktop devices
+desktop systeminfo
+desktop layouts
+desktop animations
+desktop configerrors
+desktop rollinglog
 desktop keyword general:gaps_in 9
 desktop hyprctl version
+desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
+desktop hyprctl layouts
+desktop hyprctl animations
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
+desktop hyprctl configerrors
+desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
 desktop hyprctl binds
@@ -229,12 +239,14 @@ prepared layout profile, `desktop binds`, `desktop rules`, `desktop monitors`,
 and `desktop runtime` show the generated Hyprland-style runtime files,
 `desktop layers` shows the compositor layer model, `desktop version` identifies
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
-and pointer inputs, `desktop keyword <key> <value>` applies a single
+and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
+animations`, `desktop configerrors`, and `desktop rollinglog` expose more
+Hyprland-like inspection surfaces, `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
 `fullscreen`, `pseudo`, and `pin`, `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/clients/workspaces/activeworkspace/monitors/activewindow/binds/layers/devices/cursorpos/splash/getoption/keyword/dispatch,
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/binds/layers/layouts/animations/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists launcher entries, `desktop windows` lists tiled
 clients/layers, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec

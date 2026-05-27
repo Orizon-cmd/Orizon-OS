@@ -4,6 +4,7 @@ import argparse
 import base64
 import json
 import re
+import sys
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -31,6 +32,28 @@ STATUS_SKIP = "SKIP"
 KEYMAP = {" ": "KEY_SPACE", "\n": "KEY_ENTER", "-": "KEY_MINUS"}
 for _ch in "abcdefghijklmnopqrstuvwxyz0123456789":
     KEYMAP[_ch] = "KEY_" + _ch.upper()
+
+
+def print_console(text: str) -> None:
+    try:
+        print(text)
+        return
+    except OSError:
+        pass
+
+    safe = []
+    for ch in text:
+        code = ord(ch)
+        if ch in "\n\r\t":
+            safe.append(ch)
+        elif ch == "\x1b":
+            safe.append(ch)
+        elif 0x20 <= code <= 0xD7FF or 0xE000 <= code <= 0x10FFFF:
+            safe.append(ch)
+        else:
+            safe.append("\uFFFD")
+    sys.stdout.write("".join(safe) + "\n")
+    sys.stdout.flush()
 
 
 def matrix_config(base: dict, case_name: str, overrides: dict) -> dict:
@@ -416,12 +439,22 @@ def run_ssh_checks(
         ("desktop layers", "Orizon desktop layers"),
         ("desktop version", "Orizon desktop hyprctl version"),
         ("desktop devices", "Orizon desktop devices"),
+        ("desktop systeminfo", "Orizon desktop systeminfo"),
+        ("desktop layouts", "Orizon desktop layouts"),
+        ("desktop animations", "Orizon desktop animations"),
+        ("desktop configerrors", "Hyprland config errors"),
+        ("desktop rollinglog", "Hyprland rolling log"),
         ("desktop keyword general:gaps_in 9", "desktop keyword: applied"),
         ("desktop hyprctl version", "Orizon desktop hyprctl version"),
+        ("desktop hyprctl systeminfo", "Orizon desktop systeminfo"),
         ("desktop hyprctl activeworkspace", "active workspace:"),
+        ("desktop hyprctl layouts", "Orizon desktop layouts"),
+        ("desktop hyprctl animations", "Orizon desktop animations"),
         ("desktop hyprctl cursorpos", "cursorpos:"),
         ("desktop hyprctl devices", "Orizon desktop devices"),
         ("desktop hyprctl splash", "Orizon desktop splash"),
+        ("desktop hyprctl configerrors", "Hyprland config errors"),
+        ("desktop hyprctl rollinglog", "Hyprland rolling log"),
         ("desktop hyprctl getoption general:gaps_in", "value: 9"),
         ("desktop hyprctl keyword decoration:rounding 11", "desktop keyword: applied"),
         ("desktop hyprctl getoption decoration:rounding", "value: 11"),
@@ -798,7 +831,7 @@ def main() -> int:
                     include_update=args.include_update,
                 )
                 case_log.append(output)
-                print(output)
+                print_console(output)
                 if args.include_lifecycle:
                     lifecycle = run_lifecycle_checks(
                         client,
@@ -810,7 +843,7 @@ def main() -> int:
                         ssh_timeout=args.ssh_timeout,
                     )
                     case_log.append(lifecycle)
-                    print(lifecycle)
+                    print_console(lifecycle)
                 results.append(
                     matrix_result(
                         case_name,

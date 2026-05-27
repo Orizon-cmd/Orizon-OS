@@ -1605,6 +1605,53 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
   }
 }
 
+void gui_desktop_format_layouts(char *out, size_t out_size) {
+  int total = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      total++;
+    }
+  }
+  snprintf(out, out_size,
+           "Orizon desktop layouts\n"
+           "current: %s\n"
+           "available:\n"
+           "  dwindle enabled=yes description=dynamic split tiling\n"
+           "  master enabled=yes description=main-area plus stack\n"
+           "  monocle enabled=yes description=single focused client\n"
+           "clients: total=%d workspace=%d focused=0x%x\n"
+           "set: desktop layout <dwindle|master|monocle>\n"
+           "hyprctl: desktop hyprctl layouts\n"
+           "limits: layout plugins and per-window layout rules are not implemented yet\n",
+           desktop_session.layout, total, desktop_active_workspace,
+           desktop_focused_client_id);
+}
+
+void gui_desktop_format_animations(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "Orizon desktop animations\n"
+           "enabled: %s\n"
+           "source: %s\n"
+           "curves:\n"
+           "  orizon-pop prepared=yes bezier=0.16,1,0.3,1\n"
+           "  orizon-slide prepared=yes bezier=0.2,0.8,0.2,1\n"
+           "rules:\n"
+           "  windows prepared=yes style=fade+scale\n"
+           "  workspaces prepared=yes style=slide\n"
+           "  layers prepared=yes style=fade\n"
+           "runtime: compositor currently applies static redraws only\n"
+           "set: desktop keyword animations:enabled <true|false>\n",
+           desktop_settings.animations_enabled ? "true" : "false",
+           ORIZON_DESKTOP_SETTINGS_PATH);
+}
+
 void gui_desktop_reload_session(void) {
   if (orizon_desktop_load_session(&desktop_session) < 0) {
     snprintf(desktop_session.theme, sizeof(desktop_session.theme), "%s",
@@ -1744,6 +1791,44 @@ void gui_desktop_format_devices(char *out, size_t out_size) {
            desktop_settings.pointer_profile, ps2, usb, i2c);
 }
 
+void gui_desktop_format_systeminfo(char *out, size_t out_size) {
+  int total = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      total++;
+    }
+  }
+  snprintf(out, out_size,
+           "Orizon desktop systeminfo\n"
+           "version: %s 0.14.0\n"
+           "compositor: Orizon framebuffer compositor\n"
+           "backend: framebuffer\n"
+           "renderer: software\n"
+           "monitor: %lux%lu scale=%d reserved-top=%d reserved-bottom=%d\n"
+           "session: enabled=%s theme=%s wallpaper=%s layout=%s bar=%s launcher=%s\n"
+           "clients: total=%d active-workspace=%d focused=0x%x\n"
+           "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s pointer=%s\n"
+           "protocols: wayland=no wlroots=no xwayland=no layer-shell=prepared\n"
+           "truth: Hyprland-style Orizon profile, not upstream Hyprland\n",
+           ORIZON_DESKTOP_PACKAGE, (unsigned long)screen_width,
+           (unsigned long)screen_height, ui_scale, TOP_BAR_HEIGHT,
+           FOOTER_HEIGHT, desktop_mode_enabled ? "yes" : "no",
+           desktop_session.theme, desktop_session.wallpaper,
+           desktop_session.layout,
+           desktop_session.bar_enabled ? "yes" : "no",
+           desktop_launcher_visible ? "open" : "closed", total,
+           desktop_active_workspace, desktop_focused_client_id,
+           desktop_settings.gaps_in, desktop_settings.gaps_out,
+           desktop_settings.border_size, desktop_settings.rounding,
+           desktop_settings.animations_enabled ? "true" : "false",
+           desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_settings.keyboard_layout, desktop_settings.pointer_profile);
+}
+
 void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -1751,7 +1836,7 @@ void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl version\n"
            "facade: Hyprland-style compatibility commands\n"
-           "desktop-package: %s 0.13.0\n"
+           "desktop-package: %s 0.14.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "wayland: not-implemented\n"
            "wlroots: not-embedded\n"
