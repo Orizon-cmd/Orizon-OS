@@ -67,6 +67,10 @@
   `focusmaster`/`swapwithmaster` dispatchers, relative split ratios,
   master ratio/`mfact`, explicit orientation layout messages, richer layout
   diagnostics, and bumped `orizon-desktop-hypr` to 0.17.0.
+- Extended the Hyprland-style config bridge with preserved `layerrule`,
+  `bindm`/`bindl`, `bezier`/`animation`, input/misc/layout runtime hints,
+  runtime-backed `getoption`, reload applying config, `/system/desktop-layers.conf`,
+  and bumped `orizon-desktop-hypr` to 0.18.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

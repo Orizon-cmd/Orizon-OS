@@ -16,6 +16,7 @@
 #define ORIZON_DESKTOP_AUTOSTART_PATH "/system/desktop-autostart.conf"
 #define ORIZON_DESKTOP_RULES_PATH "/system/desktop-rules.conf"
 #define ORIZON_DESKTOP_MONITORS_PATH "/system/desktop-monitors.conf"
+#define ORIZON_DESKTOP_LAYERS_PATH "/system/desktop-layers.conf"
 #define ORIZON_DESKTOP_RUNTIME_PATH "/system/desktop-runtime.conf"
 #define ORIZON_DESKTOP_LOG_PATH "/logs/desktop.log"
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"

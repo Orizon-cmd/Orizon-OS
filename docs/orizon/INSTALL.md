@@ -108,6 +108,7 @@ It writes runtime/staging state:
 /system/desktop-autostart.conf
 /system/desktop-rules.conf
 /system/desktop-monitors.conf
+/system/desktop-layers.conf
 /system/desktop-runtime.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
 ```
@@ -122,7 +123,8 @@ and persist theme/wallpaper/layout/bar/focus settings in
 border size, rounding, animations, shadows, terminal, launcher, keyboard, and
 pointer policy are created in `/system/desktop-settings.conf` at the same time.
 `desktop config apply` also generates inspectable runtime hints for binds,
-autostart, rules, monitors, env/workspace/source intent under `/system`.
+autostart, rules, monitors, layer rules, env/workspace/source intent,
+animation/bezier hints and input/misc/layout hints under `/system`.
 The model is closer to Hyprland dispatchers and automatic tiling than to a
 mouse-drag window desktop. The same profile can be installed later through
 packages:
@@ -180,6 +182,11 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop keyword layerrule blur, launcher
+desktop hyprctl getoption layerrule
+desktop hyprctl keyword input:repeat_rate 40
+desktop hyprctl getoption input:repeat_rate
+desktop hyprctl reload
 desktop dispatch fullscreen
 desktop dispatch pseudo
 desktop dispatch cyclenext

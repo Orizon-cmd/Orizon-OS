@@ -2843,7 +2843,7 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
   if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
       pkg_text_matches_query("desktop hypr hyprland optional", query)) {
     snprintf(line, sizeof(line),
-             "available %s 0.17.0 optional install='pkg install %s'",
+             "available %s 0.18.0 optional install='pkg install %s'",
              ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
     pkg_append_line(out, out_size, line);
     matches++;
@@ -2937,7 +2937,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     if (pkg_name_is_desktop_alias(name)) {
       pkg_append_line(out, out_size, "Orizon package");
       pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
-      pkg_append_line(out, out_size, "version 0.17.0");
+      pkg_append_line(out, out_size, "version 0.18.0");
       pkg_append_line(out, out_size, "state available optional");
       pkg_append_line(out, out_size,
                       "type local generated package; not installed yet");
@@ -2948,7 +2948,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
       pkg_append_line(out, out_size,
                       "depends orizon-core core-x86_64; orizon-packages text-payload-v5; orizon-desktop-base hyprland-style-profile-runtime");
       pkg_append_line(out, out_size,
-                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
+                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
       return 0;
     }
     pkg_append_line(out, out_size, "pkg info: package not installed");
@@ -3499,11 +3499,19 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "source package-template\n"
       "monitor = ,preferred,auto,1\n"
       "content-end\n"
+      "file " ORIZON_DESKTOP_LAYERS_PATH "\n"
+      "# Orizon generated Hyprland-style layer rules v1\n"
+      "source package-template\n"
+      "layerrule = blur, launcher\n"
+      "content-end\n"
       "file " ORIZON_DESKTOP_RUNTIME_PATH "\n"
       "# Orizon generated Hyprland-style runtime state v1\n"
       "source package-template\n"
       "env-count 0\n"
       "workspace-hints 0\n"
+      "layout-hints 0\n"
+      "input-hints 0\n"
+      "animation-hints 0\n"
       "submap = default\n"
       "sources 1\n"
       "source = ~/.config/hypr/orizon-local.conf\n"
@@ -3524,9 +3532,12 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "decoration:rounding = 8\n"
       "decoration:shadow:enabled = true\n"
       "animations:enabled = true\n"
+      "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
+      "animation = windows, 1, 2, orizon-pop\n"
       "misc:disable_hyprland_logo = false\n"
       "misc:force_default_wallpaper = 0\n"
       "windowrulev2 = float,class:^(orizon-launcher)$\n"
+      "layerrule = blur, launcher\n"
       "source = ~/.config/hypr/orizon-local.conf\n"
       "bind = $mod, RETURN, exec, terminal\n"
       "bind = $mod, Q, killactive\n"
@@ -3541,6 +3552,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
       "bind = $mod, S, layoutmsg, swapwithmaster\n"
       "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+      "bindl = , XF86AudioMute, exec, desktop logs\n"
       "bind = $mod, R, submap, resize\n"
       "bind = $mod SHIFT, R, submap, reset\n"
       "bind = $mod, H, movefocus, l\n"
@@ -3599,6 +3611,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "autostart-runtime = " ORIZON_DESKTOP_AUTOSTART_PATH "\n"
       "rules-runtime = " ORIZON_DESKTOP_RULES_PATH "\n"
       "monitors-runtime = " ORIZON_DESKTOP_MONITORS_PATH "\n"
+      "layers-runtime = " ORIZON_DESKTOP_LAYERS_PATH "\n"
       "runtime-state = " ORIZON_DESKTOP_RUNTIME_PATH "\n"
       "settings-path = " ORIZON_DESKTOP_SETTINGS_PATH "\n"
       "focus-command = desktop focus on|off|toggle\n"
@@ -3667,7 +3680,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   snprintf(header, sizeof(header),
            "orizon-package 1\n"
            "name " ORIZON_DESKTOP_PACKAGE "\n"
-           "version 0.17.0\n"
+           "version 0.18.0\n"
            "depends orizon-core core-x86_64\n"
            "depends orizon-packages text-payload-v5\n"
            "depends orizon-desktop-base hyprland-style-profile-runtime\n"

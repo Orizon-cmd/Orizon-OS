@@ -46,6 +46,8 @@ design note.
   `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`,
   `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
   plus split/master ratio layout messages,
+  preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
+  free-drag window moving,
   `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
   `desktop windows/clients/activewindow`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.

@@ -60,7 +60,9 @@ le developpement noyau:
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
   workspaces runtime, clients tiles avec adresses stables/focusHistoryID,
   dispatchers Hyprland-like, fullscreen/pseudo/pin,
-  runtime `desktop binds/rules/monitors/runtime/layers`, diagnostics
+  runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
+  `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
+  (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
   `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`, facade
   `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2 et raccourcis F4-F8; ce n'est
@@ -127,7 +129,8 @@ pour ce fichier. `desktop config doctor` analyse la config Hyprland-style dans
 importe le sous-ensemble supporte vers la session, les settings, et les fichiers
 runtime inspectables `/system/desktop-binds.conf`,
 `/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
-`/system/desktop-monitors.conf`, `/system/desktop-runtime.conf`. `desktop
+`/system/desktop-monitors.conf`, `/system/desktop-layers.conf`,
+`/system/desktop-runtime.conf`. `desktop
 session`, `desktop theme`, `desktop
 wallpaper`, `desktop preset`, `desktop focus`, `desktop bar` et
 `desktop launcher` reglent la session persistante.
@@ -140,7 +143,7 @@ USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
 `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 `desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats

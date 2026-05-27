@@ -4123,8 +4123,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_reload_session();
       }
     } else if (term_command_is(hypr, "reload")) {
+      orizon_desktop_apply_hypr_config(report, sizeof(report));
       gui_desktop_reload_session();
-      snprintf(report, sizeof(report), "ok\n");
     } else if (term_command_is(hypr, "dispatch")) {
       const char *dispatch = term_skip_spaces(hypr + 8);
       const char *dispatch_args = dispatch;

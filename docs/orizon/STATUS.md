@@ -55,7 +55,9 @@ work.
   movetoworkspace/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  runtime keyword/getoption inspection, split/master ratio controls, explicit orientation hints, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  preserved `layerrule`/`bindm`/`bindl`/animation/input hints
+  without default free-drag window moving,
+  runtime keyword/getoption/reload inspection, split/master ratio controls, explicit orientation hints, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.
 - Installer safety: `install-plan` writes

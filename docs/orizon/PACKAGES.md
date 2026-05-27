@@ -78,6 +78,7 @@ the first Orizon desktop profile:
 `/system/desktop-settings.conf`,
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`,
+`/system/desktop-layers.conf`,
 `/system/desktop-runtime.conf`,
 `/home/orizon/.config/hypr/orizon-hypr.conf`, and
 `/system/share/orizon-desktop-hypr.conf`. It is Hyprland-style configuration
@@ -129,6 +130,11 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop keyword layerrule blur, launcher
+desktop hyprctl getoption layerrule
+desktop hyprctl keyword input:repeat_rate 40
+desktop hyprctl getoption input:repeat_rate
+desktop hyprctl reload
 desktop hyprctl clients
 desktop hyprctl activewindow
 desktop dispatch togglesplit
@@ -146,10 +152,10 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.17.0` because it includes policy/config files, the persisted session
+`0.18.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings presets/doctor
 commands, Hyprland-style config doctor/apply import, generated
-bind/autostart/window-rule/monitor/runtime hint files, runtime inspection
+bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
 commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history diagnostics, the
 `hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
@@ -157,7 +163,11 @@ preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/submap actions, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher.
+the launcher. Version `0.18.0` specifically adds preserved `layerrule`,
+`bindm`/`bindl`, `bezier`, `animation`, input/misc/layout runtime hints and a
+reload path that reapplies the Hyprland-style config. Mouse binds are parsed
+for compatibility, but the package does not enable free-drag window moving by
+default.
 
 ## Package Format
 

@@ -69,6 +69,11 @@ desktop hyprctl binds
 desktop hyprctl layers
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop keyword layerrule blur, launcher
+desktop hyprctl getoption layerrule
+desktop hyprctl keyword input:repeat_rate 40
+desktop hyprctl getoption input:repeat_rate
+desktop hyprctl reload
 desktop autostart
 desktop autostart terminal off
 desktop autostart terminal on
@@ -149,6 +154,10 @@ imports the supported subset into Orizon's runtime files: layout, gaps, border
 size, rounding, shadows, animations, keyboard layout, focus-follows-mouse, and
 terminal autostart. It also rewrites the generated Hyprland-style runtime files
 for binds, autostart, window rules, monitor hints, env/workspace/source intent.
+It also keeps `layerrule`, `bindm`/`bindl`, `bezier`, `animation`, input,
+misc, dwindle, and master hints as inspectable runtime state without pretending
+they are already real Wayland/wlroots features. Mouse binds are parsed for
+compatibility, but Orizon does not enable free-drag window moving by default.
 Those files make the config inspectable over SSH while the compositor grows the
 corresponding real Wayland features.
 
@@ -162,6 +171,7 @@ The package writes:
 /system/desktop-autostart.conf
 /system/desktop-rules.conf
 /system/desktop-monitors.conf
+/system/desktop-layers.conf
 /system/desktop-runtime.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
 /system/share/orizon-desktop-hypr.conf
@@ -223,7 +233,10 @@ Hyprland inspection habits while staying honest about Orizon's framebuffer backe
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
-`workspace`, `source`, `submap`, variables, and binds. `desktop dispatch exec terminal`,
+`workspace`, `source`, `submap`, `layerrule`, `bezier`, `animation`,
+input/misc/layout hints, variables, and binds. `desktop hyprctl reload` now
+re-imports the Hyprland-style config before refreshing the compositor session.
+`desktop dispatch exec terminal`,
 `desktop dispatch killactive`, `desktop dispatch workspace <n>`, `desktop
 dispatch movetoworkspace <n>`, and `desktop dispatch movefocus next|prev`
 exercise the same mental model as Hyprland dispatchers. The current client
@@ -281,6 +294,7 @@ desktop focus on|off|toggle controls focus-follows-mouse
 desktop devices shows keyboard/pointer input state
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
+desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 ```
 
 ## Current Limits

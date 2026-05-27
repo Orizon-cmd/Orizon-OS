@@ -50,7 +50,9 @@
   workspaces, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  keyword/getoption runtime inspection, split/master ratio controls, explicit orientation hints, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
+  preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
+  free-drag window moving,
+  keyword/getoption/reload runtime inspection, split/master ratio controls, explicit orientation hints, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
   pointer diagnostics,
   `dwindle`/`master`/`monocle` placement, and
   diagnostic tiled client/workspace plumbing with stable client addresses,

@@ -134,6 +134,11 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop keyword layerrule blur, launcher
+desktop hyprctl getoption layerrule
+desktop hyprctl keyword input:repeat_rate 40
+desktop hyprctl getoption input:repeat_rate
+desktop hyprctl reload
 desktop hyprctl binds
 desktop hyprctl layers
 desktop dispatch exec terminal
@@ -249,7 +254,12 @@ user config, and `desktop config apply` imports the supported subset into the
 session/settings files plus generated runtime hint files such as
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`, and
-`/system/desktop-runtime.conf`. `desktop settings` manages the system-wide
+`/system/desktop-layers.conf`, and `/system/desktop-runtime.conf`.
+`layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and input/misc/layout
+hints are preserved there until the real Wayland backend exists; mouse binds
+are parsed for compatibility without enabling free-drag window moving by
+default.
+`desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,
 shadows, terminal, launcher, keyboard, and pointer policy. `desktop settings
@@ -275,7 +285,7 @@ Hyprland-style runtime keyword, `desktop dispatch
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists launcher entries, `desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`,

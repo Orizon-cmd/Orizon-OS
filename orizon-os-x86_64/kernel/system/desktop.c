@@ -82,9 +82,12 @@ static const char *desktop_user_config =
     "decoration:rounding = 8\n"
     "decoration:shadow:enabled = true\n"
     "animations:enabled = true\n"
+    "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
+    "animation = windows, 1, 2, orizon-pop\n"
     "misc:disable_hyprland_logo = false\n"
     "misc:force_default_wallpaper = 0\n"
     "windowrulev2 = float,class:^(orizon-launcher)$\n"
+    "layerrule = blur, launcher\n"
     "source = ~/.config/hypr/orizon-local.conf\n"
     "bind = $mod, RETURN, exec, terminal\n"
     "bind = $mod, Q, killactive\n"
@@ -99,6 +102,7 @@ static const char *desktop_user_config =
     "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
     "bind = $mod, S, layoutmsg, swapwithmaster\n"
     "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+    "bindl = , XF86AudioMute, exec, desktop logs\n"
     "bind = $mod, R, submap, resize\n"
     "bind = $mod SHIFT, R, submap, reset\n"
     "bind = $mod, H, movefocus, l\n"
@@ -152,12 +156,21 @@ static const char *desktop_monitors_runtime_config =
     "source built-in-template\n"
     "monitor = ,preferred,auto,1\n";
 
+static const char *desktop_layers_runtime_config =
+    "# Orizon generated Hyprland-style layer rules v1\n"
+    "# Rewritten by `desktop config apply`.\n"
+    "source built-in-template\n"
+    "layerrule = blur, launcher\n";
+
 static const char *desktop_runtime_config =
     "# Orizon generated Hyprland-style runtime state v1\n"
     "# Rewritten by `desktop config apply`.\n"
     "source built-in-template\n"
     "env-count 0\n"
     "workspace-hints 0\n"
+    "layout-hints 0\n"
+    "input-hints 0\n"
+    "animation-hints 0\n"
     "submap = default\n"
     "sources 1\n"
     "source = ~/.config/hypr/orizon-local.conf\n";
@@ -376,9 +389,16 @@ typedef struct {
   int exec_once;
   int envs;
   int windowrules;
+  int layerrules;
   int workspaces;
   int sources;
   int submaps;
+  int animation_rules;
+  int input_hints;
+  int layout_hints;
+  int misc_hints;
+  int mouse_binds;
+  int locked_binds;
   int supported_settings;
   int prepared_keywords;
   int ignored_keywords;
@@ -393,11 +413,13 @@ typedef struct {
   char autostart[768];
   char rules[1024];
   char monitors[768];
-  char runtime[1536];
+  char layers[768];
+  char runtime[2048];
   size_t binds_used;
   size_t autostart_used;
   size_t rules_used;
   size_t monitors_used;
+  size_t layers_used;
   size_t runtime_used;
 } desktop_hypr_runtime_t;
 
@@ -489,13 +511,13 @@ static int desktop_hypr_key_value(const char *line, char *key,
 }
 
 static int desktop_hypr_key_global(const char *key) {
-  return strcmp(key, "bind") == 0 || strcmp(key, "bindm") == 0 ||
-         strcmp(key, "bindr") == 0 || strcmp(key, "monitor") == 0 ||
+  return strncmp(key, "bind", 4) == 0 || strcmp(key, "monitor") == 0 ||
          strcmp(key, "env") == 0 || strcmp(key, "exec-once") == 0 ||
          strcmp(key, "windowrule") == 0 ||
-         strcmp(key, "windowrulev2") == 0 ||
+         strcmp(key, "windowrulev2") == 0 || strcmp(key, "layerrule") == 0 ||
          strcmp(key, "workspace") == 0 || strcmp(key, "source") == 0 ||
-         strcmp(key, "submap") == 0 || key[0] == '$';
+         strcmp(key, "submap") == 0 || strcmp(key, "bezier") == 0 ||
+         strcmp(key, "animation") == 0 || key[0] == '$';
 }
 
 static void desktop_hypr_join_key(char sections[][32], int depth,
@@ -544,6 +566,7 @@ static int desktop_hypr_dispatch_supported(const char *value) {
           strstr(value, "workspace") || strstr(value, "movetoworkspace") ||
           strstr(value, "movefocus") || strstr(value, "fullscreen") ||
           strstr(value, "pseudo") || strstr(value, "pin") ||
+          strstr(value, "focusmaster") || strstr(value, "swapwithmaster") ||
           strstr(value, "cyclenext") || strstr(value, "swapnext") ||
           strstr(value, "togglesplit") || strstr(value, "layoutmsg") ||
           strstr(value, "submap"));
@@ -621,6 +644,10 @@ static void desktop_hypr_runtime_init(desktop_hypr_runtime_t *runtime) {
                  &runtime->monitors_used,
                  "# Orizon generated Hyprland-style monitor hints v1\n"
                  "source user-config\n");
+  desktop_append(runtime->layers, sizeof(runtime->layers),
+                 &runtime->layers_used,
+                 "# Orizon generated Hyprland-style layer rules v1\n"
+                 "source user-config\n");
   desktop_append(runtime->runtime, sizeof(runtime->runtime),
                  &runtime->runtime_used,
                  "# Orizon generated Hyprland-style runtime state v1\n"
@@ -639,6 +666,35 @@ static void desktop_hypr_runtime_append(char *buf, size_t buf_size,
   desktop_append(buf, buf_size, used, line);
 }
 
+static int desktop_hypr_is_supported_setting_key(const char *key) {
+  return key &&
+         (strcmp(key, "general:layout") == 0 ||
+          strcmp(key, "general:gaps_in") == 0 ||
+          strcmp(key, "general:gaps_out") == 0 ||
+          strcmp(key, "general:border_size") == 0 ||
+          strcmp(key, "decoration:rounding") == 0 ||
+          strcmp(key, "decoration:shadow:enabled") == 0 ||
+          strcmp(key, "decoration:drop_shadow") == 0 ||
+          strcmp(key, "animations:enabled") == 0 ||
+          strcmp(key, "input:kb_layout") == 0 ||
+          strcmp(key, "input:follow_mouse") == 0);
+}
+
+static int desktop_hypr_key_runtime_hint(const char *key) {
+  if (!key || !key[0] || desktop_hypr_is_supported_setting_key(key)) {
+    return 0;
+  }
+  return strcmp(key, "layerrule") == 0 || strcmp(key, "animation") == 0 ||
+         strcmp(key, "bezier") == 0 || strncmp(key, "general:", 8) == 0 ||
+         strncmp(key, "decoration:", 11) == 0 ||
+         strncmp(key, "animations:", 11) == 0 ||
+         strncmp(key, "input:", 6) == 0 || strncmp(key, "misc:", 5) == 0 ||
+         strncmp(key, "dwindle:", 8) == 0 ||
+         strncmp(key, "master:", 7) == 0 ||
+         strncmp(key, "gestures:", 9) == 0 ||
+         strncmp(key, "xwayland:", 9) == 0;
+}
+
 static const char *desktop_hypr_runtime_path_for_key(const char *key) {
   if (!key) {
     return NULL;
@@ -655,9 +711,13 @@ static const char *desktop_hypr_runtime_path_for_key(const char *key) {
   if (strcmp(key, "windowrule") == 0 || strcmp(key, "windowrulev2") == 0) {
     return ORIZON_DESKTOP_RULES_PATH;
   }
+  if (strcmp(key, "layerrule") == 0) {
+    return ORIZON_DESKTOP_LAYERS_PATH;
+  }
   if (strcmp(key, "env") == 0 || strcmp(key, "workspace") == 0 ||
       strcmp(key, "source") == 0 || strcmp(key, "submap") == 0 ||
-      key[0] == '$') {
+      strcmp(key, "animation") == 0 || strcmp(key, "bezier") == 0 ||
+      key[0] == '$' || desktop_hypr_key_runtime_hint(key)) {
     return ORIZON_DESKTOP_RUNTIME_PATH;
   }
   return NULL;
@@ -673,6 +733,46 @@ static int desktop_append_hypr_runtime_keyword(const char *key,
   }
   snprintf(line, sizeof(line), "%s = %s\n", key, value);
   return desktop_append_text_file(path, line);
+}
+
+static int desktop_hypr_runtime_get_value(const char *path, const char *key,
+                                          char *out, size_t out_size) {
+  char cfg[2048];
+  int n;
+  int pos = 0;
+  int found = 0;
+
+  if (!path || !key || !out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  n = desktop_read_text_file(path, cfg, sizeof(cfg));
+  if (n <= 0) {
+    return -1;
+  }
+  while (pos < n) {
+    int start = pos;
+    int end;
+    char line[256];
+    char line_key[96];
+    char line_value[128];
+
+    while (pos < n && cfg[pos] != '\n') {
+      pos++;
+    }
+    end = pos;
+    if (pos < n && cfg[pos] == '\n') {
+      pos++;
+    }
+    desktop_trim_copy(line, sizeof(line), cfg + start, end - start);
+    if (desktop_hypr_key_value(line, line_key, sizeof(line_key), line_value,
+                               sizeof(line_value)) == 0 &&
+        strcmp(line_key, key) == 0) {
+      snprintf(out, out_size, "%s", line_value);
+      found = 1;
+    }
+  }
+  return found ? 0 : -1;
 }
 
 static int desktop_hypr_apply_pair(const char *key, const char *value,
@@ -711,6 +811,12 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
   }
   if (strncmp(key, "bind", 4) == 0) {
     summary->binds++;
+    if (strcmp(key, "bindm") == 0) {
+      summary->mouse_binds++;
+    }
+    if (strcmp(key, "bindl") == 0 || strcmp(key, "bindle") == 0) {
+      summary->locked_binds++;
+    }
     if (desktop_hypr_dispatch_supported(value)) {
       summary->supported_binds++;
     }
@@ -718,6 +824,16 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
     if (apply && runtime) {
       desktop_hypr_runtime_append(runtime->binds, sizeof(runtime->binds),
                                   &runtime->binds_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "animation") == 0 || strcmp(key, "bezier") == 0) {
+    summary->animation_rules++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
       summary->runtime_lines++;
     }
     return 0;
@@ -754,6 +870,16 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
     if (apply && runtime) {
       desktop_hypr_runtime_append(runtime->rules, sizeof(runtime->rules),
                                   &runtime->rules_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "layerrule") == 0) {
+    summary->layerrules++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->layers, sizeof(runtime->layers),
+                                  &runtime->layers_used, key, value);
       summary->runtime_lines++;
     }
     return 0;
@@ -858,6 +984,25 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
           desktop_bool_value(value, session->focus_follows_mouse);
       applied = 1;
     }
+  }
+
+  if (!supported && desktop_hypr_key_runtime_hint(key)) {
+    if (strncmp(key, "input:", 6) == 0) {
+      summary->input_hints++;
+    } else if (strncmp(key, "dwindle:", 8) == 0 ||
+               strncmp(key, "master:", 7) == 0 ||
+               strncmp(key, "general:", 8) == 0) {
+      summary->layout_hints++;
+    } else if (strncmp(key, "misc:", 5) == 0) {
+      summary->misc_hints++;
+    }
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
   }
 
   if (supported) {
@@ -1094,6 +1239,11 @@ int orizon_desktop_ensure_defaults(void) {
   if (!vfs_exists(ORIZON_DESKTOP_MONITORS_PATH) &&
       desktop_write_text_file(ORIZON_DESKTOP_MONITORS_PATH,
                               desktop_monitors_runtime_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_LAYERS_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_LAYERS_PATH,
+                              desktop_layers_runtime_config) < 0) {
     rc = -1;
   }
   if (!vfs_exists(ORIZON_DESKTOP_RUNTIME_PATH) &&
@@ -1648,6 +1798,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
   int rc_autostart;
   int rc_rules;
   int rc_monitors;
+  int rc_layers;
   int rc_runtime;
 
   if (status && status_size) {
@@ -1686,6 +1837,8 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
                                      runtime.rules);
   rc_monitors = desktop_write_text_file(ORIZON_DESKTOP_MONITORS_PATH,
                                         runtime.monitors);
+  rc_layers = desktop_write_text_file(ORIZON_DESKTOP_LAYERS_PATH,
+                                      runtime.layers);
   rc_runtime = desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH,
                                        runtime.runtime);
   desktop_log_event("hypr config applied");
@@ -1697,13 +1850,15 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              "source: %s%s\n"
              "parsed-lines: %d malformed: %d\n"
              "supported-settings: %d applied: %d prepared-keywords: %d ignored: %d runtime-lines: %d\n"
-             "binds: total=%d supported-dispatchers=%d monitors=%d exec-once=%d env=%d windowrules=%d workspaces=%d sources=%d variables=%d\n"
-             "runtime-files: binds=%s autostart=%s rules=%s monitors=%s state=%s\n"
+             "binds: total=%d supported-dispatchers=%d mouse=%d locked=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
+             "hints: input=%d layout=%d animations=%d misc=%d submaps=%d\n"
+             "runtime-files: binds=%s autostart=%s rules=%s monitors=%s layers=%s state=%s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
              "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s\n"
              "note: monitor/env/windowrule/source are now persisted as Orizon runtime hints; real Wayland outputs remain future work.\n",
              (rc1 == 0 && rc2 == 0 && rc_binds == 0 && rc_autostart == 0 &&
-              rc_rules == 0 && rc_monitors == 0 && rc_runtime == 0)
+              rc_rules == 0 && rc_monitors == 0 && rc_layers == 0 &&
+              rc_runtime == 0)
                  ? "applied"
                  : "write-failed",
              ORIZON_DESKTOP_USER_CONFIG_PATH,
@@ -1712,15 +1867,19 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              summary.supported_settings, summary.applied_settings,
              summary.prepared_keywords, summary.ignored_keywords,
              summary.runtime_lines,
-             summary.binds, summary.supported_binds, summary.monitors,
-             summary.exec_once, summary.envs, summary.windowrules,
+             summary.binds, summary.supported_binds, summary.mouse_binds,
+             summary.locked_binds, summary.monitors, summary.exec_once,
+             summary.envs, summary.windowrules, summary.layerrules,
              summary.workspaces, summary.sources, summary.variables,
+             summary.input_hints, summary.layout_hints,
+             summary.animation_rules, summary.misc_hints, summary.submaps,
              rc_binds == 0 ? ORIZON_DESKTOP_BINDS_PATH : "write-failed",
              rc_autostart == 0 ? ORIZON_DESKTOP_AUTOSTART_PATH
                                : "write-failed",
              rc_rules == 0 ? ORIZON_DESKTOP_RULES_PATH : "write-failed",
              rc_monitors == 0 ? ORIZON_DESKTOP_MONITORS_PATH
                               : "write-failed",
+             rc_layers == 0 ? ORIZON_DESKTOP_LAYERS_PATH : "write-failed",
              rc_runtime == 0 ? ORIZON_DESKTOP_RUNTIME_PATH : "write-failed",
              session.layout,
              session.autostart_terminal ? "yes" : "no",
@@ -1738,7 +1897,8 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
     }
   }
   return rc1 == 0 && rc2 == 0 && rc_binds == 0 && rc_autostart == 0 &&
-                 rc_rules == 0 && rc_monitors == 0 && rc_runtime == 0
+                 rc_rules == 0 && rc_monitors == 0 && rc_layers == 0 &&
+                 rc_runtime == 0
              ? 0
              : -1;
 }
@@ -1866,6 +2026,8 @@ int orizon_desktop_reset(char *status, size_t status_size) {
                           desktop_rules_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_MONITORS_PATH,
                           desktop_monitors_runtime_config);
+  desktop_write_text_file(ORIZON_DESKTOP_LAYERS_PATH,
+                          desktop_layers_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH, desktop_runtime_config);
   desktop_log_event("reset profile=" ORIZON_DESKTOP_PROFILE);
   vfs_persist_save();
@@ -1945,6 +2107,9 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
   snprintf(line, sizeof(line), "monitor-runtime: %s\n",
            ORIZON_DESKTOP_MONITORS_PATH);
   desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "layers-runtime: %s\n",
+           ORIZON_DESKTOP_LAYERS_PATH);
+  desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "terminal: F1/desktop dispatch exec terminal; F2/killactive\n");
   desktop_append(out, out_size, &used,
@@ -1978,6 +2143,7 @@ void orizon_desktop_format_config(char *out, size_t out_size) {
                  ORIZON_DESKTOP_AUTOSTART_PATH "\n"
                  ORIZON_DESKTOP_RULES_PATH "\n"
                  ORIZON_DESKTOP_MONITORS_PATH "\n"
+                 ORIZON_DESKTOP_LAYERS_PATH "\n"
                  ORIZON_DESKTOP_RUNTIME_PATH "\n");
   desktop_append(out, out_size, &used,
                  "\ncommands: desktop config doctor | desktop config apply | desktop write-config\n");
@@ -2029,11 +2195,17 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.malformed_lines);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d exec-once=%d env=%d windowrules=%d workspaces=%d sources=%d submaps=%d\n",
+           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d mouse-binds=%d locked-binds=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d submaps=%d\n",
            summary.variables, summary.monitors, summary.binds,
-           summary.supported_binds, summary.exec_once, summary.envs,
-           summary.windowrules, summary.workspaces, summary.sources,
-           summary.submaps);
+           summary.supported_binds, summary.mouse_binds,
+           summary.locked_binds, summary.exec_once, summary.envs,
+           summary.windowrules, summary.layerrules, summary.workspaces,
+           summary.sources, summary.submaps);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "runtime-hints: input=%d layout=%d animations=%d misc=%d\n",
+           summary.input_hints, summary.layout_hints,
+           summary.animation_rules, summary.misc_hints);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "apply-support: settings=%d prepared=%d ignored=%d\n",
@@ -2043,7 +2215,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled; animations:enabled; input:kb_layout,follow_mouse; exec-once terminal\n");
   desktop_append(out, out_size, &used,
-                 "runtime-hints: monitor, bind/bindm/bindr, env, windowrule/windowrulev2, workspace, source, submap -> /system/desktop-*.conf\n");
+                 "runtime-hints: monitor, bind/bindm/bindl/bindr, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/misc/dwindle/master hints -> /system/desktop-*.conf\n");
   desktop_append(out, out_size, &used,
                  "apply: desktop config apply  # writes supported values into session/settings\n");
   snprintf(line, sizeof(line), "summary: %s\n",
@@ -2092,6 +2264,11 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
     desktop_append(out, out_size, &used,
                    "errors: malformed lines detected; run desktop config doctor for details\n");
   }
+  snprintf(line, sizeof(line),
+           "prepared-detail: layerrules=%d animations=%d input-hints=%d layout-hints=%d misc-hints=%d\n",
+           summary.layerrules, summary.animation_rules, summary.input_hints,
+           summary.layout_hints, summary.misc_hints);
+  desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "notes: unsupported but safe Hyprland keywords are reported as ignored/prepared, not hard errors\n");
 }
@@ -2138,6 +2315,8 @@ void orizon_desktop_format_runtime(char *out, size_t out_size) {
                            ORIZON_DESKTOP_RULES_PATH);
   desktop_append_file_dump(out, out_size, &used, "monitor-hints",
                            ORIZON_DESKTOP_MONITORS_PATH);
+  desktop_append_file_dump(out, out_size, &used, "layer-rules",
+                           ORIZON_DESKTOP_LAYERS_PATH);
   desktop_append_file_dump(out, out_size, &used, "runtime-state",
                            ORIZON_DESKTOP_RUNTIME_PATH);
   desktop_append(out, out_size, &used,
@@ -2186,6 +2365,7 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
   orizon_desktop_settings_t settings;
   const char *known = "yes";
   const char *kind = "int";
+  const char *runtime_path;
   char value[64];
 
   if (!out || out_size == 0) {
@@ -2228,9 +2408,12 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
     kind = "bool";
     snprintf(value, sizeof(value), "%s",
              session.focus_follows_mouse ? "true" : "false");
-  } else if (desktop_hypr_runtime_path_for_key(key)) {
+  } else if ((runtime_path = desktop_hypr_runtime_path_for_key(key)) != NULL) {
     kind = "runtime";
-    snprintf(value, sizeof(value), "%s", "see-runtime-file");
+    if (desktop_hypr_runtime_get_value(runtime_path, key, value,
+                                       sizeof(value)) < 0) {
+      snprintf(value, sizeof(value), "%s", "prepared-no-value-yet");
+    }
   } else {
     known = "no";
     kind = "unknown";
@@ -2243,8 +2426,13 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
            "type: %s\n"
            "value: %s\n"
            "source: Orizon desktop session/settings/runtime\n"
+           "runtime-file: %s\n"
            "set: desktop keyword %s <value>\n",
-           key, known, kind, value, key);
+           key, known, kind, value,
+           strcmp(kind, "runtime") == 0
+               ? desktop_hypr_runtime_path_for_key(key)
+               : "none",
+           key);
 }
 
 void orizon_desktop_format_session(char *out, size_t out_size) {
@@ -2703,6 +2891,11 @@ void orizon_desktop_format_doctor(char *out, size_t out_size) {
   if (vfs_stat(ORIZON_DESKTOP_MONITORS_PATH, &size, NULL) == 0 && size > 0) {
     snprintf(line, sizeof(line), "monitors-runtime %s PASS bytes=%lu\n",
              ORIZON_DESKTOP_MONITORS_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  }
+  if (vfs_stat(ORIZON_DESKTOP_LAYERS_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "layers-runtime %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_LAYERS_PATH, (unsigned long)size);
     desktop_append(out, out_size, &used, line);
   }
   if (vfs_stat(ORIZON_DESKTOP_USER_CONFIG_PATH, &size, NULL) == 0 &&

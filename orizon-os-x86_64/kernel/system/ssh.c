@@ -3619,8 +3619,8 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_reload_session();
       }
     } else if (ssh_shell_command_is(hypr, "reload")) {
+      orizon_desktop_apply_hypr_config(out, sizeof(out));
       gui_desktop_reload_session();
-      snprintf(out, sizeof(out), "ok\r\n");
     } else if (ssh_shell_command_is(hypr, "dispatch")) {
       const char *dispatch = ssh_shell_skip_spaces(hypr + 8);
       const char *dispatch_args = dispatch;
