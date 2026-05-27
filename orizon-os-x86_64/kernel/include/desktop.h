@@ -18,7 +18,9 @@
 #define ORIZON_DESKTOP_MONITORS_PATH "/system/desktop-monitors.conf"
 #define ORIZON_DESKTOP_LAYERS_PATH "/system/desktop-layers.conf"
 #define ORIZON_DESKTOP_RUNTIME_PATH "/system/desktop-runtime.conf"
+#define ORIZON_DESKTOP_STATE_PATH "/system/desktop-state.conf"
 #define ORIZON_DESKTOP_LOG_PATH "/logs/desktop.log"
+#define ORIZON_DESKTOP_SESSION_LOG_PATH "/logs/desktop-session.log"
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
@@ -69,6 +71,8 @@ int orizon_desktop_apply_preset(const char *preset, char *status,
 int orizon_desktop_apply_hypr_config(char *status, size_t status_size);
 int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
                                       char *status, size_t status_size);
+int orizon_desktop_session_manager(const char *action, char *status,
+                                   size_t status_size);
 void orizon_desktop_format_status(char *out, size_t out_size);
 void orizon_desktop_format_config(char *out, size_t out_size);
 void orizon_desktop_format_config_doctor(char *out, size_t out_size);
@@ -79,6 +83,7 @@ void orizon_desktop_format_runtime(char *out, size_t out_size);
 void orizon_desktop_format_rules(char *out, size_t out_size);
 void orizon_desktop_format_monitor_hints(char *out, size_t out_size);
 void orizon_desktop_format_session(char *out, size_t out_size);
+void orizon_desktop_format_session_state(char *out, size_t out_size);
 void orizon_desktop_format_settings(char *out, size_t out_size);
 void orizon_desktop_format_settings_presets(char *out, size_t out_size);
 void orizon_desktop_format_settings_doctor(char *out, size_t out_size);

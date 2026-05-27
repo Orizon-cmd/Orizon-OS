@@ -130,10 +130,11 @@ importe le sous-ensemble supporte vers la session, les settings, et les fichiers
 runtime inspectables `/system/desktop-binds.conf`,
 `/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
 `/system/desktop-monitors.conf`, `/system/desktop-layers.conf`,
-`/system/desktop-runtime.conf`. `desktop
-session`, `desktop theme`, `desktop
-wallpaper`, `desktop preset`, `desktop focus`, `desktop bar` et
-`desktop launcher` reglent la session persistante.
+`/system/desktop-runtime.conf` et `/system/desktop-state.conf`. `desktop
+start|stop|restart|reload|recover` gere la session Hyprland-style avec etat
+persistant et log `/logs/desktop-session.log`; `desktop state`, `desktop
+session`, `desktop theme`, `desktop wallpaper`, `desktop preset`, `desktop
+focus`, `desktop bar` et `desktop launcher` reglent la session persistante.
 `desktop pointer` affiche la position du curseur et les diagnostics PS/2,
 USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
 `usb-tablet`.

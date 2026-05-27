@@ -80,6 +80,7 @@ the first Orizon desktop profile:
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`,
 `/system/desktop-layers.conf`,
 `/system/desktop-runtime.conf`,
+`/system/desktop-state.conf`,
 `/home/orizon/.config/hypr/orizon-hypr.conf`, and
 `/system/share/orizon-desktop-hypr.conf`. It is Hyprland-style configuration
 for Orizon's compositor, not upstream Hyprland/Wayland yet. After an installed
@@ -152,7 +153,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.18.0` because it includes policy/config files, the persisted session
+`0.19.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings presets/doctor
 commands, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -163,11 +164,11 @@ preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/submap actions, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.18.0` specifically adds preserved `layerrule`,
-`bindm`/`bindl`, `bezier`, `animation`, input/misc/layout runtime hints and a
-reload path that reapplies the Hyprland-style config. Mouse binds are parsed
-for compatibility, but the package does not enable free-drag window moving by
-default.
+the launcher. Version `0.19.0` specifically adds the desktop session manager:
+`desktop start/stop/restart/reload/recover/state`, persisted
+`/system/desktop-state.conf`, `/logs/desktop-session.log`, and package
+metadata for session lifecycle. Mouse binds are parsed for compatibility, but
+the package does not enable free-drag window moving by default.
 
 ## Package Format
 

@@ -87,6 +87,12 @@ desktop status
 desktop config
 desktop config doctor
 desktop config apply
+desktop start
+desktop stop
+desktop restart
+desktop reload
+desktop recover
+desktop state
 desktop session
 desktop settings
 desktop settings presets
@@ -248,13 +254,17 @@ recreates only missing defaults under `/workspace/.orizon`, `/home/orizon`,
 
 `desktop` controls the optional first desktop profile. It is Hyprland-style,
 not upstream Hyprland/Wayland yet. The live ISO keeps it disabled by default.
-Use `desktop enable` or `pkg install orizon-desktop-hypr` to start the
-compositor desktop session. `desktop config doctor` validates the Hyprland-style
+Use `desktop start` or `pkg install orizon-desktop-hypr` to start the
+compositor desktop session; `desktop enable` remains a compatibility alias.
+`desktop stop`, `desktop restart`, `desktop reload`, `desktop recover`, and
+`desktop state` manage `/system/desktop-state.conf` and
+`/logs/desktop-session.log`. `desktop config doctor` validates the Hyprland-style
 user config, and `desktop config apply` imports the supported subset into the
 session/settings files plus generated runtime hint files such as
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`, and
-`/system/desktop-layers.conf`, and `/system/desktop-runtime.conf`.
+`/system/desktop-layers.conf`, `/system/desktop-runtime.conf`, and
+`/system/desktop-state.conf`.
 `layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and input/misc/layout
 hints are preserved there until the real Wayland backend exists; mouse binds
 are parsed for compatibility without enabling free-drag window moving by

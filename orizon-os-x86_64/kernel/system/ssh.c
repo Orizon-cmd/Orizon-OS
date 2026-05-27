@@ -3315,6 +3315,10 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop config          show Hyprland-style config template\r\n"
              "  desktop config doctor   validate Hyprland-style user config\r\n"
              "  desktop config apply    apply supported config keys to session/settings\r\n"
+             "  desktop start|stop      start/stop Hyprland-style session manager\r\n"
+             "  desktop restart|reload  restart/reload session manager/config\r\n"
+             "  desktop recover         repair/recover desktop session state\r\n"
+             "  desktop state           show session manager state/log\r\n"
              "  desktop enable          enable optional desktop profile\r\n"
              "  desktop disable         disable desktop profile\r\n"
              "  desktop doctor          check desktop install/config state\r\n"
@@ -3391,6 +3395,28 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "doctor") ||
              ssh_shell_command_is(sub, "check")) {
     orizon_desktop_format_doctor(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "start") ||
+             ssh_shell_command_is(sub, "stop") ||
+             ssh_shell_command_is(sub, "restart") ||
+             ssh_shell_command_is(sub, "reload") ||
+             ssh_shell_command_is(sub, "recover")) {
+    char action[16];
+    size_t len = 0;
+    while (sub[len] && sub[len] != ' ' && len + 1 < sizeof(action)) {
+      action[len] = sub[len];
+      len++;
+    }
+    action[len] = '\0';
+    orizon_desktop_session_manager(action, out, sizeof(out));
+    if (ssh_shell_command_is(sub, "reload")) {
+      gui_desktop_reload_session();
+    } else {
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
+    }
+  } else if (ssh_shell_command_is(sub, "state") ||
+             ssh_shell_command_is(sub, "session-state") ||
+             ssh_shell_command_is(sub, "manager")) {
+    orizon_desktop_format_session_state(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "logs") ||
              ssh_shell_command_is(sub, "log")) {
     orizon_desktop_format_log(out, sizeof(out));
@@ -3853,8 +3879,7 @@ static void ssh_shell_print_desktop(const char *args) {
     } else {
       snprintf(out, sizeof(out), "desktop exec: known apps: terminal\r\n");
     }
-  } else if (ssh_shell_command_is(sub, "apply") ||
-             ssh_shell_command_is(sub, "reload")) {
+  } else if (ssh_shell_command_is(sub, "apply")) {
     gui_desktop_reload_session();
     snprintf(out, sizeof(out), "desktop: session reloaded\r\n");
   } else if (ssh_shell_command_is(sub, "write-config") ||
@@ -5001,7 +5026,7 @@ static void ssh_process_channel_request(const uint8_t *payload,
     }
     ssh_queue_channel_text(
         "\r\nOrizon OS remote shell\r\n"
-        "Commands: help, desktop, desktop status, desktop settings, desktop doctor, desktop package, security, security policy, security audit, security keys, security doctor, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
+        "Commands: help, desktop, desktop start, desktop stop, desktop status, desktop state, desktop settings, desktop doctor, desktop package, security, security policy, security audit, security keys, security doctor, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, rescue, hostname, ls, cd, cat, head, tail, write, logs, net, net check, net tcp, net daily, net tls, net diag, wifi, ps, pkg, update, storage, storage diag, storage vmcheck, persist status, persist slots, disk, disk read-test last, gpt scan, selftest, pci, hw next, report save, install-plan, free, bootguard, bootguard recover, rollback, rollback-status, audit, status, auth, hostkey, algorithms, reboot, shutdown, exit\r\n");
     ssh_shell_prompt();
     ssh_set_status("ssh: shell channel ready");
     return;
@@ -5495,7 +5520,7 @@ static void ssh_remote_exec_execute(const uint8_t *command,
   ssh_channel_exit_code = 0;
   if (strcmp(cmd, "help") == 0) {
     ssh_queue_channel_text(
-        "Remote Orizon commands: help, desktop, desktop status, desktop settings, desktop doctor, desktop package, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
+        "Remote Orizon commands: help, desktop, desktop start, desktop stop, desktop restart, desktop reload, desktop state, desktop status, desktop settings, desktop doctor, desktop package, security, security policy, security audit, security keys, security doctor, security rotate ssh-hostkey, system status, system health, system snapshot, system backup, system services, system logs, system doctor, system init, system repair, rescue, hostname, hostname set <name>, ls, cd, cat, head, tail, touch, mkdir, rm, write, append, logs, net, net check, net tcp, net daily, net tls, net diag, route, dns, ping, usb, usb rescan, wifi, ps, pkg, update, update status, storage, storage diag, storage vmcheck, persist status, persist slots, persist save, persist repair, persist restore previous, persist restore slot <n>, disk, disk identify, disk read-test, disk read-test last, gpt scan, selftest, pci, hw next, report save, report next, install-plan, free, timer, bootguard, bootguard confirm, bootguard recover, rollback, rollback-status, audit, ssh sessions, sync, reboot, shutdown, status, auth, hostkey, algorithms, ssh password, ssh auth, ssh lockout, exit\r\n");
   } else if (ssh_shell_command_is(cmd, "system")) {
     ssh_shell_print_system(cmd + strlen("system"));
   } else if (strcmp(cmd, "health") == 0) {

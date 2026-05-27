@@ -48,6 +48,7 @@ design note.
   plus split/master ratio layout messages,
   preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
   free-drag window moving,
+  `desktop start/stop/restart/reload/recover/state` session-manager commands,
   `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
   `desktop windows/clients/activewindow`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.

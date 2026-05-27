@@ -3734,6 +3734,10 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop config          - Show Hyprland-style config template\n");
     term_puts_t(term, "  desktop config doctor   - Validate Hyprland-style user config\n");
     term_puts_t(term, "  desktop config apply    - Apply supported config keys to session/settings\n");
+    term_puts_t(term, "  desktop start|stop      - Start/stop Hyprland-style session manager\n");
+    term_puts_t(term, "  desktop restart|reload  - Restart/reload session manager/config\n");
+    term_puts_t(term, "  desktop recover         - Repair/recover desktop session state\n");
+    term_puts_t(term, "  desktop state           - Show session manager state/log\n");
     term_puts_t(term, "  desktop enable          - Enable optional desktop profile\n");
     term_puts_t(term, "  desktop disable         - Disable desktop profile\n");
     term_puts_t(term, "  desktop doctor          - Check desktop install/config state\n");
@@ -3815,6 +3819,32 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "doctor") || term_command_is(args, "check")) {
     orizon_desktop_format_doctor(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "start") || term_command_is(args, "stop") ||
+      term_command_is(args, "restart") || term_command_is(args, "reload") ||
+      term_command_is(args, "recover")) {
+    char action[16];
+    size_t len = 0;
+    while (args[len] && args[len] != ' ' && len + 1 < sizeof(action)) {
+      action[len] = args[len];
+      len++;
+    }
+    action[len] = '\0';
+    orizon_desktop_session_manager(action, report, sizeof(report));
+    if (term_command_is(args, "reload")) {
+      gui_desktop_reload_session();
+    } else {
+      gui_desktop_set_enabled(orizon_desktop_is_enabled());
+    }
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "state") ||
+      term_command_is(args, "session-state") ||
+      term_command_is(args, "manager")) {
+    orizon_desktop_format_session_state(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -4406,7 +4436,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "desktop exec: known apps: terminal\n");
     return;
   }
-  if (term_command_is(args, "apply") || term_command_is(args, "reload")) {
+  if (term_command_is(args, "apply")) {
     gui_desktop_reload_session();
     term_puts_t(term, "desktop: session reloaded\n");
     return;
@@ -7006,7 +7036,7 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     }
     term_puts_t(term, "\033[33mSystem:\033[0m\n");
     term_puts_t(term,
-                "  desktop [status|settings|enable|disable|config|doctor|logs|package] - Optional Hyprland-style desktop\n");
+                "  desktop [start|stop|restart|reload|status|settings|config|doctor|logs|package] - Optional Hyprland-style desktop\n");
     term_puts_t(term, "  desktop dispatch exec terminal / killactive - Tiled desktop clients\n");
     term_puts_t(term, "  dmesg     - Show current kernel boot log\n");
     term_puts_t(term, "  system [status|health|snapshot|backup|init|services|logs|doctor|repair|rescue|firstboot done] - Installed/live admin\n");

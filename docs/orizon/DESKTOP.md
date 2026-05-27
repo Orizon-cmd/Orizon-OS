@@ -16,6 +16,12 @@ desktop status
 desktop config
 desktop config doctor
 desktop config apply
+desktop start
+desktop stop
+desktop restart
+desktop reload
+desktop recover
+desktop state
 desktop session
 desktop settings
 desktop settings presets
@@ -173,9 +179,11 @@ The package writes:
 /system/desktop-monitors.conf
 /system/desktop-layers.conf
 /system/desktop-runtime.conf
+/system/desktop-state.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
 /system/share/orizon-desktop-hypr.conf
 /logs/desktop.log
+/logs/desktop-session.log
 ```
 
 `desktop session` shows the persisted session options: theme, symbolic
@@ -187,6 +195,13 @@ The default layout is `dwindle`; `master` and `monocle` are also understood.
 compositor. Current built-in theme/wallpaper/layout names are simple symbolic
 profiles such as `graphite`, `moss`, `ember`, `frost`, `aurora`, `dawn`,
 `noir`, `dwindle`, `master`, and `monocle`.
+
+`desktop start`, `desktop stop`, `desktop restart`, `desktop reload`, and
+`desktop recover` provide a small session manager. It writes
+`/system/desktop-state.conf`, appends `/logs/desktop-session.log`, records
+live/install boot mode, keeps terminal autostart explicit, and never enables
+free-drag window moving. `desktop state` dumps the state and session log over
+console or SSH.
 
 `desktop settings` is the system-wide settings layer for the desktop
 environment. It is written to `/system/desktop-settings.conf` when the desktop

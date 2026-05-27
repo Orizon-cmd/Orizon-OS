@@ -71,6 +71,10 @@
   `bindm`/`bindl`, `bezier`/`animation`, input/misc/layout runtime hints,
   runtime-backed `getoption`, reload applying config, `/system/desktop-layers.conf`,
   and bumped `orizon-desktop-hypr` to 0.18.0.
+- Added a Hyprland-style desktop session manager with
+  `desktop start/stop/restart/reload/recover/state`, persistent
+  `/system/desktop-state.conf`, `/logs/desktop-session.log`, lifecycle state in
+  `desktop status`, and bumped `orizon-desktop-hypr` to 0.19.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

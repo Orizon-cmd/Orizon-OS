@@ -110,7 +110,9 @@ It writes runtime/staging state:
 /system/desktop-monitors.conf
 /system/desktop-layers.conf
 /system/desktop-runtime.conf
+/system/desktop-state.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
+/logs/desktop-session.log
 ```
 
 The desktop prompt is optional and disabled by default. It does not install the
@@ -125,6 +127,9 @@ pointer policy are created in `/system/desktop-settings.conf` at the same time.
 `desktop config apply` also generates inspectable runtime hints for binds,
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/misc/layout hints under `/system`.
+`desktop start|stop|restart|reload|recover` writes session-manager state to
+`/system/desktop-state.conf` and logs lifecycle events in
+`/logs/desktop-session.log`.
 The model is closer to Hyprland dispatchers and automatic tiling than to a
 mouse-drag window desktop. The same profile can be installed later through
 packages:
@@ -135,6 +140,8 @@ pkg install orizon-desktop-hypr
 pkg verify /workspace/packages/orizon-desktop-hypr.opkg
 pkg simulate /workspace/packages/orizon-desktop-hypr.opkg
 pkg install /workspace/packages/orizon-desktop-hypr.opkg
+desktop start
+desktop state
 desktop session
 desktop settings
 desktop settings presets

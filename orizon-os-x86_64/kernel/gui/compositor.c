@@ -2552,7 +2552,7 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
   }
   snprintf(out, out_size,
            "Orizon desktop systeminfo\n"
-           "version: %s 0.18.0\n"
+           "version: %s 0.19.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "backend: framebuffer\n"
            "renderer: software\n"
@@ -2592,7 +2592,7 @@ void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl version\n"
            "facade: Hyprland-style compatibility commands\n"
-           "desktop-package: %s 0.18.0\n"
+           "desktop-package: %s 0.19.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "wayland: not-implemented\n"
            "wlroots: not-embedded\n"
