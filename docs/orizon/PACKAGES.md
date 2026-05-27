@@ -95,6 +95,20 @@ desktop settings preset compact
 desktop config doctor
 desktop config apply
 desktop pointer
+desktop rules
+desktop monitors
+desktop runtime
+desktop layers
+desktop version
+desktop devices
+desktop keyword general:gaps_in 9
+desktop hyprctl version
+desktop hyprctl activeworkspace
+desktop hyprctl cursorpos
+desktop hyprctl devices
+desktop hyprctl splash
+desktop hyprctl getoption general:gaps_in
+desktop hyprctl keyword decoration:rounding 11
 desktop doctor
 ```
 
@@ -102,14 +116,17 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.11.0` because it includes policy/config files, the persisted session settings,
-the system-wide desktop settings layer,
-settings presets/doctor commands, Hyprland-style config doctor/apply import,
-generated bind/autostart/window-rule/monitor/runtime hint files,
-pointer diagnostics, the aligned Hyprland-style key template, preset/focus commands, dispatcher
-commands, fullscreen/pseudo/pinned client state, focus-cycle/swap actions, and
-commands used by `desktop theme`, `desktop wallpaper`, `desktop layout`,
-`desktop autostart`, `desktop bar`, and the launcher.
+`0.13.0` because it includes policy/config files, the persisted session
+settings, the system-wide desktop settings layer, settings presets/doctor
+commands, Hyprland-style config doctor/apply import, generated
+bind/autostart/window-rule/monitor/runtime hint files, runtime inspection
+commands, `desktop keyword`, input/version diagnostics, the
+`hyprctl version/activeworkspace/devices/cursorpos/splash/getoption/keyword/binds/layers`
+facade, pointer diagnostics, the aligned Hyprland-style key template,
+preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
+state, focus-cycle/swap actions, and commands used by `desktop theme`,
+`desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
+the launcher.
 
 ## Package Format
 

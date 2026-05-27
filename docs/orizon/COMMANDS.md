@@ -100,6 +100,22 @@ desktop apps
 desktop profiles
 desktop preset moss
 desktop binds
+desktop rules
+desktop monitors
+desktop runtime
+desktop layers
+desktop version
+desktop devices
+desktop keyword general:gaps_in 9
+desktop hyprctl version
+desktop hyprctl activeworkspace
+desktop hyprctl cursorpos
+desktop hyprctl devices
+desktop hyprctl splash
+desktop hyprctl getoption general:gaps_in
+desktop hyprctl keyword decoration:rounding 11
+desktop hyprctl binds
+desktop hyprctl layers
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl activewindow
@@ -209,11 +225,16 @@ safer profile/validation layer for that system file. `desktop session`
 manages theme/wallpaper/bar/focus state, `desktop preset <name>` applies a saved
 symbolic session, `desktop pointer` shows cursor and HID mouse/tablet
 diagnostics, `desktop layout <dwindle|master|monocle>` updates the
-prepared layout profile, `desktop binds` shows the generated Hyprland-style dispatcher
-map, `desktop dispatch <dispatcher> [args]` runs `exec`, `killactive`,
+prepared layout profile, `desktop binds`, `desktop rules`, `desktop monitors`,
+and `desktop runtime` show the generated Hyprland-style runtime files,
+`desktop layers` shows the compositor layer model, `desktop version` identifies
+the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
+and pointer inputs, `desktop keyword <key> <value>` applies a single
+Hyprland-style runtime keyword, `desktop dispatch
+<dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
 `fullscreen`, `pseudo`, and `pin`, `desktop hyprctl ...` exposes
-a small Hyprland-like facade for clients/workspaces/monitors/activewindow/dispatch,
+a small Hyprland-like facade for version/clients/workspaces/activeworkspace/monitors/activewindow/binds/layers/devices/cursorpos/splash/getoption/keyword/dispatch,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists launcher entries, `desktop windows` lists tiled
 clients/layers, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec

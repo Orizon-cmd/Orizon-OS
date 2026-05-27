@@ -3745,12 +3745,19 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop settings preset <name> - Apply compact/cozy/performance settings\n");
     term_puts_t(term, "  desktop settings doctor - Validate system-wide desktop settings\n");
     term_puts_t(term, "  desktop pointer         - Show cursor and HID mouse/tablet diagnostics\n");
+    term_puts_t(term, "  desktop devices         - Show Hyprland-style input device summary\n");
+    term_puts_t(term, "  desktop version         - Show desktop compatibility facade version\n");
     term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
     term_puts_t(term, "  desktop profiles        - List themes/wallpapers/layouts\n");
     term_puts_t(term, "  desktop preset <name>   - Apply graphite/moss/ember/frost/focus preset\n");
     term_puts_t(term, "  desktop binds           - Show Hyprland-style binds/dispatchers\n");
+    term_puts_t(term, "  desktop rules           - Show Hyprland-style window rules runtime\n");
+    term_puts_t(term, "  desktop monitors        - Show Hyprland-style monitor hints\n");
+    term_puts_t(term, "  desktop runtime         - Show generated Hyprland-style runtime files\n");
+    term_puts_t(term, "  desktop layers          - Show compositor layer model\n");
+    term_puts_t(term, "  desktop keyword <k> <v> - Apply one Hyprland-style runtime keyword\n");
     term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/killactive/fullscreen/pseudo\n");
-    term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like clients/workspaces/dispatch facade\n");
+    term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like status/keyword/dispatch facade\n");
     term_puts_t(term, "  desktop autostart       - Show or configure startup apps\n");
     term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
     term_puts_t(term, "  desktop theme <name>    - Set session theme\n");
@@ -3890,6 +3897,17 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "devices") || term_command_is(args, "device") ||
+      term_command_is(args, "input")) {
+    gui_desktop_format_devices(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "version") || term_command_is(args, "about")) {
+    gui_desktop_format_hyprctl_version(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     orizon_desktop_format_apps(report, sizeof(report));
     term_puts_t(term, report);
@@ -3900,21 +3918,108 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "rules") || term_command_is(args, "rule")) {
+    orizon_desktop_format_rules(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "monitors") || term_command_is(args, "monitor")) {
+    orizon_desktop_format_monitor_hints(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "runtime") || term_command_is(args, "state")) {
+    orizon_desktop_format_runtime(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "layers") || term_command_is(args, "layer")) {
+    gui_desktop_format_layers(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "keyword")) {
+    const char *key = term_skip_spaces(args + 7);
+    const char *value = key;
+    char key_buf[96];
+    size_t key_len;
+    while (*value && *value != ' ') {
+      value++;
+    }
+    key_len = (size_t)(value - key);
+    if (*value == ' ') {
+      value = term_skip_spaces(value);
+    }
+    if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+      term_puts_t(term, "usage: desktop keyword <hypr-key> <value>\n");
+      return;
+    }
+    memcpy(key_buf, key, key_len);
+    key_buf[key_len] = '\0';
+    orizon_desktop_apply_hypr_keyword(key_buf, value, report, sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "hyprctl")) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl clients|workspaces|activewindow|monitors|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|devices|cursorpos|splash|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
-    if (term_command_is(hypr, "clients")) {
+    if (term_command_is(hypr, "version")) {
+      gui_desktop_format_hyprctl_version(report, sizeof(report));
+    } else if (term_command_is(hypr, "clients")) {
       gui_desktop_format_windows(report, sizeof(report));
     } else if (term_command_is(hypr, "workspaces")) {
       gui_desktop_format_workspaces(report, sizeof(report));
+    } else if (term_command_is(hypr, "activeworkspace")) {
+      gui_desktop_format_activeworkspace(report, sizeof(report));
     } else if (term_command_is(hypr, "activewindow")) {
       gui_desktop_format_activewindow(report, sizeof(report));
     } else if (term_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(report, sizeof(report));
+    } else if (term_command_is(hypr, "binds")) {
+      gui_desktop_format_binds(report, sizeof(report));
+    } else if (term_command_is(hypr, "layers")) {
+      gui_desktop_format_layers(report, sizeof(report));
+    } else if (term_command_is(hypr, "devices")) {
+      gui_desktop_format_devices(report, sizeof(report));
+    } else if (term_command_is(hypr, "cursorpos")) {
+      gui_desktop_format_cursorpos(report, sizeof(report));
+    } else if (term_command_is(hypr, "splash")) {
+      gui_desktop_format_splash(report, sizeof(report));
+    } else if (term_command_is(hypr, "getoption")) {
+      const char *key = term_skip_spaces(hypr + 9);
+      if (*key == '\0') {
+        snprintf(report, sizeof(report),
+                 "usage: desktop hyprctl getoption <hypr-key>\n");
+      } else {
+        orizon_desktop_format_hypr_option(key, report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "keyword")) {
+      const char *key = term_skip_spaces(hypr + 7);
+      const char *value = key;
+      char key_buf[96];
+      size_t key_len;
+      while (*value && *value != ' ') {
+        value++;
+      }
+      key_len = (size_t)(value - key);
+      if (*value == ' ') {
+        value = term_skip_spaces(value);
+      }
+      if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+        snprintf(report, sizeof(report),
+                 "usage: desktop hyprctl keyword <hypr-key> <value>\n");
+      } else {
+        memcpy(key_buf, key, key_len);
+        key_buf[key_len] = '\0';
+        orizon_desktop_apply_hypr_keyword(key_buf, value, report,
+                                          sizeof(report));
+        gui_desktop_reload_session();
+      }
     } else if (term_command_is(hypr, "reload")) {
       gui_desktop_reload_session();
       snprintf(report, sizeof(report), "ok\n");

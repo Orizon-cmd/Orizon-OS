@@ -29,10 +29,26 @@ desktop apps
 desktop profiles
 desktop preset moss
 desktop binds
+desktop rules
+desktop monitors
+desktop runtime
+desktop layers
+desktop version
+desktop devices
+desktop keyword general:gaps_in 9
+desktop hyprctl version
+desktop hyprctl activeworkspace
+desktop hyprctl cursorpos
+desktop hyprctl devices
+desktop hyprctl splash
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl activewindow
 desktop hyprctl monitors
+desktop hyprctl binds
+desktop hyprctl layers
+desktop hyprctl getoption general:gaps_in
+desktop hyprctl keyword decoration:rounding 11
 desktop autostart
 desktop autostart terminal off
 desktop autostart terminal on
@@ -162,7 +178,15 @@ desktop starts.
 
 `desktop binds` lists the generated Hyprland-style bind runtime at
 `/system/desktop-binds.conf` plus the dispatcher vocabulary currently
-understood by Orizon. `desktop dispatch exec terminal`,
+understood by Orizon. `desktop rules`, `desktop monitors`, and `desktop
+runtime` expose the generated window-rule, monitor-hint, and aggregated
+runtime files; `desktop layers` shows the compositor's layer-shell-like model.
+`desktop version` reports the Orizon compatibility facade without pretending to
+be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
+input model. `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
+persisted Orizon session/settings subset when supported, or records safe
+runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
+`workspace`, `source`, variables, and binds. `desktop dispatch exec terminal`,
 `desktop dispatch killactive`, `desktop dispatch workspace <n>`, `desktop
 dispatch movetoworkspace <n>`, and `desktop dispatch movefocus next|prev`
 exercise the same mental model as Hyprland dispatchers. The current client
@@ -170,10 +194,13 @@ dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
 `swapnext`. Relative workspace targets such as `workspace +1`, `workspace -1`,
 and `workspace previous` are understood for VM-safe desktop flow.
 
-`desktop hyprctl clients|workspaces|activewindow|monitors|reload` is a small
-compatibility facade for the commands people expect when coming from Hyprland.
-`desktop hyprctl dispatch <dispatcher> [args]` maps to Orizon's dispatcher
-layer.
+`desktop hyprctl
+version|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|devices|cursorpos|splash|getoption|keyword|reload`
+is a small compatibility facade for the commands people expect when coming
+from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
+value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
+<value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
+[args]` maps to Orizon's dispatcher layer.
 
 `desktop windows` lists the current compositor layers and tiled clients. The
 model is intentionally no-drag: clients are placed by `dwindle`, `master`, or
@@ -209,6 +236,9 @@ desktop dispatch fullscreen|pseudo|pin controls active client state
 desktop autostart terminal on|off controls startup terminal
 desktop preset <name> applies a saved symbolic session
 desktop focus on|off|toggle controls focus-follows-mouse
+desktop devices shows keyboard/pointer input state
+desktop keyword <key> <value> applies a Hyprland-style runtime setting
+desktop hyprctl getoption <key> inspects the current mapped value
 ```
 
 ## Current Limits

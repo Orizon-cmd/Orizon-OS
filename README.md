@@ -59,8 +59,11 @@ le developpement noyau:
   `/system/desktop-session.conf`, `/system/desktop-settings.conf` et
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
   workspaces runtime, dispatchers Hyprland-like, fullscreen/pseudo/pin,
-  lanceur F3, terminal F1/F2 et raccourcis F4-F8; ce n'est pas encore le vrai
-  Hyprland/Wayland
+  runtime `desktop binds/rules/monitors/runtime/layers`, diagnostics
+  `desktop version/devices`, facade
+  `desktop hyprctl version/activeworkspace/devices/cursorpos/splash/getoption/keyword/binds/layers`, mutation
+  `desktop keyword`, lanceur F3, terminal F1/F2 et raccourcis F4-F8; ce n'est
+  pas encore le vrai Hyprland/Wayland
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
   en plein ecran, `tail`, `help shell`, commandes groupees avec `;`, sorties
   redirigees `>`/`>>`, pipes simples vers `grep/head/tail/wc/tee/less`,
@@ -131,6 +134,10 @@ wallpaper`, `desktop preset`, `desktop focus`, `desktop bar` et
 USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
 `usb-tablet`.
 `desktop binds` lit maintenant le runtime de binds genere et
+`desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
+`desktop version`, `desktop devices`, `desktop keyword <key> <value>` et
+`desktop hyprctl version|activeworkspace|devices|cursorpos|splash|getoption|keyword|binds|layers` exposent/modifient le
+sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 `desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs, layouts

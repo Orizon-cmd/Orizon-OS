@@ -66,9 +66,16 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
 int orizon_desktop_apply_preset(const char *preset, char *status,
                                 size_t status_size);
 int orizon_desktop_apply_hypr_config(char *status, size_t status_size);
+int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
+                                      char *status, size_t status_size);
 void orizon_desktop_format_status(char *out, size_t out_size);
 void orizon_desktop_format_config(char *out, size_t out_size);
 void orizon_desktop_format_config_doctor(char *out, size_t out_size);
+void orizon_desktop_format_hypr_option(const char *key, char *out,
+                                       size_t out_size);
+void orizon_desktop_format_runtime(char *out, size_t out_size);
+void orizon_desktop_format_rules(char *out, size_t out_size);
+void orizon_desktop_format_monitor_hints(char *out, size_t out_size);
 void orizon_desktop_format_session(char *out, size_t out_size);
 void orizon_desktop_format_settings(char *out, size_t out_size);
 void orizon_desktop_format_settings_presets(char *out, size_t out_size);

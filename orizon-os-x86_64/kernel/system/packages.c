@@ -2843,7 +2843,7 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
   if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
       pkg_text_matches_query("desktop hypr hyprland optional", query)) {
     snprintf(line, sizeof(line),
-             "available %s 0.11.0 optional install='pkg install %s'",
+             "available %s 0.13.0 optional install='pkg install %s'",
              ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
     pkg_append_line(out, out_size, line);
     matches++;
@@ -2937,7 +2937,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     if (pkg_name_is_desktop_alias(name)) {
       pkg_append_line(out, out_size, "Orizon package");
       pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
-      pkg_append_line(out, out_size, "version 0.11.0");
+      pkg_append_line(out, out_size, "version 0.13.0");
       pkg_append_line(out, out_size, "state available optional");
       pkg_append_line(out, out_size,
                       "type local generated package; not installed yet");
@@ -3568,6 +3568,13 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "settings-doctor-command = desktop settings doctor\n"
       "config-doctor-command = desktop config doctor\n"
       "config-apply-command = desktop config apply\n"
+      "runtime-command = desktop runtime\n"
+      "rules-command = desktop rules\n"
+      "monitors-command = desktop monitors\n"
+      "layers-command = desktop layers\n"
+      "keyword-command = desktop keyword <key> <value>\n"
+      "devices-command = desktop devices\n"
+      "version-command = desktop version\n"
       "binds-runtime = " ORIZON_DESKTOP_BINDS_PATH "\n"
       "autostart-runtime = " ORIZON_DESKTOP_AUTOSTART_PATH "\n"
       "rules-runtime = " ORIZON_DESKTOP_RULES_PATH "\n"
@@ -3577,6 +3584,13 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "focus-command = desktop focus on|off|toggle\n"
       "dispatch-command = desktop dispatch <dispatcher> [args]\n"
       "hyprctl-command = desktop hyprctl <command>\n"
+      "hyprctl-version-command = desktop hyprctl version\n"
+      "hyprctl-activeworkspace-command = desktop hyprctl activeworkspace\n"
+      "hyprctl-devices-command = desktop hyprctl devices\n"
+      "hyprctl-cursorpos-command = desktop hyprctl cursorpos\n"
+      "hyprctl-splash-command = desktop hyprctl splash\n"
+      "hyprctl-getoption-command = desktop hyprctl getoption <key>\n"
+      "hyprctl-keyword-command = desktop hyprctl keyword <key> <value>\n"
       "content-end\n"
       "file " ORIZON_DESKTOP_SESSION_PATH "\n"
       "# Orizon desktop session v1\n"
@@ -3614,7 +3628,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   snprintf(header, sizeof(header),
            "orizon-package 1\n"
            "name " ORIZON_DESKTOP_PACKAGE "\n"
-           "version 0.11.0\n"
+           "version 0.13.0\n"
            "depends orizon-core core-x86_64\n"
            "depends orizon-packages text-payload-v5\n"
            "depends orizon-desktop-base hyprland-style-profile-runtime\n"

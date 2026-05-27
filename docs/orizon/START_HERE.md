@@ -39,11 +39,12 @@ design note.
   desktop prompt, `pkg sample desktop`, and `pkg install orizon-desktop-hypr`.
   It is Hyprland-style Orizon compositor plumbing, disabled by default, persists
   `/system/desktop-session.conf` plus `/system/desktop-settings.conf` and
-  generated `/system/desktop-binds.conf` runtime hints, and starts with F1 exec terminal, F2
-  killactive, F3 launcher, F4 fullscreen, F5 pseudo, F6 focus cycle,
-  F7/F8 workspace navigation, `desktop profiles`, `desktop preset`,
-  `desktop focus`, `desktop binds`, `desktop dispatch`, `desktop hyprctl`,
-  `desktop autostart`,
+  generated `/system/desktop-binds.conf` and related runtime hints, and starts
+  with F1 exec terminal, F2 killactive, F3 launcher, F4 fullscreen, F5 pseudo,
+  F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
+  preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
+  `desktop version/devices`, `desktop keyword`, `desktop dispatch`,
+  `desktop hyprctl version/activeworkspace/devices/cursorpos/splash/getoption/keyword/binds/layers`, `desktop autostart`,
   `desktop windows`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`

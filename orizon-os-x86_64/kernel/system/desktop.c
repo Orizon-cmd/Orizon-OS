@@ -536,6 +536,41 @@ static int desktop_hypr_dispatch_supported(const char *value) {
           strstr(value, "cyclenext") || strstr(value, "swapnext"));
 }
 
+static int desktop_hypr_key_safe(const char *value) {
+  int seen = 0;
+
+  if (!value) {
+    return 0;
+  }
+  while (*value) {
+    char c = *value++;
+    if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
+        c == ':' || c == '$') {
+      seen = 1;
+      continue;
+    }
+    return 0;
+  }
+  return seen;
+}
+
+static int desktop_hypr_value_safe(const char *value) {
+  int seen = 0;
+
+  if (!value) {
+    return 0;
+  }
+  while (*value) {
+    unsigned char c = (unsigned char)*value++;
+    if (c == '\n' || c == '\r' || c < 32) {
+      return 0;
+    }
+    seen = 1;
+  }
+  return seen;
+}
+
 static int desktop_hypr_copy_token_value(char *out, size_t out_size,
                                          const char *value) {
   int len = 0;
@@ -589,6 +624,41 @@ static void desktop_hypr_runtime_append(char *buf, size_t buf_size,
   }
   snprintf(line, sizeof(line), "%s = %s\n", key, value);
   desktop_append(buf, buf_size, used, line);
+}
+
+static const char *desktop_hypr_runtime_path_for_key(const char *key) {
+  if (!key) {
+    return NULL;
+  }
+  if (strcmp(key, "monitor") == 0) {
+    return ORIZON_DESKTOP_MONITORS_PATH;
+  }
+  if (strncmp(key, "bind", 4) == 0) {
+    return ORIZON_DESKTOP_BINDS_PATH;
+  }
+  if (strcmp(key, "exec-once") == 0) {
+    return ORIZON_DESKTOP_AUTOSTART_PATH;
+  }
+  if (strcmp(key, "windowrule") == 0 || strcmp(key, "windowrulev2") == 0) {
+    return ORIZON_DESKTOP_RULES_PATH;
+  }
+  if (strcmp(key, "env") == 0 || strcmp(key, "workspace") == 0 ||
+      strcmp(key, "source") == 0 || key[0] == '$') {
+    return ORIZON_DESKTOP_RUNTIME_PATH;
+  }
+  return NULL;
+}
+
+static int desktop_append_hypr_runtime_keyword(const char *key,
+                                               const char *value) {
+  const char *path = desktop_hypr_runtime_path_for_key(key);
+  char line[256];
+
+  if (!path || !key || !value) {
+    return 0;
+  }
+  snprintf(line, sizeof(line), "%s = %s\n", key, value);
+  return desktop_append_text_file(path, line);
 }
 
 static int desktop_hypr_apply_pair(const char *key, const char *value,
@@ -1649,6 +1719,79 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              : -1;
 }
 
+int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
+                                      char *status, size_t status_size) {
+  orizon_desktop_session_t session;
+  orizon_desktop_settings_t settings;
+  desktop_hypr_summary_t summary;
+  int rc1;
+  int rc2;
+  int runtime_rc = 0;
+  const char *runtime_path;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  if (!key || !value || !key[0] || !value[0] ||
+      !desktop_hypr_key_safe(key) || !desktop_hypr_value_safe(value)) {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop keyword: invalid key/value\n"
+               "usage: desktop keyword <hypr-key> <value>\n");
+    }
+    return -1;
+  }
+
+  memset(&summary, 0, sizeof(summary));
+  desktop_ensure_dirs();
+  orizon_desktop_ensure_defaults();
+  orizon_desktop_load_session(&session);
+  orizon_desktop_load_settings(&settings);
+  desktop_hypr_apply_pair(key, value, &session, &settings, &summary, 1, NULL);
+  rc1 = desktop_write_session(&session);
+  rc2 = desktop_write_settings(&settings);
+  runtime_path = desktop_hypr_runtime_path_for_key(key);
+  if (runtime_path) {
+    runtime_rc = desktop_append_hypr_runtime_keyword(key, value);
+  }
+  desktop_log_event("hypr keyword applied");
+  vfs_persist_save();
+
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop keyword: %s\n"
+             "key: %s\n"
+             "value: %s\n"
+             "supported-settings: %d applied: %d runtime-hint: %s\n"
+             "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
+             "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s\n"
+             "apply: desktop hyprctl reload\n",
+             (rc1 == 0 && rc2 == 0 && runtime_rc == 0 &&
+              (summary.supported_settings > 0 || runtime_path))
+                 ? "applied"
+                 : "warn",
+             key, value, summary.supported_settings, summary.applied_settings,
+             runtime_path ? runtime_path : "none",
+             session.layout,
+             session.autostart_terminal ? "yes" : "no",
+             session.focus_follows_mouse ? "yes" : "no",
+             settings.gaps_in, settings.gaps_out, settings.border_size,
+             settings.rounding,
+             settings.animations_enabled ? "yes" : "no",
+             settings.shadows_enabled ? "yes" : "no",
+             settings.keyboard_layout);
+    if (summary.supported_settings == 0 && !runtime_path &&
+        strlen(status) + 96 < status_size) {
+      strcat(status,
+             "note: key is not implemented yet; supported settings and runtime hint keys are documented by desktop config doctor.\n");
+    }
+  }
+  return (rc1 == 0 && rc2 == 0 && runtime_rc == 0 &&
+          (summary.supported_settings > 0 || runtime_path))
+             ? 0
+             : 1;
+}
+
 int orizon_desktop_set_enabled(int enabled, char *status, size_t status_size) {
   int rc;
   int user_rc = 0;
@@ -1883,6 +2026,157 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
 }
 
+static void desktop_append_file_dump(char *out, size_t out_size, size_t *used,
+                                     const char *title, const char *path) {
+  char line[160];
+  char cfg[1536];
+  int n;
+
+  if (!out || !used || !title || !path) {
+    return;
+  }
+  snprintf(line, sizeof(line), "\n== %s ==\npath: %s\n", title, path);
+  desktop_append(out, out_size, used, line);
+  n = desktop_read_text_file(path, cfg, sizeof(cfg));
+  if (n <= 0) {
+    desktop_append(out, out_size, used, "(missing)\n");
+    return;
+  }
+  desktop_append(out, out_size, used, cfg);
+  if (cfg[0] && cfg[strlen(cfg) - 1] != '\n') {
+    desktop_append(out, out_size, used, "\n");
+  }
+}
+
+void orizon_desktop_format_runtime(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Orizon desktop Hyprland runtime\n");
+  desktop_append(out, out_size, &used,
+                 "source: generated by desktop config apply and desktop keyword\n");
+  desktop_append_file_dump(out, out_size, &used, "binds",
+                           ORIZON_DESKTOP_BINDS_PATH);
+  desktop_append_file_dump(out, out_size, &used, "autostart",
+                           ORIZON_DESKTOP_AUTOSTART_PATH);
+  desktop_append_file_dump(out, out_size, &used, "window-rules",
+                           ORIZON_DESKTOP_RULES_PATH);
+  desktop_append_file_dump(out, out_size, &used, "monitor-hints",
+                           ORIZON_DESKTOP_MONITORS_PATH);
+  desktop_append_file_dump(out, out_size, &used, "runtime-state",
+                           ORIZON_DESKTOP_RUNTIME_PATH);
+  desktop_append(out, out_size, &used,
+                 "commands: desktop keyword <key> <value> | desktop config apply | desktop hyprctl getoption <key>\n");
+}
+
+void orizon_desktop_format_rules(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Orizon desktop window rules\n");
+  desktop_append(out, out_size, &used,
+                 "scope: Hyprland-style rule intent; true Wayland matching is future work\n");
+  desktop_append_file_dump(out, out_size, &used, "rules",
+                           ORIZON_DESKTOP_RULES_PATH);
+  desktop_append(out, out_size, &used,
+                 "add: desktop keyword windowrulev2 <rule>\n");
+}
+
+void orizon_desktop_format_monitor_hints(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Orizon desktop monitor hints\n");
+  desktop_append(out, out_size, &used,
+                 "scope: Hyprland-style monitor config intent plus VM framebuffer monitor facade\n");
+  desktop_append_file_dump(out, out_size, &used, "monitor-hints",
+                           ORIZON_DESKTOP_MONITORS_PATH);
+  desktop_append(out, out_size, &used,
+                 "add: desktop keyword monitor <name,resolution,position,scale>\n");
+}
+
+void orizon_desktop_format_hypr_option(const char *key, char *out,
+                                       size_t out_size) {
+  orizon_desktop_session_t session;
+  orizon_desktop_settings_t settings;
+  const char *known = "yes";
+  const char *kind = "int";
+  char value[64];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (!key || !key[0] || !desktop_hypr_key_safe(key)) {
+    snprintf(out, out_size,
+             "hyprctl getoption: invalid key\n"
+             "usage: desktop hyprctl getoption general:gaps_in\n");
+    return;
+  }
+  orizon_desktop_load_session(&session);
+  orizon_desktop_load_settings(&settings);
+  value[0] = '\0';
+  if (strcmp(key, "general:layout") == 0) {
+    kind = "str";
+    snprintf(value, sizeof(value), "%s", session.layout);
+  } else if (strcmp(key, "general:gaps_in") == 0) {
+    snprintf(value, sizeof(value), "%d", settings.gaps_in);
+  } else if (strcmp(key, "general:gaps_out") == 0) {
+    snprintf(value, sizeof(value), "%d", settings.gaps_out);
+  } else if (strcmp(key, "general:border_size") == 0) {
+    snprintf(value, sizeof(value), "%d", settings.border_size);
+  } else if (strcmp(key, "decoration:rounding") == 0) {
+    snprintf(value, sizeof(value), "%d", settings.rounding);
+  } else if (strcmp(key, "decoration:shadow:enabled") == 0 ||
+             strcmp(key, "decoration:drop_shadow") == 0) {
+    kind = "bool";
+    snprintf(value, sizeof(value), "%s",
+             settings.shadows_enabled ? "true" : "false");
+  } else if (strcmp(key, "animations:enabled") == 0) {
+    kind = "bool";
+    snprintf(value, sizeof(value), "%s",
+             settings.animations_enabled ? "true" : "false");
+  } else if (strcmp(key, "input:kb_layout") == 0) {
+    kind = "str";
+    snprintf(value, sizeof(value), "%s", settings.keyboard_layout);
+  } else if (strcmp(key, "input:follow_mouse") == 0) {
+    kind = "bool";
+    snprintf(value, sizeof(value), "%s",
+             session.focus_follows_mouse ? "true" : "false");
+  } else if (desktop_hypr_runtime_path_for_key(key)) {
+    kind = "runtime";
+    snprintf(value, sizeof(value), "%s", "see-runtime-file");
+  } else {
+    known = "no";
+    kind = "unknown";
+    snprintf(value, sizeof(value), "%s", "not-implemented");
+  }
+
+  snprintf(out, out_size,
+           "option %s\n"
+           "known: %s\n"
+           "type: %s\n"
+           "value: %s\n"
+           "source: Orizon desktop session/settings/runtime\n"
+           "set: desktop keyword %s <value>\n",
+           key, known, kind, value, key);
+}
+
 void orizon_desktop_format_session(char *out, size_t out_size) {
   orizon_desktop_session_t session;
   char line[192];
@@ -1925,7 +2219,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl clients|workspaces|activewindow|monitors|dispatch\n");
+                 "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
+  desktop_append(out, out_size, &used,
+                 "hyprctl: desktop hyprctl clients|workspaces|activewindow|monitors|binds|layers|getoption|keyword|dispatch\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch terminal\n");
   desktop_append(out, out_size, &used,

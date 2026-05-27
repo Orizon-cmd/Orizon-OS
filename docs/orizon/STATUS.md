@@ -43,7 +43,7 @@ work.
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts`,
-  `desktop session/settings/settings preset/settings doctor/pointer/apps/profiles/preset/focus/autostart/windows/binds/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/apps/profiles/preset/focus/autostart/windows/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
@@ -54,7 +54,8 @@ work.
   workspace switch, relative workspace dispatch, dispatcher-style
   movetoworkspace/movefocus/cyclenext/swapnext, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
-  focus-follows-mouse policy, Hyprland-style config import/runtime files, pointer diagnostics, tiled client diagnostics, and
+  focus-follows-mouse policy, Hyprland-style config import/runtime files,
+  runtime keyword/getoption inspection, version/devices/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.
 - Installer safety: `install-plan` writes

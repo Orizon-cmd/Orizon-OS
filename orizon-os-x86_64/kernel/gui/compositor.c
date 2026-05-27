@@ -1487,6 +1487,29 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            desktop_clients[idx].pinned ? "true" : "false");
 }
 
+void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
+  int clients;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  clients = desktop_client_count_on_workspace(desktop_active_workspace);
+  snprintf(out, out_size,
+           "active workspace:\n"
+           "  id: %d\n"
+           "  name: %d\n"
+           "  monitor: Orizon framebuffer\n"
+           "  windows: %d\n"
+           "  layout: %s\n"
+           "  lastwindow: 0x%x\n",
+           desktop_active_workspace, desktop_active_workspace, clients,
+           strcmp(desktop_session.layout, "master") == 0
+               ? "master"
+               : (strcmp(desktop_session.layout, "monocle") == 0 ? "monocle"
+                                                                  : "dwindle"),
+           desktop_focused_client_id);
+}
+
 void gui_desktop_format_monitors(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -1502,6 +1525,36 @@ void gui_desktop_format_monitors(char *out, size_t out_size) {
            "\treserved: 0 %d 0 %d\n",
            (unsigned long)screen_width, (unsigned long)screen_height,
            desktop_active_workspace, ui_scale, TOP_BAR_HEIGHT, FOOTER_HEIGHT);
+}
+
+void gui_desktop_format_layers(char *out, size_t out_size) {
+  int total_clients = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      total_clients++;
+    }
+  }
+  snprintf(out, out_size,
+           "Orizon desktop layers\n"
+           "monitor: Orizon framebuffer\n"
+           "layer namespace=background z=0 visible=yes role=wallpaper\n"
+           "layer namespace=bar z=10 visible=%s position=%s reserved-top=%d\n"
+           "layer namespace=launcher z=90 visible=%s overlay=yes\n"
+           "layer namespace=tiled-clients z=50 visible=%s clients=%d workspace=%d\n"
+           "layer namespace=cursor z=100 visible=yes x=%d y=%d\n"
+           "rules-runtime: %s\n"
+           "limits: layer-shell protocol is not implemented yet; this is the Orizon compositor layer model\n",
+           desktop_session.bar_enabled ? "yes" : "no",
+           desktop_settings.bar_position,
+           desktop_session.bar_enabled ? TOP_BAR_HEIGHT : 0,
+           desktop_launcher_visible ? "yes" : "no",
+           total_clients > 0 ? "yes" : "empty", total_clients,
+           desktop_active_workspace, mouse_x, mouse_y,
+           ORIZON_DESKTOP_RULES_PATH);
 }
 
 void gui_desktop_format_binds(char *out, size_t out_size) {
@@ -1657,6 +1710,75 @@ void gui_desktop_format_pointer(char *out, size_t out_size) {
            "to the compositor pointer when their HID endpoint is selected.\n",
            mouse_x, mouse_y, prev_buttons, desktop_settings.pointer_profile,
            desktop_session.focus_follows_mouse ? "yes" : "no", ps2, usb, i2c);
+}
+
+void gui_desktop_format_devices(char *out, size_t out_size) {
+  char ps2[256];
+  char usb[320];
+  char i2c[256];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  ps2_format_status(ps2, sizeof(ps2));
+  usb_format_status(usb, sizeof(usb));
+  i2c_hid_format_status(i2c, sizeof(i2c));
+  snprintf(out, out_size,
+           "Orizon desktop devices\n"
+           "keyboard:\n"
+           "  name: Orizon keyboard\n"
+           "  layout: %s\n"
+           "  backend: framebuffer-console\n"
+           "pointer:\n"
+           "  name: Orizon compositor pointer\n"
+           "  position: %d,%d\n"
+           "  buttons: %d\n"
+           "  profile: %s\n"
+           "  manual-window-drag: no\n"
+           "backends:\n"
+           "  ps2: %s\n"
+           "  usb-hid: %s\n"
+           "  i2c-hid: %s\n"
+           "limits: this is the VM-safe Orizon input model, not libinput/Wayland yet\n",
+           desktop_settings.keyboard_layout, mouse_x, mouse_y, prev_buttons,
+           desktop_settings.pointer_profile, ps2, usb, i2c);
+}
+
+void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "Orizon desktop hyprctl version\n"
+           "facade: Hyprland-style compatibility commands\n"
+           "desktop-package: %s 0.13.0\n"
+           "compositor: Orizon framebuffer compositor\n"
+           "wayland: not-implemented\n"
+           "wlroots: not-embedded\n"
+           "layouts: dwindle, master, monocle\n"
+           "truth: inspired by Hyprland, not upstream Hyprland\n",
+           ORIZON_DESKTOP_PACKAGE);
+}
+
+void gui_desktop_format_cursorpos(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "cursorpos: %d %d\n"
+           "buttons: %d\n"
+           "profile: %s\n",
+           mouse_x, mouse_y, prev_buttons, desktop_settings.pointer_profile);
+}
+
+void gui_desktop_format_splash(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "Orizon desktop splash\n"
+           "Welcome to the Hyprland-style Orizon profile.\n"
+           "Tiny tiling gremlin status: awake, polite, no mouse-dragging.\n");
 }
 
 static void gui_show_boot_stage(const char *stage) {

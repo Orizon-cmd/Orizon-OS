@@ -3326,12 +3326,19 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop settings preset <name> apply compact/cozy/performance settings\r\n"
              "  desktop settings doctor validate system-wide desktop settings\r\n"
              "  desktop pointer         show cursor and HID mouse/tablet diagnostics\r\n"
+             "  desktop devices         show Hyprland-style input device summary\r\n"
+             "  desktop version         show desktop compatibility facade version\r\n"
              "  desktop apps            list desktop launcher apps\r\n"
              "  desktop profiles        list themes/wallpapers/layouts\r\n"
              "  desktop preset <name>   apply graphite/moss/ember/frost/focus preset\r\n"
              "  desktop binds           show Hyprland-style binds/dispatchers\r\n"
+             "  desktop rules           show Hyprland-style window rules runtime\r\n"
+             "  desktop monitors        show Hyprland-style monitor hints\r\n"
+             "  desktop runtime         show generated Hyprland-style runtime files\r\n"
+             "  desktop layers          show compositor layer model\r\n"
+             "  desktop keyword <k> <v> apply one Hyprland-style runtime keyword\r\n"
              "  desktop dispatch <d>    run exec/workspace/killactive/fullscreen/pseudo\r\n"
-             "  desktop hyprctl <cmd>   Hyprland-like clients/workspaces/dispatch facade\r\n"
+             "  desktop hyprctl <cmd>   Hyprland-like status/keyword/dispatch facade\r\n"
              "  desktop autostart       show or configure startup apps\r\n"
              "  desktop windows         list compositor windows/layers\r\n"
              "  desktop theme <name>    set session theme\r\n"
@@ -3437,25 +3444,108 @@ static void ssh_shell_print_desktop(const char *args) {
              ssh_shell_command_is(sub, "cursor") ||
              ssh_shell_command_is(sub, "mouse")) {
     gui_desktop_format_pointer(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "devices") ||
+             ssh_shell_command_is(sub, "device") ||
+             ssh_shell_command_is(sub, "input")) {
+    gui_desktop_format_devices(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "version") ||
+             ssh_shell_command_is(sub, "about")) {
+    gui_desktop_format_hyprctl_version(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
     orizon_desktop_format_apps(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "binds") ||
              ssh_shell_command_is(sub, "bind")) {
     gui_desktop_format_binds(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "rules") ||
+             ssh_shell_command_is(sub, "rule")) {
+    orizon_desktop_format_rules(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "monitors") ||
+             ssh_shell_command_is(sub, "monitor")) {
+    orizon_desktop_format_monitor_hints(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "runtime") ||
+             ssh_shell_command_is(sub, "state")) {
+    orizon_desktop_format_runtime(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "layers") ||
+             ssh_shell_command_is(sub, "layer")) {
+    gui_desktop_format_layers(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "keyword")) {
+    const char *key = ssh_shell_skip_spaces(sub + 7);
+    const char *value = key;
+    char key_buf[96];
+    size_t key_len;
+    while (*value && *value != ' ') {
+      value++;
+    }
+    key_len = (size_t)(value - key);
+    if (*value == ' ') {
+      value = ssh_shell_skip_spaces(value);
+    }
+    if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop keyword <hypr-key> <value>\r\n");
+    } else {
+      memcpy(key_buf, key, key_len);
+      key_buf[key_len] = '\0';
+      orizon_desktop_apply_hypr_keyword(key_buf, value, out, sizeof(out));
+      gui_desktop_reload_session();
+    }
   } else if (ssh_shell_command_is(sub, "hyprctl")) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl clients|workspaces|activewindow|monitors|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|devices|cursorpos|splash|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+    } else if (ssh_shell_command_is(hypr, "version")) {
+      gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "clients")) {
       gui_desktop_format_windows(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "workspaces")) {
       gui_desktop_format_workspaces(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "activeworkspace")) {
+      gui_desktop_format_activeworkspace(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "activewindow")) {
       gui_desktop_format_activewindow(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "binds")) {
+      gui_desktop_format_binds(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "layers")) {
+      gui_desktop_format_layers(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "devices")) {
+      gui_desktop_format_devices(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "cursorpos")) {
+      gui_desktop_format_cursorpos(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "splash")) {
+      gui_desktop_format_splash(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "getoption")) {
+      const char *key = ssh_shell_skip_spaces(hypr + 9);
+      if (*key == '\0') {
+        snprintf(out, sizeof(out),
+                 "usage: desktop hyprctl getoption <hypr-key>\r\n");
+      } else {
+        orizon_desktop_format_hypr_option(key, out, sizeof(out));
+      }
+    } else if (ssh_shell_command_is(hypr, "keyword")) {
+      const char *key = ssh_shell_skip_spaces(hypr + 7);
+      const char *value = key;
+      char key_buf[96];
+      size_t key_len;
+      while (*value && *value != ' ') {
+        value++;
+      }
+      key_len = (size_t)(value - key);
+      if (*value == ' ') {
+        value = ssh_shell_skip_spaces(value);
+      }
+      if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+        snprintf(out, sizeof(out),
+                 "usage: desktop hyprctl keyword <hypr-key> <value>\r\n");
+      } else {
+        memcpy(key_buf, key, key_len);
+        key_buf[key_len] = '\0';
+        orizon_desktop_apply_hypr_keyword(key_buf, value, out, sizeof(out));
+        gui_desktop_reload_session();
+      }
     } else if (ssh_shell_command_is(hypr, "reload")) {
       gui_desktop_reload_session();
       snprintf(out, sizeof(out), "ok\r\n");

@@ -94,10 +94,16 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
 void gui_desktop_format_workspaces(char *out, size_t out_size);
 void gui_desktop_format_windows(char *out, size_t out_size);
 void gui_desktop_format_activewindow(char *out, size_t out_size);
+void gui_desktop_format_activeworkspace(char *out, size_t out_size);
 void gui_desktop_format_monitors(char *out, size_t out_size);
+void gui_desktop_format_layers(char *out, size_t out_size);
 void gui_desktop_format_binds(char *out, size_t out_size);
 void gui_desktop_format_status(char *out, size_t out_size);
 void gui_desktop_format_pointer(char *out, size_t out_size);
+void gui_desktop_format_devices(char *out, size_t out_size);
+void gui_desktop_format_hyprctl_version(char *out, size_t out_size);
+void gui_desktop_format_cursorpos(char *out, size_t out_size);
+void gui_desktop_format_splash(char *out, size_t out_size);
 
 /* Direct framebuffer access for low-level debug */
 extern uint32_t *g_fb_ptr;

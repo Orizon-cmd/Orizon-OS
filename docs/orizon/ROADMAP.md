@@ -40,7 +40,7 @@
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs`,
-  `desktop session/settings/settings preset/settings doctor/pointer/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/dispatch/hyprctl`,
+  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
   profile. It is disabled by default, persists session/autostart settings plus
@@ -49,7 +49,10 @@
   currently focuses on dispatcher-driven terminal clients, relative
   workspaces, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
-  focus-follows-mouse policy, Hyprland-style config import/runtime files, pointer diagnostics, `dwindle`/`master`/`monocle` placement, and
+  focus-follows-mouse policy, Hyprland-style config import/runtime files,
+  keyword/getoption runtime inspection, version/devices/cursorpos diagnostics,
+  pointer diagnostics,
+  `dwindle`/`master`/`monocle` placement, and
   diagnostic tiled client/workspace plumbing, not the real upstream
   Hyprland/Wayland stack yet.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`

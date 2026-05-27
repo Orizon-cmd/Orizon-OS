@@ -143,8 +143,22 @@ desktop apps
 desktop profiles
 desktop preset moss
 desktop binds
+desktop rules
+desktop monitors
+desktop runtime
+desktop layers
+desktop version
+desktop devices
+desktop keyword general:gaps_in 9
 desktop dispatch exec terminal
 desktop hyprctl clients
+desktop hyprctl version
+desktop hyprctl activeworkspace
+desktop hyprctl cursorpos
+desktop hyprctl devices
+desktop hyprctl splash
+desktop hyprctl getoption general:gaps_in
+desktop hyprctl keyword decoration:rounding 11
 desktop dispatch fullscreen
 desktop dispatch pseudo
 desktop dispatch cyclenext

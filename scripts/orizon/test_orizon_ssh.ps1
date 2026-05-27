@@ -82,6 +82,23 @@ $commands = @(
   "desktop profiles",
   "desktop preset moss",
   "desktop binds",
+  "desktop rules",
+  "desktop monitors",
+  "desktop runtime",
+  "desktop layers",
+  "desktop version",
+  "desktop devices",
+  "desktop keyword general:gaps_in 9",
+  "desktop hyprctl version",
+  "desktop hyprctl activeworkspace",
+  "desktop hyprctl cursorpos",
+  "desktop hyprctl devices",
+  "desktop hyprctl splash",
+  "desktop hyprctl getoption general:gaps_in",
+  "desktop hyprctl keyword decoration:rounding 11",
+  "desktop hyprctl getoption decoration:rounding",
+  "desktop hyprctl binds",
+  "desktop hyprctl layers",
   "desktop autostart",
   "desktop autostart terminal off",
   "desktop autostart terminal on",
@@ -422,6 +439,48 @@ run_cmd() {
       ;;
     "desktop binds")
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" && grep -q "killactive" "`$OUT" || { echo "missing desktop binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop rules")
+      grep -q "Orizon desktop window rules" "`$OUT" && grep -q "/system/desktop-rules.conf" "`$OUT" || { echo "missing desktop rules"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop monitors")
+      grep -q "Orizon desktop monitor hints" "`$OUT" && grep -q "/system/desktop-monitors.conf" "`$OUT" || { echo "missing desktop monitors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop runtime")
+      grep -q "Orizon desktop Hyprland runtime" "`$OUT" && grep -q "/system/desktop-runtime.conf" "`$OUT" || { echo "missing desktop runtime"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop layers")
+      grep -q "Orizon desktop layers" "`$OUT" && grep -q "namespace=bar" "`$OUT" || { echo "missing desktop layers"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop version"|"desktop hyprctl version")
+      grep -q "Orizon desktop hyprctl version" "`$OUT" && grep -q "not upstream Hyprland" "`$OUT" || { echo "missing desktop version"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop devices"|"desktop hyprctl devices")
+      grep -q "Orizon desktop devices" "`$OUT" && grep -q "manual-window-drag: no" "`$OUT" || { echo "missing desktop devices"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop keyword general:gaps_in 9"|"desktop hyprctl keyword decoration:rounding 11")
+      grep -q "desktop keyword: applied" "`$OUT" || { echo "missing desktop keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl activeworkspace")
+      grep -q "active workspace:" "`$OUT" && grep -q "layout:" "`$OUT" || { echo "missing hyprctl activeworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl cursorpos")
+      grep -q "cursorpos:" "`$OUT" && grep -q "profile:" "`$OUT" || { echo "missing hyprctl cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl splash")
+      grep -q "Orizon desktop splash" "`$OUT" || { echo "missing hyprctl splash"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption general:gaps_in")
+      grep -q "option general:gaps_in" "`$OUT" && grep -q "value: 9" "`$OUT" || { echo "missing hyprctl getoption gaps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption decoration:rounding")
+      grep -q "option decoration:rounding" "`$OUT" && grep -q "value: 11" "`$OUT" || { echo "missing hyprctl getoption rounding"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl binds")
+      grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl layers")
+      grep -q "Orizon desktop layers" "`$OUT" && grep -q "namespace=launcher" "`$OUT" || { echo "missing hyprctl layers"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop autostart")
       grep -q "Orizon desktop autostart" "`$OUT" && grep -q "terminal:" "`$OUT" || { echo "missing desktop autostart"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

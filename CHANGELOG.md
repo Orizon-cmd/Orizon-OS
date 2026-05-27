@@ -46,6 +46,12 @@
   autostart, window rules, monitor hints, and env/workspace/source intent under
   `/system/desktop-*.conf`, exposed them through `desktop binds` and
   `desktop autostart`, and bumped `orizon-desktop-hypr` to 0.11.0.
+- Added Hyprland-style runtime inspection and mutation with `desktop
+  rules/monitors/runtime/layers`, `desktop keyword`, `desktop hyprctl
+  getoption/keyword/binds/layers`, and bumped `orizon-desktop-hypr` to 0.12.0.
+- Extended the Hyprland-like facade with `desktop version/devices` plus
+  `desktop hyprctl version/activeworkspace/devices/cursorpos/splash`, and
+  bumped `orizon-desktop-hypr` to 0.13.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.
