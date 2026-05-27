@@ -115,10 +115,12 @@ desktop instances
 desktop submap
 desktop configerrors
 desktop rollinglog
+desktop focus-history
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
+desktop hyprctl focushistory
 desktop hyprctl layouts
 desktop hyprctl animations
 desktop hyprctl decorations
@@ -151,6 +153,8 @@ desktop dispatch layoutmsg splitratio 60
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
+desktop clients
+desktop activewindow
 desktop workspace
 desktop workspace 2
 desktop dispatch movetoworkspace 2
@@ -253,17 +257,19 @@ and `desktop runtime` show the generated Hyprland-style runtime files,
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
-`desktop submap`, `desktop configerrors`, and `desktop rollinglog` expose more
-Hyprland-like inspection surfaces, `desktop keyword <key> <value>` applies a single
+`desktop submap`, `desktop configerrors`, `desktop rollinglog`, and
+`desktop focus-history` expose more Hyprland-like inspection surfaces,
+`desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
 `fullscreen`, `pseudo`, `pin`, `togglesplit`, `layoutmsg`, and `submap`,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
-`desktop apps` lists launcher entries, `desktop windows` lists tiled
-clients/layers, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
+`desktop apps` lists launcher entries, `desktop windows`/`desktop clients`
+list tiled clients with stable addresses, geometry and `focusHistoryID`,
+`desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation. See
 [DESKTOP.md](DESKTOP.md).
 

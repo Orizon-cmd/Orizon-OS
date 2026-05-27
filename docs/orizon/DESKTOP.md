@@ -44,10 +44,12 @@ desktop instances
 desktop submap
 desktop configerrors
 desktop rollinglog
+desktop focus-history
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop hyprctl activeworkspace
+desktop hyprctl focushistory
 desktop hyprctl layouts
 desktop hyprctl animations
 desktop hyprctl decorations
@@ -80,6 +82,8 @@ desktop dispatch layoutmsg splitratio 60
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
+desktop clients
+desktop activewindow
 desktop workspace
 desktop workspace 2
 desktop dispatch movetoworkspace 2
@@ -206,7 +210,7 @@ runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop layouts`, `desktop animations`,
-`desktop configerrors`, `desktop rollinglog`, `desktop decorations`,
+`desktop configerrors`, `desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
@@ -223,19 +227,21 @@ and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, and `workspace previous` are understood for VM-safe desktop flow.
 
 `desktop hyprctl
-version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
+version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
 
-`desktop windows` lists the current compositor layers and tiled clients. The
-model is intentionally no-drag: clients are placed by `dwindle`, `master`, or
-`monocle`, not by mouse-moving windows around like a traditional desktop.
-The active client can still be controlled through dispatcher state such as
-fullscreen/pseudo/pinned, which is closer to the Hyprland mental model than
-manual window dragging.
+`desktop windows`, `desktop clients`, `desktop activewindow`, and `desktop
+focus-history` list the tiled clients with stable Orizon addresses, `at/size`
+geometry, workspace state, fullscreen/pseudo/pinned flags, and Hyprland-style
+`focusHistoryID`. The model is intentionally no-drag: clients are placed by
+`dwindle`, `master`, or `monocle`, not by mouse-moving windows around like a
+traditional desktop. The active client can still be controlled through
+dispatcher state such as fullscreen/pseudo/pinned, which is closer to the
+Hyprland mental model than manual window dragging.
 
 `desktop workspace` shows the current Hyprland-style workspace state.
 `desktop workspace <n>` switches the active workspace. Prefer

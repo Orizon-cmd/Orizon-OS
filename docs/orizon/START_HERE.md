@@ -43,10 +43,10 @@ design note.
   with F1 exec terminal, F2 killactive, F3 launcher, F4 fullscreen, F5 pseudo,
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
-  `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog`,
+  `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`,
   `desktop keyword`, `desktop dispatch`,
-  `desktop hyprctl version/systeminfo/activeworkspace/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
-  `desktop windows`, and runtime tiled workspace/client-state commands rather
+  `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
+  `desktop windows/clients/activewindow`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`
   gives a PASS/WARN summary, `system snapshot` writes

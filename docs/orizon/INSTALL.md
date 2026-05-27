@@ -158,9 +158,12 @@ desktop instances
 desktop submap
 desktop configerrors
 desktop rollinglog
+desktop focus-history
 desktop keyword general:gaps_in 9
 desktop dispatch exec terminal
 desktop hyprctl clients
+desktop hyprctl activewindow
+desktop hyprctl focushistory
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop hyprctl activeworkspace

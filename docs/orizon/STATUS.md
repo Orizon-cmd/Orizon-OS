@@ -43,7 +43,7 @@ work.
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts`,
-  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/apps/profiles/preset/focus/autostart/windows/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
@@ -55,7 +55,7 @@ work.
   movetoworkspace/movefocus/cyclenext/swapnext/togglesplit/layoutmsg/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  runtime keyword/getoption inspection, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics, and
+  runtime keyword/getoption inspection, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.
 - Installer safety: `install-plan` writes

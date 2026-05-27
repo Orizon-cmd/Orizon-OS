@@ -3337,6 +3337,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop submap          show active Hyprland-style submap\r\n"
              "  desktop configerrors    show Hyprland-style config parser errors\r\n"
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
+             "  desktop focus-history   show Hyprland-style focusHistoryID order\r\n"
              "  desktop apps            list desktop launcher apps\r\n"
              "  desktop profiles        list themes/wallpapers/layouts\r\n"
              "  desktop preset <name>   apply graphite/moss/ember/frost/focus preset\r\n"
@@ -3349,7 +3350,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop dispatch <d>    run exec/workspace/layoutmsg/submap/togglesplit\r\n"
              "  desktop hyprctl <cmd>   Hyprland-like status/keyword/dispatch facade\r\n"
              "  desktop autostart       show or configure startup apps\r\n"
-             "  desktop windows         list compositor windows/layers\r\n"
+             "  desktop windows         list compositor clients/windows/layers\r\n"
              "  desktop theme <name>    set session theme\r\n"
              "  desktop wallpaper <name> set symbolic wallpaper\r\n"
              "  desktop layout <name>   set dwindle/master/monocle layout\r\n"
@@ -3492,6 +3493,9 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "rollinglog") ||
              ssh_shell_command_is(sub, "rolling-log")) {
     orizon_desktop_format_rolling_log(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "focus-history") ||
+             ssh_shell_command_is(sub, "focushistory")) {
+    gui_desktop_format_focus_history(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
     orizon_desktop_format_apps(out, sizeof(out));
@@ -3535,7 +3539,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3548,6 +3552,9 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_activeworkspace(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "activewindow")) {
       gui_desktop_format_activewindow(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "focushistory") ||
+               ssh_shell_command_is(hypr, "focus-history")) {
+      gui_desktop_format_focus_history(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "binds")) {
@@ -3693,8 +3700,13 @@ static void ssh_shell_print_desktop(const char *args) {
       }
     }
   } else if (ssh_shell_command_is(sub, "windows") ||
-             ssh_shell_command_is(sub, "window")) {
+             ssh_shell_command_is(sub, "window") ||
+             ssh_shell_command_is(sub, "clients") ||
+             ssh_shell_command_is(sub, "client")) {
     gui_desktop_format_windows(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "activewindow") ||
+             ssh_shell_command_is(sub, "active-window")) {
+    gui_desktop_format_activewindow(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "workspaces")) {
     gui_desktop_format_workspaces(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "workspace")) {

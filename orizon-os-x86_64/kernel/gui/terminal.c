@@ -3756,6 +3756,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop submap          - Show active Hyprland-style submap\n");
     term_puts_t(term, "  desktop configerrors    - Show Hyprland-style config parser errors\n");
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
+    term_puts_t(term, "  desktop focus-history   - Show Hyprland-style focusHistoryID order\n");
     term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
     term_puts_t(term, "  desktop profiles        - List themes/wallpapers/layouts\n");
     term_puts_t(term, "  desktop preset <name>   - Apply graphite/moss/ember/frost/focus preset\n");
@@ -3976,6 +3977,12 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "focus-history") ||
+      term_command_is(args, "focushistory")) {
+    gui_desktop_format_focus_history(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     orizon_desktop_format_apps(report, sizeof(report));
     term_puts_t(term, report);
@@ -4033,7 +4040,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4048,6 +4055,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_activeworkspace(report, sizeof(report));
     } else if (term_command_is(hypr, "activewindow")) {
       gui_desktop_format_activewindow(report, sizeof(report));
+    } else if (term_command_is(hypr, "focushistory") ||
+               term_command_is(hypr, "focus-history")) {
+      gui_desktop_format_focus_history(report, sizeof(report));
     } else if (term_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(report, sizeof(report));
     } else if (term_command_is(hypr, "binds")) {
@@ -4209,8 +4219,15 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
-  if (term_command_is(args, "windows") || term_command_is(args, "window")) {
+  if (term_command_is(args, "windows") || term_command_is(args, "window") ||
+      term_command_is(args, "clients") || term_command_is(args, "client")) {
     gui_desktop_format_windows(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "activewindow") ||
+      term_command_is(args, "active-window")) {
+    gui_desktop_format_activewindow(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }

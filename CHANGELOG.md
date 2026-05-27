@@ -59,6 +59,10 @@
   togglesplit/layoutmsg/submap`, `desktop decorations/descriptions/instances/submap`,
   matching `hyprctl` facade commands, submap runtime hints, and bumped
   `orizon-desktop-hypr` to 0.15.0.
+- Strengthened the Hyprland-style client model with stable client addresses,
+  richer `desktop windows/clients/activewindow`, `focusHistoryID`,
+  `desktop focus-history`, `desktop hyprctl focushistory`, per-client geometry,
+  workspace last-window diagnostics, and bumped `orizon-desktop-hypr` to 0.16.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

@@ -2843,7 +2843,7 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
   if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
       pkg_text_matches_query("desktop hypr hyprland optional", query)) {
     snprintf(line, sizeof(line),
-             "available %s 0.15.0 optional install='pkg install %s'",
+             "available %s 0.16.0 optional install='pkg install %s'",
              ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
     pkg_append_line(out, out_size, line);
     matches++;
@@ -2937,7 +2937,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     if (pkg_name_is_desktop_alias(name)) {
       pkg_append_line(out, out_size, "Orizon package");
       pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
-      pkg_append_line(out, out_size, "version 0.15.0");
+      pkg_append_line(out, out_size, "version 0.16.0");
       pkg_append_line(out, out_size, "state available optional");
       pkg_append_line(out, out_size,
                       "type local generated package; not installed yet");
@@ -3592,6 +3592,9 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "submap-command = desktop submap\n"
       "configerrors-command = desktop configerrors\n"
       "rollinglog-command = desktop rollinglog\n"
+      "clients-command = desktop clients\n"
+      "activewindow-command = desktop activewindow\n"
+      "focus-history-command = desktop focus-history\n"
       "binds-runtime = " ORIZON_DESKTOP_BINDS_PATH "\n"
       "autostart-runtime = " ORIZON_DESKTOP_AUTOSTART_PATH "\n"
       "rules-runtime = " ORIZON_DESKTOP_RULES_PATH "\n"
@@ -3607,6 +3610,9 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "hyprctl-version-command = desktop hyprctl version\n"
       "hyprctl-systeminfo-command = desktop hyprctl systeminfo\n"
       "hyprctl-activeworkspace-command = desktop hyprctl activeworkspace\n"
+      "hyprctl-activewindow-command = desktop hyprctl activewindow\n"
+      "hyprctl-clients-command = desktop hyprctl clients\n"
+      "hyprctl-focushistory-command = desktop hyprctl focushistory\n"
       "hyprctl-layouts-command = desktop hyprctl layouts\n"
       "hyprctl-animations-command = desktop hyprctl animations\n"
       "hyprctl-decorations-command = desktop hyprctl decorations\n"
@@ -3657,7 +3663,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   snprintf(header, sizeof(header),
            "orizon-package 1\n"
            "name " ORIZON_DESKTOP_PACKAGE "\n"
-           "version 0.15.0\n"
+           "version 0.16.0\n"
            "depends orizon-core core-x86_64\n"
            "depends orizon-packages text-payload-v5\n"
            "depends orizon-desktop-base hyprland-style-profile-runtime\n"

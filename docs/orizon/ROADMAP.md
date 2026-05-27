@@ -40,7 +40,7 @@
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs`,
-  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
+  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
   profile. It is disabled by default, persists session/autostart settings plus
@@ -50,10 +50,11 @@
   workspaces, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`/`togglesplit`/`layoutmsg`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  keyword/getoption runtime inspection, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/cursorpos diagnostics,
+  keyword/getoption runtime inspection, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
   pointer diagnostics,
   `dwindle`/`master`/`monocle` placement, and
-  diagnostic tiled client/workspace plumbing, not the real upstream
+  diagnostic tiled client/workspace plumbing with stable client addresses,
+  activewindow geometry and Hyprland-style focusHistoryID, not the real upstream
   Hyprland/Wayland stack yet.
 - Console basics: scrollback, `z`/`s` scrolling, full-screen `less <file>`
   pager, `tail`, `help shell`, simple `;` command grouping, `>`/`>>`
