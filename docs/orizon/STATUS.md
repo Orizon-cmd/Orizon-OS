@@ -49,7 +49,8 @@ work.
   desktop profile. It is disabled by default, selectable during installation,
   package installable later, persists `/system/desktop-session.conf` plus
   `/system/desktop-settings.conf`, settings hub export/sync to
-  `/home/orizon/.config/hypr/orizon-hypr.conf`, plus generated
+  `/home/orizon/.config/hypr/orizon-hypr.conf`, a prepared
+  `/system/desktop-modules.conf` split map for future module packages, plus generated
   `/system/desktop-binds.conf` and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative workspace dispatch, dispatcher-style

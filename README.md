@@ -59,6 +59,10 @@ le developpement noyau:
   `/system/desktop-session.conf`, `/system/desktop-settings.conf` et
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
   hub de settings `/system` synchronisable avec `desktop settings paths/export/sync`,
+  carte de modules `/system/desktop-modules.conf` consultable avec
+  `desktop modules`, separation preparee
+  `orizon-desktop-core`/`orizon-terminal`/`orizon-settings`/`orizon-launcher`
+  et `orizon-waybar` seulement prevu pour plus tard,
   workspaces runtime, clients tiles avec adresses stables/focusHistoryID,
   dispatchers Hyprland-like, fullscreen/pseudo/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
@@ -153,6 +157,11 @@ instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
 `desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
+`desktop modules` affiche la carte de packaging modulaire: le paquet actuel
+reste `orizon-desktop-hypr`, tandis que `orizon-desktop-core`,
+`orizon-terminal`, `orizon-settings` et `orizon-launcher` sont prepares comme
+modules futurs; `orizon-waybar` est seulement annonce comme paquet separe
+ulterieur, pas installe maintenant.
 `desktop launch terminal|settings|logs|packages|update` ouvre les premieres
 apps natives comme clients tiles geres par le compositor; elles ne sont pas des
 fenetres flottantes et aucune barre type Windows n'est ajoutee.

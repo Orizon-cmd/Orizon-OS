@@ -150,6 +150,7 @@ desktop settings
 desktop settings paths
 desktop settings export
 desktop settings sync
+desktop modules
 desktop settings presets
 desktop settings doctor
 desktop settings preset compact

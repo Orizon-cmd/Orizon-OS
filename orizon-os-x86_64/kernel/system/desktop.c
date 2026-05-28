@@ -219,6 +219,26 @@ static const char *desktop_runtime_config =
     "sources 1\n"
     "source = ~/.config/hypr/orizon-local.conf\n";
 
+static const char *desktop_modules_config =
+    "# Orizon desktop modular packaging map v1\n"
+    "# This prepares a split desktop without installing Waybar yet.\n"
+    "module " ORIZON_DESKTOP_PACKAGE_CORE
+    " state=prepared kind=runtime provides=policy,session,settings,logs current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    "module " ORIZON_DESKTOP_PACKAGE
+    " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
+    " state=prepared kind=app provides=terminal-client shortcut=F1 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    "module " ORIZON_DESKTOP_PACKAGE_SETTINGS
+    " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    "module " ORIZON_DESKTOP_PACKAGE_LAUNCHER
+    " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    "module " ORIZON_DESKTOP_PACKAGE_WAYBAR
+    " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
+    "policy no-windows-taskbar\n"
+    "policy no-free-drag-window-moving\n"
+    "install-meta package-current=" ORIZON_DESKTOP_PACKAGE "\n"
+    "install-meta package-split-prepared=yes\n";
+
 static const char *desktop_state_config =
     "# Orizon desktop session manager state v1\n"
     "desired-state stopped\n"
@@ -1493,6 +1513,11 @@ int orizon_desktop_ensure_defaults(void) {
                               desktop_runtime_config) < 0) {
     rc = -1;
   }
+  if (!vfs_exists(ORIZON_DESKTOP_MODULES_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_MODULES_PATH,
+                              desktop_modules_config) < 0) {
+    rc = -1;
+  }
   if (!vfs_exists(ORIZON_DESKTOP_STATE_PATH)) {
     policy_enabled = desktop_policy_enabled_from_file();
     if (desktop_write_session_state(policy_enabled ? "started" : "stopped",
@@ -2440,6 +2465,7 @@ int orizon_desktop_reset(char *status, size_t status_size) {
   desktop_write_text_file(ORIZON_DESKTOP_LAYERS_PATH,
                           desktop_layers_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH, desktop_runtime_config);
+  desktop_write_text_file(ORIZON_DESKTOP_MODULES_PATH, desktop_modules_config);
   desktop_write_session_state("stopped", "inactive", "reset",
                               "profile-defaults-restored");
   desktop_log_event("reset profile=" ORIZON_DESKTOP_PROFILE);
@@ -2452,12 +2478,14 @@ int orizon_desktop_reset(char *status, size_t status_size) {
              "config: %s\n"
              "template: %s\n"
              "settings: %s\n"
+             "modules: %s\n"
              "user-config: kept-if-present %s\n",
              ORIZON_DESKTOP_PROFILE,
              rc == 0 ? ORIZON_DESKTOP_CONFIG_PATH : "write-failed",
              template_rc == 0 ? ORIZON_DESKTOP_TEMPLATE_PATH
                               : "write-failed",
              ORIZON_DESKTOP_SETTINGS_PATH,
+             ORIZON_DESKTOP_MODULES_PATH,
              ORIZON_DESKTOP_USER_CONFIG_PATH);
   }
   return rc == 0 && template_rc == 0 ? 0 : -1;
@@ -2532,6 +2560,9 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "settings-config: %s\n",
            ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "modules-map: %s\n",
+           ORIZON_DESKTOP_MODULES_PATH);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "binds-runtime: %s\n",
            ORIZON_DESKTOP_BINDS_PATH);
@@ -3071,6 +3102,8 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
                              ORIZON_DESKTOP_SESSION_PATH);
   desktop_append_path_status(out, out_size, &used, "settings",
                              ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append_path_status(out, out_size, &used, "modules",
+                             ORIZON_DESKTOP_MODULES_PATH);
   desktop_append_path_status(out, out_size, &used, "user-config",
                              ORIZON_DESKTOP_USER_CONFIG_PATH);
   desktop_append_path_status(out, out_size, &used, "template",
@@ -3233,6 +3266,37 @@ void orizon_desktop_format_settings_doctor(char *out, size_t out_size) {
   snprintf(line, sizeof(line), "summary: %s\n",
            fail ? "FAIL" : (warn ? "WARN" : "PASS"));
   desktop_append(out, out_size, &used, line);
+}
+
+void orizon_desktop_format_modules(char *out, size_t out_size) {
+  char cfg[1536];
+  size_t used = 0;
+  int n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used, "Orizon desktop modules\n");
+  desktop_append(out, out_size, &used,
+                 "goal: modular Hyprland-style desktop packaging, no Windows taskbar, no free-drag windows\n");
+  desktop_append(out, out_size, &used,
+                 "prepared-now: " ORIZON_DESKTOP_PACKAGE_CORE " " ORIZON_DESKTOP_PACKAGE " " ORIZON_DESKTOP_PACKAGE_TERMINAL " " ORIZON_DESKTOP_PACKAGE_SETTINGS " " ORIZON_DESKTOP_PACKAGE_LAUNCHER "\n");
+  desktop_append(out, out_size, &used,
+                 "planned-later: " ORIZON_DESKTOP_PACKAGE_WAYBAR " as separate package only, not installed now\n");
+  desktop_append(out, out_size, &used,
+                 "compat-meta: pkg install " ORIZON_DESKTOP_PACKAGE " remains the current all-in-one path while split packages are prepared\n");
+  desktop_append(out, out_size, &used,
+                 "path: " ORIZON_DESKTOP_MODULES_PATH "\n");
+  n = desktop_read_text_file(ORIZON_DESKTOP_MODULES_PATH, cfg, sizeof(cfg));
+  if (n > 0) {
+    desktop_append(out, out_size, &used, "\n== modules.conf ==\n");
+    desktop_append(out, out_size, &used, cfg);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "modules.conf missing WARN run desktop reset or desktop settings sync\n");
+  }
 }
 
 void orizon_desktop_format_apps(char *out, size_t out_size) {
@@ -3423,6 +3487,15 @@ void orizon_desktop_format_doctor(char *out, size_t out_size) {
   } else {
     desktop_append(out, out_size, &used,
                    "settings missing WARN run desktop settings repair\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_MODULES_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "modules %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_MODULES_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "modules missing WARN run desktop reset\n");
     warn = 1;
   }
   if (vfs_stat(ORIZON_DESKTOP_BINDS_PATH, &size, NULL) == 0 && size > 0) {

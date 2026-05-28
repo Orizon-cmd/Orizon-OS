@@ -35,6 +35,7 @@ desktop settings set border-size 3
 desktop settings repair
 desktop pointer
 desktop keymap
+desktop modules
 desktop apps
 desktop profiles
 desktop preset moss
@@ -141,6 +142,8 @@ desktop close terminal
 desktop package
 pkg sample desktop
 pkg info orizon-desktop-hypr
+pkg info orizon-terminal
+pkg search waybar
 pkg search desktop
 pkg verify /workspace/packages/orizon-desktop-hypr.opkg
 pkg simulate /workspace/packages/orizon-desktop-hypr.opkg
@@ -161,6 +164,13 @@ generates the local package, installs it, writes the Hyprland-style config, and
 enables the desktop profile. `pkg remove orizon-desktop-hypr` disables the
 profile through the package remove hook, and `pkg rollback orizon-desktop-hypr`
 restores the last removed desktop package snapshot.
+
+`desktop modules` shows the prepared modular packaging map at
+`/system/desktop-modules.conf`. The current install path is still the compatible
+all-in-one `orizon-desktop-hypr` package, but Orizon now records the future
+split points: `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
+`orizon-launcher`. `orizon-waybar` is listed only as a future separate package;
+it is not installed now and no Windows-style taskbar is added.
 
 `desktop config doctor` parses the Hyprland-style user config at
 `/home/orizon/.config/hypr/orizon-hypr.conf`. It understands common Hyprland

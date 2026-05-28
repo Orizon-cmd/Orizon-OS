@@ -106,6 +106,7 @@ desktop settings set border-size 3
 desktop settings repair
 desktop pointer
 desktop keymap
+desktop modules
 desktop apps
 desktop profiles
 desktop preset moss
@@ -319,6 +320,9 @@ list tiled clients with stable addresses, geometry and `focusHistoryID`,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
 F9/F10/F11 enter resize/move/launch submaps and F12/Esc returns to default,
+while `desktop modules` shows the prepared package split map for
+`orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, `orizon-launcher`,
+and future `orizon-waybar`.
 without enabling manual window dragging. See
 [DESKTOP.md](DESKTOP.md).
 
@@ -404,6 +408,9 @@ the optional desktop package. It installs `/system/desktop.conf`,
 `/system/desktop-session.conf`, `/system/desktop-settings.conf`, generated
 desktop runtime hint files, and the Hyprland-style user config under
 `/home/orizon/.config/hypr/`.
+It also writes `/system/desktop-modules.conf`, a non-invasive module map for
+the future split packages. `pkg info orizon-terminal` and `pkg search waybar`
+report those prepared modules, but `orizon-waybar` is not installed now.
 `desktop settings sync` is the preferred repair command if `/system` settings
 and the user Hyprland-style config drift apart.
 On an installed VM, `pkg install orizon-desktop-hypr` generates and installs

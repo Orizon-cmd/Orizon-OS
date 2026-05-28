@@ -3765,6 +3765,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop configerrors    - Show Hyprland-style config parser errors\n");
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop focus-history   - Show Hyprland-style focusHistoryID order\n");
+    term_puts_t(term, "  desktop modules         - Show prepared modular desktop packages\n");
     term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
     term_puts_t(term, "  desktop profiles        - List themes/wallpapers/layouts\n");
     term_puts_t(term, "  desktop preset <name>   - Apply graphite/moss/ember/frost/focus preset\n");
@@ -4048,6 +4049,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     orizon_desktop_format_apps(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "modules") ||
+      term_command_is(args, "packages") ||
+      term_command_is(args, "package modules")) {
+    orizon_desktop_format_modules(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }

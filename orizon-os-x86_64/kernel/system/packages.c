@@ -344,6 +344,33 @@ static int pkg_name_is_desktop_alias(const char *name) {
                   strcmp(name, "hyprland") == 0);
 }
 
+static int pkg_name_is_desktop_module(const char *name) {
+  return name && (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0 ||
+                  strcmp(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) == 0 ||
+                  strcmp(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) == 0 ||
+                  strcmp(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) == 0 ||
+                  strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0);
+}
+
+static const char *pkg_desktop_module_role(const char *name) {
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
+    return "runtime policy/session/settings/logs";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) == 0) {
+    return "native tiled terminal client";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) == 0) {
+    return "native tiled settings/logs/packages/update viewers";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) == 0) {
+    return "Hyprland-style launcher overlay";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+    return "future Waybar-style layer package; not installed now";
+  }
+  return "unknown desktop module";
+}
+
 static int pkg_path_safe(const char *path) {
   const char *p;
 
@@ -2843,10 +2870,30 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
   if (pkg_text_matches_query(ORIZON_DESKTOP_PACKAGE, query) ||
       pkg_text_matches_query("desktop hypr hyprland optional", query)) {
     snprintf(line, sizeof(line),
-             "available %s 0.22.0 optional install='pkg install %s'",
+             "available %s " ORIZON_DESKTOP_PACKAGE_VERSION
+             " optional install='pkg install %s'",
              ORIZON_DESKTOP_PACKAGE, ORIZON_DESKTOP_PACKAGE);
     pkg_append_line(out, out_size, line);
     matches++;
+  }
+  {
+    const char *modules[] = {
+        ORIZON_DESKTOP_PACKAGE_CORE, ORIZON_DESKTOP_PACKAGE_TERMINAL,
+        ORIZON_DESKTOP_PACKAGE_SETTINGS, ORIZON_DESKTOP_PACKAGE_LAUNCHER,
+        ORIZON_DESKTOP_PACKAGE_WAYBAR};
+    for (size_t i = 0; i < sizeof(modules) / sizeof(modules[0]); i++) {
+      if (!pkg_text_matches_query(modules[i], query) &&
+          !pkg_text_matches_query(pkg_desktop_module_role(modules[i]), query) &&
+          !pkg_text_matches_query("desktop modules split hyprland waybar",
+                                  query)) {
+        continue;
+      }
+      snprintf(line, sizeof(line),
+               "prepared %s " ORIZON_DESKTOP_PACKAGE_VERSION " role='%s'",
+               modules[i], pkg_desktop_module_role(modules[i]));
+      pkg_append_line(out, out_size, line);
+      matches++;
+    }
   }
 
   count = vfs_readdir(PKG_DB_INSTALLED, entries, 64);
@@ -2937,7 +2984,8 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
     if (pkg_name_is_desktop_alias(name)) {
       pkg_append_line(out, out_size, "Orizon package");
       pkg_append_line(out, out_size, "name " ORIZON_DESKTOP_PACKAGE);
-      pkg_append_line(out, out_size, "version 0.22.0");
+      pkg_append_line(out, out_size,
+                      "version " ORIZON_DESKTOP_PACKAGE_VERSION);
       pkg_append_line(out, out_size, "state available optional");
       pkg_append_line(out, out_size,
                       "type local generated package; not installed yet");
@@ -2948,7 +2996,29 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
       pkg_append_line(out, out_size,
                       "depends orizon-core core-x86_64; orizon-packages text-payload-v5; orizon-desktop-base hyprland-style-profile-runtime");
       pkg_append_line(out, out_size,
-                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
+                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-modules.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
+      return 0;
+    }
+    if (pkg_name_is_desktop_module(name)) {
+      pkg_append_line(out, out_size, "Orizon package");
+      snprintf(line, sizeof(line), "name %s", name);
+      pkg_append_line(out, out_size, line);
+      pkg_append_line(out, out_size,
+                      "version " ORIZON_DESKTOP_PACKAGE_VERSION);
+      pkg_append_line(out, out_size,
+                      strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0
+                          ? "state planned separate-package"
+                          : "state prepared optional-module");
+      snprintf(line, sizeof(line), "role %s", pkg_desktop_module_role(name));
+      pkg_append_line(out, out_size, line);
+      pkg_append_line(out, out_size,
+                      "install-current pkg install " ORIZON_DESKTOP_PACKAGE);
+      pkg_append_line(out, out_size,
+                      "module-map " ORIZON_DESKTOP_MODULES_PATH);
+      pkg_append_line(out, out_size,
+                      "split-status prepared; individual install hooks not enabled yet");
+      pkg_append_line(out, out_size,
+                      "waybar-note no Waybar/taskbar package is installed now");
       return 0;
     }
     pkg_append_line(out, out_size, "pkg info: package not installed");
@@ -3530,6 +3600,25 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "sources 1\n"
       "source = ~/.config/hypr/orizon-local.conf\n"
       "content-end\n"
+      "file " ORIZON_DESKTOP_MODULES_PATH "\n"
+      "# Orizon desktop modular packaging map v1\n"
+      "module " ORIZON_DESKTOP_PACKAGE_CORE
+      " state=prepared kind=runtime provides=policy,session,settings,logs current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      "module " ORIZON_DESKTOP_PACKAGE
+      " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
+      " state=prepared kind=app provides=terminal-client shortcut=F1 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      "module " ORIZON_DESKTOP_PACKAGE_SETTINGS
+      " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      "module " ORIZON_DESKTOP_PACKAGE_LAUNCHER
+      " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      "module " ORIZON_DESKTOP_PACKAGE_WAYBAR
+      " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
+      "policy no-windows-taskbar\n"
+      "policy no-free-drag-window-moving\n"
+      "install-meta package-current=" ORIZON_DESKTOP_PACKAGE "\n"
+      "install-meta package-split-prepared=yes\n"
+      "content-end\n"
       "file " ORIZON_DESKTOP_STATE_PATH "\n"
       "# Orizon desktop session manager state v1\n"
       "desired-state started\n"
@@ -3639,6 +3728,14 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "settings-paths-command = desktop settings paths\n"
       "settings-export-command = desktop settings export\n"
       "settings-sync-command = desktop settings sync\n"
+      "modules-command = desktop modules\n"
+      "module-map = " ORIZON_DESKTOP_MODULES_PATH "\n"
+      "module-core = " ORIZON_DESKTOP_PACKAGE_CORE "\n"
+      "module-hypr = " ORIZON_DESKTOP_PACKAGE "\n"
+      "module-terminal = " ORIZON_DESKTOP_PACKAGE_TERMINAL "\n"
+      "module-settings = " ORIZON_DESKTOP_PACKAGE_SETTINGS "\n"
+      "module-launcher = " ORIZON_DESKTOP_PACKAGE_LAUNCHER "\n"
+      "module-waybar-future = " ORIZON_DESKTOP_PACKAGE_WAYBAR "\n"
       "settings-app-command = desktop launch settings\n"
       "logs-app-command = desktop launch logs\n"
       "packages-app-command = desktop launch packages\n"
@@ -3753,7 +3850,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   snprintf(header, sizeof(header),
            "orizon-package 1\n"
            "name " ORIZON_DESKTOP_PACKAGE "\n"
-           "version 0.22.0\n"
+           "version " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
            "depends orizon-core core-x86_64\n"
            "depends orizon-packages text-payload-v5\n"
            "depends orizon-desktop-base hyprland-style-profile-runtime\n"
@@ -3771,7 +3868,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   pkg_append_line(report, report_size,
                   "Run after install: pkg install " ORIZON_DESKTOP_PACKAGE_PATH);
   pkg_append_line(report, report_size,
-                  "Then: desktop status | desktop settings paths | desktop settings sync");
+                  "Then: desktop status | desktop modules | desktop settings sync");
   vfs_persist_save();
   return 0;
 }

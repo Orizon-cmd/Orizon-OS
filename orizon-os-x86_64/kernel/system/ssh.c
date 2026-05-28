@@ -3346,6 +3346,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop configerrors    show Hyprland-style config parser errors\r\n"
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop focus-history   show Hyprland-style focusHistoryID order\r\n"
+             "  desktop modules         show prepared modular desktop packages\r\n"
              "  desktop apps            list desktop launcher apps\r\n"
              "  desktop profiles        list themes/wallpapers/layouts\r\n"
              "  desktop preset <name>   apply graphite/moss/ember/frost/focus preset\r\n"
@@ -3547,6 +3548,10 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
     orizon_desktop_format_apps(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "modules") ||
+             ssh_shell_command_is(sub, "packages") ||
+             ssh_shell_command_is(sub, "package modules")) {
+    orizon_desktop_format_modules(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "binds") ||
              ssh_shell_command_is(sub, "bind")) {
     gui_desktop_format_binds(out, sizeof(out));

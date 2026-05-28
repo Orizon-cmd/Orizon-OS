@@ -86,6 +86,10 @@
   `desktop settings export`, and `desktop settings sync`, keeping `/system` as
   the source of truth while regenerating the Hyprland-style user config/runtime
   hints, and bumped `orizon-desktop-hypr` to 0.22.0.
+- Added the prepared modular desktop packaging map with `desktop modules`,
+  `/system/desktop-modules.conf`, discoverable `orizon-desktop-core`,
+  `orizon-terminal`, `orizon-settings`, `orizon-launcher`, and future
+  `orizon-waybar` package metadata, and bumped `orizon-desktop-hypr` to 0.23.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

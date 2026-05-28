@@ -76,6 +76,7 @@ desktop package even before it is installed. `pkg sample desktop` creates
 the first Orizon desktop profile:
 `/system/desktop.conf`, `/system/desktop-session.conf`,
 `/system/desktop-settings.conf`,
+`/system/desktop-modules.conf`,
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`,
 `/system/desktop-layers.conf`,
@@ -94,6 +95,7 @@ desktop settings
 desktop settings paths
 desktop settings export
 desktop settings sync
+desktop modules
 desktop settings presets
 desktop settings doctor
 desktop settings preset compact
@@ -162,9 +164,9 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.22.0` because it includes policy/config files, the persisted session
+`0.23.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
-commands, Hyprland-style config doctor/apply import, generated
+commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
 commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
 `hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
@@ -189,6 +191,11 @@ Version `0.22.0` adds the desktop settings hub commands:
 `desktop settings paths`, `desktop settings export`, and `desktop settings
 sync`, keeping `/system` as the source of truth while regenerating the
 Hyprland-style user config and runtime hints.
+Version `0.23.0` adds the modular desktop packaging map and prepared package
+metadata for `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`,
+`orizon-launcher`, and future `orizon-waybar`. The split packages are prepared
+for discovery and documentation; the current install path remains
+`pkg install orizon-desktop-hypr`.
 
 ## Package Format
 
