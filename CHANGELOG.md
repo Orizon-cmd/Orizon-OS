@@ -79,6 +79,9 @@
   resize/move/launch submaps, F12/Esc reset, `desktop keymap`,
   `desktop dispatch resizeactive`, real focus-follows-mouse transitions in the
   VM compositor, and bumped `orizon-desktop-hypr` to 0.20.0.
+- Added the first native Hyprland-style desktop apps as tiled clients:
+  `desktop launch settings|logs|packages|update`, launcher/submap shortcuts,
+  compositor app surfaces, and bumped `orizon-desktop-hypr` to 0.21.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

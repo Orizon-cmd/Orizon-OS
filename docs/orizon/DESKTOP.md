@@ -128,6 +128,10 @@ desktop bar toggle
 desktop apply
 desktop launcher show
 desktop launch terminal
+desktop launch settings
+desktop launch logs
+desktop launch packages
+desktop launch update
 desktop killactive
 desktop open terminal
 desktop close terminal
@@ -233,13 +237,16 @@ focus-follows-mouse transition counter. F9 enters the `resize` submap, F10
 enters `move`, F11 enters `launch`, and F12/Esc returns to `default`. In
 `resize`, arrows/HJKL adjust split/master tiling ratios and `R` resets them.
 In `move`, arrows/HJKL move focus, `1/2/3` move the active tiled client to a
-workspace, and `P` toggles pin. In `launch`, `T` opens a terminal, `D` toggles
-the launcher, and `Q` kills the active client. This is keyboard dispatcher
-control, not free window dragging.
+workspace, and `P` toggles pin. In `launch`, `T` opens a terminal, `S` opens
+Settings, `L` opens Logs, `P` opens Packages, `U` opens Update, `D` toggles the
+launcher, and `Q` kills the active client. This is keyboard dispatcher control,
+not free window dragging.
 
 `desktop apps` lists the first launcher entries. `desktop launcher show` opens
-the launcher overlay, `F3` toggles it locally, and `desktop launch terminal`
-opens the first real app: the Orizon terminal client.
+the launcher overlay, `F3` toggles it locally, and
+`desktop launch terminal|settings|logs|packages|update` opens the first native
+Orizon apps as tiled clients. They are compositor-managed Hyprland-style
+surfaces, not floating windows, and there is still no Windows-like taskbar.
 
 `desktop profiles` lists the symbolic presets, themes, wallpapers and layouts
 currently understood by the Orizon compositor. `desktop preset

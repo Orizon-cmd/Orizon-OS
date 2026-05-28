@@ -722,6 +722,111 @@ static int desktop_spawn_client(const char *title, const char *app_id,
   return -1;
 }
 
+static int desktop_known_app_spec(const char *app, char *title,
+                                  size_t title_size, char *app_id,
+                                  size_t app_id_size,
+                                  int *terminal_backed) {
+  const char *resolved_title = NULL;
+  const char *resolved_app = NULL;
+  int resolved_terminal = 0;
+
+  if (!app || !app[0] || !title || !app_id || !terminal_backed) {
+    return -1;
+  }
+  if (strcmp(app, "terminal") == 0 ||
+      strcmp(app, "orizon-terminal") == 0 || strcmp(app, "kitty") == 0) {
+    resolved_title = "Terminal";
+    resolved_app = "orizon-terminal";
+    resolved_terminal = 1;
+  } else if (strcmp(app, "settings") == 0 ||
+             strcmp(app, "desktop-settings") == 0 ||
+             strcmp(app, "orizon-settings") == 0) {
+    resolved_title = "Settings";
+    resolved_app = "orizon-settings";
+  } else if (strcmp(app, "logs") == 0 || strcmp(app, "log-viewer") == 0 ||
+             strcmp(app, "logs-viewer") == 0 ||
+             strcmp(app, "orizon-logs") == 0) {
+    resolved_title = "Logs";
+    resolved_app = "orizon-logs";
+  } else if (strcmp(app, "packages") == 0 || strcmp(app, "pkg") == 0 ||
+             strcmp(app, "package-viewer") == 0 ||
+             strcmp(app, "orizon-packages") == 0) {
+    resolved_title = "Packages";
+    resolved_app = "orizon-packages";
+  } else if (strcmp(app, "update") == 0 || strcmp(app, "updater") == 0 ||
+             strcmp(app, "update-viewer") == 0 ||
+             strcmp(app, "orizon-update-viewer") == 0) {
+    resolved_title = "Update";
+    resolved_app = "orizon-update-viewer";
+  } else if (strcmp(app, "launcher") == 0 ||
+             strcmp(app, "orizon-launcher") == 0) {
+    resolved_title = "Launcher";
+    resolved_app = "orizon-launcher";
+  } else {
+    return -1;
+  }
+
+  snprintf(title, title_size, "%s", resolved_title);
+  snprintf(app_id, app_id_size, "%s", resolved_app);
+  *terminal_backed = resolved_terminal;
+  return 0;
+}
+
+static const char *desktop_client_backend_name(const desktop_client_t *client) {
+  if (!client) {
+    return "unknown";
+  }
+  if (client->terminal_backed) {
+    return "terminal";
+  }
+  if (strcmp(client->app_id, "orizon-settings") == 0 ||
+      strcmp(client->app_id, "orizon-logs") == 0 ||
+      strcmp(client->app_id, "orizon-packages") == 0 ||
+      strcmp(client->app_id, "orizon-update-viewer") == 0) {
+    return "native-app";
+  }
+  return "prepared";
+}
+
+static int desktop_spawn_known_app_client(const char *app, char *out,
+                                          size_t out_size) {
+  char title[48];
+  char app_id[32];
+  int terminal_backed = 0;
+  int id;
+
+  if (desktop_known_app_spec(app, title, sizeof(title), app_id,
+                             sizeof(app_id), &terminal_backed) < 0) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: exec supports terminal, settings, logs, "
+               "packages, update, launcher\n");
+    }
+    return -1;
+  }
+  if (strcmp(app_id, "orizon-launcher") == 0) {
+    gui_desktop_toggle_launcher();
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: exec orizon-launcher overlay toggled\n");
+    }
+    return 0;
+  }
+  id = desktop_spawn_client(title, app_id, terminal_backed);
+  if (id < 0) {
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: client limit reached\n");
+    }
+    return -1;
+  }
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "desktop dispatch: exec %s client spawned id=%d tiled=yes\n",
+             app_id, id);
+  }
+  return 0;
+}
+
 static void desktop_ensure_terminal_client(void) {
   int has_terminal = 0;
 
@@ -957,19 +1062,22 @@ static void draw_desktop_launcher(void) {
   fb_fill_rect(x, y, 5, height, COLOR_PANEL_ACCENT);
   font_draw_string(x + 24, y + 22, "Orizon Launcher", COLOR_TEXT_PRIMARY);
   font_draw_string(x + 24, y + 52,
-                   "1 / Enter: Terminal   Esc: close launcher",
+                   "1 Terminal  2 Settings  3 Logs  4 Packages  5 Update",
                    COLOR_TEXT_SECONDARY);
   font_draw_string(x + 24, y + 88,
                    "Terminal      desktop launch terminal",
                    COLOR_TEXT_PRIMARY);
   font_draw_string(x + 24, y + 116,
-                   "Settings      desktop session",
+                   "Settings      desktop launch settings",
                    COLOR_TEXT_SECONDARY);
   font_draw_string(x + 24, y + 144,
-                   "Packages      pkg search desktop",
+                   "Logs          desktop launch logs",
+                   COLOR_TEXT_SECONDARY);
+  font_draw_string(x + 24, y + 164,
+                   "Packages      desktop launch packages",
                    COLOR_TEXT_SECONDARY);
   font_draw_string(x + 24, y + 180,
-                   "Next: file manager, bar widgets and true tiling.",
+                   "Update        desktop launch update",
                    COLOR_TEXT_MUTED);
 }
 
@@ -1158,6 +1266,69 @@ static int desktop_focus_client_at(int x, int y) {
   return -1;
 }
 
+static void draw_desktop_native_app(const desktop_client_t *client, int x,
+                                    int y, int width, int height) {
+  int line = y + 8;
+  int step = 20;
+
+  if (!client || width < 48 || height < 48) {
+    return;
+  }
+  font_draw_string(x, line, "native Orizon tiling client",
+                   COLOR_TEXT_PRIMARY);
+  line += step;
+  if (strcmp(client->app_id, "orizon-settings") == 0) {
+    font_draw_string(x, line, "Settings", COLOR_TEXT_PRIMARY);
+    line += step;
+    font_draw_string(x, line, "theme, gaps, borders, input, autostart",
+                     COLOR_TEXT_SECONDARY);
+    line += step;
+    font_draw_string(x, line, "commands: desktop settings | desktop keymap",
+                     COLOR_TEXT_MUTED);
+    line += step;
+    font_draw_string(x, line, "edit policy: desktop keyword <key> <value>",
+                     COLOR_TEXT_MUTED);
+  } else if (strcmp(client->app_id, "orizon-logs") == 0) {
+    font_draw_string(x, line, "Logs Viewer", COLOR_TEXT_PRIMARY);
+    line += step;
+    font_draw_string(x, line, "/logs/desktop.log and session rollinglog",
+                     COLOR_TEXT_SECONDARY);
+    line += step;
+    font_draw_string(x, line, "commands: desktop logs | desktop rollinglog",
+                     COLOR_TEXT_MUTED);
+    line += step;
+    font_draw_string(x, line, "SSH-safe: cat/head/tail still expose files",
+                     COLOR_TEXT_MUTED);
+  } else if (strcmp(client->app_id, "orizon-packages") == 0) {
+    font_draw_string(x, line, "Package Viewer", COLOR_TEXT_PRIMARY);
+    line += step;
+    font_draw_string(x, line, "orizon-desktop-hypr and optional modules",
+                     COLOR_TEXT_SECONDARY);
+    line += step;
+    font_draw_string(x, line, "commands: pkg search desktop | pkg info",
+                     COLOR_TEXT_MUTED);
+    line += step;
+    font_draw_string(x, line, "next split: terminal/settings/launcher pkgs",
+                     COLOR_TEXT_MUTED);
+  } else if (strcmp(client->app_id, "orizon-update-viewer") == 0) {
+    font_draw_string(x, line, "Update Viewer", COLOR_TEXT_PRIMARY);
+    line += step;
+    font_draw_string(x, line, "manifest, signature, bootguard, rollback",
+                     COLOR_TEXT_SECONDARY);
+    line += step;
+    font_draw_string(x, line, "commands: update status | rollback-status",
+                     COLOR_TEXT_MUTED);
+    line += step;
+    font_draw_string(x, line, "VM facade only; no hardware validation here",
+                     COLOR_TEXT_MUTED);
+  } else {
+    font_draw_string(x, line, "prepared surface", COLOR_TEXT_PRIMARY);
+    line += step;
+    font_draw_string(x, line, "future native Orizon desktop app",
+                     COLOR_TEXT_SECONDARY);
+  }
+}
+
 static void draw_desktop_client_tile(const desktop_client_t *client, int x,
                                      int y, int width, int height,
                                      int focused) {
@@ -1224,11 +1395,7 @@ static void draw_desktop_client_tile(const desktop_client_t *client, int x,
                      "shared backend; focus with dispatch movefocus",
                      COLOR_TEXT_SECONDARY);
   } else {
-    font_draw_string(render_x, render_y + 8, "prepared surface",
-                     COLOR_TEXT_PRIMARY);
-    font_draw_string(render_x, render_y + 32,
-                     "future native Orizon desktop app",
-                     COLOR_TEXT_SECONDARY);
+    draw_desktop_native_app(client, render_x, render_y, render_w, render_h);
   }
 }
 
@@ -1457,6 +1624,26 @@ static int desktop_handle_submap_key(int key) {
       desktop_set_submap("default");
       return 1;
     }
+    if (key == 's' || key == 'S') {
+      desktop_spawn_known_app_client("settings", NULL, 0);
+      desktop_set_submap("default");
+      return 1;
+    }
+    if (key == 'l' || key == 'L') {
+      desktop_spawn_known_app_client("logs", NULL, 0);
+      desktop_set_submap("default");
+      return 1;
+    }
+    if (key == 'p' || key == 'P') {
+      desktop_spawn_known_app_client("packages", NULL, 0);
+      desktop_set_submap("default");
+      return 1;
+    }
+    if (key == 'u' || key == 'U') {
+      desktop_spawn_known_app_client("update", NULL, 0);
+      desktop_set_submap("default");
+      return 1;
+    }
     if (key == 'd' || key == 'D' || key == ' ') {
       gui_desktop_toggle_launcher();
       desktop_set_submap("default");
@@ -1508,6 +1695,18 @@ static void keyboard_callback(int key) {
         gui_desktop_hide_launcher();
       } else if (key == '\n' || key == '\r' || key == ' ' || key == '1') {
         gui_desktop_spawn_terminal_client();
+        gui_desktop_hide_launcher();
+      } else if (key == '2' || key == 's' || key == 'S') {
+        desktop_spawn_known_app_client("settings", NULL, 0);
+        gui_desktop_hide_launcher();
+      } else if (key == '3' || key == 'l' || key == 'L') {
+        desktop_spawn_known_app_client("logs", NULL, 0);
+        gui_desktop_hide_launcher();
+      } else if (key == '4' || key == 'p' || key == 'P') {
+        desktop_spawn_known_app_client("packages", NULL, 0);
+        gui_desktop_hide_launcher();
+      } else if (key == '5' || key == 'u' || key == 'U') {
+        desktop_spawn_known_app_client("update", NULL, 0);
         gui_desktop_hide_launcher();
       }
       return;
@@ -1770,6 +1969,10 @@ int gui_desktop_spawn_terminal_client(void) {
   return desktop_spawn_client("Terminal", "orizon-terminal", 1) > 0 ? 0 : -1;
 }
 
+int gui_desktop_spawn_app_client(const char *app, char *out, size_t out_size) {
+  return desktop_spawn_known_app_client(app, out, out_size);
+}
+
 int gui_desktop_close_active_client(void) {
   int idx;
 
@@ -1825,7 +2028,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
   if (!dispatcher || !dispatcher[0]) {
     if (out && out_size) {
       snprintf(out, out_size,
-               "desktop dispatch: usage exec terminal | killactive | "
+               "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|+1|-1|previous> | movetoworkspace <n> | "
                "movefocus next|prev | fullscreen | pseudo | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
@@ -1834,25 +2037,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     return -1;
   }
   if (strcmp(dispatcher, "exec") == 0) {
-    if (strcmp(a, "terminal") == 0 || strcmp(a, "orizon-terminal") == 0 ||
-        strcmp(a, "kitty") == 0) {
-      if (gui_desktop_spawn_terminal_client() == 0) {
-        if (out && out_size) {
-          snprintf(out, out_size,
-                   "desktop dispatch: exec terminal client spawned\n");
-        }
-        return 0;
-      }
-      if (out && out_size) {
-        snprintf(out, out_size, "desktop dispatch: client limit reached\n");
-      }
-      return -1;
-    }
-    if (out && out_size) {
-      snprintf(out, out_size,
-               "desktop dispatch: exec supports terminal today\n");
-    }
-    return -1;
+    return desktop_spawn_known_app_client(a, out, out_size);
   }
   if (strcmp(dispatcher, "killactive") == 0 || strcmp(dispatcher, "close") == 0) {
     if (gui_desktop_close_active_client() == 0) {
@@ -2294,11 +2479,12 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         desktop_clients[i].focus_history_id, desktop_clients[i].last_workspace,
         (unsigned long long)desktop_clients[i].mapped_generation,
         (unsigned long long)desktop_clients[i].focus_generation,
-        desktop_clients[i].terminal_backed ? "terminal" : "prepared");
+        desktop_client_backend_name(&desktop_clients[i]));
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: exec terminal | killactive | movefocus next|prev | "
+             "dispatch: exec terminal|settings|logs|packages|update | "
+             "killactive | movefocus next|prev | "
              "cyclenext | swapnext | focusmaster | swapwithmaster | "
              "fullscreen | pseudo | pin | "
              "workspace <n|+1|-1> | movetoworkspace <n|+1|-1> | "
@@ -2519,6 +2705,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
                      "\n== built-in fallback ==\n"
                      "$mod=SUPER\n"
                      "bind $mod, RETURN, exec terminal\n"
+                     "submap launch: t terminal, s settings, l logs, p packages, u update\n"
                      "bind $mod, Q, killactive\n"
                      "bind $mod, D, launcher toggle\n"
                      "bind $mod, M, fullscreen\n"
@@ -2531,7 +2718,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
-             "supported: exec, killactive, workspace, movetoworkspace, movefocus, "
+             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, movetoworkspace, movefocus, "
              "cyclenext, swapnext, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
@@ -2862,7 +3049,7 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
   }
   snprintf(out, out_size,
            "Orizon desktop systeminfo\n"
-           "version: %s 0.20.0\n"
+           "version: %s 0.21.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "backend: framebuffer\n"
            "renderer: software\n"
@@ -2902,7 +3089,7 @@ void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl version\n"
            "facade: Hyprland-style compatibility commands\n"
-           "desktop-package: %s 0.20.0\n"
+           "desktop-package: %s 0.21.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "wayland: not-implemented\n"
            "wlroots: not-embedded\n"

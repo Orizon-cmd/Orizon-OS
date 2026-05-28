@@ -149,13 +149,17 @@ desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop keymap
 desktop doctor
+desktop launch settings
+desktop launch logs
+desktop launch packages
+desktop launch update
 ```
 
 The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.20.0` because it includes policy/config files, the persisted session
+`0.21.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings presets/doctor
 commands, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -165,6 +169,7 @@ facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, active F9/F10/F11 submaps,
+native tiling clients for settings/logs/packages/update,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
 the launcher. Version `0.19.0` specifically added the desktop session manager:
@@ -174,6 +179,9 @@ metadata for session lifecycle. Version `0.20.0` adds keyboard ergonomics:
 active resize/move/launch submaps, `resizeactive`, `desktop keymap`, and
 focus-follows-mouse transitions in the compositor. Mouse binds are parsed for compatibility, but
 the package does not enable free-drag window moving by default.
+Version `0.21.0` adds the first native app clients launched with
+`desktop launch settings|logs|packages|update`; they remain tiled compositor
+clients and do not add a taskbar or manual window dragging.
 
 ## Package Format
 

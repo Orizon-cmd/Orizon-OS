@@ -149,6 +149,10 @@ desktop settings doctor
 desktop settings preset compact
 desktop settings set gaps-in 10
 desktop apps
+desktop launch settings
+desktop launch logs
+desktop launch packages
+desktop launch update
 desktop profiles
 desktop preset moss
 desktop binds

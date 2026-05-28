@@ -3362,7 +3362,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop focus on|off|toggle configure focus-follows-mouse\r\n"
              "  desktop bar on|off|toggle configure desktop bar\r\n"
              "  desktop launcher [show|hide|toggle] control launcher\r\n"
-             "  desktop launch terminal spawn terminal client\r\n"
+             "  desktop launch <app>    spawn terminal/settings/logs/packages/update\r\n"
              "  desktop killactive      close focused tiled client\r\n"
              "  desktop focus-window next|prev change focused client\r\n"
              "  desktop workspace [n]   show or switch workspace\r\n"
@@ -3864,29 +3864,21 @@ static void ssh_shell_print_desktop(const char *args) {
     }
   } else if (ssh_shell_command_is(sub, "launch")) {
     const char *app = ssh_shell_skip_spaces(sub + 6);
-    if (ssh_shell_command_is(app, "terminal") ||
-        ssh_shell_command_is(app, "orizon-terminal")) {
-      if (gui_desktop_spawn_terminal_client() == 0) {
-        snprintf(out, sizeof(out), "desktop: launched terminal\r\n");
-      } else {
-        snprintf(out, sizeof(out), "desktop: client limit reached\r\n");
-      }
+    if (*app == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop launch <terminal|settings|logs|packages|update>\r\n");
     } else {
-      snprintf(out, sizeof(out), "desktop launch: known apps: terminal\r\n");
+      gui_desktop_spawn_app_client(app, out, sizeof(out));
     }
   } else if (ssh_shell_command_is(sub, "spawn") ||
              ssh_shell_command_is(sub, "exec")) {
     const char *app = ssh_shell_skip_spaces(
         sub + (ssh_shell_command_is(sub, "spawn") ? 5 : 4));
-    if (ssh_shell_command_is(app, "terminal") ||
-        ssh_shell_command_is(app, "orizon-terminal")) {
-      if (gui_desktop_spawn_terminal_client() == 0) {
-        snprintf(out, sizeof(out), "desktop: spawned terminal client\r\n");
-      } else {
-        snprintf(out, sizeof(out), "desktop: client limit reached\r\n");
-      }
+    if (*app == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop exec <terminal|settings|logs|packages|update>\r\n");
     } else {
-      snprintf(out, sizeof(out), "desktop exec: known apps: terminal\r\n");
+      gui_desktop_spawn_app_client(app, out, sizeof(out));
     }
   } else if (ssh_shell_command_is(sub, "apply")) {
     gui_desktop_reload_session();

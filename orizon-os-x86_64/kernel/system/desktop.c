@@ -140,6 +140,10 @@ static const char *desktop_user_config =
     "bind = , escape, submap, reset\n"
     "submap = launch\n"
     "bind = , t, exec, terminal\n"
+    "bind = , s, exec, orizon-settings\n"
+    "bind = , l, exec, orizon-logs\n"
+    "bind = , p, exec, orizon-packages\n"
+    "bind = , u, exec, orizon-update-viewer\n"
     "bind = , d, exec, orizon-launcher\n"
     "bind = , q, killactive\n"
     "bind = , escape, submap, reset\n"
@@ -2352,7 +2356,7 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
            ORIZON_DESKTOP_STATE_PATH);
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
-                 "terminal: F1/desktop dispatch exec terminal; F2/killactive\n");
+                 "apps: desktop launch terminal|settings|logs|packages|update; F2/killactive\n");
   desktop_append(out, out_size, &used,
                  "admin: desktop start | desktop stop | desktop restart | desktop reload | desktop recover | desktop settings | desktop doctor | desktop logs\n");
 }
@@ -2727,7 +2731,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "hyprctl: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
   desktop_append(out, out_size, &used,
-                 "launcher: desktop launcher | desktop launch terminal\n");
+                 "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
                  "windows: desktop windows | desktop workspace <n> | desktop dispatch movetoworkspace <n>\n");
 }
@@ -2979,15 +2983,19 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
   out[0] = '\0';
   desktop_append(out, out_size, &used, "Orizon desktop apps\n");
   desktop_append(out, out_size, &used,
-                 "terminal  installed=yes command='desktop dispatch exec terminal' shortcut=SUPER+Return/F1\n");
+                 "terminal  installed=yes command='desktop launch terminal' shortcut=SUPER+Return/F1/F11+t tiled=yes floating=no\n");
   desktop_append(out, out_size, &used,
-                 "settings  installed=yes command='desktop settings' shortcut=SUPER+R\n");
+                 "settings  installed=yes command='desktop launch settings' shortcut=F11+s tiled=yes floating=no\n");
   desktop_append(out, out_size, &used,
-                 "packages  prepared=yes command='pkg search desktop' shortcut=none\n");
+                 "logs      installed=yes command='desktop launch logs' shortcut=F11+l tiled=yes floating=no\n");
   desktop_append(out, out_size, &used,
-                 "launcher  prepared=yes command='desktop launcher' shortcut=SUPER+D\n");
+                 "packages  installed=yes command='desktop launch packages' shortcut=F11+p tiled=yes floating=no\n");
   desktop_append(out, out_size, &used,
-                 "next-apps file-manager,status-bar,wallpaper-daemon are not implemented yet\n");
+                 "update    installed=yes command='desktop launch update' shortcut=F11+u tiled=yes floating=no\n");
+  desktop_append(out, out_size, &used,
+                 "launcher  overlay=yes command='desktop launcher' shortcut=SUPER+D/F3 tiled=no taskbar=no\n");
+  desktop_append(out, out_size, &used,
+                 "next-apps file-manager,wallpaper-daemon are not implemented yet; waybar-style bar is future package\n");
 }
 
 void orizon_desktop_format_profiles(char *out, size_t out_size) {
@@ -3007,7 +3015,7 @@ void orizon_desktop_format_profiles(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "layouts: dwindle master monocle\n");
   desktop_append(out, out_size, &used,
-                 "apps: terminal enabled; settings/packages prepared\n");
+                 "apps: terminal/settings/logs/packages/update enabled as tiling clients\n");
   desktop_append(out, out_size, &used,
                  "set: desktop theme <name>; desktop wallpaper <name>; desktop layout <name>\n");
   desktop_append(out, out_size, &used,
@@ -3073,7 +3081,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "move submap: arrows or HJKL focus; 1/2/3 move focused client to workspace; P pins\n");
   desktop_append(out, out_size, &used,
-                 "launch submap: T terminal; D launcher; Q killactive; Esc/F12 default\n");
+                 "launch submap: T terminal; S settings; L logs; P packages; U update; D launcher; Q killactive; Esc/F12 default\n");
   desktop_append(out, out_size, &used,
                  "Hypr-style template: SUPER+Return exec terminal, SUPER+Q killactive, SUPER+D launcher\n");
   desktop_append(out, out_size, &used,
@@ -3083,7 +3091,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

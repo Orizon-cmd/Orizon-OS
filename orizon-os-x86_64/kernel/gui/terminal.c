@@ -3781,7 +3781,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop focus on|off|toggle - Configure focus-follows-mouse\n");
     term_puts_t(term, "  desktop bar on|off|toggle - Configure desktop bar\n");
     term_puts_t(term, "  desktop launcher [show|hide|toggle] - Control launcher\n");
-    term_puts_t(term, "  desktop launch terminal - Spawn terminal client\n");
+    term_puts_t(term, "  desktop launch <app>    - Spawn terminal/settings/logs/packages/update\n");
     term_puts_t(term, "  desktop killactive      - Close focused tiled client\n");
     term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
     term_puts_t(term, "  desktop workspace [n]   - Show or switch workspace\n");
@@ -4421,30 +4421,24 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "launch")) {
     const char *app = term_skip_spaces(args + 6);
-    if (term_command_is(app, "terminal") ||
-        term_command_is(app, "orizon-terminal")) {
-      if (gui_desktop_spawn_terminal_client() == 0) {
-        term_puts_t(term, "desktop: launched terminal\n");
-      } else {
-        term_puts_t(term, "desktop: client limit reached\n");
-      }
+    if (*app == '\0') {
+      term_puts_t(term,
+                  "usage: desktop launch <terminal|settings|logs|packages|update>\n");
       return;
     }
-    term_puts_t(term, "desktop launch: known apps: terminal\n");
+    gui_desktop_spawn_app_client(app, report, sizeof(report));
+    term_puts_t(term, report);
     return;
   }
   if (term_command_is(args, "spawn") || term_command_is(args, "exec")) {
     const char *app = term_skip_spaces(args + (term_command_is(args, "spawn") ? 5 : 4));
-    if (term_command_is(app, "terminal") ||
-        term_command_is(app, "orizon-terminal")) {
-      if (gui_desktop_spawn_terminal_client() == 0) {
-        term_puts_t(term, "desktop: spawned terminal client\n");
-      } else {
-        term_puts_t(term, "desktop: client limit reached\n");
-      }
+    if (*app == '\0') {
+      term_puts_t(term,
+                  "usage: desktop exec <terminal|settings|logs|packages|update>\n");
       return;
     }
-    term_puts_t(term, "desktop exec: known apps: terminal\n");
+    gui_desktop_spawn_app_client(app, report, sizeof(report));
+    term_puts_t(term, report);
     return;
   }
   if (term_command_is(args, "apply")) {

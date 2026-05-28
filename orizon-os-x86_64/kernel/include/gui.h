@@ -86,6 +86,7 @@ void gui_desktop_reload_session(void);
 int gui_desktop_switch_workspace(int workspace);
 int gui_desktop_move_terminal_to_workspace(int workspace);
 int gui_desktop_spawn_terminal_client(void);
+int gui_desktop_spawn_app_client(const char *app, char *out, size_t out_size);
 int gui_desktop_close_active_client(void);
 int gui_desktop_focus_next_client(void);
 int gui_desktop_focus_prev_client(void);

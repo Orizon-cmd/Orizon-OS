@@ -54,7 +54,7 @@
   free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/state`,
   keyword/getoption/reload runtime inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
-  pointer diagnostics,
+  pointer diagnostics, native tiling apps for settings/logs/packages/update,
   `dwindle`/`master`/`monocle` placement, and
   diagnostic tiled client/workspace plumbing with stable client addresses,
   activewindow geometry and Hyprland-style focusHistoryID, not the real upstream

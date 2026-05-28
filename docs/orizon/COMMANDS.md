@@ -199,6 +199,10 @@ desktop bar toggle
 desktop apply
 desktop launcher show
 desktop launch terminal
+desktop launch settings
+desktop launch logs
+desktop launch packages
+desktop launch update
 desktop killactive
 desktop open terminal
 desktop close terminal
@@ -302,7 +306,9 @@ explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
-`desktop apps` lists launcher entries, `desktop windows`/`desktop clients`
+`desktop apps` lists launcher entries, `desktop launch
+terminal|settings|logs|packages|update` opens the first native apps as tiled
+clients, `desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
