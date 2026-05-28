@@ -82,6 +82,10 @@
 - Added the first native Hyprland-style desktop apps as tiled clients:
   `desktop launch settings|logs|packages|update`, launcher/submap shortcuts,
   compositor app surfaces, and bumped `orizon-desktop-hypr` to 0.21.0.
+- Added the desktop settings hub with `desktop settings paths`,
+  `desktop settings export`, and `desktop settings sync`, keeping `/system` as
+  the source of truth while regenerating the Hyprland-style user config/runtime
+  hints, and bumped `orizon-desktop-hypr` to 0.22.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

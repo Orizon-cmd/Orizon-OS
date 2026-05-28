@@ -3746,6 +3746,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop keymap          - Show VM keyboard/submap runtime\n");
     term_puts_t(term, "  desktop session         - Show session theme/wallpaper/layout\n");
     term_puts_t(term, "  desktop settings        - Show system-wide desktop settings\n");
+    term_puts_t(term, "  desktop settings paths  - Show /system and ~/.config/hypr settings hub\n");
+    term_puts_t(term, "  desktop settings export - Write Hyprland-style user config from /system\n");
+    term_puts_t(term, "  desktop settings sync   - Export settings and refresh runtime hints\n");
     term_puts_t(term, "  desktop settings set <key> <value> - Update /system/desktop-settings.conf\n");
     term_puts_t(term, "  desktop settings preset <name> - Apply compact/cozy/performance settings\n");
     term_puts_t(term, "  desktop settings doctor - Validate system-wide desktop settings\n");
@@ -3894,6 +3897,28 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       term_puts_t(term, report);
       return;
     }
+    if (term_command_is(settings_args, "paths") ||
+        term_command_is(settings_args, "path") ||
+        term_command_is(settings_args, "hub")) {
+      orizon_desktop_format_settings_paths(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "export") ||
+        term_command_is(settings_args, "write") ||
+        term_command_is(settings_args, "generate")) {
+      orizon_desktop_export_settings(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(settings_args, "sync") ||
+        term_command_is(settings_args, "apply") ||
+        term_command_is(settings_args, "reload")) {
+      orizon_desktop_sync_settings(report, sizeof(report));
+      gui_desktop_reload_session();
+      term_puts_t(term, report);
+      return;
+    }
     if (term_command_is(settings_args, "preset") ||
         term_command_is(settings_args, "profile")) {
       const char *preset = term_skip_spaces(
@@ -3933,7 +3958,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       return;
     }
     term_puts_t(term,
-                "usage: desktop settings [show|doctor|presets|preset <name>|repair|set <key> <value>]\n");
+                "usage: desktop settings [show|paths|export|sync|doctor|presets|preset <name>|repair|set <key> <value>]\n");
     return;
   }
   if (term_command_is(args, "session")) {

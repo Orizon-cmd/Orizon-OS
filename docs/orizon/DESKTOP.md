@@ -24,6 +24,9 @@ desktop recover
 desktop state
 desktop session
 desktop settings
+desktop settings paths
+desktop settings export
+desktop settings sync
 desktop settings presets
 desktop settings doctor
 desktop settings preset compact
@@ -224,6 +227,13 @@ lists system profiles for common use cases, `desktop settings preset
 <default|compact|cozy|performance|accessibility|locked>` rewrites the settings
 file atomically, and `desktop settings doctor` checks that the file is present,
 schema-compatible, and runtime-clamped before the compositor consumes it.
+`desktop settings paths` shows the full settings hub: `/system` policy,
+session, settings, generated runtime files, the user Hyprland-style config, and
+logs. `desktop settings export` rewrites
+`/home/orizon/.config/hypr/orizon-hypr.conf` from `/system`, and `desktop
+settings sync` performs that export then refreshes the generated runtime hints.
+This keeps the source of truth in `/system` while still giving users a familiar
+Hyprland-shaped config file.
 
 `desktop pointer` shows the compositor cursor position plus PS/2, USB HID, and
 I2C-HID input diagnostics. VM profiles that expose a QEMU `usb-tablet` or a

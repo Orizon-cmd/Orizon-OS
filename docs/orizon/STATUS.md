@@ -43,13 +43,14 @@ work.
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts/keymap`,
-  `desktop session/settings/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
   package installable later, persists `/system/desktop-session.conf` plus
-  `/system/desktop-settings.conf` plus generated `/system/desktop-binds.conf`
-  and related runtime hint files, and
+  `/system/desktop-settings.conf`, settings hub export/sync to
+  `/home/orizon/.config/hypr/orizon-hypr.conf`, plus generated
+  `/system/desktop-binds.conf` and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative workspace dispatch, dispatcher-style
   movetoworkspace/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client

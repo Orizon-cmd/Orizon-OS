@@ -35,10 +35,12 @@ design note.
   non-destructive `/workspace/.orizon/install-report.txt` bundle for VM/SSH
   review before any disk write.
 - The optional first desktop profile is available through `desktop status`,
-  `desktop session`, `desktop settings`, `desktop settings preset`, `desktop settings doctor`, `desktop apps`, `desktop doctor`, the guided installer
+  `desktop session`, `desktop settings`, `desktop settings paths`, `desktop
+  settings export`, `desktop settings sync`, `desktop settings preset`, `desktop settings doctor`, `desktop apps`, `desktop doctor`, the guided installer
   desktop prompt, `pkg sample desktop`, and `pkg install orizon-desktop-hypr`.
   It is Hyprland-style Orizon compositor plumbing, disabled by default, persists
-  `/system/desktop-session.conf` plus `/system/desktop-settings.conf` and
+  `/system/desktop-session.conf` plus `/system/desktop-settings.conf`,
+  mirrors those central settings into `/home/orizon/.config/hypr/`, and
   generated `/system/desktop-binds.conf` and related runtime hints, and starts
   with F1 exec terminal, F2 killactive, F3 launcher, F4 fullscreen, F5 pseudo,
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop

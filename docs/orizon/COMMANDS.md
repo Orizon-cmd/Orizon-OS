@@ -95,6 +95,9 @@ desktop recover
 desktop state
 desktop session
 desktop settings
+desktop settings paths
+desktop settings export
+desktop settings sync
 desktop settings presets
 desktop settings doctor
 desktop settings preset compact
@@ -281,6 +284,9 @@ default.
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,
 shadows, terminal, launcher, keyboard, and pointer policy. `desktop settings
+paths` shows the central `/system` settings hub, `desktop settings export`
+rewrites `/home/orizon/.config/hypr/orizon-hypr.conf` from `/system`, and
+`desktop settings sync` exports then refreshes runtime hints. `desktop settings
 presets`, `desktop settings preset <name>`, and `desktop settings doctor` add a
 safer profile/validation layer for that system file. `desktop session`
 manages theme/wallpaper/bar/focus state, `desktop preset <name>` applies a saved
@@ -398,6 +404,8 @@ the optional desktop package. It installs `/system/desktop.conf`,
 `/system/desktop-session.conf`, `/system/desktop-settings.conf`, generated
 desktop runtime hint files, and the Hyprland-style user config under
 `/home/orizon/.config/hypr/`.
+`desktop settings sync` is the preferred repair command if `/system` settings
+and the user Hyprland-style config drift apart.
 On an installed VM, `pkg install orizon-desktop-hypr` generates and installs
 that package by name, `pkg remove orizon-desktop-hypr` disables it, and
 `pkg rollback orizon-desktop-hypr` restores the last removed snapshot.

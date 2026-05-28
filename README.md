@@ -58,6 +58,7 @@ le developpement noyau:
   `orizon-desktop-hypr`, config `/system/desktop.conf`,
   `/system/desktop-session.conf`, `/system/desktop-settings.conf` et
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
+  hub de settings `/system` synchronisable avec `desktop settings paths/export/sync`,
   workspaces runtime, clients tiles avec adresses stables/focusHistoryID,
   dispatchers Hyprland-like, fullscreen/pseudo/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
@@ -125,7 +126,10 @@ persistants dans `/system/desktop-settings.conf`; `desktop settings set <key>
 <value>` les modifie, et `desktop settings repair` restaure les valeurs
 propres. `desktop settings presets`, `desktop settings preset <name>` et
 `desktop settings doctor` ajoutent des profils systeme et un diagnostic dedie
-pour ce fichier. `desktop config doctor` analyse la config Hyprland-style dans
+pour ce fichier. `desktop settings paths` montre le hub de settings, `desktop
+settings export` regenere `/home/orizon/.config/hypr/orizon-hypr.conf` depuis
+`/system`, et `desktop settings sync` exporte puis rafraichit les hints runtime.
+`desktop config doctor` analyse la config Hyprland-style dans
 `/home/orizon/.config/hypr/orizon-hypr.conf`, et `desktop config apply`
 importe le sous-ensemble supporte vers la session, les settings, et les fichiers
 runtime inspectables `/system/desktop-binds.conf`,

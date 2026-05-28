@@ -66,6 +66,8 @@ int orizon_desktop_set_setting(const char *key, const char *value, char *status,
 int orizon_desktop_repair_settings(char *status, size_t status_size);
 int orizon_desktop_apply_settings_preset(const char *preset, char *status,
                                          size_t status_size);
+int orizon_desktop_export_settings(char *status, size_t status_size);
+int orizon_desktop_sync_settings(char *status, size_t status_size);
 int orizon_desktop_apply_preset(const char *preset, char *status,
                                 size_t status_size);
 int orizon_desktop_apply_hypr_config(char *status, size_t status_size);
@@ -85,6 +87,7 @@ void orizon_desktop_format_monitor_hints(char *out, size_t out_size);
 void orizon_desktop_format_session(char *out, size_t out_size);
 void orizon_desktop_format_session_state(char *out, size_t out_size);
 void orizon_desktop_format_settings(char *out, size_t out_size);
+void orizon_desktop_format_settings_paths(char *out, size_t out_size);
 void orizon_desktop_format_settings_presets(char *out, size_t out_size);
 void orizon_desktop_format_settings_doctor(char *out, size_t out_size);
 void orizon_desktop_format_apps(char *out, size_t out_size);

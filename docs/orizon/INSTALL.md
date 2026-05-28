@@ -124,6 +124,9 @@ and persist theme/wallpaper/layout/bar/focus settings in
 `/system/desktop-session.conf`. System-wide desktop settings such as gaps,
 border size, rounding, animations, shadows, terminal, launcher, keyboard, and
 pointer policy are created in `/system/desktop-settings.conf` at the same time.
+`desktop settings paths`, `desktop settings export`, and `desktop settings sync`
+keep that central `/system` hub aligned with
+`/home/orizon/.config/hypr/orizon-hypr.conf` and generated runtime hints.
 `desktop config apply` also generates inspectable runtime hints for binds,
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/misc/layout hints under `/system`.
@@ -144,6 +147,9 @@ desktop start
 desktop state
 desktop session
 desktop settings
+desktop settings paths
+desktop settings export
+desktop settings sync
 desktop settings presets
 desktop settings doctor
 desktop settings preset compact

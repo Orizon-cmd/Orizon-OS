@@ -91,6 +91,9 @@ pkg install orizon-desktop-hypr
 desktop status
 desktop session
 desktop settings
+desktop settings paths
+desktop settings export
+desktop settings sync
 desktop settings presets
 desktop settings doctor
 desktop settings preset compact
@@ -159,8 +162,8 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.21.0` because it includes policy/config files, the persisted session
-settings, the system-wide desktop settings layer, settings presets/doctor
+`0.22.0` because it includes policy/config files, the persisted session
+settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
 commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
@@ -182,6 +185,10 @@ the package does not enable free-drag window moving by default.
 Version `0.21.0` adds the first native app clients launched with
 `desktop launch settings|logs|packages|update`; they remain tiled compositor
 clients and do not add a taskbar or manual window dragging.
+Version `0.22.0` adds the desktop settings hub commands:
+`desktop settings paths`, `desktop settings export`, and `desktop settings
+sync`, keeping `/system` as the source of truth while regenerating the
+Hyprland-style user config and runtime hints.
 
 ## Package Format
 

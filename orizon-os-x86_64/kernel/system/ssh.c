@@ -3327,6 +3327,9 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop keymap          show VM keyboard/submap runtime\r\n"
              "  desktop session         show theme/wallpaper/layout\r\n"
              "  desktop settings        show system-wide desktop settings\r\n"
+             "  desktop settings paths  show /system and ~/.config/hypr settings hub\r\n"
+             "  desktop settings export write Hyprland-style user config from /system\r\n"
+             "  desktop settings sync   export settings and refresh runtime hints\r\n"
              "  desktop settings set <key> <value> update /system/desktop-settings.conf\r\n"
              "  desktop settings preset <name> apply compact/cozy/performance settings\r\n"
              "  desktop settings doctor validate system-wide desktop settings\r\n"
@@ -3445,6 +3448,19 @@ static void ssh_shell_print_desktop(const char *args) {
     } else if (ssh_shell_command_is(settings_args, "doctor") ||
                ssh_shell_command_is(settings_args, "check")) {
       orizon_desktop_format_settings_doctor(out, sizeof(out));
+    } else if (ssh_shell_command_is(settings_args, "paths") ||
+               ssh_shell_command_is(settings_args, "path") ||
+               ssh_shell_command_is(settings_args, "hub")) {
+      orizon_desktop_format_settings_paths(out, sizeof(out));
+    } else if (ssh_shell_command_is(settings_args, "export") ||
+               ssh_shell_command_is(settings_args, "write") ||
+               ssh_shell_command_is(settings_args, "generate")) {
+      orizon_desktop_export_settings(out, sizeof(out));
+    } else if (ssh_shell_command_is(settings_args, "sync") ||
+               ssh_shell_command_is(settings_args, "apply") ||
+               ssh_shell_command_is(settings_args, "reload")) {
+      orizon_desktop_sync_settings(out, sizeof(out));
+      gui_desktop_reload_session();
     } else if (ssh_shell_command_is(settings_args, "preset") ||
                ssh_shell_command_is(settings_args, "profile")) {
       const char *preset = ssh_shell_skip_spaces(
@@ -3480,7 +3496,7 @@ static void ssh_shell_print_desktop(const char *args) {
       }
     } else {
       snprintf(out, sizeof(out),
-               "usage: desktop settings [show|doctor|presets|preset <name>|repair|set <key> <value>]\r\n");
+               "usage: desktop settings [show|paths|export|sync|doctor|presets|preset <name>|repair|set <key> <value>]\r\n");
     }
   } else if (ssh_shell_command_is(sub, "session")) {
     orizon_desktop_format_session(out, sizeof(out));
@@ -5085,7 +5101,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  rescue               show non-destructive recovery checklist\r\n"
         "  desktop help         show optional Hyprland-style desktop commands\r\n"
         "  desktop doctor       check optional desktop config/package state\r\n"
-        "  desktop settings     show/update /system/desktop-settings.conf\r\n"
+        "  desktop settings     show/update/sync the /system desktop settings hub\r\n"
         "  desktop package      write /workspace/packages/orizon-desktop-hypr.opkg\r\n"
         "  hostname [set name]  show or persist hostname\r\n"
         "  ls [path]            list files\r\n"

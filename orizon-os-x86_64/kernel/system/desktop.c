@@ -87,7 +87,7 @@ static const char *desktop_user_config =
     "animation = windows, 1, 2, orizon-pop\n"
     "misc:disable_hyprland_logo = false\n"
     "misc:force_default_wallpaper = 0\n"
-    "windowrulev2 = float,class:^(orizon-launcher)$\n"
+    "windowrulev2 = tile,class:^(orizon-.*)$\n"
     "layerrule = blur, launcher\n"
     "source = ~/.config/hypr/orizon-local.conf\n"
     "bind = $mod, RETURN, exec, terminal\n"
@@ -166,6 +166,15 @@ static const char *desktop_binds_runtime_config =
     "bind = F10, submap, move\n"
     "bind = F11, submap, launch\n"
     "bind = F12, submap, reset\n"
+    "submap = launch\n"
+    "bind = , t, exec, terminal\n"
+    "bind = , s, exec, orizon-settings\n"
+    "bind = , l, exec, orizon-logs\n"
+    "bind = , p, exec, orizon-packages\n"
+    "bind = , u, exec, orizon-update-viewer\n"
+    "bind = , d, exec, orizon-launcher\n"
+    "bind = , q, killactive\n"
+    "submap = default\n"
     "bind = $mod, 1, workspace, 1\n"
     "bind = $mod SHIFT, 1, movetoworkspace, 1\n";
 
@@ -179,7 +188,7 @@ static const char *desktop_rules_runtime_config =
     "# Orizon generated Hyprland-style window rules v1\n"
     "# Rewritten by `desktop config apply`.\n"
     "source built-in-template\n"
-    "windowrulev2 = float,class:^(orizon-launcher)$\n";
+    "windowrulev2 = tile,class:^(orizon-.*)$\n";
 
 static const char *desktop_monitors_runtime_config =
     "# Orizon generated Hyprland-style monitor hints v1\n"
@@ -203,6 +212,10 @@ static const char *desktop_runtime_config =
     "input-hints 0\n"
     "animation-hints 0\n"
     "submap = default\n"
+    "settings-hub yes\n"
+    "settings-path " ORIZON_DESKTOP_SETTINGS_PATH "\n"
+    "session-path " ORIZON_DESKTOP_SESSION_PATH "\n"
+    "user-config-path " ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
     "sources 1\n"
     "source = ~/.config/hypr/orizon-local.conf\n";
 
@@ -1216,6 +1229,119 @@ static int desktop_write_settings(const orizon_desktop_settings_t *settings) {
   return desktop_write_text_file(ORIZON_DESKTOP_SETTINGS_PATH, text);
 }
 
+static int desktop_write_user_config_from_state(
+    const orizon_desktop_session_t *session,
+    const orizon_desktop_settings_t *settings) {
+  char text[4096];
+  const char *terminal;
+  const char *keyboard;
+
+  if (!session || !settings) {
+    return -1;
+  }
+  terminal = settings->default_terminal[0] ? settings->default_terminal
+                                           : "orizon-terminal";
+  keyboard = settings->keyboard_layout[0] ? settings->keyboard_layout : "us";
+  snprintf(text, sizeof(text),
+           "# Orizon Hyprland-style desktop profile\n"
+           "# Generated from central desktop settings.\n"
+           "# source-session = " ORIZON_DESKTOP_SESSION_PATH "\n"
+           "# source-settings = " ORIZON_DESKTOP_SETTINGS_PATH "\n"
+           "# sync-command = desktop settings sync\n"
+           "$mod = SUPER\n"
+           "$terminal = %s\n"
+           "$menu = orizon-launcher\n"
+           "monitor = ,preferred,auto,%d\n"
+           "%s"
+           "input:kb_layout = %s\n"
+           "input:follow_mouse = %d\n"
+           "general:layout = %s\n"
+           "general:gaps_in = %d\n"
+           "general:gaps_out = %d\n"
+           "general:border_size = %d\n"
+           "decoration:rounding = %d\n"
+           "decoration:shadow:enabled = %s\n"
+           "animations:enabled = %s\n"
+           "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
+           "animation = windows, 1, 2, orizon-pop\n"
+           "misc:disable_hyprland_logo = false\n"
+           "misc:force_default_wallpaper = 0\n"
+           "windowrulev2 = tile,class:^(orizon-.*)$\n"
+           "layerrule = blur, launcher\n"
+           "source = ~/.config/hypr/orizon-local.conf\n"
+           "bind = $mod, RETURN, exec, terminal\n"
+           "bind = $mod, Q, killactive\n"
+           "bind = $mod, D, exec, orizon-launcher\n"
+           "bind = $mod, A, exec, desktop autostart\n"
+           "bind = $mod, B, exec, desktop bar toggle\n"
+           "bind = $mod, F, exec, desktop focus toggle\n"
+           "bind = $mod, M, fullscreen\n"
+           "bind = $mod, P, pseudo\n"
+           "bind = $mod SHIFT, P, pin\n"
+           "bind = $mod, J, togglesplit\n"
+           "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
+           "bind = $mod, S, layoutmsg, swapwithmaster\n"
+           "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+           "bind = $mod, R, submap, resize\n"
+           "bind = $mod SHIFT, R, submap, reset\n"
+           "bind = $mod, H, movefocus, l\n"
+           "bind = $mod, L, movefocus, r\n"
+           "bind = $mod, Tab, cyclenext\n"
+           "bind = $mod SHIFT, Tab, swapnext\n"
+           "bind = $mod, C, exec, desktop session\n"
+           "bind = $mod, 1, workspace, 1\n"
+           "bind = $mod, 2, workspace, 2\n"
+           "bind = $mod, 3, workspace, 3\n"
+           "bind = $mod SHIFT, 1, movetoworkspace, 1\n"
+           "bind = $mod SHIFT, 2, movetoworkspace, 2\n"
+           "bind = $mod SHIFT, 3, movetoworkspace, 3\n"
+           "bind = F1, exec, desktop open terminal\n"
+           "bind = F2, killactive\n"
+           "bind = F4, fullscreen\n"
+           "bind = F5, pseudo\n"
+           "bind = F9, submap, resize\n"
+           "bind = F10, submap, move\n"
+           "bind = F11, submap, launch\n"
+           "bind = F12, submap, reset\n"
+           "submap = resize\n"
+           "bind = , right, resizeactive, 5 0\n"
+           "bind = , left, resizeactive, -5 0\n"
+           "bind = , up, resizeactive, 0 5\n"
+           "bind = , down, resizeactive, 0 -5\n"
+           "bind = , escape, submap, reset\n"
+           "submap = move\n"
+           "bind = , right, movefocus, r\n"
+           "bind = , left, movefocus, l\n"
+           "bind = , 1, movetoworkspace, 1\n"
+           "bind = , 2, movetoworkspace, 2\n"
+           "bind = , 3, movetoworkspace, 3\n"
+           "bind = , escape, submap, reset\n"
+           "submap = launch\n"
+           "bind = , t, exec, terminal\n"
+           "bind = , s, exec, orizon-settings\n"
+           "bind = , l, exec, orizon-logs\n"
+           "bind = , p, exec, orizon-packages\n"
+           "bind = , u, exec, orizon-update-viewer\n"
+           "bind = , d, exec, orizon-launcher\n"
+           "bind = , q, killactive\n"
+           "bind = , escape, submap, reset\n"
+           "submap = default\n"
+           "dwindle:pseudotile = true\n"
+           "dwindle:preserve_split = true\n",
+           terminal, desktop_clamp_int(settings->scale, 1, 3),
+           session->autostart_terminal ? "exec-once = terminal\n"
+                                       : "# exec-once disabled by /system session\n",
+           keyboard, session->focus_follows_mouse ? 1 : 0,
+           session->layout[0] ? session->layout : "dwindle",
+           desktop_clamp_int(settings->gaps_in, 0, 48),
+           desktop_clamp_int(settings->gaps_out, 0, 64),
+           desktop_clamp_int(settings->border_size, 0, 8),
+           desktop_clamp_int(settings->rounding, 0, 24),
+           settings->shadows_enabled ? "true" : "false",
+           settings->animations_enabled ? "true" : "false");
+  return desktop_write_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, text);
+}
+
 static void desktop_ensure_dirs(void) {
   vfs_mkdir("/system");
   vfs_mkdir("/system/share");
@@ -1804,6 +1930,76 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
              ORIZON_DESKTOP_SETTINGS_PATH);
   }
   return rc;
+}
+
+int orizon_desktop_export_settings(char *status, size_t status_size) {
+  orizon_desktop_session_t session;
+  orizon_desktop_settings_t settings;
+  int rc;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  desktop_ensure_dirs();
+  orizon_desktop_ensure_defaults();
+  orizon_desktop_load_session(&session);
+  orizon_desktop_load_settings(&settings);
+  rc = desktop_write_user_config_from_state(&session, &settings);
+  desktop_log_event("settings exported user-config");
+  vfs_persist_save();
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop settings export: %s\n"
+             "source-session: %s\n"
+             "source-settings: %s\n"
+             "target-user-config: %s\n"
+             "theme: %s wallpaper: %s layout: %s\n"
+             "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s input=%s\n"
+             "next: desktop settings sync | desktop config apply\n",
+             rc == 0 ? "written" : "write-failed",
+             ORIZON_DESKTOP_SESSION_PATH, ORIZON_DESKTOP_SETTINGS_PATH,
+             ORIZON_DESKTOP_USER_CONFIG_PATH, session.theme,
+             session.wallpaper, session.layout, settings.gaps_in,
+             settings.gaps_out, settings.border_size, settings.rounding,
+             settings.animations_enabled ? "yes" : "no",
+             settings.shadows_enabled ? "yes" : "no",
+             settings.keyboard_layout);
+  }
+  return rc;
+}
+
+int orizon_desktop_sync_settings(char *status, size_t status_size) {
+  char apply_report[1024];
+  int export_rc;
+  int apply_rc;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  export_rc = orizon_desktop_export_settings(NULL, 0);
+  apply_rc = orizon_desktop_apply_hypr_config(apply_report,
+                                              sizeof(apply_report));
+  desktop_log_event("settings synced central-to-runtime");
+  vfs_persist_save();
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop settings sync: %s\n"
+             "export: %s\n"
+             "apply: %s\n"
+             "settings: %s\n"
+             "session: %s\n"
+             "user-config: %s\n"
+             "runtime-files: %s %s %s %s %s %s\n"
+             "manual-window-drag: no\n",
+             (export_rc == 0 && apply_rc == 0) ? "synced" : "warn",
+             export_rc == 0 ? "ok" : "failed",
+             apply_rc == 0 ? "ok" : "warn", ORIZON_DESKTOP_SETTINGS_PATH,
+             ORIZON_DESKTOP_SESSION_PATH, ORIZON_DESKTOP_USER_CONFIG_PATH,
+             ORIZON_DESKTOP_BINDS_PATH, ORIZON_DESKTOP_AUTOSTART_PATH,
+             ORIZON_DESKTOP_RULES_PATH, ORIZON_DESKTOP_MONITORS_PATH,
+             ORIZON_DESKTOP_LAYERS_PATH, ORIZON_DESKTOP_RUNTIME_PATH);
+  }
+  return export_rc == 0 && apply_rc == 0 ? 0 : -1;
 }
 
 int orizon_desktop_apply_preset(const char *preset, char *status,
@@ -2827,6 +3023,12 @@ void orizon_desktop_format_settings(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "set: desktop settings set <key> <value>\n");
   desktop_append(out, out_size, &used,
+                 "paths: desktop settings paths  # show central settings hub\n");
+  desktop_append(out, out_size, &used,
+                 "export: desktop settings export  # write ~/.config/hypr/orizon-hypr.conf from /system\n");
+  desktop_append(out, out_size, &used,
+                 "sync: desktop settings sync  # export then regenerate runtime files\n");
+  desktop_append(out, out_size, &used,
                  "presets: desktop settings presets | desktop settings preset <name>\n");
   desktop_append(out, out_size, &used,
                  "doctor: desktop settings doctor  # validate system settings file\n");
@@ -2834,6 +3036,65 @@ void orizon_desktop_format_settings(char *out, size_t out_size) {
                  "repair: desktop settings repair  # rewrite safe defaults\n");
   desktop_append(out, out_size, &used,
                  "note: this is system-wide desktop policy, not per-window runtime state.\n");
+}
+
+static void desktop_append_path_status(char *out, size_t out_size,
+                                       size_t *used, const char *label,
+                                       const char *path) {
+  char line[192];
+  size_t size = 0;
+  int ok;
+
+  ok = path && vfs_stat(path, &size, NULL) == 0 && size > 0;
+  snprintf(line, sizeof(line), "%s: %s %s bytes=%lu\n", label,
+           path ? path : "none", ok ? "PASS" : "WARN",
+           (unsigned long)(ok ? size : 0));
+  desktop_append(out, out_size, used, line);
+}
+
+void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used, "Orizon desktop settings hub\n");
+  desktop_append(out, out_size, &used,
+                 "model: /system is the source of truth; /home/orizon/.config/hypr mirrors Hyprland-style user config\n");
+  desktop_append(out, out_size, &used,
+                 "install: created by installer desktop selection or pkg install " ORIZON_DESKTOP_PACKAGE "\n");
+  desktop_append_path_status(out, out_size, &used, "policy",
+                             ORIZON_DESKTOP_CONFIG_PATH);
+  desktop_append_path_status(out, out_size, &used, "session",
+                             ORIZON_DESKTOP_SESSION_PATH);
+  desktop_append_path_status(out, out_size, &used, "settings",
+                             ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append_path_status(out, out_size, &used, "user-config",
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append_path_status(out, out_size, &used, "template",
+                             ORIZON_DESKTOP_TEMPLATE_PATH);
+  desktop_append_path_status(out, out_size, &used, "binds-runtime",
+                             ORIZON_DESKTOP_BINDS_PATH);
+  desktop_append_path_status(out, out_size, &used, "autostart-runtime",
+                             ORIZON_DESKTOP_AUTOSTART_PATH);
+  desktop_append_path_status(out, out_size, &used, "rules-runtime",
+                             ORIZON_DESKTOP_RULES_PATH);
+  desktop_append_path_status(out, out_size, &used, "monitors-runtime",
+                             ORIZON_DESKTOP_MONITORS_PATH);
+  desktop_append_path_status(out, out_size, &used, "layers-runtime",
+                             ORIZON_DESKTOP_LAYERS_PATH);
+  desktop_append_path_status(out, out_size, &used, "runtime-state",
+                             ORIZON_DESKTOP_RUNTIME_PATH);
+  desktop_append_path_status(out, out_size, &used, "session-state",
+                             ORIZON_DESKTOP_STATE_PATH);
+  desktop_append_path_status(out, out_size, &used, "session-log",
+                             ORIZON_DESKTOP_SESSION_LOG_PATH);
+  desktop_append(out, out_size, &used,
+                 "commands: desktop settings export | desktop settings sync | desktop config apply | desktop settings doctor\n");
+  desktop_append(out, out_size, &used,
+                 "limits: this is a Hyprland-style facade; no wlroots/Wayland backend yet and no manual window dragging.\n");
 }
 
 void orizon_desktop_format_settings_presets(char *out, size_t out_size) {
