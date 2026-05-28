@@ -152,11 +152,14 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
 `desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`, `desktop layouts`,
-`desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop
+`desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
+`desktop render` detaille le focus ring, les shadows, les transitions
+workspace/layout/focus et le backend framebuffer logiciel sans pretendre fournir
+Wayland/wlroots.
 `desktop modules` affiche la carte de packaging modulaire: le paquet actuel
 reste `orizon-desktop-hypr`, tandis que `orizon-desktop-core`,
 `orizon-terminal`, `orizon-settings` et `orizon-launcher` sont prepares comme

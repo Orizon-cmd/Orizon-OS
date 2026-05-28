@@ -3757,8 +3757,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop version         - Show desktop compatibility facade version\n");
     term_puts_t(term, "  desktop systeminfo      - Show compositor/backend/session summary\n");
     term_puts_t(term, "  desktop layouts         - Show available tiling layouts\n");
-    term_puts_t(term, "  desktop animations      - Show animation policy placeholders\n");
+    term_puts_t(term, "  desktop animations      - Show animation/runtime transition state\n");
     term_puts_t(term, "  desktop decorations     - Show border/shadow/rounding state\n");
+    term_puts_t(term, "  desktop render          - Show render/focus/transition diagnostics\n");
     term_puts_t(term, "  desktop descriptions    - Show hyprctl/dispatcher command descriptions\n");
     term_puts_t(term, "  desktop instances       - Show compositor instance summary\n");
     term_puts_t(term, "  desktop submap          - Show active Hyprland-style submap\n");
@@ -4006,6 +4007,12 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "render") || term_command_is(args, "rendering") ||
+      term_command_is(args, "renderdiag")) {
+    gui_desktop_format_render(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "descriptions") ||
       term_command_is(args, "description")) {
     gui_desktop_format_descriptions(report, sizeof(report));
@@ -4111,7 +4118,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4144,6 +4151,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_animations(report, sizeof(report));
     } else if (term_command_is(hypr, "decorations")) {
       gui_desktop_format_decorations(report, sizeof(report));
+    } else if (term_command_is(hypr, "render") ||
+               term_command_is(hypr, "rendering")) {
+      gui_desktop_format_render(report, sizeof(report));
     } else if (term_command_is(hypr, "descriptions")) {
       gui_desktop_format_descriptions(report, sizeof(report));
     } else if (term_command_is(hypr, "instances")) {

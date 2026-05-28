@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.24.0` with Hyprland-style framebuffer render
+  diagnostics through `desktop render` and `desktop hyprctl render`.
+- Added software focus ring drawing, shadow/rounding diagnostics, and ticked
+  focus/workspace/layout transition state for the Orizon desktop compositor.
+- Documented that these render improvements remain VM-safe Orizon framebuffer
+  UX, not upstream Wayland/wlroots/Hyprland validation.
 - Added the first optional Hyprland-style desktop profile with installer
   choice, `desktop` commands, `orizon-desktop-hypr` package generation, and
   F1/F2 terminal open/close support in the compositor.

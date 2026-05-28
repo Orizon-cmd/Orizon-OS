@@ -40,7 +40,7 @@
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs/keymap`,
-  `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
+  `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
   profile. It is disabled by default, persists session/autostart settings plus
@@ -55,7 +55,8 @@
   preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
   free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/state`,
-  keyword/getoption/reload runtime inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
+  keyword/getoption/reload runtime inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
+  software focus ring and ticked focus/workspace/layout transitions,
   pointer diagnostics, native tiling apps for settings/logs/packages/update,
   `dwindle`/`master`/`monocle` placement, and
   diagnostic tiled client/workspace plumbing with stable client addresses,

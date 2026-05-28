@@ -92,6 +92,7 @@ $commands = @(
   "desktop layouts",
   "desktop animations",
   "desktop decorations",
+  "desktop render",
   "desktop descriptions",
   "desktop instances",
   "desktop submap",
@@ -104,6 +105,7 @@ $commands = @(
   "desktop hyprctl layouts",
   "desktop hyprctl animations",
   "desktop hyprctl decorations",
+  "desktop hyprctl render",
   "desktop hyprctl descriptions",
   "desktop hyprctl instances",
   "desktop hyprctl submap",
@@ -492,6 +494,9 @@ run_cmd() {
       ;;
     "desktop decorations"|"desktop hyprctl decorations")
       grep -q "Orizon desktop decorations" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop render"|"desktop hyprctl render")
+      grep -q "Orizon desktop render" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop descriptions"|"desktop hyprctl descriptions")
       grep -q "Orizon desktop hyprctl descriptions" "`$OUT" && grep -q "layoutmsg" "`$OUT" || { echo "missing desktop descriptions"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

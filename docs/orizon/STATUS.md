@@ -43,7 +43,7 @@ work.
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts/keymap`,
-  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
@@ -62,7 +62,7 @@ work.
   without default free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/state`
   with `/system/desktop-state.conf` and `/logs/desktop-session.log`,
-  runtime keyword/getoption/reload inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  runtime keyword/getoption/reload inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, software focus ring, ticked focus/workspace/layout transition state, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.
 - Installer safety: `install-plan` writes

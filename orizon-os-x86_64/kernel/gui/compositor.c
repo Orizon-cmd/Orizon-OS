@@ -36,6 +36,7 @@
 #define SHELL_WIDTH (TERM_CONTENT_WIDTH + PANEL_PADDING * 2)
 #define SHELL_HEIGHT (PANEL_TITLE_HEIGHT + TERM_CONTENT_HEIGHT + PANEL_PADDING * 2)
 #define SPLASH_TICKS 180
+#define DESKTOP_ANIMATION_TICKS 18
 #define TIMER_BOOT_FALLBACK_LOOPS 8000
 #define TIMER_FALLBACK_IDLE_PAUSES 20000
 #define DESKTOP_MAX_CLIENTS 8
@@ -81,6 +82,11 @@ static char desktop_submap[32] = "default";
 static int desktop_last_key = 0;
 static uint64_t desktop_key_serial = 0;
 static uint64_t desktop_pointer_focus_changes = 0;
+static int desktop_animation_ticks_remaining = 0;
+static int desktop_transition_from_workspace = 1;
+static int desktop_transition_to_workspace = 1;
+static const char *desktop_transition_reason = "initial";
+static uint64_t desktop_render_serial = 1;
 typedef struct {
   int id;
   int workspace;
@@ -138,6 +144,21 @@ static void draw_shadow_panel(int x, int y, int width, int height) {
   }
 }
 
+static color_t desktop_theme_accent(void) {
+  if (desktop_mode_enabled) {
+    if (strcmp(desktop_session.theme, "moss") == 0) {
+      return MAKE_COLOR(88, 190, 132);
+    }
+    if (strcmp(desktop_session.theme, "ember") == 0) {
+      return MAKE_COLOR(242, 132, 74);
+    }
+    if (strcmp(desktop_session.theme, "frost") == 0) {
+      return MAKE_COLOR(98, 210, 232);
+    }
+  }
+  return COLOR_PANEL_ACCENT;
+}
+
 static void draw_centered_string(int y, const char *text, color_t color) {
   int x = ((int)screen_width - font_string_width(text)) / 2;
   font_draw_string(x, y, text, color);
@@ -146,7 +167,7 @@ static void draw_centered_string(int y, const char *text, color_t color) {
 static void draw_background(void) {
   color_t top = COLOR_BG_TOP;
   color_t bottom = COLOR_BG_BOTTOM;
-  color_t accent = COLOR_PANEL_ACCENT;
+  color_t accent = desktop_theme_accent();
 
   if (desktop_mode_enabled) {
     if (strcmp(desktop_session.wallpaper, "dawn") == 0) {
@@ -158,13 +179,6 @@ static void draw_background(void) {
     } else if (strcmp(desktop_session.wallpaper, "moss") == 0) {
       top = MAKE_COLOR(10, 24, 20);
       bottom = MAKE_COLOR(22, 48, 38);
-    }
-    if (strcmp(desktop_session.theme, "moss") == 0) {
-      accent = MAKE_COLOR(88, 190, 132);
-    } else if (strcmp(desktop_session.theme, "ember") == 0) {
-      accent = MAKE_COLOR(242, 132, 74);
-    } else if (strcmp(desktop_session.theme, "frost") == 0) {
-      accent = MAKE_COLOR(98, 210, 232);
     }
   }
 
@@ -270,6 +284,35 @@ static int desktop_parse_int_arg(const char *value, int *out) {
   return 0;
 }
 
+static void desktop_start_transition(const char *reason, int from_workspace,
+                                     int to_workspace) {
+  if (!reason || !reason[0]) {
+    reason = "redraw";
+  }
+  if (from_workspace <= 0) {
+    from_workspace = desktop_active_workspace;
+  }
+  if (to_workspace <= 0) {
+    to_workspace = desktop_active_workspace;
+  }
+  desktop_transition_from_workspace = desktop_clamp_workspace(from_workspace);
+  desktop_transition_to_workspace = desktop_clamp_workspace(to_workspace);
+  desktop_transition_reason = reason;
+  desktop_render_serial++;
+  desktop_animation_ticks_remaining =
+      desktop_settings.animations_enabled ? DESKTOP_ANIMATION_TICKS : 0;
+  needs_redraw = 1;
+}
+
+static int desktop_transition_progress_percent(void) {
+  if (!desktop_settings.animations_enabled ||
+      desktop_animation_ticks_remaining <= 0) {
+    return 100;
+  }
+  return ((DESKTOP_ANIMATION_TICKS - desktop_animation_ticks_remaining) * 100) /
+         DESKTOP_ANIMATION_TICKS;
+}
+
 static const char *desktop_layout_engine(void) {
   if (strcmp(desktop_session.layout, "master") == 0) {
     return "master";
@@ -292,7 +335,8 @@ static const char *desktop_split_mode_name(void) {
 
 static int desktop_cycle_split_mode(int delta) {
   desktop_split_mode = (desktop_split_mode + delta + 3) % 3;
-  needs_redraw = 1;
+  desktop_start_transition("layout", desktop_active_workspace,
+                           desktop_active_workspace);
   return desktop_split_mode;
 }
 
@@ -301,7 +345,8 @@ static int desktop_set_split_mode(int mode) {
     return -1;
   }
   desktop_split_mode = mode;
-  needs_redraw = 1;
+  desktop_start_transition("layout", desktop_active_workspace,
+                           desktop_active_workspace);
   return 0;
 }
 
@@ -310,7 +355,8 @@ static int desktop_set_split_ratio(int ratio) {
     return -1;
   }
   desktop_split_ratio_percent = ratio;
-  needs_redraw = 1;
+  desktop_start_transition("layout", desktop_active_workspace,
+                           desktop_active_workspace);
   return 0;
 }
 
@@ -319,7 +365,8 @@ static int desktop_set_master_ratio(int ratio) {
     return -1;
   }
   desktop_master_ratio_percent = ratio;
-  needs_redraw = 1;
+  desktop_start_transition("layout", desktop_active_workspace,
+                           desktop_active_workspace);
   return 0;
 }
 
@@ -624,6 +671,7 @@ static void desktop_focus_history_touch(int id) {
 }
 
 static void desktop_set_focused_client_index(int idx) {
+  int previous = desktop_focused_client_id;
   int id;
   int was_top;
 
@@ -639,6 +687,10 @@ static void desktop_set_focused_client_index(int idx) {
     desktop_clients[idx].focus_generation = desktop_focus_serial++;
   }
   desktop_focus_history_touch(id);
+  if (previous != desktop_focused_client_id) {
+    desktop_start_transition("focus", desktop_active_workspace,
+                             desktop_active_workspace);
+  }
 }
 
 static int desktop_focused_client_index(void) {
@@ -1266,6 +1318,72 @@ static int desktop_focus_client_at(int x, int y) {
   return -1;
 }
 
+static void draw_desktop_focus_ring(int x, int y, int width, int height,
+                                    color_t accent) {
+  int r = (accent >> 16) & 0xff;
+  int g = (accent >> 8) & 0xff;
+  int b = accent & 0xff;
+  int rounding = desktop_settings.rounding;
+
+  if (width < 24 || height < 24) {
+    return;
+  }
+  for (int i = 0; i < 3; i++) {
+    int alpha = 70 - i * 18;
+    color_t glow = MAKE_ARGB(alpha, r, g, b);
+    int inset = i + 1;
+    fb_fill_rect_alpha(x - inset, y - inset, width + inset * 2, 2, glow);
+    fb_fill_rect_alpha(x - inset, y + height + inset - 2,
+                       width + inset * 2, 2, glow);
+    fb_fill_rect_alpha(x - inset, y - inset, 2, height + inset * 2, glow);
+    fb_fill_rect_alpha(x + width + inset - 2, y - inset, 2,
+                       height + inset * 2, glow);
+  }
+  if (rounding > 0) {
+    int hint = rounding > 12 ? 12 : rounding;
+    color_t corner = MAKE_ARGB(110, r, g, b);
+    fb_fill_rect_alpha(x - 2, y - 2, hint, 2, corner);
+    fb_fill_rect_alpha(x - 2, y - 2, 2, hint, corner);
+    fb_fill_rect_alpha(x + width - hint + 2, y - 2, hint, 2, corner);
+    fb_fill_rect_alpha(x + width, y - 2, 2, hint, corner);
+    fb_fill_rect_alpha(x - 2, y + height, hint, 2, corner);
+    fb_fill_rect_alpha(x - 2, y + height - hint + 2, 2, hint, corner);
+    fb_fill_rect_alpha(x + width - hint + 2, y + height, hint, 2, corner);
+    fb_fill_rect_alpha(x + width, y + height - hint + 2, 2, hint, corner);
+  }
+}
+
+static void draw_desktop_transition_overlay(void) {
+  char line[128];
+  color_t accent = desktop_theme_accent();
+  int r = (accent >> 16) & 0xff;
+  int g = (accent >> 8) & 0xff;
+  int b = accent & 0xff;
+  int progress;
+  int width = 370;
+  int height = 30;
+  int x = (int)screen_width - width - 44;
+  int y = TOP_BAR_HEIGHT + 46;
+
+  if (!desktop_settings.animations_enabled ||
+      desktop_animation_ticks_remaining <= 0) {
+    return;
+  }
+  if (x < 48) {
+    x = 48;
+  }
+  progress = desktop_transition_progress_percent();
+  fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(210, 8, 13, 22));
+  fb_draw_rect(x, y, width, height, MAKE_ARGB(160, r, g, b));
+  fb_fill_rect_alpha(x + 2, y + height - 4,
+                     ((width - 4) * progress) / 100, 2,
+                     MAKE_ARGB(190, r, g, b));
+  snprintf(line, sizeof(line), "anim %s ws %d -> %d progress=%d%%",
+           desktop_transition_reason, desktop_transition_from_workspace,
+           desktop_transition_to_workspace, progress);
+  font_draw_string(x + 12, y + 9, line, COLOR_TEXT_SECONDARY);
+}
+
 static void draw_desktop_native_app(const desktop_client_t *client, int x,
                                     int y, int width, int height) {
   int line = y + 8;
@@ -1333,7 +1451,8 @@ static void draw_desktop_client_tile(const desktop_client_t *client, int x,
                                      int y, int width, int height,
                                      int focused) {
   char title[128];
-  color_t border = focused ? COLOR_PANEL_ACCENT : COLOR_PANEL_EDGE;
+  color_t accent = desktop_theme_accent();
+  color_t border = focused ? accent : COLOR_PANEL_EDGE;
   int inner_x = x + 8;
   int inner_y = y + 30;
   int inner_w = width - 16;
@@ -1349,6 +1468,9 @@ static void draw_desktop_client_tile(const desktop_client_t *client, int x,
   }
   if (desktop_settings.shadows_enabled) {
     draw_shadow_panel(x, y, width, height);
+  }
+  if (focused) {
+    draw_desktop_focus_ring(x, y, width, height, accent);
   }
   fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(226, 10, 15, 24));
   if (border_count < 1) {
@@ -1485,6 +1607,7 @@ static void draw_desktop_scene(void) {
   }
 
   draw_desktop_launcher();
+  draw_desktop_transition_overlay();
   draw_footer();
 }
 
@@ -1934,6 +2057,8 @@ int gui_desktop_launcher_visible(void) {
 }
 
 int gui_desktop_switch_workspace(int workspace) {
+  int previous_workspace = desktop_active_workspace;
+
   if (workspace < 1 || workspace > desktop_workspace_count) {
     return -1;
   }
@@ -1944,7 +2069,11 @@ int gui_desktop_switch_workspace(int workspace) {
   desktop_launcher_visible = 0;
   desktop_focused_client_index();
   desktop_sync_terminal_compat();
-  needs_redraw = 1;
+  if (workspace != previous_workspace) {
+    desktop_start_transition("workspace", previous_workspace, workspace);
+  } else {
+    needs_redraw = 1;
+  }
   return 0;
 }
 
@@ -1961,7 +2090,8 @@ int gui_desktop_move_terminal_to_workspace(int workspace) {
   desktop_clients[idx].workspace = workspace;
   desktop_set_focused_client_index(idx);
   desktop_sync_terminal_compat();
-  needs_redraw = 1;
+  desktop_start_transition("movetoworkspace", desktop_active_workspace,
+                           workspace);
   return 0;
 }
 
@@ -2002,7 +2132,8 @@ int gui_desktop_close_active_client(void) {
   desktop_set_focused_client_index(-1);
   desktop_focused_client_index();
   desktop_sync_terminal_compat();
-  needs_redraw = 1;
+  desktop_start_transition("client", desktop_active_workspace,
+                           desktop_active_workspace);
   return 0;
 }
 
@@ -2660,6 +2791,7 @@ void gui_desktop_format_layers(char *out, size_t out_size) {
            "layer namespace=bar z=10 visible=%s position=%s reserved-top=%d\n"
            "layer namespace=launcher z=90 visible=%s overlay=yes\n"
            "layer namespace=tiled-clients z=50 visible=%s clients=%d workspace=%d\n"
+           "layer namespace=render-transition z=95 visible=%s reason=%s progress=%d%%\n"
            "layer namespace=cursor z=100 visible=yes x=%d y=%d\n"
            "rules-runtime: %s\n"
            "layerrules-runtime: %s\n"
@@ -2669,8 +2801,11 @@ void gui_desktop_format_layers(char *out, size_t out_size) {
            desktop_session.bar_enabled ? TOP_BAR_HEIGHT : 0,
            desktop_launcher_visible ? "yes" : "no",
            total_clients > 0 ? "yes" : "empty", total_clients,
-           desktop_active_workspace, mouse_x, mouse_y,
-           ORIZON_DESKTOP_RULES_PATH, ORIZON_DESKTOP_LAYERS_PATH);
+           desktop_active_workspace,
+           desktop_animation_ticks_remaining > 0 ? "yes" : "no",
+           desktop_transition_reason, desktop_transition_progress_percent(),
+           mouse_x, mouse_y, ORIZON_DESKTOP_RULES_PATH,
+           ORIZON_DESKTOP_LAYERS_PATH);
 }
 
 void gui_desktop_format_binds(char *out, size_t out_size) {
@@ -2771,17 +2906,23 @@ void gui_desktop_format_animations(char *out, size_t out_size) {
            "Orizon desktop animations\n"
            "enabled: %s\n"
            "source: %s\n"
+           "runtime: focus-ring=yes workspace-transition=yes layout-transition=yes tick-budget=%d\n"
+           "transition: reason=%s from=%d to=%d ticks-remaining=%d progress=%d%% render-serial=%llu\n"
            "curves:\n"
            "  orizon-pop prepared=yes bezier=0.16,1,0.3,1\n"
            "  orizon-slide prepared=yes bezier=0.2,0.8,0.2,1\n"
            "rules:\n"
-           "  windows prepared=yes style=fade+scale\n"
-           "  workspaces prepared=yes style=slide\n"
-           "  layers prepared=yes style=fade\n"
-           "runtime: compositor currently applies static redraws only\n"
+           "  windows enabled=yes style=focus-glow+shadow ticked-software\n"
+           "  workspaces enabled=yes style=slide-indicator ticked-software\n"
+           "  layers enabled=yes style=fade-indicator ticked-software\n"
+           "truth: software framebuffer animation hints, not wlroots animation graph\n"
            "set: desktop keyword animations:enabled <true|false>\n",
            desktop_settings.animations_enabled ? "true" : "false",
-           ORIZON_DESKTOP_SETTINGS_PATH);
+           ORIZON_DESKTOP_SETTINGS_PATH, DESKTOP_ANIMATION_TICKS,
+           desktop_transition_reason, desktop_transition_from_workspace,
+           desktop_transition_to_workspace, desktop_animation_ticks_remaining,
+           desktop_transition_progress_percent(),
+           (unsigned long long)desktop_render_serial);
 }
 
 void gui_desktop_format_decorations(char *out, size_t out_size) {
@@ -2791,7 +2932,8 @@ void gui_desktop_format_decorations(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop decorations\n"
            "border: size=%d active-color=accent inactive-color=edge\n"
-           "rounding: %d\n"
+           "focus-ring: enabled=yes renderer=software-glow follows=activewindow\n"
+           "rounding: configured=%d renderer=corner-hints true-rounded=no\n"
            "shadows: enabled=%s renderer=software\n"
            "blur: enabled=no prepared=no\n"
            "drop-shadow: %s\n"
@@ -2802,6 +2944,41 @@ void gui_desktop_format_decorations(char *out, size_t out_size) {
            desktop_settings.shadows_enabled ? "enabled" : "disabled");
 }
 
+void gui_desktop_format_render(char *out, size_t out_size) {
+  color_t accent = desktop_theme_accent();
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "Orizon desktop render\n"
+           "backend: framebuffer\n"
+           "renderer: software\n"
+           "scale: %d\n"
+           "theme: %s wallpaper=%s accent=#%06x\n"
+           "focus-ring: enabled=yes activewindow=0x%x style=hyprland-like-glow\n"
+           "shadows: enabled=%s renderer=software\n"
+           "rounding: configured=%d renderer=corner-hints true-rounded=no\n"
+           "transitions: enabled=%s reason=%s from=%d to=%d ticks=%d progress=%d%%\n"
+           "render-serial: %llu\n"
+           "window-moving: manual-drag=no tiled-dispatch=yes\n"
+           "protocols: wayland=no wlroots=no layer-shell=prepared\n"
+           "truth: VM-safe Hyprland-style facade over Orizon framebuffer compositor\n",
+           ui_scale, desktop_session.theme, desktop_session.wallpaper,
+           accent & 0xffffff,
+           desktop_focused_client_id > 0
+               ? DESKTOP_CLIENT_ADDRESS_BASE +
+                     ((uint32_t)desktop_focused_client_id * 0x100u)
+               : 0,
+           desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_settings.rounding,
+           desktop_settings.animations_enabled ? "true" : "false",
+           desktop_transition_reason, desktop_transition_from_workspace,
+           desktop_transition_to_workspace, desktop_animation_ticks_remaining,
+           desktop_transition_progress_percent(),
+           (unsigned long long)desktop_render_serial);
+}
+
 void gui_desktop_format_descriptions(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -2809,7 +2986,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, workspaces, activeworkspace, activewindow\n"
-           "commands: monitors, binds, layers, layouts, animations, decorations, devices\n"
+           "commands: monitors, binds, layers, layouts, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movefocus, cyclenext, swapnext\n"
@@ -3058,6 +3235,7 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
            "clients: total=%d active-workspace=%d focused=0x%x focus-history=%s\n"
            "layout-state: split=%s ratio=%d master=%d submap=%s\n"
            "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s pointer=%s\n"
+           "render-state: serial=%llu focus-ring=yes transition=%s ticks=%d progress=%d%%\n"
            "protocols: wayland=no wlroots=no xwayland=no layer-shell=prepared\n"
            "truth: Hyprland-style Orizon profile, not upstream Hyprland\n",
            ORIZON_DESKTOP_PACKAGE, (unsigned long)screen_width,
@@ -3079,7 +3257,10 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
            desktop_settings.border_size, desktop_settings.rounding,
            desktop_settings.animations_enabled ? "true" : "false",
            desktop_settings.shadows_enabled ? "true" : "false",
-           desktop_settings.keyboard_layout, desktop_settings.pointer_profile);
+           desktop_settings.keyboard_layout, desktop_settings.pointer_profile,
+           (unsigned long long)desktop_render_serial,
+           desktop_transition_reason, desktop_animation_ticks_remaining,
+           desktop_transition_progress_percent());
 }
 
 void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
@@ -3237,6 +3418,14 @@ void gui_main_loop(void) {
           splash_ticks_remaining -= (int)elapsed;
         } else {
           splash_ticks_remaining = 0;
+        }
+        needs_redraw = 1;
+      }
+      if (desktop_mode_enabled && desktop_animation_ticks_remaining > 0) {
+        if ((uint64_t)desktop_animation_ticks_remaining > elapsed) {
+          desktop_animation_ticks_remaining -= (int)elapsed;
+        } else {
+          desktop_animation_ticks_remaining = 0;
         }
         needs_redraw = 1;
       }

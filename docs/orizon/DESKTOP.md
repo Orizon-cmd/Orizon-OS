@@ -50,6 +50,7 @@ desktop systeminfo
 desktop layouts
 desktop animations
 desktop decorations
+desktop render
 desktop descriptions
 desktop instances
 desktop submap
@@ -64,6 +65,7 @@ desktop hyprctl focushistory
 desktop hyprctl layouts
 desktop hyprctl animations
 desktop hyprctl decorations
+desktop hyprctl render
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
@@ -283,9 +285,12 @@ runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop layouts`, `desktop animations`,
-`desktop configerrors`, `desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
+`desktop render`, `desktop configerrors`, `desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
+`desktop render` is the most direct VM-safe renderer diagnostic: it reports the
+software focus ring, shadow policy, configured rounding, transition reason and
+render serial. It is Hyprland-style compositor UX, not upstream Wayland/wlroots.
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,

@@ -103,6 +103,7 @@ void gui_desktop_format_binds(char *out, size_t out_size);
 void gui_desktop_format_layouts(char *out, size_t out_size);
 void gui_desktop_format_animations(char *out, size_t out_size);
 void gui_desktop_format_decorations(char *out, size_t out_size);
+void gui_desktop_format_render(char *out, size_t out_size);
 void gui_desktop_format_descriptions(char *out, size_t out_size);
 void gui_desktop_format_instances(char *out, size_t out_size);
 void gui_desktop_format_submap(char *out, size_t out_size);

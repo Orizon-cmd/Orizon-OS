@@ -3338,8 +3338,9 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop version         show desktop compatibility facade version\r\n"
              "  desktop systeminfo      show compositor/backend/session summary\r\n"
              "  desktop layouts         show available tiling layouts\r\n"
-             "  desktop animations      show animation policy placeholders\r\n"
+             "  desktop animations      show animation/runtime transition state\r\n"
              "  desktop decorations     show border/shadow/rounding state\r\n"
+             "  desktop render          show render/focus/transition diagnostics\r\n"
              "  desktop descriptions    show hyprctl/dispatcher command descriptions\r\n"
              "  desktop instances       show compositor instance summary\r\n"
              "  desktop submap          show active Hyprland-style submap\r\n"
@@ -3522,6 +3523,10 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "decorations") ||
              ssh_shell_command_is(sub, "decoration")) {
     gui_desktop_format_decorations(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "render") ||
+             ssh_shell_command_is(sub, "rendering") ||
+             ssh_shell_command_is(sub, "renderdiag")) {
+    gui_desktop_format_render(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "descriptions") ||
              ssh_shell_command_is(sub, "description")) {
     gui_desktop_format_descriptions(out, sizeof(out));
@@ -3592,7 +3597,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3623,6 +3628,9 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_animations(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "decorations")) {
       gui_desktop_format_decorations(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "render") ||
+               ssh_shell_command_is(hypr, "rendering")) {
+      gui_desktop_format_render(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "descriptions")) {
       gui_desktop_format_descriptions(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "instances")) {

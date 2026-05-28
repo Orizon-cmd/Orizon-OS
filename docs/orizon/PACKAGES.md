@@ -112,6 +112,7 @@ desktop systeminfo
 desktop layouts
 desktop animations
 desktop decorations
+desktop render
 desktop descriptions
 desktop instances
 desktop submap
@@ -126,6 +127,7 @@ desktop hyprctl focushistory
 desktop hyprctl layouts
 desktop hyprctl animations
 desktop hyprctl decorations
+desktop hyprctl render
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
@@ -164,12 +166,12 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.23.0` because it includes policy/config files, the persisted session
+`0.24.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
-`hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
+`hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
@@ -196,6 +198,10 @@ metadata for `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`,
 `orizon-launcher`, and future `orizon-waybar`. The split packages are prepared
 for discovery and documentation; the current install path remains
 `pkg install orizon-desktop-hypr`.
+Version `0.24.0` adds framebuffer render diagnostics and first live render UX:
+software focus ring, shadow/rounding diagnostics, ticked focus/workspace/layout
+transition state, `desktop render`, and `desktop hyprctl render`. It remains a
+Hyprland-style Orizon compositor facade, not upstream Wayland/wlroots.
 
 ## Package Format
 

@@ -121,6 +121,7 @@ desktop systeminfo
 desktop layouts
 desktop animations
 desktop decorations
+desktop render
 desktop descriptions
 desktop instances
 desktop submap
@@ -135,6 +136,7 @@ desktop hyprctl focushistory
 desktop hyprctl layouts
 desktop hyprctl animations
 desktop hyprctl decorations
+desktop hyprctl render
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
@@ -300,7 +302,7 @@ and `desktop runtime` show the generated Hyprland-style runtime files,
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
-`desktop submap`, `desktop configerrors`, `desktop rollinglog`, and
+`desktop render`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`, and
 `desktop focus-history` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
@@ -311,7 +313,7 @@ Hyprland-style runtime keyword, `desktop dispatch
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists launcher entries, `desktop launch
 terminal|settings|logs|packages|update` opens the first native apps as tiled

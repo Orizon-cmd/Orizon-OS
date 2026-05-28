@@ -174,6 +174,7 @@ desktop systeminfo
 desktop layouts
 desktop animations
 desktop decorations
+desktop render
 desktop descriptions
 desktop instances
 desktop submap
@@ -191,6 +192,7 @@ desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl animations
 desktop hyprctl decorations
+desktop hyprctl render
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
