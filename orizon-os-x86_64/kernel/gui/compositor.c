@@ -78,6 +78,9 @@ static int desktop_split_mode = 0; /* 0=auto, 1=vertical, 2=horizontal */
 static int desktop_split_ratio_percent = 50;
 static int desktop_master_ratio_percent = 58;
 static char desktop_submap[32] = "default";
+static int desktop_last_key = 0;
+static uint64_t desktop_key_serial = 0;
+static uint64_t desktop_pointer_focus_changes = 0;
 typedef struct {
   int id;
   int workspace;
@@ -114,6 +117,8 @@ static int wifi_ready = 0;
 static int i2c_hid_ready = 0;
 static int i2c_hid_deferred_probe = 0;
 static const char *boot_stage_hint = "Starting Orizon shell";
+
+static int desktop_submap_is_default(void);
 
 static void draw_circle(int cx, int cy, int radius, color_t color) {
   for (int y = -radius; y <= radius; y++) {
@@ -208,9 +213,13 @@ static void draw_footer(void) {
   if (i2c_hid_deferred_probe == 1) {
     hint = "Lenovo I2C-HID probe selected. Boot UI is visible first; driver probe runs after startup.";
   } else if (desktop_mode_enabled && core_services_done) {
-    hint = desktop_terminal_visible
-               ? "Desktop profile active. F2 closes, F4 fullscreen, F5 pseudo, F6 cycles focus."
-               : "Desktop profile active. Press F1, t or Enter to spawn a tiled terminal.";
+    if (!desktop_submap_is_default()) {
+      hint = "Desktop submap active. F9 resize, F10 move, F11 launch, F12/Esc default.";
+    } else {
+      hint = desktop_terminal_visible
+                 ? "Desktop active. F2 kill, F4 full, F5 pseudo, F6 focus, F9/F10/F11 submaps."
+                 : "Desktop active. Press F1, t or Enter to spawn a tiled terminal.";
+    }
   } else if (boot_stage_hint && boot_stage_hint[0]) {
     hint = boot_stage_hint;
   } else if (boot_cmdline_has("orizon.safe=1")) {
@@ -314,6 +323,28 @@ static int desktop_set_master_ratio(int ratio) {
   return 0;
 }
 
+static int desktop_adjust_split_ratio(int delta) {
+  int next = desktop_split_ratio_percent + delta;
+  if (next < 10) {
+    next = 10;
+  }
+  if (next > 90) {
+    next = 90;
+  }
+  return desktop_set_split_ratio(next);
+}
+
+static int desktop_adjust_master_ratio(int delta) {
+  int next = desktop_master_ratio_percent + delta;
+  if (next < 10) {
+    next = 10;
+  }
+  if (next > 90) {
+    next = 90;
+  }
+  return desktop_set_master_ratio(next);
+}
+
 static int desktop_parse_ratio_arg(const char *value, int current, int *out) {
   int exact = 0;
   int parsed = 0;
@@ -368,6 +399,78 @@ static int desktop_set_submap(const char *name) {
   desktop_submap[len] = '\0';
   needs_redraw = 1;
   return 0;
+}
+
+static int desktop_submap_is_default(void) {
+  return strcmp(desktop_submap, "default") == 0 ||
+         strcmp(desktop_submap, "reset") == 0;
+}
+
+static const char *desktop_key_name(int key, char *buf, size_t buf_size) {
+  if (!buf || buf_size == 0) {
+    return "";
+  }
+  switch (key) {
+  case KEY_UP:
+    snprintf(buf, buf_size, "Up");
+    break;
+  case KEY_DOWN:
+    snprintf(buf, buf_size, "Down");
+    break;
+  case KEY_LEFT:
+    snprintf(buf, buf_size, "Left");
+    break;
+  case KEY_RIGHT:
+    snprintf(buf, buf_size, "Right");
+    break;
+  case KEY_ESC:
+    snprintf(buf, buf_size, "Esc");
+    break;
+  case KEY_F1:
+    snprintf(buf, buf_size, "F1");
+    break;
+  case KEY_F2:
+    snprintf(buf, buf_size, "F2");
+    break;
+  case KEY_F3:
+    snprintf(buf, buf_size, "F3");
+    break;
+  case KEY_F4:
+    snprintf(buf, buf_size, "F4");
+    break;
+  case KEY_F5:
+    snprintf(buf, buf_size, "F5");
+    break;
+  case KEY_F6:
+    snprintf(buf, buf_size, "F6");
+    break;
+  case KEY_F7:
+    snprintf(buf, buf_size, "F7");
+    break;
+  case KEY_F8:
+    snprintf(buf, buf_size, "F8");
+    break;
+  case KEY_F9:
+    snprintf(buf, buf_size, "F9");
+    break;
+  case KEY_F10:
+    snprintf(buf, buf_size, "F10");
+    break;
+  case KEY_F11:
+    snprintf(buf, buf_size, "F11");
+    break;
+  case KEY_F12:
+    snprintf(buf, buf_size, "F12");
+    break;
+  default:
+    if (key >= 32 && key < 127) {
+      snprintf(buf, buf_size, "%c", key);
+    } else {
+      snprintf(buf, buf_size, "0x%x", key);
+    }
+    break;
+  }
+  return buf;
 }
 
 static int desktop_parse_workspace_arg(const char *value, int *workspace) {
@@ -830,12 +933,12 @@ static void draw_desktop_status_bar(void) {
   fb_fill_rect_alpha(36, y, (int)screen_width - 72, 28,
                      MAKE_ARGB(168, 8, 12, 20));
   snprintf(line, sizeof(line),
-           "WS %d/%d  layout=%s split=%s/%d master=%d  gaps=%d/%d border=%d  F1 term F2 kill F3 launcher",
+           "WS %d/%d  layout=%s split=%s/%d master=%d  gaps=%d/%d border=%d  F1 term F9 resize F10 move sub=%s",
            desktop_active_workspace, desktop_workspace_count,
            desktop_session.layout, desktop_split_mode_name(),
            desktop_split_ratio_percent, desktop_master_ratio_percent,
            desktop_settings.gaps_in, desktop_settings.gaps_out,
-           desktop_settings.border_size);
+           desktop_settings.border_size, desktop_submap);
   font_draw_string(52, y + 7, line, COLOR_TEXT_SECONDARY);
 }
 
@@ -1028,6 +1131,31 @@ static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
   if (*rh < 0) {
     *rh = 0;
   }
+}
+
+static int desktop_focus_client_at(int x, int y) {
+  for (int i = DESKTOP_MAX_CLIENTS - 1; i >= 0; i--) {
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+
+    if (!desktop_client_on_workspace(&desktop_clients[i],
+                                     desktop_active_workspace)) {
+      continue;
+    }
+    desktop_client_rect(i, &rx, &ry, &rw, &rh);
+    if (x >= rx && y >= ry && x < rx + rw && y < ry + rh) {
+      if (desktop_clients[i].id != desktop_focused_client_id) {
+        desktop_set_focused_client_index(i);
+        desktop_sync_terminal_compat();
+        desktop_pointer_focus_changes++;
+        needs_redraw = 1;
+      }
+      return 0;
+    }
+  }
+  return -1;
 }
 
 static void draw_desktop_client_tile(const desktop_client_t *client, int x,
@@ -1266,7 +1394,88 @@ static void layout_console(void) {
   term_y = shell_y + PANEL_TITLE_HEIGHT + PANEL_PADDING;
 }
 
+static int desktop_handle_submap_key(int key) {
+  if (desktop_submap_is_default()) {
+    return 0;
+  }
+  if (key == KEY_ESC || key == KEY_F12) {
+    desktop_set_submap("default");
+    return 1;
+  }
+  if (strcmp(desktop_submap, "resize") == 0) {
+    if (key == KEY_LEFT || key == 'h' || key == 'H') {
+      desktop_adjust_split_ratio(-5);
+      return 1;
+    }
+    if (key == KEY_RIGHT || key == 'l' || key == 'L') {
+      desktop_adjust_split_ratio(5);
+      return 1;
+    }
+    if (key == KEY_UP || key == 'k' || key == 'K') {
+      desktop_adjust_master_ratio(5);
+      return 1;
+    }
+    if (key == KEY_DOWN || key == 'j' || key == 'J') {
+      desktop_adjust_master_ratio(-5);
+      return 1;
+    }
+    if (key == 'r' || key == 'R') {
+      desktop_set_split_ratio(50);
+      desktop_set_master_ratio(58);
+      return 1;
+    }
+    if (key == 's' || key == 'S') {
+      desktop_cycle_split_mode(1);
+      return 1;
+    }
+    return 1;
+  }
+  if (strcmp(desktop_submap, "move") == 0) {
+    if (key == KEY_LEFT || key == KEY_UP || key == 'h' || key == 'H' ||
+        key == 'k' || key == 'K') {
+      gui_desktop_focus_prev_client();
+      return 1;
+    }
+    if (key == KEY_RIGHT || key == KEY_DOWN || key == 'l' || key == 'L' ||
+        key == 'j' || key == 'J') {
+      gui_desktop_focus_next_client();
+      return 1;
+    }
+    if (key >= '1' && key <= '3') {
+      gui_desktop_move_terminal_to_workspace(key - '0');
+      return 1;
+    }
+    if (key == 'p' || key == 'P') {
+      desktop_toggle_active_pin();
+      return 1;
+    }
+    return 1;
+  }
+  if (strcmp(desktop_submap, "launch") == 0) {
+    if (key == 't' || key == 'T' || key == '\n' || key == '\r') {
+      gui_desktop_spawn_terminal_client();
+      desktop_set_submap("default");
+      return 1;
+    }
+    if (key == 'd' || key == 'D' || key == ' ') {
+      gui_desktop_toggle_launcher();
+      desktop_set_submap("default");
+      return 1;
+    }
+    if (key == 'q' || key == 'Q') {
+      gui_desktop_close_active_client();
+      desktop_set_submap("default");
+      return 1;
+    }
+    return 1;
+  }
+  return 0;
+}
+
 static void keyboard_callback(int key) {
+  desktop_last_key = key;
+  desktop_key_serial++;
+
   if (splash_ticks_remaining > 0 &&
       (key == ' ' || key == '\n' || key == '\r' || key == KEY_ESC)) {
     splash_ticks_remaining = 0;
@@ -1275,6 +1484,21 @@ static void keyboard_callback(int key) {
   }
 
   if (desktop_mode_enabled) {
+    if (key == KEY_F9) {
+      desktop_set_submap("resize");
+      return;
+    }
+    if (key == KEY_F10) {
+      desktop_set_submap("move");
+      return;
+    }
+    if (key == KEY_F11) {
+      desktop_set_submap("launch");
+      return;
+    }
+    if (desktop_handle_submap_key(key)) {
+      return;
+    }
     if (key == KEY_F3) {
       gui_desktop_toggle_launcher();
       return;
@@ -1319,6 +1543,10 @@ static void keyboard_callback(int key) {
       return;
     }
     if (!desktop_focused_client_is_terminal()) {
+      if (key >= '1' && key <= '3') {
+        gui_desktop_switch_workspace(key - '0');
+        return;
+      }
       if (key == '\n' || key == '\r' || key == ' ') {
         gui_desktop_spawn_terminal_client();
       }
@@ -1342,6 +1570,10 @@ static void poll_input_state(void) {
   if (new_x != mouse_x || new_y != mouse_y || new_buttons != prev_buttons) {
     mouse_x = new_x;
     mouse_y = new_y;
+    if (desktop_mode_enabled && desktop_session.focus_follows_mouse &&
+        !desktop_launcher_visible && splash_ticks_remaining <= 0) {
+      desktop_focus_client_at(mouse_x, mouse_y);
+    }
     needs_redraw = 1;
   }
 
@@ -1597,7 +1829,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                "workspace <n|+1|-1|previous> | movetoworkspace <n> | "
                "movefocus next|prev | fullscreen | pseudo | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
-               "submap <name>\n");
+               "resizeactive <x> <y> | submap <name>\n");
     }
     return -1;
   }
@@ -1724,6 +1956,49 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: togglesplit split=%s ratio=%d master=%d\n",
+               desktop_split_mode_name(), desktop_split_ratio_percent,
+               desktop_master_ratio_percent);
+    }
+    return 0;
+  }
+  if (strcmp(dispatcher, "resizeactive") == 0 ||
+      strcmp(dispatcher, "resizewindowpixel") == 0) {
+    const char *next_arg = a;
+    int dx = 0;
+    int dy = 0;
+
+    if (desktop_parse_int_arg(next_arg, &dx) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: resizeactive expects <x-delta> <y-delta>\n");
+      }
+      return -1;
+    }
+    while (*next_arg && *next_arg != ' ') {
+      next_arg++;
+    }
+    while (*next_arg == ' ') {
+      next_arg++;
+    }
+    if (*next_arg) {
+      desktop_parse_int_arg(next_arg, &dy);
+    }
+    if (dx == 0 && dy == 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: resizeactive no-op split=%d master=%d\n",
+                 desktop_split_ratio_percent, desktop_master_ratio_percent);
+      }
+      return 0;
+    }
+    if (dx != 0 && (dx < 0 ? -dx : dx) >= (dy < 0 ? -dy : dy)) {
+      desktop_adjust_split_ratio(dx > 0 ? 5 : -5);
+    } else {
+      desktop_adjust_master_ratio(dy > 0 ? 5 : -5);
+    }
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: resizeactive split=%s ratio=%d master=%d note=tiling-ratio-only\n",
                desktop_split_mode_name(), desktop_split_ratio_percent,
                desktop_master_ratio_percent);
     }
@@ -2027,7 +2302,8 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "cyclenext | swapnext | focusmaster | swapwithmaster | "
              "fullscreen | pseudo | pin | "
              "workspace <n|+1|-1> | movetoworkspace <n|+1|-1> | "
-             "togglesplit | layoutmsg <msg> | submap <name>\n"
+             "togglesplit | layoutmsg <msg> | resizeactive <x> <y> | "
+             "submap <name>\n"
              "rules: class/title/app selectors prepared via %s\n"
              "focus-history: desktop focus-history | desktop hyprctl focushistory\n"
              "limits: no mouse-drag window moving; true Wayland clients are future work\n",
@@ -2257,7 +2533,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
              "supported: exec, killactive, workspace, movetoworkspace, movefocus, "
              "cyclenext, swapnext, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
-             "layoutmsg, submap\n"
+             "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
 }
@@ -2350,7 +2626,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movefocus, cyclenext, swapnext\n"
-           "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, submap\n"
+           "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, focusmaster, swapwithmaster\n"
            "truth: Hyprland-style facade for Orizon's framebuffer compositor\n");
@@ -2383,7 +2659,9 @@ void gui_desktop_format_submap(char *out, size_t out_size) {
            "submap: %s\n"
            "available: default, resize, move, launch\n"
            "set: desktop dispatch submap <name|reset>\n"
-           "bind-note: config parser records submap-style binds; runtime dispatch stores current submap only\n",
+           "keys: F9 resize, F10 move, F11 launch, F12/Esc default\n"
+           "resize: arrows/HJKL adjust tiling ratios; move: arrows/HJKL focus and 1/2/3 move clients\n"
+           "bind-note: config parser records submap-style binds; runtime submaps are active in VM keyboard input\n",
            desktop_submap);
 }
 
@@ -2496,7 +2774,7 @@ void gui_desktop_format_pointer(char *out, size_t out_size) {
   i2c_hid_format_status(i2c, sizeof(i2c));
   snprintf(out, out_size,
            "Orizon desktop pointer\n"
-           "cursor: x=%d y=%d buttons=%d profile=%s focus-follows-mouse=%s\n"
+           "cursor: x=%d y=%d buttons=%d profile=%s focus-follows-mouse=%s focus-changes=%llu\n"
            "window-moving: keyboard-dispatch-only manual-drag=no\n"
            "ps2: %s\n"
            "usb-hid: %s\n"
@@ -2504,7 +2782,8 @@ void gui_desktop_format_pointer(char *out, size_t out_size) {
            "vm-note: QEMU/libvirt usb-tablet and boot mouse reports are routed "
            "to the compositor pointer when their HID endpoint is selected.\n",
            mouse_x, mouse_y, prev_buttons, desktop_settings.pointer_profile,
-           desktop_session.focus_follows_mouse ? "yes" : "no", ps2, usb, i2c);
+           desktop_session.focus_follows_mouse ? "yes" : "no",
+           (unsigned long long)desktop_pointer_focus_changes, ps2, usb, i2c);
 }
 
 void gui_desktop_format_devices(char *out, size_t out_size) {
@@ -2539,6 +2818,37 @@ void gui_desktop_format_devices(char *out, size_t out_size) {
            desktop_settings.pointer_profile, ps2, usb, i2c);
 }
 
+void gui_desktop_format_keymap(char *out, size_t out_size) {
+  char key_name[24];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  desktop_key_name(desktop_last_key, key_name, sizeof(key_name));
+  snprintf(out, out_size,
+           "Orizon desktop keymap\n"
+           "model: Hyprland-style dispatcher/submap facade over VM framebuffer input\n"
+           "keyboard-layout: %s\n"
+           "active-submap: %s\n"
+           "last-key: %s serial=%llu\n"
+           "focus-follows-mouse: %s pointer-focus-changes=%llu\n"
+           "direct-keys:\n"
+           "  F1 exec terminal | F2 killactive | F3 launcher toggle\n"
+           "  F4 fullscreen | F5 pseudo | F6 cyclenext | F7/F8 workspace +/-1\n"
+           "submaps:\n"
+           "  F9 resize: Left/H split -5, Right/L split +5, Up/K master +5, Down/J master -5, R reset, S togglesplit, Esc/F12 default\n"
+           "  F10 move: arrows/HJKL focus, 1/2/3 movetoworkspace, P pin, Esc/F12 default\n"
+           "  F11 launch: T/Enter terminal, D/Space launcher, Q killactive, Esc/F12 default\n"
+           "config-binds: %s\n"
+           "mouse-policy: focus follows mouse is optional; manual-window-drag=no\n"
+           "dispatch: desktop dispatch submap <default|resize|move|launch> | desktop dispatch resizeactive <x> <y>\n",
+           desktop_settings.keyboard_layout, desktop_submap, key_name,
+           (unsigned long long)desktop_key_serial,
+           desktop_session.focus_follows_mouse ? "yes" : "no",
+           (unsigned long long)desktop_pointer_focus_changes,
+           ORIZON_DESKTOP_BINDS_PATH);
+}
+
 void gui_desktop_format_systeminfo(char *out, size_t out_size) {
   int total = 0;
 
@@ -2552,7 +2862,7 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
   }
   snprintf(out, out_size,
            "Orizon desktop systeminfo\n"
-           "version: %s 0.19.0\n"
+           "version: %s 0.20.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "backend: framebuffer\n"
            "renderer: software\n"
@@ -2592,7 +2902,7 @@ void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl version\n"
            "facade: Hyprland-style compatibility commands\n"
-           "desktop-package: %s 0.19.0\n"
+           "desktop-package: %s 0.20.0\n"
            "compositor: Orizon framebuffer compositor\n"
            "wayland: not-implemented\n"
            "wlroots: not-embedded\n"

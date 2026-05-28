@@ -121,6 +121,28 @@ static const char *desktop_user_config =
     "bind = F2, killactive\n"
     "bind = F4, fullscreen\n"
     "bind = F5, pseudo\n"
+    "bind = F9, submap, resize\n"
+    "bind = F10, submap, move\n"
+    "bind = F11, submap, launch\n"
+    "bind = F12, submap, reset\n"
+    "submap = resize\n"
+    "bind = , right, resizeactive, 5 0\n"
+    "bind = , left, resizeactive, -5 0\n"
+    "bind = , up, resizeactive, 0 5\n"
+    "bind = , down, resizeactive, 0 -5\n"
+    "bind = , escape, submap, reset\n"
+    "submap = move\n"
+    "bind = , right, movefocus, r\n"
+    "bind = , left, movefocus, l\n"
+    "bind = , 1, movetoworkspace, 1\n"
+    "bind = , 2, movetoworkspace, 2\n"
+    "bind = , 3, movetoworkspace, 3\n"
+    "bind = , escape, submap, reset\n"
+    "submap = launch\n"
+    "bind = , t, exec, terminal\n"
+    "bind = , d, exec, orizon-launcher\n"
+    "bind = , q, killactive\n"
+    "bind = , escape, submap, reset\n"
     "submap = default\n"
     "dwindle:pseudotile = true\n"
     "dwindle:preserve_split = true\n";
@@ -136,6 +158,10 @@ static const char *desktop_binds_runtime_config =
     "bind = $mod, P, pseudo\n"
     "bind = $mod, J, togglesplit\n"
     "bind = $mod, S, layoutmsg, swapwithmaster\n"
+    "bind = F9, submap, resize\n"
+    "bind = F10, submap, move\n"
+    "bind = F11, submap, launch\n"
+    "bind = F12, submap, reset\n"
     "bind = $mod, 1, workspace, 1\n"
     "bind = $mod SHIFT, 1, movetoworkspace, 1\n";
 
@@ -581,7 +607,7 @@ static int desktop_hypr_dispatch_supported(const char *value) {
           strstr(value, "focusmaster") || strstr(value, "swapwithmaster") ||
           strstr(value, "cyclenext") || strstr(value, "swapnext") ||
           strstr(value, "togglesplit") || strstr(value, "layoutmsg") ||
-          strstr(value, "submap"));
+          strstr(value, "resizeactive") || strstr(value, "submap"));
 }
 
 static int desktop_hypr_key_safe(const char *value) {
@@ -3039,7 +3065,15 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, "F6: dispatch cyclenext\n");
   desktop_append(out, out_size, &used, "F7/F8: dispatch workspace +1/-1\n");
   desktop_append(out, out_size, &used,
+                 "F9/F10/F11/F12: submap resize/move/launch/default\n");
+  desktop_append(out, out_size, &used,
                  "Enter / Space on empty focus: dispatch exec terminal\n");
+  desktop_append(out, out_size, &used,
+                 "resize submap: arrows or HJKL adjust tiling ratios; R resets; S toggles split\n");
+  desktop_append(out, out_size, &used,
+                 "move submap: arrows or HJKL focus; 1/2/3 move focused client to workspace; P pins\n");
+  desktop_append(out, out_size, &used,
+                 "launch submap: T terminal; D launcher; Q killactive; Esc/F12 default\n");
   desktop_append(out, out_size, &used,
                  "Hypr-style template: SUPER+Return exec terminal, SUPER+Q killactive, SUPER+D launcher\n");
   desktop_append(out, out_size, &used,
@@ -3049,7 +3083,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin\n");
+                 "dispatchers: exec terminal | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

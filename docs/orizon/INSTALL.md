@@ -158,6 +158,7 @@ desktop runtime
 desktop layers
 desktop version
 desktop devices
+desktop keymap
 desktop systeminfo
 desktop layouts
 desktop animations
@@ -182,6 +183,7 @@ desktop hyprctl decorations
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
+desktop hyprctl keymap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -203,6 +205,7 @@ desktop dispatch togglesplit
 desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg orientationleft
+desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop dispatch movetoworkspace 2

@@ -31,6 +31,7 @@ desktop settings set gaps-in 10
 desktop settings set border-size 3
 desktop settings repair
 desktop pointer
+desktop keymap
 desktop apps
 desktop profiles
 desktop preset moss
@@ -62,6 +63,7 @@ desktop hyprctl decorations
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
+desktop hyprctl keymap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -97,6 +99,7 @@ desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg mfact -5
 desktop dispatch layoutmsg orientationleft
 desktop dispatch layoutmsg orientationtop
+desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
@@ -110,6 +113,7 @@ desktop dispatch workspace previous
 desktop dispatch workspace +1
 desktop dispatch movefocus next
 desktop shortcuts
+desktop keymap
 desktop doctor
 desktop logs
 desktop enable
@@ -223,6 +227,16 @@ boot-protocol USB mouse are routed into the same pointer state used by the
 desktop compositor. This is pointer support for focus/cursor diagnostics, not
 manual window dragging.
 
+`desktop keymap` shows the active VM keyboard/runtime map: direct F-key
+shortcuts, the last key seen by the compositor, the active submap, and the
+focus-follows-mouse transition counter. F9 enters the `resize` submap, F10
+enters `move`, F11 enters `launch`, and F12/Esc returns to `default`. In
+`resize`, arrows/HJKL adjust split/master tiling ratios and `R` resets them.
+In `move`, arrows/HJKL move focus, `1/2/3` move the active tiled client to a
+workspace, and `P` toggles pin. In `launch`, `T` opens a terminal, `D` toggles
+the launcher, and `Q` kills the active client. This is keyboard dispatcher
+control, not free window dragging.
+
 `desktop apps` lists the first launcher entries. `desktop launcher show` opens
 the launcher overlay, `F3` toggles it locally, and `desktop launch terminal`
 opens the first real app: the Orizon terminal client.
@@ -259,11 +273,11 @@ dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
 `swapnext`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
 dispatchers now include `togglesplit`,
 `layoutmsg orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
-and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
+`resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, and `workspace previous` are understood for VM-safe desktop flow.
 
 `desktop hyprctl
-version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
+version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -298,11 +312,15 @@ F4 dispatches fullscreen
 F5 dispatches pseudo
 F6 dispatches cyclenext
 F7/F8 dispatch workspace +1/-1
+F9/F10/F11 enter resize/move/launch submaps
+F12 or Esc returns to the default submap
 Enter/Space on an empty focus dispatches exec terminal
 desktop workspace <n> switches runtime workspace
 desktop dispatch movetoworkspace <n> moves the active tiled client
 desktop dispatch movefocus next|prev changes focus
 desktop dispatch fullscreen|pseudo|pin controls active client state
+desktop dispatch resizeactive <x> <y> adjusts tiling ratios
+desktop keymap shows keyboard/submap runtime diagnostics
 desktop autostart terminal on|off controls startup terminal
 desktop preset <name> applies a saved symbolic session
 desktop focus on|off|toggle controls focus-follows-mouse
@@ -324,6 +342,7 @@ desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
   exists yet.
 - VM pointer input supports PS/2 mouse/touchpad and selected USB HID
   mouse/tablet reports, but windows are still managed by dispatchers and tiling
-  layouts rather than mouse drag/resize.
+  layouts rather than mouse drag/resize. Keyboard resize submaps adjust tiling
+  ratios only; they do not create floating/manual window movement.
 - The first useful app is still the terminal.
 - Real hardware validation is not claimed; this is VM/ZimaOS-ready plumbing.

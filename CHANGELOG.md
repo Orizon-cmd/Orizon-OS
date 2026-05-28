@@ -75,6 +75,10 @@
   `desktop start/stop/restart/reload/recover/state`, persistent
   `/system/desktop-state.conf`, `/logs/desktop-session.log`, lifecycle state in
   `desktop status`, and bumped `orizon-desktop-hypr` to 0.19.0.
+- Added Hyprland-style keyboard ergonomics with active F9/F10/F11
+  resize/move/launch submaps, F12/Esc reset, `desktop keymap`,
+  `desktop dispatch resizeactive`, real focus-follows-mouse transitions in the
+  VM compositor, and bumped `orizon-desktop-hypr` to 0.20.0.
 - Aligned the documentation/release map after the VM/ZimaOS stabilization
   blocks: README, STATUS, RELEASE, ROADMAP, troubleshooting, and subsystem docs
   now point to the same implemented/prepared/not-validated boundary.

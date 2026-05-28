@@ -3324,6 +3324,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop doctor          check desktop install/config state\r\n"
              "  desktop logs            show desktop events\r\n"
              "  desktop shortcuts       show keys and commands\r\n"
+             "  desktop keymap          show VM keyboard/submap runtime\r\n"
              "  desktop session         show theme/wallpaper/layout\r\n"
              "  desktop settings        show system-wide desktop settings\r\n"
              "  desktop settings set <key> <value> update /system/desktop-settings.conf\r\n"
@@ -3351,7 +3352,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop runtime         show generated Hyprland-style runtime files\r\n"
              "  desktop layers          show compositor layer model\r\n"
              "  desktop keyword <k> <v> apply one Hyprland-style runtime keyword\r\n"
-             "  desktop dispatch <d>    run exec/workspace/layoutmsg/master/submap/togglesplit\r\n"
+             "  desktop dispatch <d>    run exec/workspace/layoutmsg/master/submap/resizeactive\r\n"
              "  desktop hyprctl <cmd>   Hyprland-like status/keyword/dispatch facade\r\n"
              "  desktop autostart       show or configure startup apps\r\n"
              "  desktop windows         list compositor clients/windows/layers\r\n"
@@ -3368,6 +3369,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop dispatch movetoworkspace <n|+1|-1> move focused client\r\n"
              "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster client actions\r\n"
              "  desktop dispatch layoutmsg <msg> orientation/splitratio/masterratio actions\r\n"
+             "  desktop dispatch resizeactive <x> <y> tiling ratio resize action\r\n"
              "  desktop dispatch submap <name|reset> set active submap\r\n"
              "  desktop reset           disable and restore default policy\r\n"
              "  desktop write-config    rewrite Hypr-style user config\r\n"
@@ -3423,6 +3425,10 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "shortcuts") ||
              ssh_shell_command_is(sub, "keys")) {
     orizon_desktop_format_shortcuts(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "keymap") ||
+             ssh_shell_command_is(sub, "inputmap") ||
+             ssh_shell_command_is(sub, "ergonomics")) {
+    gui_desktop_format_keymap(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "settings")) {
     const char *settings_args = ssh_shell_skip_spaces(sub + 8);
     if (*settings_args == '\0' || ssh_shell_command_is(settings_args, "show") ||
@@ -3565,7 +3571,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3585,6 +3591,9 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_monitors(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "binds")) {
       gui_desktop_format_binds(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "keymap") ||
+               ssh_shell_command_is(hypr, "inputmap")) {
+      gui_desktop_format_keymap(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layers")) {
       gui_desktop_format_layers(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layouts")) {

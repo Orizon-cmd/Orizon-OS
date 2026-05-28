@@ -102,6 +102,7 @@ desktop settings set gaps-in 10
 desktop settings set border-size 3
 desktop settings repair
 desktop pointer
+desktop keymap
 desktop apps
 desktop profiles
 desktop preset moss
@@ -133,6 +134,7 @@ desktop hyprctl decorations
 desktop hyprctl descriptions
 desktop hyprctl instances
 desktop hyprctl submap
+desktop hyprctl keymap
 desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
@@ -168,6 +170,7 @@ desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg mfact -5
 desktop dispatch layoutmsg orientationleft
 desktop dispatch layoutmsg orientationtop
+desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
@@ -181,6 +184,7 @@ desktop dispatch workspace previous
 desktop dispatch workspace +1
 desktop dispatch movefocus next
 desktop shortcuts
+desktop keymap
 desktop doctor
 desktop logs
 desktop enable
@@ -278,7 +282,8 @@ safer profile/validation layer for that system file. `desktop session`
 manages theme/wallpaper/bar/focus state, `desktop preset <name>` applies a saved
 symbolic session, `desktop pointer` shows cursor and HID mouse/tablet
 diagnostics, `desktop layout <dwindle|master|monocle>` updates the
-prepared layout profile, `desktop binds`, `desktop rules`, `desktop monitors`,
+prepared layout profile, `desktop keymap` shows active F-key/submap keyboard
+runtime and focus-follows-mouse counters, `desktop binds`, `desktop rules`, `desktop monitors`,
 and `desktop runtime` show the generated Hyprland-style runtime files,
 `desktop layers` shows the compositor layer model, `desktop version` identifies
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
@@ -291,16 +296,18 @@ Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
 `focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
-`togglesplit`, `layoutmsg`, and `submap`,
+`togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists launcher entries, `desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
-terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation. See
+terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
+F9/F10/F11 enter resize/move/launch submaps and F12/Esc returns to default,
+without enabling manual window dragging. See
 [DESKTOP.md](DESKTOP.md).
 
 ## Network And Update

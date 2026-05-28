@@ -42,8 +42,8 @@ work.
   `firstboot done` document first boot, record `/system/boot-state`, write
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
-- Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts`,
-  `desktop session/settings/settings preset/settings doctor/pointer/devices/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+- Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts/keymap`,
+  `desktop session/settings/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
@@ -52,14 +52,14 @@ work.
   and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative workspace dispatch, dispatcher-style
-  movetoworkspace/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/submap, fullscreen/pseudo/pinned client
+  movetoworkspace/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input hints
   without default free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/state`
   with `/system/desktop-state.conf` and `/logs/desktop-session.log`,
-  runtime keyword/getoption/reload inspection, split/master ratio controls, explicit orientation hints, version/devices/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  runtime keyword/getoption/reload inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.
 - Installer safety: `install-plan` writes

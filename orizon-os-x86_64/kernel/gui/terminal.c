@@ -3743,6 +3743,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop doctor          - Check desktop install/config state\n");
     term_puts_t(term, "  desktop logs            - Show desktop events\n");
     term_puts_t(term, "  desktop shortcuts       - Show keys and commands\n");
+    term_puts_t(term, "  desktop keymap          - Show VM keyboard/submap runtime\n");
     term_puts_t(term, "  desktop session         - Show session theme/wallpaper/layout\n");
     term_puts_t(term, "  desktop settings        - Show system-wide desktop settings\n");
     term_puts_t(term, "  desktop settings set <key> <value> - Update /system/desktop-settings.conf\n");
@@ -3770,7 +3771,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop runtime         - Show generated Hyprland-style runtime files\n");
     term_puts_t(term, "  desktop layers          - Show compositor layer model\n");
     term_puts_t(term, "  desktop keyword <k> <v> - Apply one Hyprland-style runtime keyword\n");
-    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/master/submap/togglesplit\n");
+    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/master/submap/resizeactive\n");
     term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like status/keyword/dispatch facade\n");
     term_puts_t(term, "  desktop autostart       - Show or configure startup apps\n");
     term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
@@ -3787,13 +3788,14 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop dispatch movetoworkspace <n|+1|-1> - Move focused client\n");
     term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster - Hyprland-like actions\n");
     term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/masterratio actions\n");
+    term_puts_t(term, "  desktop dispatch resizeactive <x> <y> - Keyboard tiling ratio resize\n");
     term_puts_t(term, "  desktop dispatch submap <name|reset> - Set active submap\n");
     term_puts_t(term, "  desktop reset           - Disable and restore default policy\n");
     term_puts_t(term, "  desktop write-config    - Rewrite Hypr-style user config\n");
     term_puts_t(term, "  desktop open terminal   - Compat alias for dispatch exec terminal\n");
     term_puts_t(term, "  desktop close terminal  - Compat alias for killactive\n");
     term_puts_t(term, "  desktop package         - Write installable desktop .opkg\n");
-    term_puts_t(term, "Shortcuts: F1 exec terminal, F2 killactive, F3 launcher.\n");
+    term_puts_t(term, "Shortcuts: F1 exec terminal, F2 killactive, F3 launcher, F9/F10/F11 submaps.\n");
     return;
   }
   if (term_command_is(args, "config")) {
@@ -3855,6 +3857,12 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "shortcuts") || term_command_is(args, "keys")) {
     orizon_desktop_format_shortcuts(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "keymap") || term_command_is(args, "inputmap") ||
+      term_command_is(args, "ergonomics")) {
+    gui_desktop_format_keymap(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -4070,7 +4078,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4092,6 +4100,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_monitors(report, sizeof(report));
     } else if (term_command_is(hypr, "binds")) {
       gui_desktop_format_binds(report, sizeof(report));
+    } else if (term_command_is(hypr, "keymap") ||
+               term_command_is(hypr, "inputmap")) {
+      gui_desktop_format_keymap(report, sizeof(report));
     } else if (term_command_is(hypr, "layers")) {
       gui_desktop_format_layers(report, sizeof(report));
     } else if (term_command_is(hypr, "layouts")) {

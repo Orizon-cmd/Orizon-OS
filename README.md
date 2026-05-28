@@ -63,9 +63,10 @@ le developpement noyau:
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
-  `desktop version/devices/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`, facade
-  `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
-  `desktop keyword`, lanceur F3, terminal F1/F2 et raccourcis F4-F8; ce n'est
+  `desktop version/devices/keymap/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`, facade
+  `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
+  clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
 - console avec scrollback, defilement clavier `z`/`s`, pager `less <fichier>`
   en plein ecran, `tail`, `help shell`, commandes groupees avec `;`, sorties
@@ -137,16 +138,18 @@ session`, `desktop theme`, `desktop wallpaper`, `desktop preset`, `desktop
 focus`, `desktop bar` et `desktop launcher` reglent la session persistante.
 `desktop pointer` affiche la position du curseur et les diagnostics PS/2,
 USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
-`usb-tablet`.
+`usb-tablet`. `desktop keymap` montre les raccourcis actifs, le dernier
+evenement clavier, les submaps F9 resize/F10 move/F11 launch/F12 reset et le
+compteur de focus par souris quand `desktop focus on` active focus-follows-mouse.
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
-`desktop version`, `desktop devices`, `desktop systeminfo`, `desktop layouts`,
+`desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`, `desktop layouts`,
 `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
-`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|submap`
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
@@ -158,7 +161,8 @@ profiles` liste les profils symboliques, `desktop preset <name>` applique une
 session complete, et `desktop autostart terminal on|off|toggle` controle le
 terminal au demarrage. F1 lance un terminal, F2 ferme le client actif, F3
 affiche le lanceur, F4 bascule fullscreen, F5 pseudo, F6 cycle le focus, et
-F7/F8 changent de workspace.
+F7/F8 changent de workspace. F9 active la submap resize, F10 la submap move,
+F11 la submap launch et F12/Esc revient a `default`, toujours sans drag manuel.
 
 Le mode recommande pour une machine qui contient deja Windows/Linux est
 `dual-boot-data`: il detecte la GPT existante, trouve l'ESP FAT32, affiche les
