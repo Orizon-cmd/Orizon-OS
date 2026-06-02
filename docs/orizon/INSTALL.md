@@ -122,7 +122,8 @@ tiled client with F2, open the launcher with F3, toggle fullscreen with F4,
 toggle pseudo tiling with F5, cycle focus with F6, switch workspaces with F7/F8,
 and persist theme/wallpaper/layout/bar/focus settings in
 `/system/desktop-session.conf`. System-wide desktop settings such as gaps,
-border size, rounding, animations, shadows, terminal, launcher, keyboard, and
+border size, rounding, animations, shadows, focus ring, shadow range,
+animation tick budget/curve, render profile, terminal, launcher, keyboard, and
 pointer policy are created in `/system/desktop-settings.conf` at the same time.
 `desktop settings paths`, `desktop settings export`, and `desktop settings sync`
 keep that central `/system` hub aligned with
@@ -131,6 +132,11 @@ keep that central `/system` hub aligned with
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
+Render tuning stays VM-safe and tiling-only: use `desktop settings set
+focus-ring <yes|no>`, `desktop settings set render-profile
+<balanced|performance|cozy>`, `desktop keyword decoration:shadow:range <0-32>`,
+and `desktop keyword animations:tick_budget <4-60>`, then inspect with
+`desktop render`, `desktop decorations`, or `desktop animations`.
 `desktop start|stop|restart|reload|recover|rescue` writes or inspects
 session-manager state in `/system/desktop-state.conf` and logs lifecycle events
 in `/logs/desktop-session.log`. `desktop rescue` is non-destructive and reports
@@ -216,6 +222,12 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop hyprctl keyword decoration:shadow:range 22
+desktop hyprctl getoption decoration:shadow:range
+desktop hyprctl keyword animations:tick_budget 24
+desktop hyprctl getoption animations:tick_budget
+desktop hyprctl getoption render:focus_ring
+desktop hyprctl getoption render:profile
 desktop keyword layerrule blur, launcher
 desktop hyprctl getoption layerrule
 desktop hyprctl keyword input:repeat_rate 40

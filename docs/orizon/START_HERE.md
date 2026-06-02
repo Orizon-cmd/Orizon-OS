@@ -51,6 +51,8 @@ design note.
   plus split/master ratio layout messages, directional movefocus/swapwindow,
   workspace next/empty targets, and
   silent move-to-workspace dispatch,
+  persistent render tuning for focus ring, shadow range, render profile and
+  animation tick budget,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,

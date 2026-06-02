@@ -70,8 +70,8 @@ static int desktop_launcher_visible = 0;
 static orizon_desktop_session_t desktop_session = {
     "graphite", "aurora", "dwindle", 1, 1, 1, 0};
 static orizon_desktop_settings_t desktop_settings = {
-    1, 6, 12, 2, 8, 1, 1, 0, 0, "orizon-terminal", "builtin", "top", "us",
-    "flat"};
+    1, 6, 12, 2, 8, 1, 1, 1, 18, 18, 0, 0, "orizon-terminal",
+    "builtin", "top", "us", "flat", "orizon-pop", "balanced"};
 static int desktop_workspace_count = DESKTOP_MAX_WORKSPACES;
 static int desktop_active_workspace = 1;
 static int desktop_previous_workspace = 1;
@@ -146,11 +146,46 @@ static void draw_circle(int cx, int cy, int radius, color_t color) {
 }
 
 static void draw_shadow_panel(int x, int y, int width, int height) {
-  for (int i = 1; i <= 8; i++) {
-    color_t shadow = MAKE_ARGB(24 - i * 2, 0, 0, 0);
+  int range = desktop_mode_enabled ? desktop_settings.shadow_range : 18;
+  int passes;
+
+  if (range <= 0) {
+    return;
+  }
+  if (range > 32) {
+    range = 32;
+  }
+  passes = range / 3;
+  if (passes < 3) {
+    passes = 3;
+  }
+  if (passes > 10) {
+    passes = 10;
+  }
+  for (int i = 1; i <= passes; i++) {
+    int alpha = 16 + range - i * 2;
+    if (alpha < 4) {
+      alpha = 4;
+    }
+    if (alpha > 44) {
+      alpha = 44;
+    }
+    color_t shadow = MAKE_ARGB(alpha, 0, 0, 0);
     fb_fill_rect_alpha(x + i, y + height + i - 2, width, 3, shadow);
     fb_fill_rect_alpha(x + width + i - 2, y + i, 3, height, shadow);
   }
+}
+
+static int desktop_animation_tick_budget(void) {
+  int ticks = desktop_settings.animation_ticks;
+
+  if (ticks < 4) {
+    return 4;
+  }
+  if (ticks > 60) {
+    return 60;
+  }
+  return ticks;
 }
 
 static color_t desktop_theme_accent(void) {
@@ -379,17 +414,21 @@ static void desktop_start_transition(const char *reason, int from_workspace,
   desktop_transition_reason = reason;
   desktop_render_serial++;
   desktop_animation_ticks_remaining =
-      desktop_settings.animations_enabled ? DESKTOP_ANIMATION_TICKS : 0;
+      desktop_settings.animations_enabled ? desktop_animation_tick_budget() : 0;
   needs_redraw = 1;
 }
 
 static int desktop_transition_progress_percent(void) {
+  int budget = desktop_animation_tick_budget();
+
   if (!desktop_settings.animations_enabled ||
       desktop_animation_ticks_remaining <= 0) {
     return 100;
   }
-  return ((DESKTOP_ANIMATION_TICKS - desktop_animation_ticks_remaining) * 100) /
-         DESKTOP_ANIMATION_TICKS;
+  if (desktop_animation_ticks_remaining > budget) {
+    return 0;
+  }
+  return ((budget - desktop_animation_ticks_remaining) * 100) / budget;
 }
 
 static const char *desktop_layout_engine(void) {
@@ -1602,7 +1641,7 @@ static void draw_desktop_focus_ring(int x, int y, int width, int height,
   int b = accent & 0xff;
   int rounding = desktop_settings.rounding;
 
-  if (width < 24 || height < 24) {
+  if (!desktop_settings.focus_ring_enabled || width < 24 || height < 24) {
     return;
   }
   for (int i = 0; i < 3; i++) {
@@ -1655,7 +1694,8 @@ static void draw_desktop_transition_overlay(void) {
   fb_fill_rect_alpha(x + 2, y + height - 4,
                      ((width - 4) * progress) / 100, 2,
                      MAKE_ARGB(190, r, g, b));
-  snprintf(line, sizeof(line), "anim %s ws %d -> %d progress=%d%%",
+  snprintf(line, sizeof(line), "anim %s %s ws %d -> %d progress=%d%%",
+           desktop_settings.animation_curve,
            desktop_transition_reason, desktop_transition_from_workspace,
            desktop_transition_to_workspace, progress);
   font_draw_string(x + 12, y + 9, line, COLOR_TEXT_SECONDARY);
@@ -1749,7 +1789,7 @@ static void draw_desktop_client_tile(const desktop_client_t *client, int x,
   if (desktop_settings.shadows_enabled) {
     draw_shadow_panel(x, y, width, height);
   }
-  if (focused) {
+  if (focused && desktop_settings.focus_ring_enabled) {
     draw_desktop_focus_ring(x, y, width, height, accent);
   }
   fb_fill_rect_alpha(x, y, width, height, MAKE_ARGB(226, 10, 15, 24));
@@ -3267,7 +3307,7 @@ void gui_desktop_format_animations(char *out, size_t out_size) {
            "Orizon desktop animations\n"
            "enabled: %s\n"
            "source: %s\n"
-           "runtime: focus-ring=yes workspace-transition=yes layout-transition=yes tick-budget=%d\n"
+           "runtime: focus-ring=%s workspace-transition=yes layout-transition=yes tick-budget=%d curve=%s profile=%s\n"
            "transition: reason=%s from=%d to=%d ticks-remaining=%d progress=%d%% render-serial=%llu\n"
            "curves:\n"
            "  orizon-pop prepared=yes bezier=0.16,1,0.3,1\n"
@@ -3277,9 +3317,12 @@ void gui_desktop_format_animations(char *out, size_t out_size) {
            "  workspaces enabled=yes style=slide-indicator ticked-software\n"
            "  layers enabled=yes style=fade-indicator ticked-software\n"
            "truth: software framebuffer animation hints, not wlroots animation graph\n"
-           "set: desktop keyword animations:enabled <true|false>\n",
+           "set: desktop keyword animations:enabled <true|false> | desktop keyword animations:tick_budget <4-60>\n",
            desktop_settings.animations_enabled ? "true" : "false",
-           ORIZON_DESKTOP_SETTINGS_PATH, DESKTOP_ANIMATION_TICKS,
+           ORIZON_DESKTOP_SETTINGS_PATH,
+           desktop_settings.focus_ring_enabled ? "yes" : "no",
+           desktop_animation_tick_budget(), desktop_settings.animation_curve,
+           desktop_settings.render_profile,
            desktop_transition_reason, desktop_transition_from_workspace,
            desktop_transition_to_workspace, desktop_animation_ticks_remaining,
            desktop_transition_progress_percent(),
@@ -3293,15 +3336,18 @@ void gui_desktop_format_decorations(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop decorations\n"
            "border: size=%d active-color=accent inactive-color=edge\n"
-           "focus-ring: enabled=yes renderer=software-glow follows=activewindow\n"
+           "focus-ring: enabled=%s renderer=software-glow follows=activewindow\n"
            "rounding: configured=%d renderer=corner-hints true-rounded=no\n"
-           "shadows: enabled=%s renderer=software\n"
+           "shadows: enabled=%s range=%d renderer=software\n"
            "blur: enabled=no prepared=no\n"
            "drop-shadow: %s\n"
            "window-moving: manual-drag=no tiled-dispatch=yes\n"
-           "set: desktop keyword decoration:rounding <n> | desktop settings set border-size <n>\n",
-           desktop_settings.border_size, desktop_settings.rounding,
+           "set: desktop keyword decoration:rounding <n> | desktop keyword decoration:shadow:range <0-32>\n",
+           desktop_settings.border_size,
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           desktop_settings.rounding,
            desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_settings.shadow_range,
            desktop_settings.shadows_enabled ? "enabled" : "disabled");
 }
 
@@ -3317,23 +3363,27 @@ void gui_desktop_format_render(char *out, size_t out_size) {
            "renderer: software\n"
            "scale: %d\n"
            "theme: %s wallpaper=%s accent=#%06x\n"
-           "focus-ring: enabled=yes activewindow=0x%x style=hyprland-like-glow\n"
-           "shadows: enabled=%s renderer=software\n"
+           "render-profile: %s\n"
+           "focus-ring: enabled=%s activewindow=0x%x style=hyprland-like-glow\n"
+           "shadows: enabled=%s range=%d renderer=software\n"
            "rounding: configured=%d renderer=corner-hints true-rounded=no\n"
-           "transitions: enabled=%s reason=%s from=%d to=%d ticks=%d progress=%d%%\n"
+           "transitions: enabled=%s curve=%s budget=%d reason=%s from=%d to=%d ticks=%d progress=%d%%\n"
            "render-serial: %llu\n"
            "window-moving: manual-drag=no tiled-dispatch=yes\n"
            "protocols: wayland=no wlroots=no layer-shell=prepared\n"
            "truth: VM-safe Hyprland-style facade over Orizon framebuffer compositor\n",
            ui_scale, desktop_session.theme, desktop_session.wallpaper,
            accent & 0xffffff,
+           desktop_settings.render_profile,
+           desktop_settings.focus_ring_enabled ? "true" : "false",
            desktop_focused_client_id > 0
                ? DESKTOP_CLIENT_ADDRESS_BASE +
                      ((uint32_t)desktop_focused_client_id * 0x100u)
                : 0,
            desktop_settings.shadows_enabled ? "true" : "false",
-           desktop_settings.rounding,
+           desktop_settings.shadow_range, desktop_settings.rounding,
            desktop_settings.animations_enabled ? "true" : "false",
+           desktop_settings.animation_curve, desktop_animation_tick_budget(),
            desktop_transition_reason, desktop_transition_from_workspace,
            desktop_transition_to_workspace, desktop_animation_ticks_remaining,
            desktop_transition_progress_percent(),
@@ -3411,6 +3461,9 @@ void gui_desktop_reload_session(void) {
     desktop_settings.rounding = 8;
     desktop_settings.animations_enabled = 1;
     desktop_settings.shadows_enabled = 1;
+    desktop_settings.focus_ring_enabled = 1;
+    desktop_settings.shadow_range = 18;
+    desktop_settings.animation_ticks = DESKTOP_ANIMATION_TICKS;
     desktop_settings.idle_timeout_seconds = 0;
     desktop_settings.lock_on_idle = 0;
     snprintf(desktop_settings.default_terminal,
@@ -3424,6 +3477,10 @@ void gui_desktop_reload_session(void) {
              sizeof(desktop_settings.keyboard_layout), "%s", "us");
     snprintf(desktop_settings.pointer_profile,
              sizeof(desktop_settings.pointer_profile), "%s", "flat");
+    snprintf(desktop_settings.animation_curve,
+             sizeof(desktop_settings.animation_curve), "%s", "orizon-pop");
+    snprintf(desktop_settings.render_profile,
+             sizeof(desktop_settings.render_profile), "%s", "balanced");
   }
   if (!desktop_session.launcher_enabled) {
     desktop_launcher_visible = 0;
@@ -3448,7 +3505,7 @@ void gui_desktop_format_status(char *out, size_t out_size) {
            "runtime-wallpaper: %s\nruntime-layout: %s\n"
            "runtime-focus-follows-mouse: %s\n"
            "runtime-settings: %s\n"
-           "runtime-gaps: in=%d out=%d border=%d rounding=%d animations=%s shadows=%s\n"
+           "runtime-gaps: in=%d out=%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s\n"
            "tiling-engine: %s\n"
            "tiling-split: mode=%s ratio=%d master-ratio=%d\n"
            "runtime-submap: %s\n"
@@ -3466,7 +3523,11 @@ void gui_desktop_format_status(char *out, size_t out_size) {
            desktop_settings.gaps_out, desktop_settings.border_size,
            desktop_settings.rounding,
            desktop_settings.animations_enabled ? "yes" : "no",
+           desktop_settings.animation_ticks, desktop_settings.animation_curve,
            desktop_settings.shadows_enabled ? "yes" : "no",
+           desktop_settings.shadow_range,
+           desktop_settings.focus_ring_enabled ? "yes" : "no",
+           desktop_settings.render_profile,
            strcmp(desktop_session.layout, "master") == 0
                ? "master"
                : (strcmp(desktop_session.layout, "monocle") == 0 ? "monocle"
@@ -3595,8 +3656,8 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
            "session: enabled=%s theme=%s wallpaper=%s layout=%s bar=%s launcher=%s\n"
            "clients: total=%d active-workspace=%d focused=0x%x focus-history=%s\n"
            "layout-state: split=%s ratio=%d master=%d submap=%s\n"
-           "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s pointer=%s\n"
-           "render-state: serial=%llu focus-ring=yes transition=%s ticks=%d progress=%d%%\n"
+           "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s keyboard=%s pointer=%s\n"
+           "render-state: serial=%llu focus-ring=%s transition=%s ticks=%d progress=%d%%\n"
            "protocols: wayland=no wlroots=no xwayland=no layer-shell=prepared\n"
            "truth: Hyprland-style Orizon profile, not upstream Hyprland\n",
            ORIZON_DESKTOP_PACKAGE, (unsigned long)screen_width,
@@ -3617,9 +3678,14 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
            desktop_settings.gaps_in, desktop_settings.gaps_out,
            desktop_settings.border_size, desktop_settings.rounding,
            desktop_settings.animations_enabled ? "true" : "false",
+           desktop_settings.animation_ticks, desktop_settings.animation_curve,
            desktop_settings.shadows_enabled ? "true" : "false",
-           desktop_settings.keyboard_layout, desktop_settings.pointer_profile,
+           desktop_settings.shadow_range,
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           desktop_settings.render_profile, desktop_settings.keyboard_layout,
+           desktop_settings.pointer_profile,
            (unsigned long long)desktop_render_serial,
+           desktop_settings.focus_ring_enabled ? "yes" : "no",
            desktop_transition_reason, desktop_animation_ticks_remaining,
            desktop_transition_progress_percent());
 }

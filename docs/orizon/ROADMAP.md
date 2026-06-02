@@ -57,7 +57,8 @@
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`,
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
-  software focus ring and ticked focus/workspace/layout transitions,
+  software focus ring, persistent shadow range/render profile/animation
+  tick budget controls, and ticked focus/workspace/layout transitions,
   pointer diagnostics, native tiling apps for settings/logs/packages/update,
   app catalog/details with class/module/surface diagnostics and launcher
   overlay dispatch, input layout/pointer/focus hub with keyboard persistence,

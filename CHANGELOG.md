@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.31.0` with persistent render/animation
+  settings: `focus-ring`, `shadow-range`, `animation-ticks`,
+  `animation-curve`, and `render-profile`, plus Hyprland-style
+  `getoption/keyword` support for render focus rings, shadow range, and
+  animation tick budget.
 - Added desktop package version `0.30.0` with `desktop input` as a VM-safe
   keyboard/pointer/focus hub, including FR/US layout sync to `/system/keyboard`
   and `/workspace/.orizon/keyboard`.

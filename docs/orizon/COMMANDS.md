@@ -158,6 +158,12 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop hyprctl keyword decoration:shadow:range 22
+desktop hyprctl getoption decoration:shadow:range
+desktop hyprctl keyword animations:tick_budget 24
+desktop hyprctl getoption animations:tick_budget
+desktop hyprctl getoption render:focus_ring
+desktop hyprctl getoption render:profile
 desktop keyword layerrule blur, launcher
 desktop hyprctl getoption layerrule
 desktop hyprctl keyword input:repeat_rate 40
@@ -306,7 +312,8 @@ compatibility without enabling free-drag window moving by default.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,
-shadows, terminal, launcher, keyboard, and pointer policy. `desktop settings
+shadows, focus ring, shadow range, animation tick budget/curve, render profile,
+terminal, launcher, keyboard, and pointer policy. `desktop settings
 paths` shows the central `/system` settings hub, `desktop settings export`
 rewrites `/home/orizon/.config/hypr/orizon-hypr.conf` from `/system`, and
 `desktop settings sync` exports then refreshes runtime hints. `desktop settings
@@ -347,9 +354,15 @@ terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
 F9/F10/F11 enter resize/move/launch submaps and F12/Esc returns to default,
 while `desktop modules` shows the prepared package split map for
 `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, `orizon-launcher`,
-and future `orizon-waybar`.
-without enabling manual window dragging. See
+and future `orizon-waybar`, without enabling manual window dragging. See
 [DESKTOP.md](DESKTOP.md).
+
+Useful render tuning commands stay Hyprland-style while remaining VM-safe:
+`desktop settings set focus-ring yes|no`, `desktop settings set render-profile
+balanced|performance|cozy`, `desktop keyword decoration:shadow:range <0-32>`,
+and `desktop keyword animations:tick_budget <4-60>`. Inspect them with
+`desktop render`, `desktop decorations`, `desktop animations`, or
+`desktop hyprctl getoption render:focus_ring|render:profile|decoration:shadow:range|animations:tick_budget`.
 
 ## Network And Update
 

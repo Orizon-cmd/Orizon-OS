@@ -143,6 +143,12 @@ desktop hyprctl configerrors
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop hyprctl keyword decoration:shadow:range 22
+desktop hyprctl getoption decoration:shadow:range
+desktop hyprctl keyword animations:tick_budget 24
+desktop hyprctl getoption animations:tick_budget
+desktop hyprctl getoption render:focus_ring
+desktop hyprctl getoption render:profile
 desktop keyword layerrule blur, launcher
 desktop hyprctl getoption layerrule
 desktop hyprctl keyword input:repeat_rate 40
@@ -179,7 +185,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.30.0` because it includes policy/config files, the persisted session
+`0.31.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -243,6 +249,12 @@ keyboard layout switching synchronizes desktop settings with `/system/keyboard`
 and `/workspace/.orizon/keyboard`, pointer profiles are persisted for
 diagnostics, focus-follows-mouse is controlled from the same surface, and submap
 dispatch remains keyboard-only without manual window dragging.
+Version `0.31.0` adds persistent render and animation settings:
+`focus-ring`, `shadow-range`, `animation-ticks`, `animation-curve`, and
+`render-profile`. These values are written by the installer/package, exported
+into the Hyprland-style user config, consumed by the framebuffer compositor, and
+inspectable through `desktop render`, `desktop decorations`, `desktop
+animations`, and `desktop hyprctl getoption render:focus_ring|render:profile|decoration:shadow:range|animations:tick_budget`.
 
 ## Package Format
 

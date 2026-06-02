@@ -25,7 +25,7 @@
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.30.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.31.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"
@@ -50,6 +50,9 @@ typedef struct {
   int rounding;
   int animations_enabled;
   int shadows_enabled;
+  int focus_ring_enabled;
+  int shadow_range;
+  int animation_ticks;
   int idle_timeout_seconds;
   int lock_on_idle;
   char default_terminal[32];
@@ -57,6 +60,8 @@ typedef struct {
   char bar_position[16];
   char keyboard_layout[16];
   char pointer_profile[16];
+  char animation_curve[32];
+  char render_profile[16];
 } orizon_desktop_settings_t;
 
 int orizon_desktop_ensure_defaults(void);

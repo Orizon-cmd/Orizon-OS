@@ -76,6 +76,10 @@ $commands = @(
   "desktop settings preset compact",
   "desktop settings set gaps-in 10",
   "desktop settings set border-size 3",
+  "desktop settings set focus-ring no",
+  "desktop settings set render-profile performance",
+  "desktop hyprctl getoption render:focus_ring",
+  "desktop hyprctl getoption render:profile",
   "desktop settings repair",
   "desktop input",
   "desktop input layout fr",
@@ -126,6 +130,10 @@ $commands = @(
   "desktop hyprctl getoption general:gaps_in",
   "desktop hyprctl keyword decoration:rounding 11",
   "desktop hyprctl getoption decoration:rounding",
+  "desktop hyprctl keyword decoration:shadow:range 22",
+  "desktop hyprctl getoption decoration:shadow:range",
+  "desktop hyprctl keyword animations:tick_budget 24",
+  "desktop hyprctl getoption animations:tick_budget",
   "desktop hyprctl binds",
   "desktop hyprctl layers",
   "desktop autostart",
@@ -460,7 +468,7 @@ run_cmd() {
     "desktop settings preset compact")
       grep -q "desktop settings preset: applied" "`$OUT" && grep -q "preset: compact" "`$OUT" || { echo "missing desktop settings preset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
-    "desktop settings set gaps-in 10"|"desktop settings set border-size 3")
+    "desktop settings set gaps-in 10"|"desktop settings set border-size 3"|"desktop settings set focus-ring no"|"desktop settings set render-profile performance")
       grep -q "desktop settings: updated" "`$OUT" || { echo "missing desktop settings update"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop settings repair")
@@ -556,7 +564,7 @@ run_cmd() {
     "desktop rollinglog"|"desktop hyprctl rollinglog")
       grep -q "Hyprland rolling log" "`$OUT" && grep -q "/logs/desktop.log" "`$OUT" || { echo "missing desktop rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
-    "desktop keyword general:gaps_in 9"|"desktop hyprctl keyword decoration:rounding 11")
+    "desktop keyword general:gaps_in 9"|"desktop hyprctl keyword decoration:rounding 11"|"desktop hyprctl keyword decoration:shadow:range 22"|"desktop hyprctl keyword animations:tick_budget 24")
       grep -q "desktop keyword: applied" "`$OUT" || { echo "missing desktop keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl activeworkspace")
@@ -573,6 +581,18 @@ run_cmd() {
       ;;
     "desktop hyprctl getoption decoration:rounding")
       grep -q "option decoration:rounding" "`$OUT" && grep -q "value: 11" "`$OUT" || { echo "missing hyprctl getoption rounding"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption render:focus_ring")
+      grep -q "option render:focus_ring" "`$OUT" && grep -q "value: false" "`$OUT" || { echo "missing hyprctl getoption focus ring"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption render:profile")
+      grep -q "option render:profile" "`$OUT" && grep -q "value: performance" "`$OUT" || { echo "missing hyprctl getoption render profile"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption decoration:shadow:range")
+      grep -q "option decoration:shadow:range" "`$OUT" && grep -q "value: 22" "`$OUT" || { echo "missing hyprctl getoption shadow range"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption animations:tick_budget")
+      grep -q "option animations:tick_budget" "`$OUT" && grep -q "value: 24" "`$OUT" || { echo "missing hyprctl getoption animation budget"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl binds")
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

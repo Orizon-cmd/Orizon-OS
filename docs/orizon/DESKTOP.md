@@ -255,9 +255,10 @@ environment. It is written to `/system/desktop-settings.conf` when the desktop
 is selected during installation, when `desktop enable` runs, or when
 `pkg install orizon-desktop-hypr` installs the package. It currently stores
 compositor-wide defaults such as `scale`, `gaps-in`, `gaps-out`,
-`border-size`, `rounding`, `animations`, `shadows`, idle/lock policy, default
-terminal, launcher provider, bar position, keyboard layout, and pointer
-profile. Use `desktop settings set <key> <value>` to update it and
+`border-size`, `rounding`, `animations`, `shadows`, `focus-ring`,
+`shadow-range`, `animation-ticks`, `animation-curve`, `render-profile`,
+idle/lock policy, default terminal, launcher provider, bar position, keyboard
+layout, and pointer profile. Use `desktop settings set <key> <value>` to update it and
 `desktop settings repair` to rewrite safe defaults. `desktop settings presets`
 lists system profiles for common use cases, `desktop settings preset
 <default|compact|cozy|performance|accessibility|locked>` rewrites the settings
@@ -324,8 +325,13 @@ input model. `desktop systeminfo`, `desktop layouts`, `desktop animations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop render` is the most direct VM-safe renderer diagnostic: it reports the
-software focus ring, shadow policy, configured rounding, transition reason and
-render serial. It is Hyprland-style compositor UX, not upstream Wayland/wlroots.
+software focus ring policy, shadow range, render profile, configured rounding,
+animation curve/tick budget, transition reason and render serial. `desktop
+keyword decoration:shadow:range <0-32>`, `desktop keyword
+animations:tick_budget <4-60>`, `desktop keyword render:focus_ring
+<true|false>`, and `desktop settings set render-profile <name>` persist those
+values without enabling floating windows or manual dragging. It is
+Hyprland-style compositor UX, not upstream Wayland/wlroots.
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,

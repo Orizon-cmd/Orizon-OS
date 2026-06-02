@@ -170,9 +170,13 @@ Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
 `plugin` et `permission` comme hints runtime inspectables quand Orizon ne sait
 pas encore les appliquer comme un vrai backend Wayland.
-`desktop render` detaille le focus ring, les shadows, les transitions
-workspace/layout/focus et le backend framebuffer logiciel sans pretendre fournir
-Wayland/wlroots.
+`desktop render` detaille le focus ring, les shadows, le `render-profile`, la
+courbe/budget d'animation, les transitions workspace/layout/focus et le backend
+framebuffer logiciel sans pretendre fournir Wayland/wlroots. Les reglages
+persistants passent par `desktop settings set focus-ring <yes|no>`,
+`desktop settings set render-profile <balanced|performance|cozy>`,
+`desktop keyword decoration:shadow:range <0-32>` et
+`desktop keyword animations:tick_budget <4-60>`.
 `desktop modules` affiche la carte de packaging modulaire: le paquet actuel
 reste `orizon-desktop-hypr`, tandis que `orizon-desktop-core`,
 `orizon-terminal`, `orizon-settings` et `orizon-launcher` sont prepares comme

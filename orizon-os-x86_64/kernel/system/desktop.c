@@ -58,6 +58,11 @@ static const char *desktop_settings_config =
     "rounding 8\n"
     "animations yes\n"
     "shadows yes\n"
+    "focus-ring yes\n"
+    "shadow-range 18\n"
+    "animation-ticks 18\n"
+    "animation-curve orizon-pop\n"
+    "render-profile balanced\n"
     "idle-timeout-seconds 0\n"
     "lock-on-idle no\n"
     "default-terminal orizon-terminal\n"
@@ -89,8 +94,12 @@ static const char *desktop_user_config =
     "decoration:rounding = 8\n"
     "decoration:shadow:enabled = true\n"
     "decoration:shadow:range = 18\n"
+    "render:focus_ring = true\n"
+    "render:profile = balanced\n"
     "decoration:blur:enabled = false\n"
     "animations:enabled = true\n"
+    "animations:tick_budget = 18\n"
+    "animations:curve = orizon-pop\n"
     "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
     "animation = windows, 1, 2, orizon-pop\n"
     "cursor:no_hardware_cursors = true\n"
@@ -558,6 +567,11 @@ static int desktop_settings_key_known(const char *key) {
       "rounding",
       "animations",
       "shadows",
+      "focus-ring",
+      "shadow-range",
+      "animation-ticks",
+      "animation-curve",
+      "render-profile",
       "idle-timeout-seconds",
       "lock-on-idle",
       "default-terminal",
@@ -922,8 +936,13 @@ static int desktop_hypr_is_supported_setting_key(const char *key) {
           strcmp(key, "general:border_size") == 0 ||
           strcmp(key, "decoration:rounding") == 0 ||
           strcmp(key, "decoration:shadow:enabled") == 0 ||
+          strcmp(key, "decoration:shadow:range") == 0 ||
           strcmp(key, "decoration:drop_shadow") == 0 ||
           strcmp(key, "animations:enabled") == 0 ||
+          strcmp(key, "animations:tick_budget") == 0 ||
+          strcmp(key, "animations:curve") == 0 ||
+          strcmp(key, "render:focus_ring") == 0 ||
+          strcmp(key, "render:profile") == 0 ||
           strcmp(key, "input:kb_layout") == 0 ||
           strcmp(key, "input:follow_mouse") == 0);
 }
@@ -1233,11 +1252,48 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
           desktop_bool_value(value, settings->shadows_enabled);
       applied = 1;
     }
+  } else if (strcmp(key, "decoration:shadow:range") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->shadow_range = desktop_clamp_int(
+          desktop_parse_int_value(value, settings->shadow_range), 0, 32);
+      applied = 1;
+    }
   } else if (strcmp(key, "animations:enabled") == 0) {
     supported = 1;
     if (apply && settings) {
       settings->animations_enabled =
           desktop_bool_value(value, settings->animations_enabled);
+      applied = 1;
+    }
+  } else if (strcmp(key, "animations:tick_budget") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->animation_ticks = desktop_clamp_int(
+          desktop_parse_int_value(value, settings->animation_ticks), 4, 60);
+      applied = 1;
+    }
+  } else if (strcmp(key, "animations:curve") == 0) {
+    supported = 1;
+    if (apply && settings &&
+        desktop_hypr_copy_token_value(token, sizeof(token), value) == 0) {
+      snprintf(settings->animation_curve, sizeof(settings->animation_curve),
+               "%s", token);
+      applied = 1;
+    }
+  } else if (strcmp(key, "render:focus_ring") == 0) {
+    supported = 1;
+    if (apply && settings) {
+      settings->focus_ring_enabled =
+          desktop_bool_value(value, settings->focus_ring_enabled);
+      applied = 1;
+    }
+  } else if (strcmp(key, "render:profile") == 0) {
+    supported = 1;
+    if (apply && settings &&
+        desktop_hypr_copy_token_value(token, sizeof(token), value) == 0) {
+      snprintf(settings->render_profile, sizeof(settings->render_profile),
+               "%s", token);
       applied = 1;
     }
   } else if (strcmp(key, "input:kb_layout") == 0) {
@@ -1410,6 +1466,9 @@ static void desktop_settings_defaults(orizon_desktop_settings_t *settings) {
   settings->rounding = 8;
   settings->animations_enabled = 1;
   settings->shadows_enabled = 1;
+  settings->focus_ring_enabled = 1;
+  settings->shadow_range = 18;
+  settings->animation_ticks = 18;
   settings->idle_timeout_seconds = 0;
   settings->lock_on_idle = 0;
   snprintf(settings->default_terminal, sizeof(settings->default_terminal),
@@ -1422,10 +1481,14 @@ static void desktop_settings_defaults(orizon_desktop_settings_t *settings) {
            "us");
   snprintf(settings->pointer_profile, sizeof(settings->pointer_profile), "%s",
            "flat");
+  snprintf(settings->animation_curve, sizeof(settings->animation_curve), "%s",
+           "orizon-pop");
+  snprintf(settings->render_profile, sizeof(settings->render_profile), "%s",
+           "balanced");
 }
 
 static int desktop_write_settings(const orizon_desktop_settings_t *settings) {
-  char text[768];
+  char text[1024];
 
   if (!settings) {
     return -1;
@@ -1441,6 +1504,11 @@ static int desktop_write_settings(const orizon_desktop_settings_t *settings) {
            "rounding %d\n"
            "animations %s\n"
            "shadows %s\n"
+           "focus-ring %s\n"
+           "shadow-range %d\n"
+           "animation-ticks %d\n"
+           "animation-curve %s\n"
+           "render-profile %s\n"
            "idle-timeout-seconds %d\n"
            "lock-on-idle %s\n"
            "default-terminal %s\n"
@@ -1455,6 +1523,12 @@ static int desktop_write_settings(const orizon_desktop_settings_t *settings) {
            desktop_clamp_int(settings->rounding, 0, 24),
            settings->animations_enabled ? "yes" : "no",
            settings->shadows_enabled ? "yes" : "no",
+           settings->focus_ring_enabled ? "yes" : "no",
+           desktop_clamp_int(settings->shadow_range, 0, 32),
+           desktop_clamp_int(settings->animation_ticks, 4, 60),
+           settings->animation_curve[0] ? settings->animation_curve
+                                        : "orizon-pop",
+           settings->render_profile[0] ? settings->render_profile : "balanced",
            desktop_clamp_int(settings->idle_timeout_seconds, 0, 86400),
            settings->lock_on_idle ? "yes" : "no",
            settings->default_terminal[0] ? settings->default_terminal
@@ -1470,7 +1544,7 @@ static int desktop_write_settings(const orizon_desktop_settings_t *settings) {
 static int desktop_write_user_config_from_state(
     const orizon_desktop_session_t *session,
     const orizon_desktop_settings_t *settings) {
-  char text[4096];
+  char text[6144];
   const char *terminal;
   const char *keyboard;
 
@@ -1504,9 +1578,13 @@ static int desktop_write_user_config_from_state(
            "general:col.inactive_border = rgba(2a2f3acc)\n"
            "decoration:rounding = %d\n"
            "decoration:shadow:enabled = %s\n"
-           "decoration:shadow:range = 18\n"
+           "decoration:shadow:range = %d\n"
+           "render:focus_ring = %s\n"
+           "render:profile = %s\n"
            "decoration:blur:enabled = false\n"
            "animations:enabled = %s\n"
+           "animations:tick_budget = %d\n"
+           "animations:curve = %s\n"
            "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
            "animation = windows, 1, 2, orizon-pop\n"
            "cursor:no_hardware_cursors = true\n"
@@ -1594,7 +1672,13 @@ static int desktop_write_user_config_from_state(
            desktop_clamp_int(settings->border_size, 0, 8),
            desktop_clamp_int(settings->rounding, 0, 24),
            settings->shadows_enabled ? "true" : "false",
-           settings->animations_enabled ? "true" : "false");
+           desktop_clamp_int(settings->shadow_range, 0, 32),
+           settings->focus_ring_enabled ? "true" : "false",
+           settings->render_profile[0] ? settings->render_profile : "balanced",
+           settings->animations_enabled ? "true" : "false",
+           desktop_clamp_int(settings->animation_ticks, 4, 60),
+           settings->animation_curve[0] ? settings->animation_curve
+                                        : "orizon-pop");
   return desktop_write_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, text);
 }
 
@@ -1907,7 +1991,7 @@ int orizon_desktop_load_session(orizon_desktop_session_t *session) {
 }
 
 int orizon_desktop_load_settings(orizon_desktop_settings_t *settings) {
-  char cfg[1024];
+  char cfg[1536];
   char value[64];
 
   if (!settings) {
@@ -1952,6 +2036,20 @@ int orizon_desktop_load_settings(orizon_desktop_settings_t *settings) {
       0) {
     settings->shadows_enabled = desktop_bool_value(value, 1);
   }
+  if (desktop_session_get_value(cfg, "focus-ring", value, sizeof(value),
+                                "yes") == 0) {
+    settings->focus_ring_enabled = desktop_bool_value(value, 1);
+  }
+  if (desktop_session_get_value(cfg, "shadow-range", value, sizeof(value),
+                                "18") == 0) {
+    settings->shadow_range =
+        desktop_clamp_int(desktop_parse_int_value(value, 18), 0, 32);
+  }
+  if (desktop_session_get_value(cfg, "animation-ticks", value, sizeof(value),
+                                "18") == 0) {
+    settings->animation_ticks =
+        desktop_clamp_int(desktop_parse_int_value(value, 18), 4, 60);
+  }
   if (desktop_session_get_value(cfg, "idle-timeout-seconds", value,
                                 sizeof(value), "0") == 0) {
     settings->idle_timeout_seconds =
@@ -1990,6 +2088,18 @@ int orizon_desktop_load_settings(orizon_desktop_settings_t *settings) {
                                 settings->pointer_profile) == 0 &&
       desktop_token_safe(value)) {
     snprintf(settings->pointer_profile, sizeof(settings->pointer_profile), "%s",
+             value);
+  }
+  if (desktop_session_get_value(cfg, "animation-curve", value, sizeof(value),
+                                settings->animation_curve) == 0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->animation_curve, sizeof(settings->animation_curve), "%s",
+             value);
+  }
+  if (desktop_session_get_value(cfg, "render-profile", value, sizeof(value),
+                                settings->render_profile) == 0 &&
+      desktop_token_safe(value)) {
+    snprintf(settings->render_profile, sizeof(settings->render_profile), "%s",
              value);
   }
   return 0;
@@ -2092,6 +2202,21 @@ int orizon_desktop_set_setting(const char *key, const char *value, char *status,
         desktop_bool_value(value, settings.animations_enabled);
   } else if (strcmp(key, "shadows") == 0) {
     settings.shadows_enabled = desktop_bool_value(value, settings.shadows_enabled);
+  } else if (strcmp(key, "focus-ring") == 0) {
+    settings.focus_ring_enabled =
+        desktop_bool_value(value, settings.focus_ring_enabled);
+  } else if (strcmp(key, "shadow-range") == 0) {
+    settings.shadow_range = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.shadow_range), 0, 32);
+  } else if (strcmp(key, "animation-ticks") == 0) {
+    settings.animation_ticks = desktop_clamp_int(
+        desktop_parse_int_value(value, settings.animation_ticks), 4, 60);
+  } else if (strcmp(key, "animation-curve") == 0) {
+    snprintf(settings.animation_curve, sizeof(settings.animation_curve), "%s",
+             value);
+  } else if (strcmp(key, "render-profile") == 0) {
+    snprintf(settings.render_profile, sizeof(settings.render_profile), "%s",
+             value);
   } else if (strcmp(key, "idle-timeout-seconds") == 0) {
     settings.idle_timeout_seconds = desktop_clamp_int(
         desktop_parse_int_value(value, settings.idle_timeout_seconds), 0,
@@ -2117,7 +2242,7 @@ int orizon_desktop_set_setting(const char *key, const char *value, char *status,
     if (status && status_size) {
       snprintf(status, status_size,
                "desktop settings: unknown key '%s'\n"
-               "keys: scale gaps-in gaps-out border-size rounding animations shadows idle-timeout-seconds lock-on-idle default-terminal launcher-provider bar-position keyboard-layout pointer-profile\n",
+               "keys: scale gaps-in gaps-out border-size rounding animations shadows focus-ring shadow-range animation-ticks animation-curve render-profile idle-timeout-seconds lock-on-idle default-terminal launcher-provider bar-position keyboard-layout pointer-profile\n",
                key);
     }
     return -2;
@@ -2374,6 +2499,10 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
     settings.border_size = 1;
     settings.rounding = 4;
     settings.shadows_enabled = 0;
+    settings.shadow_range = 8;
+    settings.animation_ticks = 12;
+    snprintf(settings.render_profile, sizeof(settings.render_profile), "%s",
+             "compact");
   } else if (strcmp(preset, "cozy") == 0 ||
              strcmp(preset, "comfortable") == 0) {
     settings.gaps_in = 10;
@@ -2381,6 +2510,12 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
     settings.border_size = 2;
     settings.rounding = 12;
     settings.shadows_enabled = 1;
+    settings.shadow_range = 22;
+    settings.animation_ticks = 22;
+    snprintf(settings.animation_curve, sizeof(settings.animation_curve), "%s",
+             "orizon-slide");
+    snprintf(settings.render_profile, sizeof(settings.render_profile), "%s",
+             "cozy");
   } else if (strcmp(preset, "performance") == 0 ||
              strcmp(preset, "vm") == 0) {
     settings.gaps_in = 4;
@@ -2389,6 +2524,11 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
     settings.rounding = 0;
     settings.animations_enabled = 0;
     settings.shadows_enabled = 0;
+    settings.focus_ring_enabled = 1;
+    settings.shadow_range = 0;
+    settings.animation_ticks = 8;
+    snprintf(settings.render_profile, sizeof(settings.render_profile), "%s",
+             "performance");
   } else if (strcmp(preset, "accessibility") == 0 ||
              strcmp(preset, "large") == 0) {
     settings.scale = 2;
@@ -2398,6 +2538,11 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
     settings.rounding = 10;
     settings.animations_enabled = 0;
     settings.shadows_enabled = 1;
+    settings.focus_ring_enabled = 1;
+    settings.shadow_range = 24;
+    settings.animation_ticks = 10;
+    snprintf(settings.render_profile, sizeof(settings.render_profile), "%s",
+             "accessibility");
     snprintf(settings.pointer_profile, sizeof(settings.pointer_profile), "%s",
              "adaptive");
   } else if (strcmp(preset, "locked") == 0 ||
@@ -2410,6 +2555,11 @@ int orizon_desktop_apply_settings_preset(const char *preset, char *status,
     settings.lock_on_idle = 1;
     settings.animations_enabled = 0;
     settings.shadows_enabled = 0;
+    settings.focus_ring_enabled = 1;
+    settings.shadow_range = 0;
+    settings.animation_ticks = 8;
+    snprintf(settings.render_profile, sizeof(settings.render_profile), "%s",
+             "locked");
   } else {
     if (status && status_size) {
       snprintf(status, status_size,
@@ -2470,7 +2620,7 @@ int orizon_desktop_export_settings(char *status, size_t status_size) {
              "source-settings: %s\n"
              "target-user-config: %s\n"
              "theme: %s wallpaper: %s layout: %s\n"
-             "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s input=%s\n"
+             "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s input=%s\n"
              "next: desktop settings sync | desktop config apply\n",
              rc == 0 ? "written" : "write-failed",
              ORIZON_DESKTOP_SESSION_PATH, ORIZON_DESKTOP_SETTINGS_PATH,
@@ -2478,8 +2628,11 @@ int orizon_desktop_export_settings(char *status, size_t status_size) {
              session.wallpaper, session.layout, settings.gaps_in,
              settings.gaps_out, settings.border_size, settings.rounding,
              settings.animations_enabled ? "yes" : "no",
+             settings.animation_ticks, settings.animation_curve,
              settings.shadows_enabled ? "yes" : "no",
-             settings.keyboard_layout);
+             settings.shadow_range,
+             settings.focus_ring_enabled ? "yes" : "no",
+             settings.render_profile, settings.keyboard_layout);
   }
   return rc;
 }
@@ -2684,7 +2837,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              "hints: input=%d layout=%d animations=%d misc=%d submaps=%d\n"
              "runtime-files: binds=%s autostart=%s rules=%s monitors=%s layers=%s state=%s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
-             "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s\n"
+             "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s keyboard=%s\n"
              "note: monitor/env/windowrule/source are now persisted as Orizon runtime hints; real Wayland outputs remain future work.\n",
              (rc1 == 0 && rc2 == 0 && rc_binds == 0 && rc_autostart == 0 &&
               rc_rules == 0 && rc_monitors == 0 && rc_layers == 0 &&
@@ -2717,12 +2870,15 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              settings.gaps_in, settings.gaps_out, settings.border_size,
              settings.rounding,
              settings.animations_enabled ? "yes" : "no",
+             settings.animation_ticks, settings.animation_curve,
              settings.shadows_enabled ? "yes" : "no",
-             settings.keyboard_layout);
+             settings.shadow_range,
+             settings.focus_ring_enabled ? "yes" : "no",
+             settings.render_profile, settings.keyboard_layout);
     if (summary.applied_settings == 0 &&
         strlen(status) + 80 < status_size) {
       snprintf(line, sizeof(line),
-               "hint: add general:gaps_in, general:layout, decoration:rounding, animations:enabled, input:kb_layout.\n");
+               "hint: add general:gaps_in, general:layout, decoration:rounding, decoration:shadow:range, render:focus_ring, animations:enabled, input:kb_layout.\n");
       strcat(status, line);
     }
   }
@@ -2778,7 +2934,7 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
              "value: %s\n"
              "supported-settings: %d applied: %d runtime-hint: %s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
-             "settings: gaps=%d/%d border=%d rounding=%d animations=%s shadows=%s keyboard=%s\n"
+             "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s keyboard=%s\n"
              "apply: desktop hyprctl reload\n",
              (rc1 == 0 && rc2 == 0 && runtime_rc == 0 &&
               (summary.supported_settings > 0 || runtime_path))
@@ -2792,8 +2948,11 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
              settings.gaps_in, settings.gaps_out, settings.border_size,
              settings.rounding,
              settings.animations_enabled ? "yes" : "no",
+             settings.animation_ticks, settings.animation_curve,
              settings.shadows_enabled ? "yes" : "no",
-             settings.keyboard_layout);
+             settings.shadow_range,
+             settings.focus_ring_enabled ? "yes" : "no",
+             settings.render_profile, settings.keyboard_layout);
     if (summary.supported_settings == 0 && !runtime_path &&
         strlen(status) + 96 < status_size) {
       strcat(status,
@@ -3202,7 +3361,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.ignored_keywords);
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
-                 "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled; animations:enabled; input:kb_layout,follow_mouse; exec-once terminal\n");
+                 "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled,shadow:range; render:focus_ring,profile; animations:enabled,tick_budget,curve; input:kb_layout,follow_mouse; exec-once terminal\n");
   desktop_append(out, out_size, &used,
                  "runtime-hints: monitor, bind/bindm/bindl/bindr, exec/exec-once, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/device/decoration/cursor/render/debug/misc/dwindle/master/group hints -> /system/desktop-*.conf\n");
   desktop_append(out, out_size, &used,
@@ -3388,10 +3547,24 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
     kind = "bool";
     snprintf(value, sizeof(value), "%s",
              settings.shadows_enabled ? "true" : "false");
+  } else if (strcmp(key, "decoration:shadow:range") == 0) {
+    snprintf(value, sizeof(value), "%d", settings.shadow_range);
   } else if (strcmp(key, "animations:enabled") == 0) {
     kind = "bool";
     snprintf(value, sizeof(value), "%s",
              settings.animations_enabled ? "true" : "false");
+  } else if (strcmp(key, "animations:tick_budget") == 0) {
+    snprintf(value, sizeof(value), "%d", settings.animation_ticks);
+  } else if (strcmp(key, "animations:curve") == 0) {
+    kind = "str";
+    snprintf(value, sizeof(value), "%s", settings.animation_curve);
+  } else if (strcmp(key, "render:focus_ring") == 0) {
+    kind = "bool";
+    snprintf(value, sizeof(value), "%s",
+             settings.focus_ring_enabled ? "true" : "false");
+  } else if (strcmp(key, "render:profile") == 0) {
+    kind = "str";
+    snprintf(value, sizeof(value), "%s", settings.render_profile);
   } else if (strcmp(key, "input:kb_layout") == 0) {
     kind = "str";
     snprintf(value, sizeof(value), "%s", settings.keyboard_layout);
@@ -3548,6 +3721,21 @@ void orizon_desktop_format_settings(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "shadows: %s\n",
            settings.shadows_enabled ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "focus-ring: %s\n",
+           settings.focus_ring_enabled ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "shadow-range: %d\n",
+           settings.shadow_range);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "animation-ticks: %d\n",
+           settings.animation_ticks);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "animation-curve: %s\n",
+           settings.animation_curve);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "render-profile: %s\n",
+           settings.render_profile);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "idle-timeout-seconds: %d\n",
            settings.idle_timeout_seconds);
@@ -3730,15 +3918,15 @@ void orizon_desktop_format_settings_presets(char *out, size_t out_size) {
   out[0] = '\0';
   desktop_append(out, out_size, &used, "Orizon desktop settings presets\n");
   desktop_append(out, out_size, &used,
-                 "default       scale=1 gaps=6/12 border=2 rounding=8 animations=yes shadows=yes\n");
+                 "default       scale=1 gaps=6/12 border=2 rounding=8 anim=18 curve=orizon-pop shadows=18 render=balanced\n");
   desktop_append(out, out_size, &used,
-                 "compact       scale=1 gaps=2/4 border=1 rounding=4 animations=yes shadows=no\n");
+                 "compact       scale=1 gaps=2/4 border=1 rounding=4 anim=12 shadows=8 render=compact\n");
   desktop_append(out, out_size, &used,
-                 "cozy          scale=1 gaps=10/18 border=2 rounding=12 animations=yes shadows=yes\n");
+                 "cozy          scale=1 gaps=10/18 border=2 rounding=12 anim=22 curve=orizon-slide shadows=22 render=cozy\n");
   desktop_append(out, out_size, &used,
-                 "performance   scale=1 gaps=4/8 border=1 rounding=0 animations=no shadows=no\n");
+                 "performance   scale=1 gaps=4/8 border=1 rounding=0 anim=no shadow=0 render=performance\n");
   desktop_append(out, out_size, &used,
-                 "accessibility scale=2 gaps=12/20 border=4 rounding=10 animations=no shadows=yes\n");
+                 "accessibility scale=2 gaps=12/20 border=4 rounding=10 focus-ring=yes shadow=24 render=accessibility\n");
   desktop_append(out, out_size, &used,
                  "locked        scale=1 gaps=6/10 border=2 rounding=6 idle-lock=300s\n");
   desktop_append(out, out_size, &used,
@@ -3841,16 +4029,19 @@ void orizon_desktop_format_settings_doctor(char *out, size_t out_size) {
     fail = 1;
   } else {
     snprintf(line, sizeof(line),
-             "runtime PASS scale=%d gaps=%d/%d border=%d rounding=%d\n",
+             "runtime PASS scale=%d gaps=%d/%d border=%d rounding=%d focus-ring=%s shadow-range=%d animation-ticks=%d\n",
              settings.scale, settings.gaps_in, settings.gaps_out,
-             settings.border_size, settings.rounding);
+             settings.border_size, settings.rounding,
+             settings.focus_ring_enabled ? "yes" : "no",
+             settings.shadow_range, settings.animation_ticks);
     desktop_append(out, out_size, &used, line);
   }
   snprintf(line, sizeof(line),
-           "policy terminal=%s launcher=%s bar=%s keyboard=%s pointer=%s\n",
+           "policy terminal=%s launcher=%s bar=%s keyboard=%s pointer=%s render=%s curve=%s\n",
            settings.default_terminal, settings.launcher_provider,
            settings.bar_position, settings.keyboard_layout,
-           settings.pointer_profile);
+           settings.pointer_profile, settings.render_profile,
+           settings.animation_curve);
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "safe-fix: desktop settings repair | desktop settings preset default\n");
