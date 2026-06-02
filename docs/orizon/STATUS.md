@@ -43,7 +43,7 @@ work.
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts/keymap`,
-  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/app/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`, and
   `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
@@ -57,7 +57,8 @@ work.
   dispatcher-style
   movetoworkspace/movetoworkspacesilent/movefocus directionnel/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
-  native tiling apps for settings/logs/packages/update,
+  native tiling apps for settings/logs/packages/update, app catalog/details with
+  class/module/surface diagnostics, launcher overlay dispatch,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints
   without default free-drag window moving,

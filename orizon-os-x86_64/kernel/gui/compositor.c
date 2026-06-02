@@ -1250,7 +1250,7 @@ static void draw_desktop_status_bar(void) {
 
 static void draw_desktop_launcher(void) {
   int width = 520;
-  int height = 232;
+  int height = 252;
   int x = ((int)screen_width - width) / 2;
   int y = TOP_BAR_HEIGHT + 96;
 
@@ -1265,6 +1265,9 @@ static void draw_desktop_launcher(void) {
   font_draw_string(x + 24, y + 52,
                    "1 Terminal  2 Settings  3 Logs  4 Packages  5 Update",
                    COLOR_TEXT_SECONDARY);
+  font_draw_string(x + 24, y + 70,
+                   "Overlay only: no taskbar, no start menu, no free-drag",
+                   COLOR_TEXT_MUTED);
   font_draw_string(x + 24, y + 88,
                    "Terminal      desktop launch terminal",
                    COLOR_TEXT_PRIMARY);
@@ -1279,6 +1282,9 @@ static void draw_desktop_launcher(void) {
                    COLOR_TEXT_SECONDARY);
   font_draw_string(x + 24, y + 180,
                    "Update        desktop launch update",
+                   COLOR_TEXT_MUTED);
+  font_draw_string(x + 24, y + 208,
+                   "Details: desktop app <id> | Close: F3/Esc",
                    COLOR_TEXT_MUTED);
 }
 
@@ -1665,6 +1671,9 @@ static void draw_desktop_native_app(const desktop_client_t *client, int x,
   }
   font_draw_string(x, line, "native Orizon tiling client",
                    COLOR_TEXT_PRIMARY);
+  line += step;
+  font_draw_string(x, line, "surface=tiled-client floating=no manual-drag=no",
+                   COLOR_TEXT_MUTED);
   line += step;
   if (strcmp(client->app_id, "orizon-settings") == 0) {
     font_draw_string(x, line, "Settings", COLOR_TEXT_PRIMARY);

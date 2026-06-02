@@ -165,13 +165,16 @@ desktop launch settings
 desktop launch logs
 desktop launch packages
 desktop launch update
+desktop launch launcher
+desktop apps
+desktop app settings
 ```
 
 The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.28.0` because it includes policy/config files, the persisted session
+`0.29.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -181,7 +184,8 @@ facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
-native tiling clients for settings/logs/packages/update,
+native tiling clients for settings/logs/packages/update, the app catalog/detail
+commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
 the launcher. Version `0.19.0` specifically added the desktop session manager:
@@ -223,6 +227,11 @@ Version `0.28.0` strengthens the installed/live desktop session manager with a
 v2 state file, `desktop rescue`, health and policy coherence reporting,
 lifecycle counters, recovery commands, file checks, and clearer
 crash/recover-ready diagnostics for VM usage.
+Version `0.29.0` adds a compositor-managed desktop app catalog with
+`desktop apps`, `desktop app <id>`, class/module/backend/surface diagnostics,
+and explicit `desktop launch launcher` overlay dispatch. It keeps all native
+apps tiled or overlay-only and still does not add a taskbar, start menu, or
+manual free-drag windows.
 
 ## Package Format
 

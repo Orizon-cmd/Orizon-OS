@@ -3349,7 +3349,8 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop focus-history   show Hyprland-style focusHistoryID order\r\n"
              "  desktop modules         show prepared modular desktop packages\r\n"
-             "  desktop apps            list desktop launcher apps\r\n"
+             "  desktop apps            list compositor-managed desktop apps\r\n"
+             "  desktop app <id>        show app class/module/surface details\r\n"
              "  desktop profiles        list themes/wallpapers/layouts\r\n"
              "  desktop preset <name>   apply graphite/moss/ember/frost/focus preset\r\n"
              "  desktop binds           show Hyprland-style binds/dispatchers\r\n"
@@ -3368,7 +3369,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop focus on|off|toggle configure focus-follows-mouse\r\n"
              "  desktop bar on|off|toggle configure desktop bar\r\n"
              "  desktop launcher [show|hide|toggle] control launcher\r\n"
-             "  desktop launch <app>    spawn terminal/settings/logs/packages/update\r\n"
+             "  desktop launch <app>    spawn terminal/settings/logs/packages/update/launcher\r\n"
              "  desktop killactive      close focused tiled client\r\n"
              "  desktop focus-window next|prev change focused client\r\n"
              "  desktop workspace [n|next|empty|previous] show or switch workspace\r\n"
@@ -3558,7 +3559,22 @@ static void ssh_shell_print_desktop(const char *args) {
     gui_desktop_format_focus_history(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
-    orizon_desktop_format_apps(out, sizeof(out));
+    const char *app = ssh_shell_command_is(sub, "apps")
+                          ? ssh_shell_skip_spaces(sub + 4)
+                          : ssh_shell_skip_spaces(sub + strlen("launcher apps"));
+    if (*app) {
+      orizon_desktop_format_app_detail(app, out, sizeof(out));
+    } else {
+      orizon_desktop_format_apps(out, sizeof(out));
+    }
+  } else if (ssh_shell_command_is(sub, "app")) {
+    const char *app = ssh_shell_skip_spaces(sub + 3);
+    if (*app == '\0') {
+      snprintf(out, sizeof(out),
+               "usage: desktop app <terminal|settings|logs|packages|update|launcher>\r\n");
+    } else {
+      orizon_desktop_format_app_detail(app, out, sizeof(out));
+    }
   } else if (ssh_shell_command_is(sub, "modules") ||
              ssh_shell_command_is(sub, "packages") ||
              ssh_shell_command_is(sub, "package modules")) {
@@ -3904,7 +3920,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *app = ssh_shell_skip_spaces(sub + 6);
     if (*app == '\0') {
       snprintf(out, sizeof(out),
-               "usage: desktop launch <terminal|settings|logs|packages|update>\r\n");
+               "usage: desktop launch <terminal|settings|logs|packages|update|launcher>\r\n");
     } else {
       gui_desktop_spawn_app_client(app, out, sizeof(out));
     }
@@ -3914,7 +3930,7 @@ static void ssh_shell_print_desktop(const char *args) {
         sub + (ssh_shell_command_is(sub, "spawn") ? 5 : 4));
     if (*app == '\0') {
       snprintf(out, sizeof(out),
-               "usage: desktop exec <terminal|settings|logs|packages|update>\r\n");
+               "usage: desktop exec <terminal|settings|logs|packages|update|launcher>\r\n");
     } else {
       gui_desktop_spawn_app_client(app, out, sizeof(out));
     }

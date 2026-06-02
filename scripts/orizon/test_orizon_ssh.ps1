@@ -79,6 +79,8 @@ $commands = @(
   "desktop settings repair",
   "desktop pointer",
   "desktop apps",
+  "desktop app settings",
+  "desktop apps launcher",
   "desktop profiles",
   "desktop preset moss",
   "desktop binds",
@@ -162,6 +164,7 @@ $commands = @(
   "desktop apply",
   "desktop launcher show",
   "desktop launch terminal",
+  "desktop launch launcher",
   "pkg info orizon-desktop-hypr",
   "desktop package",
   "pkg simulate /workspace/packages/orizon-desktop-hypr.opkg",
@@ -462,6 +465,12 @@ run_cmd() {
     "desktop apps")
       grep -q "Orizon desktop apps" "`$OUT" && grep -q "terminal" "`$OUT" || { echo "missing desktop apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop app settings")
+      grep -q "Orizon desktop app" "`$OUT" && grep -q "class: orizon-settings" "`$OUT" || { echo "missing desktop app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop apps launcher")
+      grep -q "Orizon desktop app" "`$OUT" && grep -q "surface: overlay" "`$OUT" || { echo "missing desktop launcher detail"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop profiles")
       grep -q "Orizon desktop profiles" "`$OUT" && grep -q "themes:" "`$OUT" || { echo "missing desktop profiles"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -652,7 +661,10 @@ run_cmd() {
       grep -q "desktop: launcher open" "`$OUT" || { echo "missing desktop launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop launch terminal")
-      grep -q "desktop: launched terminal" "`$OUT" || { echo "missing desktop launch output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -Eq "desktop: launched terminal|exec orizon-terminal client spawned" "`$OUT" || { echo "missing desktop launch output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop launch launcher")
+      grep -q "orizon-launcher overlay toggled" "`$OUT" || { echo "missing desktop launch launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg info orizon-desktop-hypr")
       grep -q "orizon-desktop-hypr" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -109,6 +109,8 @@ desktop pointer
 desktop keymap
 desktop modules
 desktop apps
+desktop app settings
+desktop apps launcher
 desktop profiles
 desktop preset moss
 desktop binds
@@ -216,6 +218,7 @@ desktop launch settings
 desktop launch logs
 desktop launch packages
 desktop launch update
+desktop launch launcher
 desktop killactive
 desktop open terminal
 desktop close terminal
@@ -325,9 +328,10 @@ explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
-`desktop apps` lists launcher entries, `desktop launch
-terminal|settings|logs|packages|update` opens the first native apps as tiled
-clients, `desktop windows`/`desktop clients`
+`desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
+class/module/surface details, and `desktop launch
+terminal|settings|logs|packages|update|launcher` opens the first native apps as
+tiled clients or toggles the launcher overlay. `desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.

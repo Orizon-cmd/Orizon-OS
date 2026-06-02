@@ -314,6 +314,122 @@ static void desktop_append(char *out, size_t out_size, size_t *used,
   out[*used] = '\0';
 }
 
+typedef struct {
+  const char *id;
+  const char *title;
+  const char *class_name;
+  const char *module;
+  const char *backend;
+  const char *surface;
+  const char *status;
+  const char *command;
+  const char *shortcut;
+  const char *aliases;
+  const char *description;
+} desktop_app_entry_t;
+
+static const desktop_app_entry_t desktop_app_catalog[] = {
+    {"terminal",
+     "Terminal",
+     ORIZON_DESKTOP_PACKAGE_TERMINAL,
+     ORIZON_DESKTOP_PACKAGE_TERMINAL,
+     "terminal",
+     "tiled-client",
+     "installed",
+     "desktop launch terminal",
+     "SUPER+Return/F1/F11+t",
+     "orizon-terminal,kitty",
+     "shell client backed by the Orizon terminal surface"},
+    {"settings",
+     "Settings",
+     ORIZON_DESKTOP_PACKAGE_SETTINGS,
+     ORIZON_DESKTOP_PACKAGE_SETTINGS,
+     "native-app",
+     "tiled-client",
+     "installed",
+     "desktop launch settings",
+     "F11+s",
+     "desktop-settings,orizon-settings",
+     "settings client for theme, gaps, input, binds, and autostart"},
+    {"logs",
+     "Logs",
+     "orizon-logs",
+     ORIZON_DESKTOP_PACKAGE,
+     "native-app",
+     "tiled-client",
+     "installed",
+     "desktop launch logs",
+     "F11+l",
+     "log-viewer,logs-viewer,orizon-logs",
+     "logs viewer for persistent desktop and session diagnostics"},
+    {"packages",
+     "Packages",
+     "orizon-packages",
+     ORIZON_DESKTOP_PACKAGE,
+     "native-app",
+     "tiled-client",
+     "installed",
+     "desktop launch packages",
+     "F11+p",
+     "pkg,package-viewer,orizon-packages",
+     "package viewer for desktop modules and package-manager state"},
+    {"update",
+     "Update",
+     "orizon-update-viewer",
+     ORIZON_DESKTOP_PACKAGE,
+     "native-app",
+     "tiled-client",
+     "installed",
+     "desktop launch update",
+     "F11+u",
+     "updater,update-viewer,orizon-update-viewer",
+     "update viewer for manifest, signature, bootguard, and rollback state"},
+    {"launcher",
+     "Launcher",
+     ORIZON_DESKTOP_PACKAGE_LAUNCHER,
+     ORIZON_DESKTOP_PACKAGE_LAUNCHER,
+     "overlay",
+     "overlay",
+     "installed",
+     "desktop launch launcher",
+     "SUPER+D/F3/F11+d",
+     "orizon-launcher",
+     "dispatch overlay only; no taskbar, start menu, or free-drag desktop"},
+};
+
+static const desktop_app_entry_t *desktop_find_app_entry(const char *app) {
+  size_t count = sizeof(desktop_app_catalog) / sizeof(desktop_app_catalog[0]);
+
+  if (!app || !app[0]) {
+    return NULL;
+  }
+  for (size_t i = 0; i < count; i++) {
+    const desktop_app_entry_t *entry = &desktop_app_catalog[i];
+    if (strcmp(app, entry->id) == 0 ||
+        strcmp(app, entry->class_name) == 0 ||
+        strcmp(app, entry->title) == 0) {
+      return entry;
+    }
+  }
+  if (strcmp(app, "kitty") == 0) {
+    return &desktop_app_catalog[0];
+  }
+  if (strcmp(app, "desktop-settings") == 0) {
+    return &desktop_app_catalog[1];
+  }
+  if (strcmp(app, "log-viewer") == 0 ||
+      strcmp(app, "logs-viewer") == 0) {
+    return &desktop_app_catalog[2];
+  }
+  if (strcmp(app, "pkg") == 0 || strcmp(app, "package-viewer") == 0) {
+    return &desktop_app_catalog[3];
+  }
+  if (strcmp(app, "updater") == 0 || strcmp(app, "update-viewer") == 0) {
+    return &desktop_app_catalog[4];
+  }
+  return NULL;
+}
+
 static int desktop_write_text_file(const char *path, const char *text) {
   file_t *f;
 
@@ -2787,7 +2903,7 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
            ORIZON_DESKTOP_STATE_PATH);
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
-                 "apps: desktop launch terminal|settings|logs|packages|update; F2/killactive\n");
+                 "apps: desktop launch terminal|settings|logs|packages|update|launcher; desktop app <id>; F2/killactive\n");
   desktop_append(out, out_size, &used,
                  "admin: desktop start | desktop stop | desktop restart | desktop reload | desktop recover | desktop rescue | desktop settings | desktop doctor | desktop logs\n");
 }
@@ -3584,6 +3700,8 @@ void orizon_desktop_format_modules(char *out, size_t out_size) {
 
 void orizon_desktop_format_apps(char *out, size_t out_size) {
   size_t used = 0;
+  size_t count = sizeof(desktop_app_catalog) / sizeof(desktop_app_catalog[0]);
+  char line[256];
 
   if (!out || out_size == 0) {
     return;
@@ -3591,19 +3709,72 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
   out[0] = '\0';
   desktop_append(out, out_size, &used, "Orizon desktop apps\n");
   desktop_append(out, out_size, &used,
-                 "terminal  installed=yes command='desktop launch terminal' shortcut=SUPER+Return/F1/F11+t tiled=yes floating=no\n");
+                 "model: compositor-managed Hyprland-style clients; tiling only, floating=no, manual-drag=no\n");
   desktop_append(out, out_size, &used,
-                 "settings  installed=yes command='desktop launch settings' shortcut=F11+s tiled=yes floating=no\n");
+                 "launcher-policy: overlay only; no Windows taskbar, no start menu, Waybar is future package\n");
+  for (size_t i = 0; i < count; i++) {
+    const desktop_app_entry_t *app = &desktop_app_catalog[i];
+    snprintf(line, sizeof(line),
+             "%-9s status=%s class=%s module=%s surface=%s backend=%s command='%s' shortcut=%s\n",
+             app->id, app->status, app->class_name, app->module,
+             app->surface, app->backend, app->command, app->shortcut);
+    desktop_append(out, out_size, &used, line);
+  }
   desktop_append(out, out_size, &used,
-                 "logs      installed=yes command='desktop launch logs' shortcut=F11+l tiled=yes floating=no\n");
-  desktop_append(out, out_size, &used,
-                 "packages  installed=yes command='desktop launch packages' shortcut=F11+p tiled=yes floating=no\n");
-  desktop_append(out, out_size, &used,
-                 "update    installed=yes command='desktop launch update' shortcut=F11+u tiled=yes floating=no\n");
-  desktop_append(out, out_size, &used,
-                 "launcher  overlay=yes command='desktop launcher' shortcut=SUPER+D/F3 tiled=no taskbar=no\n");
+                 "detail: desktop app <terminal|settings|logs|packages|update|launcher>\n");
   desktop_append(out, out_size, &used,
                  "next-apps file-manager,wallpaper-daemon are not implemented yet; waybar-style bar is future package\n");
+}
+
+void orizon_desktop_format_app_detail(const char *app, char *out,
+                                      size_t out_size) {
+  const desktop_app_entry_t *entry;
+  size_t used = 0;
+  char line[256];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  entry = desktop_find_app_entry(app);
+  desktop_append(out, out_size, &used, "Orizon desktop app\n");
+  if (!entry) {
+    snprintf(line, sizeof(line), "unknown: %s\n",
+             (app && app[0]) ? app : "(empty)");
+    desktop_append(out, out_size, &used, line);
+    desktop_append(out, out_size, &used,
+                   "known: terminal settings logs packages update launcher\n");
+    desktop_append(out, out_size, &used,
+                   "usage: desktop app <id> | desktop launch <id>\n");
+    return;
+  }
+  snprintf(line, sizeof(line), "id: %s\n", entry->id);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "title: %s\n", entry->title);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "class: %s\n", entry->class_name);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "module: %s\n", entry->module);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "status: %s\n", entry->status);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "backend: %s\n", entry->backend);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "surface: %s\n", entry->surface);
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used, "floating: no\n");
+  desktop_append(out, out_size, &used, "manual-drag: no\n");
+  desktop_append(out, out_size, &used, "taskbar: no\n");
+  snprintf(line, sizeof(line), "command: %s\n", entry->command);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "shortcut: %s\n", entry->shortcut);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "aliases: %s\n", entry->aliases);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "description: %s\n", entry->description);
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "inspect: desktop clients | desktop activewindow | desktop apps\n");
 }
 
 void orizon_desktop_format_profiles(char *out, size_t out_size) {

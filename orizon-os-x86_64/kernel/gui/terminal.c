@@ -3768,7 +3768,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop focus-history   - Show Hyprland-style focusHistoryID order\n");
     term_puts_t(term, "  desktop modules         - Show prepared modular desktop packages\n");
-    term_puts_t(term, "  desktop apps            - List desktop launcher apps\n");
+    term_puts_t(term, "  desktop apps            - List compositor-managed desktop apps\n");
+    term_puts_t(term, "  desktop app <id>        - Show app class/module/surface details\n");
     term_puts_t(term, "  desktop profiles        - List themes/wallpapers/layouts\n");
     term_puts_t(term, "  desktop preset <name>   - Apply graphite/moss/ember/frost/focus preset\n");
     term_puts_t(term, "  desktop binds           - Show Hyprland-style binds/dispatchers\n");
@@ -3787,7 +3788,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop focus on|off|toggle - Configure focus-follows-mouse\n");
     term_puts_t(term, "  desktop bar on|off|toggle - Configure desktop bar\n");
     term_puts_t(term, "  desktop launcher [show|hide|toggle] - Control launcher\n");
-    term_puts_t(term, "  desktop launch <app>    - Spawn terminal/settings/logs/packages/update\n");
+    term_puts_t(term, "  desktop launch <app>    - Spawn terminal/settings/logs/packages/update/launcher\n");
     term_puts_t(term, "  desktop killactive      - Close focused tiled client\n");
     term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
     term_puts_t(term, "  desktop workspace [n|next|empty|previous] - Show or switch workspace\n");
@@ -4064,7 +4065,25 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     return;
   }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
-    orizon_desktop_format_apps(report, sizeof(report));
+    const char *app = term_command_is(args, "apps")
+                          ? term_skip_spaces(args + 4)
+                          : term_skip_spaces(args + strlen("launcher apps"));
+    if (*app) {
+      orizon_desktop_format_app_detail(app, report, sizeof(report));
+    } else {
+      orizon_desktop_format_apps(report, sizeof(report));
+    }
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "app")) {
+    const char *app = term_skip_spaces(args + 3);
+    if (*app == '\0') {
+      term_puts_t(term,
+                  "usage: desktop app <terminal|settings|logs|packages|update|launcher>\n");
+      return;
+    }
+    orizon_desktop_format_app_detail(app, report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
@@ -4480,7 +4499,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *app = term_skip_spaces(args + 6);
     if (*app == '\0') {
       term_puts_t(term,
-                  "usage: desktop launch <terminal|settings|logs|packages|update>\n");
+                  "usage: desktop launch <terminal|settings|logs|packages|update|launcher>\n");
       return;
     }
     gui_desktop_spawn_app_client(app, report, sizeof(report));
@@ -4491,7 +4510,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *app = term_skip_spaces(args + (term_command_is(args, "spawn") ? 5 : 4));
     if (*app == '\0') {
       term_puts_t(term,
-                  "usage: desktop exec <terminal|settings|logs|packages|update>\n");
+                  "usage: desktop exec <terminal|settings|logs|packages|update|launcher>\n");
       return;
     }
     gui_desktop_spawn_app_client(app, report, sizeof(report));

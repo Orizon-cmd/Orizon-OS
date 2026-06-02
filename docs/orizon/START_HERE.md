@@ -36,7 +36,7 @@ design note.
   review before any disk write.
 - The optional first desktop profile is available through `desktop status`,
   `desktop session`, `desktop settings`, `desktop settings paths`, `desktop
-  settings export`, `desktop settings sync`, `desktop modules`, `desktop settings preset`, `desktop settings doctor`, `desktop apps`, `desktop doctor`, the guided installer
+  settings export`, `desktop settings sync`, `desktop modules`, `desktop settings preset`, `desktop settings doctor`, `desktop apps`, `desktop app <id>`, `desktop doctor`, the guided installer
   desktop prompt, `pkg sample desktop`, and `pkg install orizon-desktop-hypr`.
   It is Hyprland-style Orizon compositor plumbing, disabled by default, persists
   `/system/desktop-session.conf` plus `/system/desktop-settings.conf`,

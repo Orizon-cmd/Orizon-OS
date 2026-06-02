@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added desktop package version `0.29.0` with a compositor-managed app catalog:
+  `desktop apps`, `desktop app <id>`, class/module/backend/surface diagnostics,
+  and explicit launcher overlay dispatch via `desktop launch launcher`.
 - Added desktop package version `0.28.0` with a stronger installed/live session
   manager: v2 state health, lifecycle counters, `desktop rescue`, recovery
   commands, and clearer file checks before `desktop recover`.

@@ -172,9 +172,12 @@ reste `orizon-desktop-hypr`, tandis que `orizon-desktop-core`,
 `orizon-terminal`, `orizon-settings` et `orizon-launcher` sont prepares comme
 modules futurs; `orizon-waybar` est seulement annonce comme paquet separe
 ulterieur, pas installe maintenant.
-`desktop launch terminal|settings|logs|packages|update` ouvre les premieres
-apps natives comme clients tiles geres par le compositor; elles ne sont pas des
-fenetres flottantes et aucune barre type Windows n'est ajoutee.
+`desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
+detaille classe/module/surface, et
+`desktop launch terminal|settings|logs|packages|update|launcher` ouvre les
+premieres apps natives comme clients tiles geres par le compositor. Le launcher
+est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
+menu demarrer permanent, ni fenetres flottantes.
 `desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|swapwindow|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
