@@ -44,13 +44,15 @@ work.
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts/keymap`,
   `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/app/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
-  `desktop enable/disable/reset/package`, `pkg sample desktop`, and
-  `pkg install orizon-desktop-hypr` provide the first installable Hyprland-style
+  `desktop enable/disable/reset/package`, `pkg sample desktop`,
+  `pkg install orizon-desktop-hypr`, and split module samples/install names for
+  `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
+  `orizon-launcher` provide the first installable Hyprland-style
   desktop profile. It is disabled by default, selectable during installation,
   package installable later, persists `/system/desktop-session.conf` plus
   `/system/desktop-settings.conf`, settings hub export/sync to
-  `/home/orizon/.config/hypr/orizon-hypr.conf`, a prepared
-  `/system/desktop-modules.conf` split map for future module packages, plus generated
+  `/home/orizon/.config/hypr/orizon-hypr.conf`, a
+  `/system/desktop-modules.conf` split map for generated module packages, plus generated
   `/system/desktop-binds.conf` and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative/dynamic workspace dispatch with next/empty targets,

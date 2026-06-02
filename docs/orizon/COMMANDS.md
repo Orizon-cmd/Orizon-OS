@@ -422,11 +422,17 @@ pkg info orizon-desktop-hypr
 pkg history
 pkg sample
 pkg sample desktop
+pkg sample orizon-desktop-core
+pkg sample orizon-terminal
+pkg sample orizon-settings
+pkg sample orizon-launcher
 pkg hash /workspace/packages/orizon-hello.opkg
 pkg verify /workspace/packages/orizon-hello.opkg
+pkg verify /workspace/packages/orizon-desktop-core.opkg
 pkg simulate /workspace/packages/orizon-hello.opkg
 pkg install /workspace/packages/orizon-hello.opkg
 pkg install orizon-desktop-hypr
+pkg install orizon-terminal
 pkg remove orizon-hello
 pkg rollback orizon-hello
 ```
@@ -447,8 +453,12 @@ the optional desktop package. It installs `/system/desktop.conf`,
 desktop runtime hint files, and the Hyprland-style user config under
 `/home/orizon/.config/hypr/`.
 It also writes `/system/desktop-modules.conf`, a non-invasive module map for
-the future split packages. `pkg info orizon-terminal` and `pkg search waybar`
-report those prepared modules, but `orizon-waybar` is not installed now.
+the split packages. `pkg sample orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher`
+writes separate module `.opkg` files, and installed VMs accept named installs
+such as `pkg install orizon-terminal`; app modules auto-prepare
+`orizon-desktop-core` first. `pkg info orizon-terminal` and
+`pkg search waybar` report those modules, but `orizon-waybar` is not generated
+or installed now.
 `desktop settings sync` is the preferred repair command if `/system` settings
 and the user Hyprland-style config drift apart.
 On an installed VM, `pkg install orizon-desktop-hypr` generates and installs

@@ -352,6 +352,11 @@ static int pkg_name_is_desktop_module(const char *name) {
                   strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0);
 }
 
+static int pkg_name_is_desktop_installable_module(const char *name) {
+  return pkg_name_is_desktop_module(name) &&
+         strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) != 0;
+}
+
 static const char *pkg_desktop_module_role(const char *name) {
   if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
     return "runtime policy/session/settings/logs";
@@ -369,6 +374,78 @@ static const char *pkg_desktop_module_role(const char *name) {
     return "future Waybar-style layer package; not installed now";
   }
   return "unknown desktop module";
+}
+
+static const char *pkg_desktop_module_kind(const char *name) {
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
+    return "runtime";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) == 0 ||
+      strcmp(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) == 0 ||
+      strcmp(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) == 0) {
+    return "app";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+    return "bar";
+  }
+  return "unknown";
+}
+
+static const char *pkg_desktop_module_provides(const char *name) {
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
+    return "policy,session,settings,logs,module-map";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) == 0) {
+    return "terminal-client,tiled-surface,F1";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) == 0) {
+    return "settings,logs,packages,update-viewers";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) == 0) {
+    return "launcher-overlay,hypr-dispatch,SUPER+D,F3";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+    return "waybar-style-layer,future-package";
+  }
+  return "unknown";
+}
+
+static const char *pkg_desktop_module_command(const char *name) {
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
+    return "desktop start";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) == 0) {
+    return "desktop launch terminal";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) == 0) {
+    return "desktop launch settings|logs|packages|update";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) == 0) {
+    return "desktop launch launcher";
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+    return "not-installed";
+  }
+  return "unknown";
+}
+
+static const char *pkg_desktop_module_package_path(const char *name) {
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
+    return ORIZON_DESKTOP_PACKAGE_CORE_PATH;
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) == 0) {
+    return ORIZON_DESKTOP_PACKAGE_TERMINAL_PATH;
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) == 0) {
+    return ORIZON_DESKTOP_PACKAGE_SETTINGS_PATH;
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) == 0) {
+    return ORIZON_DESKTOP_PACKAGE_LAUNCHER_PATH;
+  }
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+    return ORIZON_DESKTOP_PACKAGE_WAYBAR_PATH;
+  }
+  return NULL;
 }
 
 static int pkg_path_safe(const char *path) {
@@ -2093,7 +2170,8 @@ static int pkg_install_loaded(const char *source_name, const char *data,
                                 "previous-payload-on-failure", "db-failed");
     return -6;
   }
-  if (strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE) == 0) {
+  if (strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE) == 0 ||
+      strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
     char desktop_status[512];
     if (orizon_desktop_set_enabled(1, desktop_status,
                                    sizeof(desktop_status)) == 0) {
@@ -2130,6 +2208,8 @@ int orizon_pkg_install_named(const char *name, char *report,
                              size_t report_size) {
   char generated[640];
   char install_report[4096];
+  char current_version[64];
+  char current_origin[32];
   int rc;
 
   if (report && report_size > 0) {
@@ -2138,14 +2218,68 @@ int orizon_pkg_install_named(const char *name, char *report,
   if (!pkg_initialized) {
     orizon_pkg_init();
   }
-  if (!pkg_name_is_desktop_alias(name)) {
+  if (!pkg_name_is_desktop_alias(name) && !pkg_name_is_desktop_module(name)) {
     pkg_append_line(report, report_size,
                     "pkg install: unknown named package");
     pkg_append_line(report, report_size,
-                    "available named package: " ORIZON_DESKTOP_PACKAGE);
+                    "available named packages: " ORIZON_DESKTOP_PACKAGE
+                    ", " ORIZON_DESKTOP_PACKAGE_CORE
+                    ", " ORIZON_DESKTOP_PACKAGE_TERMINAL
+                    ", " ORIZON_DESKTOP_PACKAGE_SETTINGS
+                    ", " ORIZON_DESKTOP_PACKAGE_LAUNCHER);
     pkg_append_line(report, report_size,
                     "hint: use pkg install <file> for local .opkg files");
     return -1;
+  }
+
+  if (pkg_name_is_desktop_module(name)) {
+    const char *path = pkg_desktop_module_package_path(name);
+    if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+      pkg_append_line(report, report_size,
+                      "pkg named install: orizon-waybar is planned later");
+      pkg_append_line(report, report_size,
+                      "policy: no Waybar/taskbar package is installed now");
+      pkg_append_line(report, report_size,
+                      "hint: use pkg info orizon-waybar for current status");
+      return -2;
+    }
+    if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) != 0 &&
+        package_current_version(ORIZON_DESKTOP_PACKAGE_CORE, current_version,
+                                sizeof(current_version), current_origin,
+                                sizeof(current_origin)) < 0) {
+      pkg_append_line(report, report_size,
+                      "pkg named install: installing required desktop core first");
+      rc = orizon_pkg_write_desktop_module_sample(ORIZON_DESKTOP_PACKAGE_CORE,
+                                                  generated,
+                                                  sizeof(generated));
+      pkg_append(report, report_size, generated);
+      if (rc < 0) {
+        pkg_append_line(report, report_size,
+                        "pkg install: failed to prepare desktop core package");
+        return rc;
+      }
+      rc = orizon_pkg_install_file(ORIZON_DESKTOP_PACKAGE_CORE_PATH,
+                                   install_report, sizeof(install_report));
+      pkg_append(report, report_size, install_report);
+      if (rc < 0) {
+        pkg_append_line(report, report_size,
+                        "pkg install: required desktop core failed");
+        return rc;
+      }
+    }
+    snprintf(generated, sizeof(generated), "pkg named install: %s\n", name);
+    pkg_append(report, report_size, generated);
+    rc = orizon_pkg_write_desktop_module_sample(name, generated,
+                                                sizeof(generated));
+    pkg_append(report, report_size, generated);
+    if (rc < 0 || !path) {
+      pkg_append_line(report, report_size,
+                      "pkg install: failed to prepare desktop module package");
+      return rc < 0 ? rc : -3;
+    }
+    rc = orizon_pkg_install_file(path, install_report, sizeof(install_report));
+    pkg_append(report, report_size, install_report);
+    return rc;
   }
 
   pkg_append_line(report, report_size,
@@ -2888,9 +3022,18 @@ int orizon_pkg_search(const char *query, char *out, size_t out_size) {
                                   query)) {
         continue;
       }
-      snprintf(line, sizeof(line),
-               "prepared %s " ORIZON_DESKTOP_PACKAGE_VERSION " role='%s'",
-               modules[i], pkg_desktop_module_role(modules[i]));
+      if (strcmp(modules[i], ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+        snprintf(line, sizeof(line),
+                 "planned %s " ORIZON_DESKTOP_PACKAGE_VERSION
+                 " role='%s' install=no waybar-package-later=yes",
+                 modules[i], pkg_desktop_module_role(modules[i]));
+      } else {
+        snprintf(line, sizeof(line),
+                 "prepared %s " ORIZON_DESKTOP_PACKAGE_VERSION
+                 " role='%s' sample='pkg sample %s' install='pkg install %s'",
+                 modules[i], pkg_desktop_module_role(modules[i]), modules[i],
+                 modules[i]);
+      }
       pkg_append_line(out, out_size, line);
       matches++;
     }
@@ -2997,6 +3140,8 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
                       "depends orizon-core core-x86_64; orizon-packages text-payload-v5; orizon-desktop-base hyprland-style-profile-runtime");
       pkg_append_line(out, out_size,
                       "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-modules.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
+      pkg_append_line(out, out_size,
+                      "split-modules pkg sample orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher");
       return 0;
     }
     if (pkg_name_is_desktop_module(name)) {
@@ -3011,12 +3156,31 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
                           : "state prepared optional-module");
       snprintf(line, sizeof(line), "role %s", pkg_desktop_module_role(name));
       pkg_append_line(out, out_size, line);
+      snprintf(line, sizeof(line), "kind %s", pkg_desktop_module_kind(name));
+      pkg_append_line(out, out_size, line);
+      snprintf(line, sizeof(line), "provides %s",
+               pkg_desktop_module_provides(name));
+      pkg_append_line(out, out_size, line);
+      if (strcmp(name, ORIZON_DESKTOP_PACKAGE_WAYBAR) == 0) {
+        pkg_append_line(out, out_size,
+                        "install no; planned future separate package only");
+        pkg_append_line(out, out_size,
+                        "sample no; Waybar/taskbar package is not generated now");
+      } else {
+        snprintf(line, sizeof(line), "sample pkg sample %s", name);
+        pkg_append_line(out, out_size, line);
+        snprintf(line, sizeof(line), "install pkg install %s", name);
+        pkg_append_line(out, out_size, line);
+        snprintf(line, sizeof(line), "package-path %s",
+                 pkg_desktop_module_package_path(name));
+        pkg_append_line(out, out_size, line);
+      }
       pkg_append_line(out, out_size,
-                      "install-current pkg install " ORIZON_DESKTOP_PACKAGE);
+                      "compat-bundle pkg install " ORIZON_DESKTOP_PACKAGE);
       pkg_append_line(out, out_size,
                       "module-map " ORIZON_DESKTOP_MODULES_PATH);
       pkg_append_line(out, out_size,
-                      "split-status prepared; individual install hooks not enabled yet");
+                      "split-status samples-enabled core-auto-installed-for-app-modules");
       pkg_append_line(out, out_size,
                       "waybar-note no Waybar/taskbar package is installed now");
       return 0;
@@ -3149,7 +3313,8 @@ int orizon_pkg_remove(const char *name, char *report, size_t report_size) {
     pkg_append_line(report, report_size,
                     "pkg remove: WARN post-remove script failed");
   }
-  if (strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE) == 0) {
+  if (strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE) == 0 ||
+      strcmp(pkg.name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
     char desktop_status[512];
     if (orizon_desktop_set_enabled(0, desktop_status,
                                    sizeof(desktop_status)) == 0) {
@@ -3511,6 +3676,182 @@ int orizon_pkg_write_sample(char *report, size_t report_size) {
   return 0;
 }
 
+int orizon_pkg_write_desktop_module_sample(const char *name, char *report,
+                                           size_t report_size) {
+  const char *path;
+  const char *kind;
+  const char *role;
+  const char *provides;
+  const char *command;
+  const char *dep_line;
+  char hash[SHA256_HEX_SIZE];
+  char header[512];
+  char line[256];
+  char deps[256];
+
+  if (report && report_size > 0) {
+    report[0] = '\0';
+  }
+  if (!pkg_initialized) {
+    orizon_pkg_init();
+  }
+  if (!pkg_name_is_desktop_module(name)) {
+    pkg_append_line(report, report_size,
+                    "pkg sample desktop-module: unknown desktop module");
+    pkg_append_line(report, report_size,
+                    "known: " ORIZON_DESKTOP_PACKAGE_CORE
+                    " " ORIZON_DESKTOP_PACKAGE_TERMINAL
+                    " " ORIZON_DESKTOP_PACKAGE_SETTINGS
+                    " " ORIZON_DESKTOP_PACKAGE_LAUNCHER
+                    " " ORIZON_DESKTOP_PACKAGE_WAYBAR);
+    return -1;
+  }
+  if (!pkg_name_is_desktop_installable_module(name)) {
+    pkg_append_line(report, report_size,
+                    "pkg sample desktop-module: orizon-waybar is planned later");
+    pkg_append_line(report, report_size,
+                    "policy: Waybar/taskbar package is not generated or installed now");
+    return -2;
+  }
+
+  path = pkg_desktop_module_package_path(name);
+  kind = pkg_desktop_module_kind(name);
+  role = pkg_desktop_module_role(name);
+  provides = pkg_desktop_module_provides(name);
+  command = pkg_desktop_module_command(name);
+  if (!path) {
+    pkg_append_line(report, report_size,
+                    "pkg sample desktop-module: invalid module path");
+    return -3;
+  }
+
+  pkg_buf[0] = '\0';
+  snprintf(line, sizeof(line), "file " ORIZON_DESKTOP_MODULE_DIR "/%s.conf",
+           name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "# Orizon desktop module manifest v1");
+  snprintf(line, sizeof(line), "module %s", name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "version " ORIZON_DESKTOP_PACKAGE_VERSION);
+  snprintf(line, sizeof(line), "kind %s", kind);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line), "role %s", role);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line), "provides %s", provides);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line), "command %s", command);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "status packaged-optional-module");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "current-bundle " ORIZON_DESKTOP_PACKAGE);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "sample-command pkg sample <module>");
+  snprintf(line, sizeof(line), "install-command pkg install %s", name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "floating no");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "manual-window-drag no");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "windows-taskbar no");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "waybar-installed no");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "content-end");
+
+  snprintf(line, sizeof(line), "file /system/share/%s.conf", name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "# Orizon desktop split package hint v1");
+  snprintf(line, sizeof(line), "package %s", name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "version " ORIZON_DESKTOP_PACKAGE_VERSION);
+  snprintf(line, sizeof(line), "module-kind %s", kind);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line), "module-provides %s", provides);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line), "module-command %s", command);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "desktop-core " ORIZON_DESKTOP_PACKAGE_CORE);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "desktop-profile " ORIZON_DESKTOP_PACKAGE);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "policy tiling-only-no-free-drag-no-windows-taskbar");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "waybar future-package-not-installed");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "content-end");
+
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "post-install");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "mkdir " ORIZON_DESKTOP_MODULE_DIR);
+  snprintf(line, sizeof(line),
+           "append " ORIZON_DESKTOP_MODULES_PATH
+           " module-installed %s version=" ORIZON_DESKTOP_PACKAGE_VERSION
+           " kind=%s",
+           name, kind);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line),
+           "append " ORIZON_DESKTOP_LOG_PATH
+           " %s module installed version=" ORIZON_DESKTOP_PACKAGE_VERSION,
+           name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  snprintf(line, sizeof(line), "echo post-install: %s module installed", name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "sync");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "end-post-install");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "pre-remove");
+  snprintf(line, sizeof(line), "echo pre-remove: %s module cleanup starting",
+           name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "end-pre-remove");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "post-remove");
+  snprintf(line, sizeof(line),
+           "append " ORIZON_DESKTOP_LOG_PATH " %s module removed", name);
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), line);
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0) {
+    pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                    "write " ORIZON_DESKTOP_CONFIG_PATH " enabled no");
+  }
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "sync");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf), "end-post-remove");
+
+  sha256_buffer_hex(pkg_buf, strlen(pkg_buf), hash);
+  dep_line = strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) == 0
+                 ? "depends orizon-desktop-base hyprland-style-profile-runtime\n"
+                 : "depends " ORIZON_DESKTOP_PACKAGE_CORE
+                   " " ORIZON_DESKTOP_PACKAGE_VERSION "\n";
+  snprintf(deps, sizeof(deps), "%s", dep_line);
+  snprintf(header, sizeof(header),
+           "orizon-package 1\n"
+           "name %s\n"
+           "version " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
+           "depends orizon-core core-x86_64\n"
+           "depends orizon-packages text-payload-v5\n"
+           "%s"
+           "sha256 %s\n"
+           "payload:\n",
+           name, deps, hash);
+  pkg_ensure_dir("/workspace/packages");
+  if (pkg_write_blob_internal(path, header, strlen(header)) < 0 ||
+      pkg_append_text_internal(path, pkg_buf) < 0) {
+    pkg_append_line(report, report_size,
+                    "pkg sample desktop-module: cannot write package");
+    return -4;
+  }
+  snprintf(line, sizeof(line), "Desktop module package written to %s", path);
+  pkg_append_line(report, report_size, line);
+  snprintf(line, sizeof(line), "Run after install: pkg install %s", path);
+  pkg_append_line(report, report_size, line);
+  snprintf(line, sizeof(line), "Named install: pkg install %s", name);
+  pkg_append_line(report, report_size, line);
+  if (strcmp(name, ORIZON_DESKTOP_PACKAGE_CORE) != 0) {
+    pkg_append_line(report, report_size,
+                    "dependency: orizon-desktop-core auto-prepared for named install");
+  }
+  pkg_append_line(report, report_size,
+                  "Waybar note: orizon-waybar remains a future separate package");
+  vfs_persist_save();
+  return 0;
+}
+
 int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
   static const char desktop_payload[] =
       "file " ORIZON_DESKTOP_CONFIG_PATH "\n"
@@ -3612,15 +3953,15 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "file " ORIZON_DESKTOP_MODULES_PATH "\n"
       "# Orizon desktop modular packaging map v1\n"
       "module " ORIZON_DESKTOP_PACKAGE_CORE
-      " state=prepared kind=runtime provides=policy,session,settings,logs current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      " state=prepared kind=runtime provides=policy,session,settings,logs sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE
       " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
-      " state=prepared kind=app provides=terminal-client shortcut=F1 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      " state=prepared kind=app provides=terminal-client shortcut=F1 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_TERMINAL "' install='pkg install " ORIZON_DESKTOP_PACKAGE_TERMINAL "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE_SETTINGS
-      " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s sample='pkg sample " ORIZON_DESKTOP_PACKAGE_SETTINGS "' install='pkg install " ORIZON_DESKTOP_PACKAGE_SETTINGS "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE_LAUNCHER
-      " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' install='pkg install " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE_WAYBAR
       " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
       "policy no-windows-taskbar\n"
@@ -3779,11 +4120,19 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "modules-command = desktop modules\n"
       "module-map = " ORIZON_DESKTOP_MODULES_PATH "\n"
       "module-core = " ORIZON_DESKTOP_PACKAGE_CORE "\n"
+      "module-core-package = " ORIZON_DESKTOP_PACKAGE_CORE_PATH "\n"
       "module-hypr = " ORIZON_DESKTOP_PACKAGE "\n"
       "module-terminal = " ORIZON_DESKTOP_PACKAGE_TERMINAL "\n"
+      "module-terminal-package = " ORIZON_DESKTOP_PACKAGE_TERMINAL_PATH "\n"
       "module-settings = " ORIZON_DESKTOP_PACKAGE_SETTINGS "\n"
+      "module-settings-package = " ORIZON_DESKTOP_PACKAGE_SETTINGS_PATH "\n"
       "module-launcher = " ORIZON_DESKTOP_PACKAGE_LAUNCHER "\n"
+      "module-launcher-package = " ORIZON_DESKTOP_PACKAGE_LAUNCHER_PATH "\n"
       "module-waybar-future = " ORIZON_DESKTOP_PACKAGE_WAYBAR "\n"
+      "module-waybar-package-future = " ORIZON_DESKTOP_PACKAGE_WAYBAR_PATH "\n"
+      "module-sample-command = pkg sample <orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher>\n"
+      "module-install-command = pkg install <orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher>\n"
+      "module-waybar-policy = planned-only-not-installed-now\n"
       "apps-command = desktop apps\n"
       "app-detail-command = desktop app <id>\n"
       "terminal-app-command = desktop launch terminal\n"

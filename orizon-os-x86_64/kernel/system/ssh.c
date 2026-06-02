@@ -3136,6 +3136,14 @@ static int ssh_pkg_desktop_name(const char *name) {
          ssh_shell_command_is(name, "hyprland");
 }
 
+static int ssh_pkg_desktop_module_name(const char *name) {
+  return ssh_shell_command_is(name, ORIZON_DESKTOP_PACKAGE_CORE) ||
+         ssh_shell_command_is(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) ||
+         ssh_shell_command_is(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) ||
+         ssh_shell_command_is(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) ||
+         ssh_shell_command_is(name, ORIZON_DESKTOP_PACKAGE_WAYBAR);
+}
+
 static void ssh_shell_print_pkg(const char *args) {
   static char out[SSH_CHANNEL_TEXT_BUF];
   static char path[MAX_PATH];
@@ -3159,13 +3167,13 @@ static void ssh_shell_print_pkg(const char *args) {
              "  pkg upgrade plan       show signed package upgrade plan\r\n"
              "  pkg info <name>        show package metadata/files\r\n"
              "  pkg history            show install/remove history\r\n"
-             "  pkg sample [desktop]   create a sample .opkg package\r\n"
+             "  pkg sample [desktop|desktop-module] create a sample .opkg package\r\n"
              "  pkg hash <file>        print package payload sha256\r\n"
              "  pkg verify <file>      verify package hash/dependencies\r\n"
              "  pkg simulate <file>    dry-run install/upgrade without writes\r\n"
              "  pkg update             run signed package refresh through update\r\n"
              "  pkg upgrade            plan then run signed package refresh\r\n"
-             "  pkg install <file|orizon-desktop-hypr> install a verified package after disk install\r\n"
+             "  pkg install <file|desktop-package> install a verified package after disk install\r\n"
              "  pkg remove <name>      remove an installed package\r\n"
              "  pkg rollback <name>    restore last removed package snapshot\r\n");
   } else if (ssh_shell_command_is(sub, "list")) {
@@ -3219,6 +3227,8 @@ static void ssh_shell_print_pkg(const char *args) {
     if (ssh_shell_command_is(sample_args, "desktop") ||
         ssh_shell_command_is(sample_args, "orizon-desktop-hypr")) {
       orizon_pkg_write_desktop_sample(out, sizeof(out));
+    } else if (ssh_pkg_desktop_module_name(sample_args)) {
+      orizon_pkg_write_desktop_module_sample(sample_args, out, sizeof(out));
     } else {
       orizon_pkg_write_sample(out, sizeof(out));
     }
@@ -3256,13 +3266,14 @@ static void ssh_shell_print_pkg(const char *args) {
     if (!ssh_install_already_complete()) {
       snprintf(out, sizeof(out),
                "pkg install: unavailable in live boot. Install Orizon OS first.\r\n");
-    } else if (ssh_pkg_desktop_name(ssh_shell_skip_spaces(sub + 7))) {
+    } else if (ssh_pkg_desktop_name(ssh_shell_skip_spaces(sub + 7)) ||
+               ssh_pkg_desktop_module_name(ssh_shell_skip_spaces(sub + 7))) {
       orizon_pkg_install_named(ssh_shell_skip_spaces(sub + 7), out,
                                sizeof(out));
       gui_desktop_set_enabled(orizon_desktop_is_enabled());
     } else if (ssh_shell_resolve_path(sub + 7, path, sizeof(path)) < 0) {
       snprintf(out, sizeof(out),
-               "usage: pkg install <file|orizon-desktop-hypr>\r\n");
+               "usage: pkg install <file|desktop-package>\r\n");
     } else {
       orizon_pkg_install_file(path, out, sizeof(out));
       gui_desktop_set_enabled(orizon_desktop_is_enabled());
@@ -5191,7 +5202,7 @@ static void ssh_remote_shell_execute(const char *line) {
         "  usb rescan           rescan USB root ports\r\n"
         "  ps|pkg|update        show system/update/package state\r\n"
         "  pkg help             show package search/verify/install/update commands\r\n"
-        "  pkg sample desktop   create optional desktop package\r\n"
+        "  pkg sample desktop|orizon-terminal create optional desktop packages\r\n"
         "  pkg audit|doctor     audit or diagnose package v5 state\r\n"
         "  pkg upgrade plan     show signed package upgrade plan\r\n"
         "  pkg search|remote    inspect local and signed remote package metadata\r\n"

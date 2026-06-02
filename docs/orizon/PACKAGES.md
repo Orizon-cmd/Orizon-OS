@@ -72,8 +72,13 @@ honest fallback.
 
 `pkg search desktop` and `pkg info orizon-desktop-hypr` expose the optional
 desktop package even before it is installed. `pkg sample desktop` creates
-`/workspace/packages/orizon-desktop-hypr.opkg`. That optional package installs
-the first Orizon desktop profile:
+`/workspace/packages/orizon-desktop-hypr.opkg`. The split module samples are
+also generated on demand with `pkg sample orizon-desktop-core`, `pkg sample
+orizon-terminal`, `pkg sample orizon-settings`, and `pkg sample
+orizon-launcher`; named installs such as `pkg install orizon-terminal`
+auto-prepare `orizon-desktop-core` first on an installed VM. `orizon-waybar`
+stays planned only: no Waybar/taskbar package is generated or installed now.
+The all-in-one optional package installs the first Orizon desktop profile:
 `/system/desktop.conf`, `/system/desktop-session.conf`,
 `/system/desktop-settings.conf`,
 `/system/desktop-modules.conf`,
@@ -89,6 +94,13 @@ VM boot:
 
 ```text
 pkg install orizon-desktop-hypr
+pkg sample orizon-desktop-core
+pkg verify /workspace/packages/orizon-desktop-core.opkg
+pkg sample orizon-terminal
+pkg sample orizon-settings
+pkg sample orizon-launcher
+pkg info orizon-terminal
+pkg search orizon-terminal
 desktop status
 desktop session
 desktop settings
@@ -185,7 +197,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.31.0` because it includes policy/config files, the persisted session
+`0.32.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -255,6 +267,12 @@ Version `0.31.0` adds persistent render and animation settings:
 into the Hyprland-style user config, consumed by the framebuffer compositor, and
 inspectable through `desktop render`, `desktop decorations`, `desktop
 animations`, and `desktop hyprctl getoption render:focus_ring|render:profile|decoration:shadow:range|animations:tick_budget`.
+Version `0.32.0` turns the prepared module map into package-manager surfaces:
+`pkg sample orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher`
+writes separate `.opkg` files, `pkg install <module>` is accepted by name on an
+installed VM, app modules auto-prepare `orizon-desktop-core`, and
+`pkg info/search` report sample/install paths. `orizon-waybar` remains a
+future separate package only and is not generated or installed.
 
 ## Package Format
 

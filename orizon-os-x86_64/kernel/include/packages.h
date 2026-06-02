@@ -32,5 +32,7 @@ int orizon_pkg_simulate_file(const char *path, char *out, size_t out_size);
 int orizon_pkg_history(char *out, size_t out_size);
 int orizon_pkg_write_sample(char *report, size_t report_size);
 int orizon_pkg_write_desktop_sample(char *report, size_t report_size);
+int orizon_pkg_write_desktop_module_sample(const char *name, char *report,
+                                           size_t report_size);
 
 #endif /* _PACKAGES_H */

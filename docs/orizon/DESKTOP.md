@@ -160,8 +160,13 @@ desktop open terminal
 desktop close terminal
 desktop package
 pkg sample desktop
+pkg sample orizon-desktop-core
+pkg sample orizon-terminal
+pkg sample orizon-settings
+pkg sample orizon-launcher
 pkg info orizon-desktop-hypr
 pkg info orizon-terminal
+pkg search orizon-terminal
 pkg search waybar
 pkg search desktop
 pkg verify /workspace/packages/orizon-desktop-hypr.opkg
@@ -178,18 +183,29 @@ pkg rollback orizon-desktop-hypr
 /workspace/packages/orizon-desktop-hypr.opkg
 ```
 
+The modular samples create:
+
+```text
+/workspace/packages/orizon-desktop-core.opkg
+/workspace/packages/orizon-terminal.opkg
+/workspace/packages/orizon-settings.opkg
+/workspace/packages/orizon-launcher.opkg
+```
+
 On an installed VM, `pkg install orizon-desktop-hypr` is the shortcut path: it
 generates the local package, installs it, writes the Hyprland-style config, and
 enables the desktop profile. `pkg remove orizon-desktop-hypr` disables the
 profile through the package remove hook, and `pkg rollback orizon-desktop-hypr`
 restores the last removed desktop package snapshot.
 
-`desktop modules` shows the prepared modular packaging map at
-`/system/desktop-modules.conf`. The current install path is still the compatible
-all-in-one `orizon-desktop-hypr` package, but Orizon now records the future
-split points: `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
-`orizon-launcher`. `orizon-waybar` is listed only as a future separate package;
-it is not installed now and no Windows-style taskbar is added.
+`desktop modules` shows the modular packaging map at
+`/system/desktop-modules.conf`. The compatible all-in-one
+`orizon-desktop-hypr` package still exists, while `orizon-desktop-core`,
+`orizon-terminal`, `orizon-settings`, and `orizon-launcher` now have generated
+module `.opkg` samples and named install commands. App modules depend on
+`orizon-desktop-core`, which is auto-prepared for named installs. `orizon-waybar`
+is listed only as a future separate package; it is not generated or installed
+now and no Windows-style taskbar is added.
 
 `desktop config doctor` parses the Hyprland-style user config at
 `/home/orizon/.config/hypr/orizon-hypr.conf`. It understands common Hyprland

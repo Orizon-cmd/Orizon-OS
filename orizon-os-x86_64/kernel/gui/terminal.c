@@ -3438,7 +3438,8 @@ static void term_pkg_help(terminal_t *term) {
   term_puts_t(term, "  pkg upgrade plan  - Show signed package upgrade plan\n");
   term_puts_t(term, "  pkg info <name>   - Show package metadata/files\n");
   term_puts_t(term, "  pkg history       - Show package install/remove history\n");
-  term_puts_t(term, "  pkg sample [desktop] - Create a sample .opkg package\n");
+  term_puts_t(term,
+              "  pkg sample [desktop|desktop-module] - Create a sample .opkg package\n");
   term_puts_t(term, "  pkg hash <file>   - Print package payload sha256\n");
   term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
   term_puts_t(term, "  pkg simulate <file> - Dry-run install/upgrade without writes\n");
@@ -3446,7 +3447,7 @@ static void term_pkg_help(terminal_t *term) {
     term_puts_t(term, "  pkg update        - Run signed update package refresh\n");
     term_puts_t(term, "  pkg upgrade       - Plan then run signed package refresh\n");
     term_puts_t(term,
-                "  pkg install <file|orizon-desktop-hypr> - Install a verified package\n");
+                "  pkg install <file|desktop-package> - Install a verified package\n");
     term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
     term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
   } else {
@@ -3455,7 +3456,7 @@ static void term_pkg_help(terminal_t *term) {
     term_puts_t(term,
                 "  pkg upgrade       - Available after disk install only\n");
     term_puts_t(term,
-                "  pkg install <file|orizon-desktop-hypr> - Available after disk install only\n");
+                "  pkg install <file|desktop-package> - Available after disk install only\n");
     term_puts_t(term,
                 "  pkg remove <name> - Available after disk install only\n");
     term_puts_t(term,
@@ -3467,6 +3468,14 @@ static int term_pkg_desktop_name(const char *name) {
   return term_command_is(name, ORIZON_DESKTOP_PACKAGE) ||
          term_command_is(name, "desktop") || term_command_is(name, "hypr") ||
          term_command_is(name, "hyprland");
+}
+
+static int term_pkg_desktop_module_name(const char *name) {
+  return term_command_is(name, ORIZON_DESKTOP_PACKAGE_CORE) ||
+         term_command_is(name, ORIZON_DESKTOP_PACKAGE_TERMINAL) ||
+         term_command_is(name, ORIZON_DESKTOP_PACKAGE_SETTINGS) ||
+         term_command_is(name, ORIZON_DESKTOP_PACKAGE_LAUNCHER) ||
+         term_command_is(name, ORIZON_DESKTOP_PACKAGE_WAYBAR);
 }
 
 static void term_run_pkg(terminal_t *term, const char *cmd) {
@@ -3580,6 +3589,9 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
     if (term_command_is(sample_args, "desktop") ||
         term_command_is(sample_args, "orizon-desktop-hypr")) {
       orizon_pkg_write_desktop_sample(report, sizeof(report));
+    } else if (term_pkg_desktop_module_name(sample_args)) {
+      orizon_pkg_write_desktop_module_sample(sample_args, report,
+                                             sizeof(report));
     } else {
       orizon_pkg_write_sample(report, sizeof(report));
     }
@@ -3659,10 +3671,11 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
       return;
     }
     if (*requested == '\0') {
-      term_puts_t(term, "usage: pkg install <file|orizon-desktop-hypr>\n");
+      term_puts_t(term, "usage: pkg install <file|desktop-package>\n");
       return;
     }
-    if (term_pkg_desktop_name(requested)) {
+    if (term_pkg_desktop_name(requested) ||
+        term_pkg_desktop_module_name(requested)) {
       orizon_pkg_install_named(requested, report, sizeof(report));
       gui_desktop_set_enabled(orizon_desktop_is_enabled());
       term_puts_t(term, report);
@@ -7144,14 +7157,15 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  pkg upgrade plan - Show signed upgrade plan\n");
     term_puts_t(term, "  pkg info <name> - Show package metadata/files\n");
     term_puts_t(term, "  pkg history    - Show package transaction history\n");
-    term_puts_t(term, "  pkg sample [desktop] - Create a sample .opkg package\n");
+    term_puts_t(term,
+                "  pkg sample [desktop|desktop-module] - Create a sample .opkg package\n");
     term_puts_t(term, "  pkg hash <file> - Print package payload sha256\n");
     term_puts_t(term, "  pkg verify <file> - Verify package hash/dependencies\n");
     if (term_install_already_complete()) {
       term_puts_t(term, "  pkg update      - Refresh packages through signed update\n");
       term_puts_t(term, "  pkg upgrade     - Plan then refresh packages through signed update\n");
       term_puts_t(term,
-                  "  pkg install <file|orizon-desktop-hypr> - Install a verified package\n");
+                  "  pkg install <file|desktop-package> - Install a verified package\n");
       term_puts_t(term, "  pkg remove <name> - Remove an installed package\n");
       term_puts_t(term, "  pkg rollback <name> - Restore last removed package snapshot\n");
     }

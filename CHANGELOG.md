@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.32.0` with split desktop module package
+  samples for `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
+  `orizon-launcher`; named installs auto-prepare the core for app modules while
+  `orizon-waybar` remains explicitly planned and not installed.
 - Added desktop package version `0.31.0` with persistent render/animation
   settings: `focus-ring`, `shadow-range`, `animation-ticks`,
   `animation-curve`, and `render-profile`, plus Hyprland-style

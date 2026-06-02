@@ -42,11 +42,13 @@
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs/keymap`,
   `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/apps/app/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
-  and `pkg install orizon-desktop-hypr` provide a Hyprland-style Orizon desktop
+  `pkg install orizon-desktop-hypr`, and split module samples for
+  `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
+  `orizon-launcher` provide a Hyprland-style Orizon desktop
   profile. It is disabled by default, persists session/autostart settings plus
   a system-wide `/system/desktop-settings.conf` layer, a settings hub export to
-  `/home/orizon/.config/hypr/orizon-hypr.conf`, a prepared
-  `/system/desktop-modules.conf` split map for future module packages, generated
+  `/home/orizon/.config/hypr/orizon-hypr.conf`, a
+  `/system/desktop-modules.conf` split map for generated module packages, generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, relative/dynamic
   workspaces with next/empty targets, fullscreen/pseudo/pinned client state, directional `movefocus`/`swapwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg`/`resizeactive`/`submap`,

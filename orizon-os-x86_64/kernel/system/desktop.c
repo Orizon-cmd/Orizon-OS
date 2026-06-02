@@ -265,15 +265,15 @@ static const char *desktop_modules_config =
     "# Orizon desktop modular packaging map v1\n"
     "# This prepares a split desktop without installing Waybar yet.\n"
     "module " ORIZON_DESKTOP_PACKAGE_CORE
-    " state=prepared kind=runtime provides=policy,session,settings,logs current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=runtime provides=policy,session,settings,logs sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE
     " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
-    " state=prepared kind=app provides=terminal-client shortcut=F1 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=app provides=terminal-client shortcut=F1 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_TERMINAL "' install='pkg install " ORIZON_DESKTOP_PACKAGE_TERMINAL "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_SETTINGS
-    " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s sample='pkg sample " ORIZON_DESKTOP_PACKAGE_SETTINGS "' install='pkg install " ORIZON_DESKTOP_PACKAGE_SETTINGS "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_LAUNCHER
-    " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' install='pkg install " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_WAYBAR
     " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
     "policy no-windows-taskbar\n"
@@ -4066,9 +4066,15 @@ void orizon_desktop_format_modules(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "prepared-now: " ORIZON_DESKTOP_PACKAGE_CORE " " ORIZON_DESKTOP_PACKAGE " " ORIZON_DESKTOP_PACKAGE_TERMINAL " " ORIZON_DESKTOP_PACKAGE_SETTINGS " " ORIZON_DESKTOP_PACKAGE_LAUNCHER "\n");
   desktop_append(out, out_size, &used,
+                 "sample-now: pkg sample " ORIZON_DESKTOP_PACKAGE_CORE " | pkg sample " ORIZON_DESKTOP_PACKAGE_TERMINAL " | pkg sample " ORIZON_DESKTOP_PACKAGE_SETTINGS " | pkg sample " ORIZON_DESKTOP_PACKAGE_LAUNCHER "\n");
+  desktop_append(out, out_size, &used,
+                 "install-now: pkg install " ORIZON_DESKTOP_PACKAGE_CORE " | pkg install " ORIZON_DESKTOP_PACKAGE_TERMINAL " | pkg install " ORIZON_DESKTOP_PACKAGE_SETTINGS " | pkg install " ORIZON_DESKTOP_PACKAGE_LAUNCHER "\n");
+  desktop_append(out, out_size, &used,
                  "planned-later: " ORIZON_DESKTOP_PACKAGE_WAYBAR " as separate package only, not installed now\n");
   desktop_append(out, out_size, &used,
                  "compat-meta: pkg install " ORIZON_DESKTOP_PACKAGE " remains the current all-in-one path while split packages are prepared\n");
+  desktop_append(out, out_size, &used,
+                 "module-dir: " ORIZON_DESKTOP_MODULE_DIR "\n");
   desktop_append(out, out_size, &used,
                  "path: " ORIZON_DESKTOP_MODULES_PATH "\n");
   n = desktop_read_text_file(ORIZON_DESKTOP_MODULES_PATH, cfg, sizeof(cfg));

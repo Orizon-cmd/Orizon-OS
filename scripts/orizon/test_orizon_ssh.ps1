@@ -62,6 +62,10 @@ $commands = @(
   "pkg remote verify",
   "pkg upgrade plan",
   "pkg sample",
+  "pkg sample orizon-desktop-core",
+  "pkg verify /workspace/packages/orizon-desktop-core.opkg",
+  "pkg sample orizon-terminal",
+  "pkg sample orizon-waybar",
   "pkg simulate /workspace/packages/orizon-hello.opkg",
   "pkg verify /workspace/packages/orizon-hello.opkg",
   "pkg install /workspace/packages/orizon-hello.opkg",
@@ -431,6 +435,18 @@ run_cmd() {
       ;;
     "pkg sample")
       grep -q "Sample package written" "`$OUT" || { echo "missing pkg sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg sample orizon-desktop-core")
+      grep -q "Desktop module package written" "`$OUT" && grep -q "orizon-desktop-core.opkg" "`$OUT" || { echo "missing desktop core sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg verify /workspace/packages/orizon-desktop-core.opkg")
+      grep -q "package verify: OK" "`$OUT" || { echo "missing desktop core verify output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg sample orizon-terminal")
+      grep -q "Desktop module package written" "`$OUT" && grep -q "orizon-terminal.opkg" "`$OUT" || { echo "missing desktop terminal sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg sample orizon-waybar")
+      grep -q "planned later" "`$OUT" && grep -q "not generated" "`$OUT" || { echo "missing desktop waybar planned output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg simulate /workspace/packages/orizon-hello.opkg")
       grep -q "pkg simulate:" "`$OUT" && grep -q "dry-run" "`$OUT" || { echo "missing pkg simulate output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

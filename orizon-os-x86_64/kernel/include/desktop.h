@@ -25,12 +25,18 @@
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.31.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.32.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"
 #define ORIZON_DESKTOP_PACKAGE_LAUNCHER "orizon-launcher"
 #define ORIZON_DESKTOP_PACKAGE_WAYBAR "orizon-waybar"
+#define ORIZON_DESKTOP_MODULE_DIR "/system/desktop-modules"
+#define ORIZON_DESKTOP_PACKAGE_CORE_PATH "/workspace/packages/orizon-desktop-core.opkg"
+#define ORIZON_DESKTOP_PACKAGE_TERMINAL_PATH "/workspace/packages/orizon-terminal.opkg"
+#define ORIZON_DESKTOP_PACKAGE_SETTINGS_PATH "/workspace/packages/orizon-settings.opkg"
+#define ORIZON_DESKTOP_PACKAGE_LAUNCHER_PATH "/workspace/packages/orizon-launcher.opkg"
+#define ORIZON_DESKTOP_PACKAGE_WAYBAR_PATH "/workspace/packages/orizon-waybar.opkg"
 
 typedef struct {
   char theme[32];

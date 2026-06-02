@@ -60,7 +60,8 @@ le developpement noyau:
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
   hub de settings `/system` synchronisable avec `desktop settings paths/export/sync`,
   carte de modules `/system/desktop-modules.conf` consultable avec
-  `desktop modules`, separation preparee
+  `desktop modules`, samples modulaires generables/installables avec
+  `pkg sample/install orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher`,
   `orizon-desktop-core`/`orizon-terminal`/`orizon-settings`/`orizon-launcher`
   et `orizon-waybar` seulement prevu pour plus tard,
   dix workspaces runtime dynamiques, clients tiles avec adresses stables/focusHistoryID,
@@ -179,9 +180,11 @@ persistants passent par `desktop settings set focus-ring <yes|no>`,
 `desktop keyword animations:tick_budget <4-60>`.
 `desktop modules` affiche la carte de packaging modulaire: le paquet actuel
 reste `orizon-desktop-hypr`, tandis que `orizon-desktop-core`,
-`orizon-terminal`, `orizon-settings` et `orizon-launcher` sont prepares comme
-modules futurs; `orizon-waybar` est seulement annonce comme paquet separe
-ulterieur, pas installe maintenant.
+`orizon-terminal`, `orizon-settings` et `orizon-launcher` ont maintenant des
+samples `.opkg` separes via `pkg sample <module>` et des installs nommes sur VM
+installee. Les modules app auto-preparent `orizon-desktop-core`; `orizon-waybar`
+est seulement annonce comme paquet separe ulterieur, pas genere ni installe
+maintenant.
 `desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
 detaille classe/module/surface, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les

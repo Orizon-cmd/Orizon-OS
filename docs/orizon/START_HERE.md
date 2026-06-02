@@ -37,11 +37,13 @@ design note.
 - The optional first desktop profile is available through `desktop status`,
   `desktop session`, `desktop settings`, `desktop settings paths`, `desktop
   settings export`, `desktop settings sync`, `desktop input`, `desktop modules`, `desktop settings preset`, `desktop settings doctor`, `desktop apps`, `desktop app <id>`, `desktop doctor`, the guided installer
-  desktop prompt, `pkg sample desktop`, and `pkg install orizon-desktop-hypr`.
+  desktop prompt, `pkg sample desktop`, `pkg install orizon-desktop-hypr`,
+  and split samples for `orizon-desktop-core`, `orizon-terminal`,
+  `orizon-settings`, and `orizon-launcher`. `orizon-waybar` is future only.
   It is Hyprland-style Orizon compositor plumbing, disabled by default, persists
   `/system/desktop-session.conf` plus `/system/desktop-settings.conf`,
-  mirrors those central settings into `/home/orizon/.config/hypr/`, prepares
-  `/system/desktop-modules.conf` for future split packages, and
+  mirrors those central settings into `/home/orizon/.config/hypr/`, writes
+  `/system/desktop-modules.conf` for split module samples, and
   generated `/system/desktop-binds.conf` and related runtime hints, and starts
   with F1 exec terminal, F2 killactive, F3 launcher, F4 fullscreen, F5 pseudo,
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
