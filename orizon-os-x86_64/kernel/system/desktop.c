@@ -258,16 +258,50 @@ static const char *desktop_runtime_config =
     "settings-path " ORIZON_DESKTOP_SETTINGS_PATH "\n"
     "session-path " ORIZON_DESKTOP_SESSION_PATH "\n"
     "user-config-path " ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
+    "backend-path " ORIZON_DESKTOP_BACKEND_PATH "\n"
+    "protocol-path " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
     "sources 1\n"
     "source = ~/.config/hypr/orizon-local.conf\n";
+
+static const char *desktop_backend_config =
+    "# Orizon desktop compositor backend map v1\n"
+    "# Truth file for the current VM-safe Hyprland-style facade.\n"
+    "api compositor-orchestrator\n"
+    "backend-current framebuffer-vm\n"
+    "backend-current-file gui/compositor.c\n"
+    "backend-future wayland-wlroots\n"
+    "render-path software-backbuffer\n"
+    "client-model tiled-internal\n"
+    "external-wayland-clients no\n"
+    "manual-window-drag no\n"
+    "taskbar no\n"
+    "waybar installed-no future-package\n"
+    "vm-ready yes\n"
+    "hardware-validated no\n"
+    "truth hyprland-style-facade-not-upstream\n";
+
+static const char *desktop_protocol_config =
+    "# Orizon desktop internal protocol map v1\n"
+    "# Prepared split between compositor API and the current framebuffer backend.\n"
+    "protocol orizon-desktop-ipc-v0\n"
+    "transport internal-kernel-dispatch\n"
+    "messages dispatch,spawn-client,close-client,focus-client,workspace,config-keyword,query-state\n"
+    "security local-kernel-only\n"
+    "wayland no\n"
+    "wlroots no\n"
+    "xdg-shell no\n"
+    "layer-shell prepared-only\n"
+    "xwayland no\n"
+    "external-clients no\n"
+    "status prepared\n";
 
 static const char *desktop_modules_config =
     "# Orizon desktop modular packaging map v1\n"
     "# This prepares a split desktop without installing Waybar yet.\n"
     "module " ORIZON_DESKTOP_PACKAGE_CORE
-    " state=prepared kind=runtime provides=policy,session,settings,logs sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=runtime provides=policy,session,settings,logs,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE
-    " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling,backend-diagnostics current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
     " state=prepared kind=app provides=terminal-client shortcut=F1 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_TERMINAL "' install='pkg install " ORIZON_DESKTOP_PACKAGE_TERMINAL "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_SETTINGS
@@ -278,6 +312,7 @@ static const char *desktop_modules_config =
     " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
     "policy no-windows-taskbar\n"
     "policy no-free-drag-window-moving\n"
+    "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0\n"
     "install-meta package-current=" ORIZON_DESKTOP_PACKAGE "\n"
     "install-meta package-split-prepared=yes\n";
 
@@ -1902,6 +1937,16 @@ int orizon_desktop_ensure_defaults(void) {
                               desktop_modules_config) < 0) {
     rc = -1;
   }
+  if (!vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_BACKEND_PATH,
+                              desktop_backend_config) < 0) {
+    rc = -1;
+  }
+  if (!vfs_exists(ORIZON_DESKTOP_PROTOCOL_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_PROTOCOL_PATH,
+                              desktop_protocol_config) < 0) {
+    rc = -1;
+  }
   if (!vfs_exists(ORIZON_DESKTOP_STATE_PATH)) {
     policy_enabled = desktop_policy_enabled_from_file();
     if (desktop_write_session_state(policy_enabled ? "started" : "stopped",
@@ -3137,6 +3182,9 @@ int orizon_desktop_reset(char *status, size_t status_size) {
                           desktop_layers_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH, desktop_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_MODULES_PATH, desktop_modules_config);
+  desktop_write_text_file(ORIZON_DESKTOP_BACKEND_PATH, desktop_backend_config);
+  desktop_write_text_file(ORIZON_DESKTOP_PROTOCOL_PATH,
+                          desktop_protocol_config);
   desktop_write_session_state("stopped", "inactive", "reset",
                               "profile-defaults-restored");
   desktop_log_event("reset profile=" ORIZON_DESKTOP_PROFILE);
@@ -3858,6 +3906,10 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
                              ORIZON_DESKTOP_BINDS_PATH);
   desktop_append_path_status(out, out_size, &used, "runtime-state",
                              ORIZON_DESKTOP_RUNTIME_PATH);
+  desktop_append_path_status(out, out_size, &used, "backend-map",
+                             ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_append_path_status(out, out_size, &used, "protocol-map",
+                             ORIZON_DESKTOP_PROTOCOL_PATH);
   desktop_append(out, out_size, &used,
                  "\nnext: desktop recover if files are WARN, then desktop state\n");
 }
@@ -3899,6 +3951,10 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
                              ORIZON_DESKTOP_LAYERS_PATH);
   desktop_append_path_status(out, out_size, &used, "runtime-state",
                              ORIZON_DESKTOP_RUNTIME_PATH);
+  desktop_append_path_status(out, out_size, &used, "backend-map",
+                             ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_append_path_status(out, out_size, &used, "protocol-map",
+                             ORIZON_DESKTOP_PROTOCOL_PATH);
   desktop_append_path_status(out, out_size, &used, "session-state",
                              ORIZON_DESKTOP_STATE_PATH);
   desktop_append_path_status(out, out_size, &used, "session-log",
@@ -3907,6 +3963,76 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
                  "commands: desktop settings export | desktop settings sync | desktop config apply | desktop settings doctor\n");
   desktop_append(out, out_size, &used,
                  "limits: this is a Hyprland-style facade; no wlroots/Wayland backend yet and no manual window dragging.\n");
+}
+
+void orizon_desktop_format_backend(char *out, size_t out_size) {
+  char cfg[1024];
+  size_t used = 0;
+  int n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used, "Orizon desktop backend\n");
+  desktop_append(out, out_size, &used,
+                 "current-backend: framebuffer-vm\n");
+  desktop_append(out, out_size, &used,
+                 "api: compositor-orchestrator\n");
+  desktop_append(out, out_size, &used,
+                 "renderer: software-backbuffer\n");
+  desktop_append(out, out_size, &used,
+                 "clients: tiled-internal only; external-wayland-clients=no\n");
+  desktop_append(out, out_size, &used,
+                 "future-backend: wayland-wlroots prepared, not implemented\n");
+  desktop_append(out, out_size, &used,
+                 "policy: manual-window-drag=no taskbar=no waybar-installed=no\n");
+  desktop_append(out, out_size, &used,
+                 "hardware-validation: no real PC/Lenovo validation claimed\n");
+  desktop_append(out, out_size, &used,
+                 "path: " ORIZON_DESKTOP_BACKEND_PATH "\n");
+  n = desktop_read_text_file(ORIZON_DESKTOP_BACKEND_PATH, cfg, sizeof(cfg));
+  if (n > 0) {
+    desktop_append(out, out_size, &used, "\n== backend.conf ==\n");
+    desktop_append(out, out_size, &used, cfg);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "backend-map WARN missing; run desktop reset\n");
+  }
+}
+
+void orizon_desktop_format_protocol(char *out, size_t out_size) {
+  char cfg[1024];
+  size_t used = 0;
+  int n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used, "Orizon desktop protocol\n");
+  desktop_append(out, out_size, &used,
+                 "protocol: orizon-desktop-ipc-v0\n");
+  desktop_append(out, out_size, &used,
+                 "transport: internal-kernel-dispatch\n");
+  desktop_append(out, out_size, &used,
+                 "messages: dispatch spawn-client close-client focus-client workspace config-keyword query-state\n");
+  desktop_append(out, out_size, &used,
+                 "wayland: no\nwlroots: no\nxdg-shell: no\nlayer-shell: prepared-only\nxwayland: no\n");
+  desktop_append(out, out_size, &used,
+                 "status: prepared split between Orizon compositor API and framebuffer backend\n");
+  desktop_append(out, out_size, &used,
+                 "path: " ORIZON_DESKTOP_PROTOCOL_PATH "\n");
+  n = desktop_read_text_file(ORIZON_DESKTOP_PROTOCOL_PATH, cfg, sizeof(cfg));
+  if (n > 0) {
+    desktop_append(out, out_size, &used, "\n== protocol.conf ==\n");
+    desktop_append(out, out_size, &used, cfg);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "protocol-map WARN missing; run desktop reset\n");
+  }
 }
 
 void orizon_desktop_format_settings_presets(char *out, size_t out_size) {
@@ -4339,6 +4465,24 @@ void orizon_desktop_format_doctor(char *out, size_t out_size) {
   } else {
     desktop_append(out, out_size, &used,
                    "modules missing WARN run desktop reset\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_BACKEND_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "backend-map %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_BACKEND_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "backend-map missing WARN run desktop reset\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_PROTOCOL_PATH, &size, NULL) == 0 && size > 0) {
+    snprintf(line, sizeof(line), "protocol-map %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_PROTOCOL_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "protocol-map missing WARN run desktop reset\n");
     warn = 1;
   }
   if (vfs_stat(ORIZON_DESKTOP_BINDS_PATH, &size, NULL) == 0 && size > 0) {

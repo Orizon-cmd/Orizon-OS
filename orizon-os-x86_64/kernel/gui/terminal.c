@@ -3771,6 +3771,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop devices         - Show Hyprland-style input device summary\n");
     term_puts_t(term, "  desktop version         - Show desktop compatibility facade version\n");
     term_puts_t(term, "  desktop systeminfo      - Show compositor/backend/session summary\n");
+    term_puts_t(term, "  desktop backend         - Show current framebuffer backend and future split\n");
+    term_puts_t(term, "  desktop protocol        - Show internal client/compositor protocol map\n");
     term_puts_t(term, "  desktop layouts         - Show available tiling layouts\n");
     term_puts_t(term, "  desktop animations      - Show animation/runtime transition state\n");
     term_puts_t(term, "  desktop decorations     - Show border/shadow/rounding state\n");
@@ -4054,6 +4056,18 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "backend") ||
+      term_command_is(args, "backend-info")) {
+    orizon_desktop_format_backend(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "protocol") ||
+      term_command_is(args, "protocols")) {
+    orizon_desktop_format_protocol(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "layouts")) {
     gui_desktop_format_layouts(report, sizeof(report));
     term_puts_t(term, report);
@@ -4199,13 +4213,19 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(report, sizeof(report));
     } else if (term_command_is(hypr, "systeminfo")) {
       gui_desktop_format_systeminfo(report, sizeof(report));
+    } else if (term_command_is(hypr, "backend") ||
+               term_command_is(hypr, "backend-info")) {
+      orizon_desktop_format_backend(report, sizeof(report));
+    } else if (term_command_is(hypr, "protocol") ||
+               term_command_is(hypr, "protocols")) {
+      orizon_desktop_format_protocol(report, sizeof(report));
     } else if (term_command_is(hypr, "clients")) {
       gui_desktop_format_windows(report, sizeof(report));
     } else if (term_command_is(hypr, "workspaces")) {

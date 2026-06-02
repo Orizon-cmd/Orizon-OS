@@ -128,6 +128,8 @@ desktop layers
 desktop version
 desktop devices
 desktop systeminfo
+desktop backend
+desktop protocol
 desktop layouts
 desktop animations
 desktop decorations
@@ -141,6 +143,8 @@ desktop focus-history
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
+desktop hyprctl backend
+desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
@@ -343,6 +347,9 @@ including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
+`desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
+the internal `orizon-desktop-ipc-v0` protocol map, and the honest
+not-yet-Wayland/wlroots boundary,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

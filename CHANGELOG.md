@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.33.0` with architecture truth-map commands
+  `desktop backend`, `desktop protocol`, `desktop hyprctl backend`, and
+  `desktop hyprctl protocol`, backed by `/system/desktop-backend.conf` and
+  `/system/desktop-protocol.conf`; the current backend remains VM framebuffer
+  and Wayland/wlroots/upstream Hyprland stay documented as prepared-only.
 - Added desktop package version `0.32.0` with split desktop module package
   samples for `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
   `orizon-launcher`; named installs auto-prepare the core for app modules while

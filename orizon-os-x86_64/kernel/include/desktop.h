@@ -20,12 +20,14 @@
 #define ORIZON_DESKTOP_RUNTIME_PATH "/system/desktop-runtime.conf"
 #define ORIZON_DESKTOP_STATE_PATH "/system/desktop-state.conf"
 #define ORIZON_DESKTOP_MODULES_PATH "/system/desktop-modules.conf"
+#define ORIZON_DESKTOP_BACKEND_PATH "/system/desktop-backend.conf"
+#define ORIZON_DESKTOP_PROTOCOL_PATH "/system/desktop-protocol.conf"
 #define ORIZON_DESKTOP_LOG_PATH "/logs/desktop.log"
 #define ORIZON_DESKTOP_SESSION_LOG_PATH "/logs/desktop-session.log"
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.32.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.33.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"
@@ -113,6 +115,8 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size);
 void orizon_desktop_format_settings_presets(char *out, size_t out_size);
 void orizon_desktop_format_settings_doctor(char *out, size_t out_size);
 void orizon_desktop_format_modules(char *out, size_t out_size);
+void orizon_desktop_format_backend(char *out, size_t out_size);
+void orizon_desktop_format_protocol(char *out, size_t out_size);
 void orizon_desktop_format_apps(char *out, size_t out_size);
 void orizon_desktop_format_app_detail(const char *app, char *out,
                                       size_t out_size);

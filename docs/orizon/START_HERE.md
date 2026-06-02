@@ -59,7 +59,7 @@ design note.
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
   v2 state health/counters,
-  `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop backend`, `desktop protocol`, `desktop autostart`,
   `desktop windows/clients/activewindow`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`

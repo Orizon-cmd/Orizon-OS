@@ -206,6 +206,10 @@ desktop hyprctl activewindow
 desktop hyprctl focushistory
 desktop hyprctl version
 desktop hyprctl systeminfo
+desktop backend
+desktop protocol
+desktop hyprctl backend
+desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl animations

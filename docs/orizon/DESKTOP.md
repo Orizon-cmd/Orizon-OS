@@ -55,6 +55,8 @@ desktop layers
 desktop version
 desktop devices
 desktop systeminfo
+desktop backend
+desktop protocol
 desktop layouts
 desktop animations
 desktop decorations
@@ -68,6 +70,8 @@ desktop focus-history
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
+desktop hyprctl backend
+desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
@@ -336,7 +340,8 @@ runtime` expose the generated window-rule, monitor-hint, and aggregated
 runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
-input model. `desktop systeminfo`, `desktop layouts`, `desktop animations`,
+input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
+`desktop layouts`, `desktop animations`,
 `desktop render`, `desktop configerrors`, `desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
@@ -348,6 +353,15 @@ animations:tick_budget <4-60>`, `desktop keyword render:focus_ring
 <true|false>`, and `desktop settings set render-profile <name>` persist those
 values without enabling floating windows or manual dragging. It is
 Hyprland-style compositor UX, not upstream Wayland/wlroots.
+`desktop backend` and `desktop protocol` expose the architecture seam for the
+future real compositor path. Today they report `current-backend:
+framebuffer-vm`, `protocol: orizon-desktop-ipc-v0`, software backbuffer
+rendering, tiled internal clients only, no manual free-drag windows, no taskbar,
+and no Waybar package installed. They persist the truth files
+`/system/desktop-backend.conf` and `/system/desktop-protocol.conf`; the future
+target is documented as `wayland-wlroots`, but Wayland, wlroots, xdg-shell,
+real layer-shell clients, XWayland, GPU acceleration, and upstream Hyprland are
+not implemented yet.
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
@@ -368,7 +382,7 @@ dispatchers now include `togglesplit`,
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
+version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -422,8 +436,12 @@ desktop autostart terminal on|off controls startup terminal
 desktop preset <name> applies a saved symbolic session
 desktop focus on|off|toggle controls focus-follows-mouse
 desktop devices shows keyboard/pointer input state
+desktop backend shows the current framebuffer-vm backend map
+desktop protocol shows the internal orizon-desktop-ipc-v0 protocol map
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
+desktop hyprctl backend mirrors desktop backend
+desktop hyprctl protocol mirrors desktop protocol
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 ```
 
@@ -432,6 +450,8 @@ desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 - This is a Hyprland-style Orizon profile, not the real Hyprland compositor.
 - No Wayland protocol, wlroots, GPU acceleration, file manager, wallpaper
   daemon, or real external client protocol is implemented yet.
+- `desktop backend` and `desktop protocol` are truthful architecture maps, not
+  a real Wayland/wlroots backend.
 - The launcher/status bar/theme are Orizon compositor primitives, not upstream
   Hyprland plugins.
 - Workspaces, focus, clients, and `dwindle`/`master`/`monocle` placement are

@@ -3370,7 +3370,9 @@ void gui_desktop_format_render(char *out, size_t out_size) {
            "transitions: enabled=%s curve=%s budget=%d reason=%s from=%d to=%d ticks=%d progress=%d%%\n"
            "render-serial: %llu\n"
            "window-moving: manual-drag=no tiled-dispatch=yes\n"
-           "protocols: wayland=no wlroots=no layer-shell=prepared\n"
+           "backend-map: " ORIZON_DESKTOP_BACKEND_PATH "\n"
+           "protocol-map: " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
+           "protocols: wayland=no wlroots=no xdg-shell=no layer-shell=prepared-only\n"
            "truth: VM-safe Hyprland-style facade over Orizon framebuffer compositor\n",
            ui_scale, desktop_session.theme, desktop_session.wallpaper,
            accent & 0xffffff,
@@ -3397,7 +3399,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, workspaces, activeworkspace, activewindow\n"
-           "commands: monitors, binds, layers, layouts, animations, decorations, render, devices\n"
+           "commands: backend, protocol, monitors, binds, layers, layouts, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext, swapwindow\n"
@@ -3659,6 +3661,7 @@ void gui_desktop_format_systeminfo(char *out, size_t out_size) {
            "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s keyboard=%s pointer=%s\n"
            "render-state: serial=%llu focus-ring=%s transition=%s ticks=%d progress=%d%%\n"
            "protocols: wayland=no wlroots=no xwayland=no layer-shell=prepared\n"
+           "architecture: backend-map=" ORIZON_DESKTOP_BACKEND_PATH " protocol-map=" ORIZON_DESKTOP_PROTOCOL_PATH "\n"
            "truth: Hyprland-style Orizon profile, not upstream Hyprland\n",
            ORIZON_DESKTOP_PACKAGE, (unsigned long)screen_width,
            (unsigned long)screen_height, ui_scale, TOP_BAR_HEIGHT,
@@ -3699,6 +3702,8 @@ void gui_desktop_format_hyprctl_version(char *out, size_t out_size) {
            "facade: Hyprland-style compatibility commands\n"
            "desktop-package: %s " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
            "compositor: Orizon framebuffer compositor\n"
+           "backend: framebuffer-vm\n"
+           "protocol: orizon-desktop-ipc-v0\n"
            "wayland: not-implemented\n"
            "wlroots: not-embedded\n"
            "layouts: dwindle, master, monocle\n"

@@ -106,6 +106,8 @@ $commands = @(
   "desktop version",
   "desktop devices",
   "desktop systeminfo",
+  "desktop backend",
+  "desktop protocol",
   "desktop layouts",
   "desktop animations",
   "desktop decorations",
@@ -118,6 +120,8 @@ $commands = @(
   "desktop keyword general:gaps_in 9",
   "desktop hyprctl version",
   "desktop hyprctl systeminfo",
+  "desktop hyprctl backend",
+  "desktop hyprctl protocol",
   "desktop hyprctl activeworkspace",
   "desktop hyprctl layouts",
   "desktop hyprctl animations",
@@ -552,6 +556,12 @@ run_cmd() {
       ;;
     "desktop systeminfo"|"desktop hyprctl systeminfo")
       grep -q "Orizon desktop systeminfo" "`$OUT" && grep -q "not upstream Hyprland" "`$OUT" || { echo "missing desktop systeminfo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop backend"|"desktop hyprctl backend")
+      grep -q "Orizon desktop backend" "`$OUT" && grep -q "current-backend: framebuffer-vm" "`$OUT" || { echo "missing desktop backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop protocol"|"desktop hyprctl protocol")
+      grep -q "Orizon desktop protocol" "`$OUT" && grep -q "wayland: no" "`$OUT" || { echo "missing desktop protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop layouts"|"desktop hyprctl layouts")
       grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

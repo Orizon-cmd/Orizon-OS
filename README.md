@@ -60,7 +60,9 @@ le developpement noyau:
   `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
   hub de settings `/system` synchronisable avec `desktop settings paths/export/sync`,
   carte de modules `/system/desktop-modules.conf` consultable avec
-  `desktop modules`, samples modulaires generables/installables avec
+  `desktop modules`, carte backend `/system/desktop-backend.conf` consultable
+  avec `desktop backend`, et protocole interne `/system/desktop-protocol.conf`
+  consultable avec `desktop protocol`, samples modulaires generables/installables avec
   `pkg sample/install orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher`,
   `orizon-desktop-core`/`orizon-terminal`/`orizon-settings`/`orizon-launcher`
   et `orizon-waybar` seulement prevu pour plus tard,
@@ -69,8 +71,8 @@ le developpement noyau:
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
-  `desktop version/devices/keymap/systeminfo/layouts/animations/configerrors/rollinglog/focus-history`, facade
-  `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/animations/configerrors/rollinglog/focus-history`, facade
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -140,7 +142,8 @@ importe le sous-ensemble supporte vers la session, les settings, et les fichiers
 runtime inspectables `/system/desktop-binds.conf`,
 `/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
 `/system/desktop-monitors.conf`, `/system/desktop-layers.conf`,
-`/system/desktop-runtime.conf` et `/system/desktop-state.conf`. `desktop
+`/system/desktop-runtime.conf`, `/system/desktop-backend.conf`,
+`/system/desktop-protocol.conf` et `/system/desktop-state.conf`. `desktop
 start|stop|restart|reload|recover|rescue` gere la session Hyprland-style avec etat
 persistant et log `/logs/desktop-session.log`; `desktop state`, `desktop
 session`, `desktop theme`, `desktop wallpaper`, `desktop preset`, `desktop
@@ -161,11 +164,12 @@ evenement clavier, les submaps F9 resize/F10 move/F11 launch/F12 reset et le
 compteur de focus par souris quand `desktop focus on` active focus-follows-mouse.
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
-`desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`, `desktop layouts`,
+`desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`,
+`desktop backend`, `desktop protocol`, `desktop layouts`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -185,6 +189,10 @@ samples `.opkg` separes via `pkg sample <module>` et des installs nommes sur VM
 installee. Les modules app auto-preparent `orizon-desktop-core`; `orizon-waybar`
 est seulement annonce comme paquet separe ulterieur, pas genere ni installe
 maintenant.
+`desktop backend` et `desktop protocol` documentent le split d'architecture:
+backend actuel `framebuffer-vm`, protocole interne `orizon-desktop-ipc-v0`,
+future cible `wayland-wlroots` preparee, mais pas encore Wayland/wlroots,
+xdg-shell, layer-shell reel, XWayland ni clients Wayland externes.
 `desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
 detaille classe/module/surface, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les

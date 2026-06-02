@@ -3350,6 +3350,8 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop devices         show Hyprland-style input device summary\r\n"
              "  desktop version         show desktop compatibility facade version\r\n"
              "  desktop systeminfo      show compositor/backend/session summary\r\n"
+             "  desktop backend         show current framebuffer backend and future split\r\n"
+             "  desktop protocol        show internal client/compositor protocol map\r\n"
              "  desktop layouts         show available tiling layouts\r\n"
              "  desktop animations      show animation/runtime transition state\r\n"
              "  desktop decorations     show border/shadow/rounding state\r\n"
@@ -3567,6 +3569,12 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "systeminfo") ||
              ssh_shell_command_is(sub, "system-info")) {
     gui_desktop_format_systeminfo(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "backend") ||
+             ssh_shell_command_is(sub, "backend-info")) {
+    orizon_desktop_format_backend(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "protocol") ||
+             ssh_shell_command_is(sub, "protocols")) {
+    orizon_desktop_format_protocol(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "layouts")) {
     gui_desktop_format_layouts(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "animations")) {
@@ -3663,11 +3671,17 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
       gui_desktop_format_systeminfo(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "backend") ||
+               ssh_shell_command_is(hypr, "backend-info")) {
+      orizon_desktop_format_backend(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "protocol") ||
+               ssh_shell_command_is(hypr, "protocols")) {
+      orizon_desktop_format_protocol(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "clients")) {
       gui_desktop_format_windows(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "workspaces")) {

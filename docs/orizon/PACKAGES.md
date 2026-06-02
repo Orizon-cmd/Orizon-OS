@@ -126,6 +126,8 @@ desktop layers
 desktop version
 desktop devices
 desktop systeminfo
+desktop backend
+desktop protocol
 desktop layouts
 desktop animations
 desktop decorations
@@ -139,6 +141,8 @@ desktop focus-history
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
+desktop hyprctl backend
+desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
@@ -197,12 +201,13 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.32.0` because it includes policy/config files, the persisted session
+`0.33.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
-commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
+commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
+`/system/desktop-protocol.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
-`hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
+`hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
@@ -273,6 +278,13 @@ writes separate `.opkg` files, `pkg install <module>` is accepted by name on an
 installed VM, app modules auto-prepare `orizon-desktop-core`, and
 `pkg info/search` report sample/install paths. `orizon-waybar` remains a
 future separate package only and is not generated or installed.
+Version `0.33.0` adds the desktop architecture truth map:
+`desktop backend`, `desktop protocol`, `desktop hyprctl backend`, and
+`desktop hyprctl protocol`, backed by `/system/desktop-backend.conf` and
+`/system/desktop-protocol.conf`. These commands document the current
+`framebuffer-vm` backend and internal `orizon-desktop-ipc-v0` dispatcher
+protocol while keeping Wayland/wlroots/upstream Hyprland marked prepared-only
+and not implemented.
 
 ## Package Format
 
