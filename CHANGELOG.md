@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.27.0` with broader Hyprland-style config
+  hint preservation for input repeat/touchpad, decoration blur/shadow, cursor,
+  render, debug, device, plugin, permission, group, gestures, xwayland, and
+  ecosystem keys.
 - Added desktop package version `0.26.0` with Hyprland-style directional
   tiled focus/swap dispatchers: `movefocus l|r|u|d` and
   `swapwindow l|r|u|d`, plus generated arrow/H-L binds and package metadata.

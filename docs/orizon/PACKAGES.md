@@ -171,7 +171,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.26.0` because it includes policy/config files, the persisted session
+`0.27.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -213,6 +213,12 @@ slots, adds `workspace next`, `workspace empty`, relative wrap-around targets,
 Version `0.26.0` adds Hyprland-style directional tiled focus and swap:
 `movefocus l|r|u|d`, `swapwindow l|r|u|d`, generated arrow/H-L binds, and package
 metadata for these dispatchers. It still does not enable manual window dragging.
+Version `0.27.0` expands the Hyprland-style config bridge with
+`input:repeat_*`, touchpad, border color, decoration blur/shadow, cursor,
+render, debug, device, plugin, permission, group, gestures, xwayland, and
+ecosystem runtime hints. These keys are inspectable through
+`desktop config doctor`, `desktop runtime`, and `desktop hyprctl getoption`, but
+remain honest runtime intent until Orizon grows the real Wayland backend.
 
 ## Package Format
 

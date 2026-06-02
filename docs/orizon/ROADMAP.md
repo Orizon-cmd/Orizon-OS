@@ -52,7 +52,7 @@
   workspaces with next/empty targets, fullscreen/pseudo/pinned client state, directional `movefocus`/`swapwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
+  preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/state`,
   keyword/getoption/reload runtime inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,

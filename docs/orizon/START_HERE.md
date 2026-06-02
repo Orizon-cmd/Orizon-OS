@@ -51,7 +51,7 @@ design note.
   plus split/master ratio layout messages, directional movefocus/swapwindow,
   workspace next/empty targets, and
   silent move-to-workspace dispatch,
-  preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
+  preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/state` session-manager commands,
   `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,

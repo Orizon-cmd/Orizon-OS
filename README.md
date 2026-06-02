@@ -157,6 +157,10 @@ instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
 `desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
+Le parser conserve maintenant aussi les familles `input`, `device`,
+`decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
+`plugin` et `permission` comme hints runtime inspectables quand Orizon ne sait
+pas encore les appliquer comme un vrai backend Wayland.
 `desktop render` detaille le focus ring, les shadows, les transitions
 workspace/layout/focus et le backend framebuffer logiciel sans pretendre fournir
 Wayland/wlroots.

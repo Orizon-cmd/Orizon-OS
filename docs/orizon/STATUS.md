@@ -59,7 +59,7 @@ work.
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
-  preserved `layerrule`/`bindm`/`bindl`/animation/input hints
+  preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints
   without default free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/state`
   with `/system/desktop-state.conf` and `/logs/desktop-session.log`,

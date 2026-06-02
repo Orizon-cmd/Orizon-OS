@@ -285,10 +285,10 @@ session/settings files plus generated runtime hint files such as
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`, and
 `/system/desktop-layers.conf`, `/system/desktop-runtime.conf`, and
 `/system/desktop-state.conf`.
-`layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and input/misc/layout
-hints are preserved there until the real Wayland backend exists; mouse binds
-are parsed for compatibility without enabling free-drag window moving by
-default.
+`layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and
+input/device/decoration/cursor/render/debug/misc/layout hints are preserved
+there until the real Wayland backend exists; mouse binds are parsed for
+compatibility without enabling free-drag window moving by default.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,

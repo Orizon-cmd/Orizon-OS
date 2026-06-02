@@ -184,14 +184,19 @@ it is not installed now and no Windows-style taskbar is added.
 `/home/orizon/.config/hypr/orizon-hypr.conf`. It understands common Hyprland
 shape such as variables, section blocks, `monitor`, `bind`, `exec-once`, `env`,
 `workspace`, `windowrule`, `source`, and `submap`, and reports what is supported today,
-persisted as runtime hints, ignored, or malformed. `desktop config apply`
+persisted as runtime hints, ignored, or malformed. It now keeps additional
+Hyprland-style families such as `device`, `decoration`, `cursor`, `render`,
+`debug`, `group`, `plugin`, `permission`, `gestures`, `xwayland`, and
+`ecosystem` as inspectable runtime hints when Orizon does not have the real
+Wayland implementation yet. `desktop config apply`
 imports the supported subset into Orizon's runtime files: layout, gaps, border
 size, rounding, shadows, animations, keyboard layout, focus-follows-mouse, and
 terminal autostart. It also rewrites the generated Hyprland-style runtime files
 for binds, autostart, window rules, monitor hints, env/workspace/source intent.
 It also keeps `layerrule`, `bindm`/`bindl`, `bezier`, `animation`, input,
-misc, dwindle, and master hints as inspectable runtime state without pretending
-they are already real Wayland/wlroots features. Mouse binds are parsed for
+device, decoration, cursor, render, debug, misc, dwindle, and master hints as
+inspectable runtime state without pretending they are already real
+Wayland/wlroots features. Mouse binds are parsed for
 compatibility, but Orizon does not enable free-drag window moving by default.
 Those files make the config inspectable over SSH while the compositor grows the
 corresponding real Wayland features.

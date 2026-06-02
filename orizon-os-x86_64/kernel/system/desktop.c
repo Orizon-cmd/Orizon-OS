@@ -76,15 +76,25 @@ static const char *desktop_user_config =
     "exec-once = terminal\n"
     "input:kb_layout = us\n"
     "input:follow_mouse = 0\n"
+    "input:repeat_rate = 40\n"
+    "input:repeat_delay = 300\n"
+    "input:touchpad:natural_scroll = false\n"
     "general:layout = dwindle\n"
     "general:gaps_in = 6\n"
     "general:gaps_out = 12\n"
     "general:border_size = 2\n"
+    "general:col.active_border = rgba(8bd5ffcc)\n"
+    "general:col.inactive_border = rgba(2a2f3acc)\n"
     "decoration:rounding = 8\n"
     "decoration:shadow:enabled = true\n"
+    "decoration:shadow:range = 18\n"
+    "decoration:blur:enabled = false\n"
     "animations:enabled = true\n"
     "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
     "animation = windows, 1, 2, orizon-pop\n"
+    "cursor:no_hardware_cursors = true\n"
+    "render:direct_scanout = false\n"
+    "debug:disable_logs = false\n"
     "misc:disable_hyprland_logo = false\n"
     "misc:force_default_wallpaper = 0\n"
     "windowrulev2 = tile,class:^(orizon-.*)$\n"
@@ -228,6 +238,10 @@ static const char *desktop_runtime_config =
     "workspace-hints 0\n"
     "layout-hints 0\n"
     "input-hints 0\n"
+    "decoration-hints 0\n"
+    "cursor-hints 0\n"
+    "render-hints 0\n"
+    "debug-hints 0\n"
     "animation-hints 0\n"
     "submap = default\n"
     "settings-hub yes\n"
@@ -489,6 +503,11 @@ typedef struct {
   int animation_rules;
   int input_hints;
   int layout_hints;
+  int decoration_hints;
+  int cursor_hints;
+  int render_hints;
+  int debug_hints;
+  int device_hints;
   int misc_hints;
   int mouse_binds;
   int locked_binds;
@@ -605,12 +624,16 @@ static int desktop_hypr_key_value(const char *line, char *key,
 
 static int desktop_hypr_key_global(const char *key) {
   return strncmp(key, "bind", 4) == 0 || strcmp(key, "monitor") == 0 ||
-         strcmp(key, "env") == 0 || strcmp(key, "exec-once") == 0 ||
+         strcmp(key, "env") == 0 || strcmp(key, "exec") == 0 ||
+         strcmp(key, "exec-once") == 0 ||
+         strcmp(key, "exec-shutdown") == 0 ||
          strcmp(key, "windowrule") == 0 ||
          strcmp(key, "windowrulev2") == 0 || strcmp(key, "layerrule") == 0 ||
          strcmp(key, "workspace") == 0 || strcmp(key, "source") == 0 ||
          strcmp(key, "submap") == 0 || strcmp(key, "bezier") == 0 ||
-         strcmp(key, "animation") == 0 || key[0] == '$';
+         strcmp(key, "animation") == 0 || strcmp(key, "plugin") == 0 ||
+         strcmp(key, "permission") == 0 || strcmp(key, "blurls") == 0 ||
+         key[0] == '$';
 }
 
 static void desktop_hypr_join_key(char sections[][32], int depth,
@@ -783,6 +806,16 @@ static int desktop_hypr_key_runtime_hint(const char *key) {
          strncmp(key, "decoration:", 11) == 0 ||
          strncmp(key, "animations:", 11) == 0 ||
          strncmp(key, "input:", 6) == 0 || strncmp(key, "misc:", 5) == 0 ||
+         strncmp(key, "cursor:", 7) == 0 ||
+         strncmp(key, "render:", 7) == 0 ||
+         strncmp(key, "debug:", 6) == 0 ||
+         strncmp(key, "opengl:", 7) == 0 ||
+         strncmp(key, "device:", 7) == 0 ||
+         strncmp(key, "plugin:", 7) == 0 ||
+         strncmp(key, "permission:", 11) == 0 ||
+         strncmp(key, "group:", 6) == 0 ||
+         strncmp(key, "binds:", 6) == 0 ||
+         strncmp(key, "ecosystem:", 10) == 0 ||
          strncmp(key, "dwindle:", 8) == 0 ||
          strncmp(key, "master:", 7) == 0 ||
          strncmp(key, "gestures:", 9) == 0 ||
@@ -799,7 +832,8 @@ static const char *desktop_hypr_runtime_path_for_key(const char *key) {
   if (strncmp(key, "bind", 4) == 0) {
     return ORIZON_DESKTOP_BINDS_PATH;
   }
-  if (strcmp(key, "exec-once") == 0) {
+  if (strcmp(key, "exec-once") == 0 || strcmp(key, "exec") == 0 ||
+      strcmp(key, "exec-shutdown") == 0) {
     return ORIZON_DESKTOP_AUTOSTART_PATH;
   }
   if (strcmp(key, "windowrule") == 0 || strcmp(key, "windowrulev2") == 0) {
@@ -932,10 +966,12 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
     }
     return 0;
   }
-  if (strcmp(key, "exec-once") == 0) {
+  if (strcmp(key, "exec-once") == 0 || strcmp(key, "exec") == 0 ||
+      strcmp(key, "exec-shutdown") == 0) {
     summary->exec_once++;
     summary->prepared_keywords++;
-    if (apply && strstr(value, "terminal") && session) {
+    if (apply && strcmp(key, "exec-once") == 0 && strstr(value, "terminal") &&
+        session) {
       session->autostart_terminal = 1;
       applied = 1;
     }
@@ -1000,6 +1036,17 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
   }
   if (strcmp(key, "submap") == 0) {
     summary->submaps++;
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
+                                  &runtime->runtime_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "plugin") == 0 || strcmp(key, "permission") == 0 ||
+      strcmp(key, "blurls") == 0) {
+    summary->misc_hints++;
     summary->prepared_keywords++;
     if (apply && runtime) {
       desktop_hypr_runtime_append(runtime->runtime, sizeof(runtime->runtime),
@@ -1081,13 +1128,34 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
   }
 
   if (!supported && desktop_hypr_key_runtime_hint(key)) {
-    if (strncmp(key, "input:", 6) == 0) {
+    if (strncmp(key, "input:", 6) == 0 ||
+        strncmp(key, "device:", 7) == 0) {
       summary->input_hints++;
+      if (strncmp(key, "device:", 7) == 0) {
+        summary->device_hints++;
+      }
     } else if (strncmp(key, "dwindle:", 8) == 0 ||
                strncmp(key, "master:", 7) == 0 ||
-               strncmp(key, "general:", 8) == 0) {
+               strncmp(key, "general:", 8) == 0 ||
+               strncmp(key, "group:", 6) == 0 ||
+               strncmp(key, "binds:", 6) == 0) {
       summary->layout_hints++;
+    } else if (strncmp(key, "decoration:", 11) == 0) {
+      summary->decoration_hints++;
+    } else if (strncmp(key, "cursor:", 7) == 0) {
+      summary->cursor_hints++;
+    } else if (strncmp(key, "render:", 7) == 0 ||
+               strncmp(key, "opengl:", 7) == 0) {
+      summary->render_hints++;
+    } else if (strncmp(key, "debug:", 6) == 0) {
+      summary->debug_hints++;
     } else if (strncmp(key, "misc:", 5) == 0) {
+      summary->misc_hints++;
+    } else if (strncmp(key, "plugin:", 7) == 0 ||
+               strncmp(key, "permission:", 11) == 0 ||
+               strncmp(key, "ecosystem:", 10) == 0 ||
+               strncmp(key, "gestures:", 9) == 0 ||
+               strncmp(key, "xwayland:", 9) == 0) {
       summary->misc_hints++;
     }
     summary->prepared_keywords++;
@@ -1294,15 +1362,25 @@ static int desktop_write_user_config_from_state(
            "%s"
            "input:kb_layout = %s\n"
            "input:follow_mouse = %d\n"
+           "input:repeat_rate = 40\n"
+           "input:repeat_delay = 300\n"
+           "input:touchpad:natural_scroll = false\n"
            "general:layout = %s\n"
            "general:gaps_in = %d\n"
            "general:gaps_out = %d\n"
            "general:border_size = %d\n"
+           "general:col.active_border = rgba(8bd5ffcc)\n"
+           "general:col.inactive_border = rgba(2a2f3acc)\n"
            "decoration:rounding = %d\n"
            "decoration:shadow:enabled = %s\n"
+           "decoration:shadow:range = 18\n"
+           "decoration:blur:enabled = false\n"
            "animations:enabled = %s\n"
            "bezier = orizon-pop, 0.16, 1, 0.3, 1\n"
            "animation = windows, 1, 2, orizon-pop\n"
+           "cursor:no_hardware_cursors = true\n"
+           "render:direct_scanout = false\n"
+           "debug:disable_logs = false\n"
            "misc:disable_hyprland_logo = false\n"
            "misc:force_default_wallpaper = 0\n"
            "windowrulev2 = tile,class:^(orizon-.*)$\n"
@@ -2705,9 +2783,11 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.sources, summary.submaps);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "runtime-hints: input=%d layout=%d animations=%d misc=%d\n",
-           summary.input_hints, summary.layout_hints,
-           summary.animation_rules, summary.misc_hints);
+           "runtime-hints: input=%d device=%d layout=%d decoration=%d animations=%d cursor=%d render=%d debug=%d misc=%d\n",
+           summary.input_hints, summary.device_hints, summary.layout_hints,
+           summary.decoration_hints, summary.animation_rules,
+           summary.cursor_hints, summary.render_hints, summary.debug_hints,
+           summary.misc_hints);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "apply-support: settings=%d prepared=%d ignored=%d\n",
@@ -2717,7 +2797,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled; animations:enabled; input:kb_layout,follow_mouse; exec-once terminal\n");
   desktop_append(out, out_size, &used,
-                 "runtime-hints: monitor, bind/bindm/bindl/bindr, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/misc/dwindle/master hints -> /system/desktop-*.conf\n");
+                 "runtime-hints: monitor, bind/bindm/bindl/bindr, exec/exec-once, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/device/decoration/cursor/render/debug/misc/dwindle/master/group hints -> /system/desktop-*.conf\n");
   desktop_append(out, out_size, &used,
                  "apply: desktop config apply  # writes supported values into session/settings\n");
   snprintf(line, sizeof(line), "summary: %s\n",
@@ -2767,9 +2847,11 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
                    "errors: malformed lines detected; run desktop config doctor for details\n");
   }
   snprintf(line, sizeof(line),
-           "prepared-detail: layerrules=%d animations=%d input-hints=%d layout-hints=%d misc-hints=%d\n",
+           "prepared-detail: layerrules=%d animations=%d input-hints=%d device-hints=%d layout-hints=%d decoration-hints=%d cursor-hints=%d render-hints=%d debug-hints=%d misc-hints=%d\n",
            summary.layerrules, summary.animation_rules, summary.input_hints,
-           summary.layout_hints, summary.misc_hints);
+           summary.device_hints, summary.layout_hints,
+           summary.decoration_hints, summary.cursor_hints,
+           summary.render_hints, summary.debug_hints, summary.misc_hints);
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "notes: unsupported but safe Hyprland keywords are reported as ignored/prepared, not hard errors\n");

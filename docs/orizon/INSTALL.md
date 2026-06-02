@@ -129,7 +129,8 @@ keep that central `/system` hub aligned with
 `/home/orizon/.config/hypr/orizon-hypr.conf` and generated runtime hints.
 `desktop config apply` also generates inspectable runtime hints for binds,
 autostart, rules, monitors, layer rules, env/workspace/source intent,
-animation/bezier hints and input/misc/layout hints under `/system`.
+animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
+hints under `/system`.
 `desktop start|stop|restart|reload|recover` writes session-manager state to
 `/system/desktop-state.conf` and logs lifecycle events in
 `/logs/desktop-session.log`.
