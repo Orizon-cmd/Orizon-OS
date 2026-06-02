@@ -21,6 +21,7 @@ desktop stop
 desktop restart
 desktop reload
 desktop recover
+desktop rescue
 desktop state
 desktop session
 desktop settings
@@ -230,12 +231,14 @@ compositor. Current built-in theme/wallpaper/layout names are simple symbolic
 profiles such as `graphite`, `moss`, `ember`, `frost`, `aurora`, `dawn`,
 `noir`, `dwindle`, `master`, and `monocle`.
 
-`desktop start`, `desktop stop`, `desktop restart`, `desktop reload`, and
-`desktop recover` provide a small session manager. It writes
-`/system/desktop-state.conf`, appends `/logs/desktop-session.log`, records
-live/install boot mode, keeps terminal autostart explicit, and never enables
-free-drag window moving. `desktop state` dumps the state and session log over
-console or SSH.
+`desktop start`, `desktop stop`, `desktop restart`, `desktop reload`,
+`desktop recover`, and `desktop rescue` provide a small session manager. It
+writes `/system/desktop-state.conf`, appends `/logs/desktop-session.log`,
+records live/install boot mode, desired/runtime/policy health, lifecycle
+counters, recovery commands, terminal autostart, and never enables free-drag
+window moving. `desktop state` dumps the state and session log over console or
+SSH. `desktop rescue` is read-only: it prints a recovery checklist, file
+health, and the safe next commands before `desktop recover` rewrites anything.
 
 `desktop settings` is the system-wide settings layer for the desktop
 environment. It is written to `/system/desktop-settings.conf` when the desktop

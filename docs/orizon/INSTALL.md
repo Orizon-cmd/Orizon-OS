@@ -131,9 +131,11 @@ keep that central `/system` hub aligned with
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-`desktop start|stop|restart|reload|recover` writes session-manager state to
-`/system/desktop-state.conf` and logs lifecycle events in
-`/logs/desktop-session.log`.
+`desktop start|stop|restart|reload|recover|rescue` writes or inspects
+session-manager state in `/system/desktop-state.conf` and logs lifecycle events
+in `/logs/desktop-session.log`. `desktop rescue` is non-destructive and reports
+state health, live/install mode, policy, and file checks before `desktop
+recover` repairs/reapplies the session.
 The model is closer to Hyprland dispatchers and automatic tiling than to a
 mouse-drag window desktop. The same profile can be installed later through
 packages:
@@ -146,6 +148,7 @@ pkg simulate /workspace/packages/orizon-desktop-hypr.opkg
 pkg install /workspace/packages/orizon-desktop-hypr.opkg
 desktop start
 desktop state
+desktop rescue
 desktop session
 desktop settings
 desktop settings paths

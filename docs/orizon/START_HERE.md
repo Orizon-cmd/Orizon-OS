@@ -53,7 +53,8 @@ design note.
   silent move-to-workspace dispatch,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving,
-  `desktop start/stop/restart/reload/recover/state` session-manager commands,
+  `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
+  v2 state health/counters,
   `desktop hyprctl version/systeminfo/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, `desktop autostart`,
   `desktop windows/clients/activewindow`, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.

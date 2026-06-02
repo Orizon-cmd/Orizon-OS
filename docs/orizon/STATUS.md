@@ -61,8 +61,8 @@ work.
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints
   without default free-drag window moving,
-  session-manager commands `desktop start/stop/restart/reload/recover/state`
-  with `/system/desktop-state.conf` and `/logs/desktop-session.log`,
+  session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`
+  with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
   runtime keyword/getoption/reload inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, software focus ring, ticked focus/workspace/layout transition state, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor.

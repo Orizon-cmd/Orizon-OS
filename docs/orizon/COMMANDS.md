@@ -92,6 +92,7 @@ desktop stop
 desktop restart
 desktop reload
 desktop recover
+desktop rescue
 desktop state
 desktop session
 desktop settings
@@ -276,9 +277,12 @@ recreates only missing defaults under `/workspace/.orizon`, `/home/orizon`,
 not upstream Hyprland/Wayland yet. The live ISO keeps it disabled by default.
 Use `desktop start` or `pkg install orizon-desktop-hypr` to start the
 compositor desktop session; `desktop enable` remains a compatibility alias.
-`desktop stop`, `desktop restart`, `desktop reload`, `desktop recover`, and
-`desktop state` manage `/system/desktop-state.conf` and
-`/logs/desktop-session.log`. `desktop config doctor` validates the Hyprland-style
+`desktop stop`, `desktop restart`, `desktop reload`, `desktop recover`,
+`desktop rescue`, and `desktop state` manage `/system/desktop-state.conf` and
+`/logs/desktop-session.log`. The state file now records health,
+desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
+and recovery commands. `desktop rescue` is read-only and prints the safe
+checklist before `desktop recover` repairs/reapplies anything. `desktop config doctor` validates the Hyprland-style
 user config, and `desktop config apply` imports the supported subset into the
 session/settings files plus generated runtime hint files such as
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,

@@ -272,14 +272,28 @@ static const char *desktop_modules_config =
     "install-meta package-split-prepared=yes\n";
 
 static const char *desktop_state_config =
-    "# Orizon desktop session manager state v1\n"
+    "# Orizon desktop session manager state v2\n"
+    "schema-version 2\n"
+    "health PASS\n"
     "desired-state stopped\n"
     "runtime-state inactive\n"
     "last-action defaults\n"
     "last-ticks 0\n"
     "boot-mode unknown\n"
+    "installed-marker unknown\n"
+    "policy disabled\n"
     "autostart-terminal yes\n"
+    "focus-follows-mouse no\n"
+    "layout dwindle\n"
+    "start-count 0\n"
+    "stop-count 0\n"
+    "restart-count 0\n"
+    "reload-count 0\n"
+    "recover-count 0\n"
+    "crash-count 0\n"
     "crash-recover ready\n"
+    "recover-command desktop recover\n"
+    "rescue-command desktop rescue\n"
     "manual-window-drag no\n";
 
 static void desktop_append(char *out, size_t out_size, size_t *used,
@@ -1519,13 +1533,33 @@ static int desktop_policy_enabled_from_file(void) {
              : 0;
 }
 
+static int desktop_state_counter(const char *key) {
+  char cfg[1024];
+  char value[32];
+
+  if (!key || desktop_read_text_file(ORIZON_DESKTOP_STATE_PATH, cfg,
+                                     sizeof(cfg)) <= 0) {
+    return 0;
+  }
+  desktop_session_get_value(cfg, key, value, sizeof(value), "0");
+  return desktop_parse_int_value(value, 0);
+}
+
 static int desktop_write_session_state(const char *desired,
                                        const char *runtime,
                                        const char *action,
                                        const char *note) {
-  char text[768];
+  char text[1280];
   orizon_desktop_session_t session;
   int installed;
+  int policy_enabled;
+  int start_count;
+  int stop_count;
+  int restart_count;
+  int reload_count;
+  int recover_count;
+  int crash_count;
+  const char *health = "PASS";
 
   if (!desired) {
     desired = "stopped";
@@ -1541,24 +1575,68 @@ static int desktop_write_session_state(const char *desired,
   }
   orizon_desktop_load_session(&session);
   installed = orizon_system_is_installed();
+  policy_enabled = desktop_policy_enabled_from_file();
+  start_count = desktop_state_counter("start-count");
+  stop_count = desktop_state_counter("stop-count");
+  restart_count = desktop_state_counter("restart-count");
+  reload_count = desktop_state_counter("reload-count");
+  recover_count = desktop_state_counter("recover-count");
+  crash_count = desktop_state_counter("crash-count");
+
+  if (strcmp(action, "start") == 0) {
+    start_count++;
+  } else if (strcmp(action, "stop") == 0) {
+    stop_count++;
+  } else if (strcmp(action, "restart") == 0) {
+    restart_count++;
+  } else if (strcmp(action, "reload") == 0) {
+    reload_count++;
+  } else if (strcmp(action, "recover") == 0) {
+    recover_count++;
+  }
+  if ((strcmp(desired, "started") == 0 && !policy_enabled) ||
+      (strcmp(desired, "started") == 0 && strcmp(runtime, "active") != 0) ||
+      (strcmp(desired, "stopped") == 0 && strcmp(runtime, "inactive") != 0)) {
+    health = "WARN";
+  }
+
   snprintf(text, sizeof(text),
-           "# Orizon desktop session manager state v1\n"
+           "# Orizon desktop session manager state v2\n"
+           "schema-version 2\n"
+           "health %s\n"
            "desired-state %s\n"
            "runtime-state %s\n"
            "last-action %s\n"
            "last-ticks %lu\n"
            "boot-mode %s\n"
+           "installed-marker %s\n"
+           "policy %s\n"
            "autostart-terminal %s\n"
            "focus-follows-mouse %s\n"
            "layout %s\n"
+           "start-count %d\n"
+           "stop-count %d\n"
+           "restart-count %d\n"
+           "reload-count %d\n"
+           "recover-count %d\n"
+           "crash-count %d\n"
            "crash-recover ready\n"
            "recover-command desktop recover\n"
+           "rescue-command desktop rescue\n"
+           "config-apply-command desktop config apply\n"
+           "settings-doctor-command desktop settings doctor\n"
+           "state-path " ORIZON_DESKTOP_STATE_PATH "\n"
+           "session-log " ORIZON_DESKTOP_SESSION_LOG_PATH "\n"
            "manual-window-drag no\n"
            "note %s\n",
-           desired, runtime, action, (unsigned long)timer_ticks(),
+           health, desired, runtime, action, (unsigned long)timer_ticks(),
            installed ? "installed" : "live-iso",
+           installed ? "present" : "missing",
+           policy_enabled ? "enabled" : "disabled",
            session.autostart_terminal ? "yes" : "no",
-           session.focus_follows_mouse ? "yes" : "no", session.layout, note);
+           session.focus_follows_mouse ? "yes" : "no", session.layout,
+           start_count, stop_count, restart_count, reload_count, recover_count,
+           crash_count, note);
   desktop_session_log_event(action, runtime, note);
   return desktop_write_text_file(ORIZON_DESKTOP_STATE_PATH, text);
 }
@@ -2473,6 +2551,13 @@ int orizon_desktop_session_manager(const char *action, char *status,
   desktop_ensure_dirs();
   orizon_desktop_ensure_defaults();
 
+  if (strcmp(action, "rescue") == 0) {
+    if (status && status_size) {
+      orizon_desktop_format_session_rescue(status, status_size);
+    }
+    return 0;
+  }
+
   if (strcmp(action, "start") == 0) {
     rc = orizon_desktop_set_enabled(1, NULL, 0);
     apply_rc = orizon_desktop_apply_hypr_config(apply_report,
@@ -2515,9 +2600,14 @@ int orizon_desktop_session_manager(const char *action, char *status,
   } else {
     if (status && status_size) {
       snprintf(status, status_size,
-               "usage: desktop start|stop|restart|reload|recover\n");
+               "usage: desktop start|stop|restart|reload|recover|rescue\n");
     }
     return -EINVAL;
+  }
+
+  if (strcmp(action, "stop") != 0 && apply_rc != 0) {
+    runtime = orizon_desktop_is_enabled() ? "degraded" : "standby-degraded";
+    note = "config-apply-warn-run-desktop-rescue";
   }
 
   if (desktop_write_session_state(desired, runtime, action, note) < 0) {
@@ -2528,16 +2618,25 @@ int orizon_desktop_session_manager(const char *action, char *status,
   if (status && status_size) {
     snprintf(status, status_size,
              "desktop session-manager: %s\n"
+             "health: %s\n"
              "desired-state: %s\nruntime-state: %s\n"
              "boot-mode: %s\n"
+             "installed-marker: %s\n"
              "policy: %s\n"
              "config-apply: %s\n"
              "state: %s\nsession-log: %s\n"
              "autostart: terminal=%s launcher=recorded\n"
              "manual-window-drag: no\n"
-             "recover: desktop recover\n",
-             action, desired, runtime,
+             "recover: desktop recover\n"
+             "rescue: desktop rescue\n",
+             action, strcmp(runtime, "active") == 0 ||
+                         (strcmp(desired, "stopped") == 0 &&
+                          strcmp(runtime, "inactive") == 0)
+                         ? "PASS"
+                         : "WARN",
+             desired, runtime,
              orizon_system_is_installed() ? "installed" : "live-iso",
+             orizon_system_is_installed() ? "present" : "missing",
              orizon_desktop_is_enabled() ? "enabled" : "disabled",
              apply_rc == 0 ? "ok" : (strcmp(action, "stop") == 0 ? "skipped"
                                                                    : "warn"),
@@ -2690,7 +2789,7 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "apps: desktop launch terminal|settings|logs|packages|update; F2/killactive\n");
   desktop_append(out, out_size, &used,
-                 "admin: desktop start | desktop stop | desktop restart | desktop reload | desktop recover | desktop settings | desktop doctor | desktop logs\n");
+                 "admin: desktop start | desktop stop | desktop restart | desktop reload | desktop recover | desktop rescue | desktop settings | desktop doctor | desktop logs\n");
 }
 
 void orizon_desktop_format_config(char *out, size_t out_size) {
@@ -3063,7 +3162,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
-                 "manager: desktop start|stop|restart|reload|recover | desktop state\n");
+                 "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
                  "hyprctl: desktop hyprctl version|systeminfo|clients|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
   desktop_append(out, out_size, &used,
@@ -3085,9 +3184,11 @@ void orizon_desktop_format_session_state(char *out, size_t out_size) {
   orizon_desktop_ensure_defaults();
   desktop_append(out, out_size, &used, "Orizon desktop session manager\n");
   desktop_append(out, out_size, &used,
-                 "commands: desktop start | desktop stop | desktop restart | desktop reload | desktop recover\n");
+                 "commands: desktop start | desktop stop | desktop restart | desktop reload | desktop recover | desktop rescue\n");
   desktop_append(out, out_size, &used,
                  "scope: Hyprland-style compositor facade, VM/ZimaOS-safe\n");
+  desktop_append(out, out_size, &used,
+                 "health: PASS means desired/runtime/policy are coherent; WARN means use desktop rescue/recover\n");
   desktop_append(out, out_size, &used,
                  "manual-window-drag: no\n");
   desktop_append(out, out_size, &used, "state-path: ");
@@ -3190,6 +3291,79 @@ static void desktop_append_path_status(char *out, size_t out_size,
            path ? path : "none", ok ? "PASS" : "WARN",
            (unsigned long)(ok ? size : 0));
   desktop_append(out, out_size, used, line);
+}
+
+void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
+  char state[1024];
+  char desired[32];
+  char runtime[32];
+  char health[32];
+  char policy[32];
+  char line[192];
+  size_t used = 0;
+  int n;
+  int installed;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  installed = orizon_system_is_installed();
+  n = desktop_read_text_file(ORIZON_DESKTOP_STATE_PATH, state, sizeof(state));
+  if (n <= 0) {
+    snprintf(state, sizeof(state), "%s", desktop_state_config);
+  }
+  desktop_session_get_value(state, "desired-state", desired, sizeof(desired),
+                            "unknown");
+  desktop_session_get_value(state, "runtime-state", runtime, sizeof(runtime),
+                            "unknown");
+  desktop_session_get_value(state, "health", health, sizeof(health), "WARN");
+  desktop_session_get_value(state, "policy", policy, sizeof(policy),
+                            orizon_desktop_is_enabled() ? "enabled"
+                                                        : "disabled");
+
+  desktop_append(out, out_size, &used, "Orizon desktop rescue\n");
+  desktop_append(out, out_size, &used,
+                 "scope: non-destructive Hyprland-style session recovery checklist\n");
+  snprintf(line, sizeof(line),
+           "summary: health=%s desired=%s runtime=%s policy=%s boot=%s\n",
+           health, desired, runtime, policy,
+           installed ? "installed" : "live-iso");
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "safe-actions:\n"
+                 "  desktop state              inspect manager state/log\n"
+                 "  desktop recover            rewrite defaults and reapply config\n"
+                 "  desktop config doctor      inspect Hyprland-style config\n"
+                 "  desktop settings doctor    inspect /system desktop settings\n"
+                 "  desktop settings sync      export /system settings and refresh runtime hints\n"
+                 "  desktop stop               disable policy without deleting config\n"
+                 "  desktop start              enable policy and apply config\n");
+  desktop_append(out, out_size, &used,
+                 installed ? "persistence: installed VM marker present\n"
+                           : "persistence: live ISO/unmarked; install VM before relying on durable state\n");
+  desktop_append(out, out_size, &used,
+                 "limits: no Waybar package installed now; no taskbar/menu-start; no free-drag window moving\n");
+  desktop_append(out, out_size, &used, "\n== files ==\n");
+  desktop_append_path_status(out, out_size, &used, "policy",
+                             ORIZON_DESKTOP_CONFIG_PATH);
+  desktop_append_path_status(out, out_size, &used, "session",
+                             ORIZON_DESKTOP_SESSION_PATH);
+  desktop_append_path_status(out, out_size, &used, "settings",
+                             ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_append_path_status(out, out_size, &used, "state",
+                             ORIZON_DESKTOP_STATE_PATH);
+  desktop_append_path_status(out, out_size, &used, "session-log",
+                             ORIZON_DESKTOP_SESSION_LOG_PATH);
+  desktop_append_path_status(out, out_size, &used, "user-config",
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append_path_status(out, out_size, &used, "binds-runtime",
+                             ORIZON_DESKTOP_BINDS_PATH);
+  desktop_append_path_status(out, out_size, &used, "runtime-state",
+                             ORIZON_DESKTOP_RUNTIME_PATH);
+  desktop_append(out, out_size, &used,
+                 "\nnext: desktop recover if files are WARN, then desktop state\n");
 }
 
 void orizon_desktop_format_settings_paths(char *out, size_t out_size) {

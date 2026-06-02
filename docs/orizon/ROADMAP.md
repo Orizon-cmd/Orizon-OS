@@ -54,7 +54,8 @@
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving,
-  session-manager commands `desktop start/stop/restart/reload/recover/state`,
+  session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`,
+  v2 session health/counters,
   keyword/getoption/reload runtime inspection, split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focushistory/cursorpos diagnostics,
   software focus ring and ticked focus/workspace/layout transitions,
   pointer diagnostics, native tiling apps for settings/logs/packages/update,

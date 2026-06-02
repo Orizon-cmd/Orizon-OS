@@ -3737,6 +3737,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop start|stop      - Start/stop Hyprland-style session manager\n");
     term_puts_t(term, "  desktop restart|reload  - Restart/reload session manager/config\n");
     term_puts_t(term, "  desktop recover         - Repair/recover desktop session state\n");
+    term_puts_t(term, "  desktop rescue          - Read-only session recovery checklist\n");
     term_puts_t(term, "  desktop state           - Show session manager state/log\n");
     term_puts_t(term, "  desktop enable          - Enable optional desktop profile\n");
     term_puts_t(term, "  desktop disable         - Disable desktop profile\n");
@@ -3847,6 +3848,12 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     } else {
       gui_desktop_set_enabled(orizon_desktop_is_enabled());
     }
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "rescue") ||
+      term_command_is(args, "session-rescue")) {
+    orizon_desktop_format_session_rescue(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }

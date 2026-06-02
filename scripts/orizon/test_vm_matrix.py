@@ -419,6 +419,7 @@ def run_ssh_checks(
         ("desktop status", "Orizon desktop"),
         ("desktop start", "desktop session-manager: start"),
         ("desktop state", "desired-state started"),
+        ("desktop rescue", "Orizon desktop rescue"),
         ("desktop reload", "desktop session-manager: reload"),
         ("desktop restart", "desktop session-manager: restart"),
         ("desktop stop", "desired-state: stopped"),

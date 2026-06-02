@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added desktop package version `0.28.0` with a stronger installed/live session
+  manager: v2 state health, lifecycle counters, `desktop rescue`, recovery
+  commands, and clearer file checks before `desktop recover`.
 - Added desktop package version `0.27.0` with broader Hyprland-style config
   hint preservation for input repeat/touchpad, decoration blur/shadow, cursor,
   render, debug, device, plugin, permission, group, gestures, xwayland, and
