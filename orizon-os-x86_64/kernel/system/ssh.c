@@ -3334,6 +3334,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop settings set <key> <value> update /system/desktop-settings.conf\r\n"
              "  desktop settings preset <name> apply compact/cozy/performance settings\r\n"
              "  desktop settings doctor validate system-wide desktop settings\r\n"
+             "  desktop input           show/set keyboard, pointer and focus policy\r\n"
              "  desktop pointer         show cursor and HID mouse/tablet diagnostics\r\n"
              "  desktop devices         show Hyprland-style input device summary\r\n"
              "  desktop version         show desktop compatibility facade version\r\n"
@@ -3509,13 +3510,45 @@ static void ssh_shell_print_desktop(const char *args) {
     }
   } else if (ssh_shell_command_is(sub, "session")) {
     orizon_desktop_format_session(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "input")) {
+    const char *input_args = ssh_shell_skip_spaces(sub + 5);
+    const char *value = input_args;
+    char key_buf[48];
+    size_t key_len;
+    if (*input_args == '\0' || ssh_shell_command_is(input_args, "show") ||
+        ssh_shell_command_is(input_args, "status")) {
+      orizon_desktop_format_input(out, sizeof(out));
+    } else if (ssh_shell_command_is(input_args, "submap")) {
+      value = ssh_shell_skip_spaces(input_args + 6);
+      if (*value == '\0') {
+        gui_desktop_format_submap(out, sizeof(out));
+      } else {
+        gui_desktop_dispatch("submap", value, out, sizeof(out));
+      }
+    } else {
+      while (*value && *value != ' ') {
+        value++;
+      }
+      key_len = (size_t)(value - input_args);
+      if (*value == ' ') {
+        value = ssh_shell_skip_spaces(value);
+      }
+      if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+        snprintf(out, sizeof(out),
+                 "usage: desktop input [layout <fr|us>|pointer <flat|natural|precise|accelerated>|focus <on|off|toggle>|submap <name|reset>]\r\n");
+      } else {
+        memcpy(key_buf, input_args, key_len);
+        key_buf[key_len] = '\0';
+        orizon_desktop_set_input(key_buf, value, out, sizeof(out));
+        gui_desktop_reload_session();
+      }
+    }
   } else if (ssh_shell_command_is(sub, "pointer") ||
              ssh_shell_command_is(sub, "cursor") ||
              ssh_shell_command_is(sub, "mouse")) {
     gui_desktop_format_pointer(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "devices") ||
-             ssh_shell_command_is(sub, "device") ||
-             ssh_shell_command_is(sub, "input")) {
+             ssh_shell_command_is(sub, "device")) {
     gui_desktop_format_devices(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "version") ||
              ssh_shell_command_is(sub, "about")) {

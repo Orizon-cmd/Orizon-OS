@@ -34,6 +34,13 @@ desktop settings preset compact
 desktop settings set gaps-in 10
 desktop settings set border-size 3
 desktop settings repair
+desktop input
+desktop input layout fr
+desktop input layout us
+desktop input pointer natural
+desktop input focus toggle
+desktop input submap launch
+desktop input submap reset
 desktop pointer
 desktop keymap
 desktop modules
@@ -264,6 +271,15 @@ settings sync` performs that export then refreshes the generated runtime hints.
 This keeps the source of truth in `/system` while still giving users a familiar
 Hyprland-shaped config file.
 
+`desktop input` is the VM-safe Hyprland-style input hub. `desktop input layout
+fr|us` updates the desktop settings and synchronizes `/system/keyboard` plus
+`/workspace/.orizon/keyboard` so the kernel keyboard mapper follows the desktop
+choice. `desktop input pointer <flat|natural|precise|accelerated>` records the
+pointer profile used by diagnostics, and `desktop input focus <on|off|toggle>`
+controls focus-follows-mouse without enabling manual window dragging.
+`desktop input submap <name|reset>` is a convenience alias for the dispatcher
+submap command.
+
 `desktop pointer` shows the compositor cursor position plus PS/2, USB HID, and
 I2C-HID input diagnostics. VM profiles that expose a QEMU `usb-tablet` or a
 boot-protocol USB mouse are routed into the same pointer state used by the
@@ -376,6 +392,9 @@ desktop dispatch movefocus l|r|u|d|next|prev changes focus
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pin controls active client state
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios
+desktop input layout fr|us syncs desktop and kernel keyboard layout
+desktop input pointer flat|natural|precise|accelerated records pointer policy
+desktop input focus on|off|toggle controls focus-follows-mouse
 desktop keymap shows keyboard/submap runtime diagnostics
 desktop autostart terminal on|off controls startup terminal
 desktop preset <name> applies a saved symbolic session

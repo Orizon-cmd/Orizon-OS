@@ -105,6 +105,13 @@ desktop settings preset compact
 desktop settings set gaps-in 10
 desktop settings set border-size 3
 desktop settings repair
+desktop input
+desktop input layout fr
+desktop input layout us
+desktop input pointer natural
+desktop input focus toggle
+desktop input submap launch
+desktop input submap reset
 desktop pointer
 desktop keymap
 desktop modules
@@ -306,8 +313,10 @@ rewrites `/home/orizon/.config/hypr/orizon-hypr.conf` from `/system`, and
 presets`, `desktop settings preset <name>`, and `desktop settings doctor` add a
 safer profile/validation layer for that system file. `desktop session`
 manages theme/wallpaper/bar/focus state, `desktop preset <name>` applies a saved
-symbolic session, `desktop pointer` shows cursor and HID mouse/tablet
-diagnostics, `desktop layout <dwindle|master|monocle>` updates the
+symbolic session, `desktop input` is the keyboard/pointer/focus hub for
+`layout fr|us`, pointer profiles, focus-follows-mouse, and submaps,
+`desktop pointer` shows cursor and HID mouse/tablet diagnostics,
+`desktop layout <dwindle|master|monocle>` updates the
 prepared layout profile, `desktop keymap` shows active F-key/submap keyboard
 runtime and focus-follows-mouse counters, `desktop binds`, `desktop rules`, `desktop monitors`,
 and `desktop runtime` show the generated Hyprland-style runtime files,

@@ -1162,7 +1162,7 @@ void orizon_system_format_rescue(char *out, size_t out_size) {
            "installed-only helpers:\n"
            "  boot-check, repair-boot, update status, bootguard, rollback-status\n"
            "desktop:\n"
-           "  desktop enable|disable, desktop session, desktop settings, desktop apps, desktop app <id>, desktop package, pkg install orizon-desktop-hypr\n"
+           "  desktop enable|disable, desktop session, desktop settings, desktop input, desktop apps, desktop app <id>, desktop package, pkg install orizon-desktop-hypr\n"
            "logs:\n"
            "  /logs/init.log, /logs/service.log, /logs/boot.log, /workspace/.orizon/rescue-report.txt\n"
            "  /workspace/.orizon/system-snapshot.txt, /workspace/.orizon/admin-backup.txt\n"

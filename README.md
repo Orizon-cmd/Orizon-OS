@@ -147,6 +147,12 @@ focus`, `desktop bar` et `desktop launcher` reglent la session persistante.
 `desktop rescue` affiche une checklist non destructive avec health,
 desired/runtime/policy, boot live/installe et les fichiers a reparer avant
 `desktop recover`.
+`desktop input` centralise le layout clavier, le profil pointeur et
+focus-follows-mouse: `desktop input layout fr|us` synchronise
+`/system/desktop-settings.conf`, `/system/keyboard` et
+`/workspace/.orizon/keyboard`, `desktop input pointer <profile>` garde le profil
+dans les diagnostics VM, et `desktop input focus <on|off|toggle>` controle le
+focus souris sans activer de deplacement libre des fenetres.
 `desktop pointer` affiche la position du curseur et les diagnostics PS/2,
 USB HID souris/tablette et I2C-HID, utile en VM quand QEMU/libvirt expose une
 `usb-tablet`. `desktop keymap` montre les raccourcis actifs, le dernier

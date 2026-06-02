@@ -101,6 +101,11 @@ desktop settings doctor
 desktop settings preset compact
 desktop config doctor
 desktop config apply
+desktop input
+desktop input layout fr
+desktop input layout us
+desktop input pointer natural
+desktop input focus toggle
 desktop pointer
 desktop rules
 desktop monitors
@@ -174,7 +179,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.29.0` because it includes policy/config files, the persisted session
+`0.30.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -186,6 +191,7 @@ state, stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
+the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
 the launcher. Version `0.19.0` specifically added the desktop session manager:
@@ -232,6 +238,11 @@ Version `0.29.0` adds a compositor-managed desktop app catalog with
 and explicit `desktop launch launcher` overlay dispatch. It keeps all native
 apps tiled or overlay-only and still does not add a taskbar, start menu, or
 manual free-drag windows.
+Version `0.30.0` adds `desktop input` as a VM-safe Hyprland-style input hub:
+keyboard layout switching synchronizes desktop settings with `/system/keyboard`
+and `/workspace/.orizon/keyboard`, pointer profiles are persisted for
+diagnostics, focus-follows-mouse is controlled from the same surface, and submap
+dispatch remains keyboard-only without manual window dragging.
 
 ## Package Format
 

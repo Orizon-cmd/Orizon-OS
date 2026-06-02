@@ -159,6 +159,11 @@ desktop settings presets
 desktop settings doctor
 desktop settings preset compact
 desktop settings set gaps-in 10
+desktop input
+desktop input layout fr
+desktop input layout us
+desktop input pointer natural
+desktop input focus toggle
 desktop apps
 desktop app settings
 desktop apps launcher

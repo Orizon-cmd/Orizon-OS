@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added desktop package version `0.30.0` with `desktop input` as a VM-safe
+  keyboard/pointer/focus hub, including FR/US layout sync to `/system/keyboard`
+  and `/workspace/.orizon/keyboard`.
 - Added desktop package version `0.29.0` with a compositor-managed app catalog:
   `desktop apps`, `desktop app <id>`, class/module/backend/surface diagnostics,
   and explicit launcher overlay dispatch via `desktop launch launcher`.

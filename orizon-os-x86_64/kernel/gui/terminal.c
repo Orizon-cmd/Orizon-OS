@@ -3753,6 +3753,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop settings set <key> <value> - Update /system/desktop-settings.conf\n");
     term_puts_t(term, "  desktop settings preset <name> - Apply compact/cozy/performance settings\n");
     term_puts_t(term, "  desktop settings doctor - Validate system-wide desktop settings\n");
+    term_puts_t(term, "  desktop input           - Show/set keyboard, pointer and focus policy\n");
     term_puts_t(term, "  desktop pointer         - Show cursor and HID mouse/tablet diagnostics\n");
     term_puts_t(term, "  desktop devices         - Show Hyprland-style input device summary\n");
     term_puts_t(term, "  desktop version         - Show desktop compatibility facade version\n");
@@ -3978,14 +3979,53 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "input")) {
+    const char *input_args = term_skip_spaces(args + 5);
+    const char *value = input_args;
+    char key_buf[48];
+    size_t key_len;
+    if (*input_args == '\0' || term_command_is(input_args, "show") ||
+        term_command_is(input_args, "status")) {
+      orizon_desktop_format_input(report, sizeof(report));
+      term_puts_t(term, report);
+      return;
+    }
+    if (term_command_is(input_args, "submap")) {
+      value = term_skip_spaces(input_args + 6);
+      if (*value == '\0') {
+        gui_desktop_format_submap(report, sizeof(report));
+      } else {
+        gui_desktop_dispatch("submap", value, report, sizeof(report));
+      }
+      term_puts_t(term, report);
+      return;
+    }
+    while (*value && *value != ' ') {
+      value++;
+    }
+    key_len = (size_t)(value - input_args);
+    if (*value == ' ') {
+      value = term_skip_spaces(value);
+    }
+    if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
+      term_puts_t(term,
+                  "usage: desktop input [layout <fr|us>|pointer <flat|natural|precise|accelerated>|focus <on|off|toggle>|submap <name|reset>]\n");
+      return;
+    }
+    memcpy(key_buf, input_args, key_len);
+    key_buf[key_len] = '\0';
+    orizon_desktop_set_input(key_buf, value, report, sizeof(report));
+    gui_desktop_reload_session();
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "pointer") || term_command_is(args, "cursor") ||
       term_command_is(args, "mouse")) {
     gui_desktop_format_pointer(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }
-  if (term_command_is(args, "devices") || term_command_is(args, "device") ||
-      term_command_is(args, "input")) {
+  if (term_command_is(args, "devices") || term_command_is(args, "device")) {
     gui_desktop_format_devices(report, sizeof(report));
     term_puts_t(term, report);
     return;

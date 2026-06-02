@@ -163,7 +163,14 @@ def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) 
     )
 
 
-def find_nat_ip(client, sudo_password: str, mac: str, network_name: str, timeout: int) -> str:
+def find_nat_ip(
+    client,
+    sudo_password: str,
+    vm_name: str,
+    mac: str,
+    network_name: str,
+    timeout: int,
+) -> str:
     deadline = time.time() + timeout
     pattern = re.compile(re.escape(mac) + r"\s+ipv4\s+([0-9.]+)/")
     while time.time() < deadline:
@@ -176,6 +183,18 @@ def find_nat_ip(client, sudo_password: str, mac: str, network_name: str, timeout
         match = pattern.search(leases)
         if match:
             return match.group(1)
+
+        # libvirt can lag before net-dhcp-leases is populated. Probe the
+        # domain ARP view and host neighbor table before declaring NAT failed.
+        for probe in (
+            f"virsh domifaddr {vm_name} --source lease || true",
+            f"virsh domifaddr {vm_name} --source arp || true",
+            "ip -4 neigh show || true",
+        ):
+            out = run_sudo_command(client, sudo_password, probe, check=False)
+            ip = _extract_ipv4_for_mac(out, mac)
+            if ip:
+                return ip
         time.sleep(2)
     return ""
 
@@ -225,7 +244,14 @@ def find_guest_ip(
     timeout: int,
 ) -> str:
     if cfg["network_name"]:
-        return find_nat_ip(client, sudo_password, mac, cfg["network_name"], timeout)
+        return find_nat_ip(
+            client,
+            sudo_password,
+            vm_name,
+            mac,
+            cfg["network_name"],
+            timeout,
+        )
     return find_bridge_ip(
         client,
         sudo_password,
@@ -438,6 +464,14 @@ def run_ssh_checks(
         ("desktop settings set gaps-in 10", "desktop settings: updated"),
         ("desktop settings set border-size 3", "desktop settings: updated"),
         ("desktop settings repair", "desktop settings: repaired"),
+        ("desktop input", "Orizon desktop input"),
+        ("desktop input layout fr", "keyboard-layout: fr-azerty"),
+        ("desktop keymap", "keyboard-layout: fr-azerty"),
+        ("desktop input layout us", "keyboard-layout: us-qwerty"),
+        ("desktop input pointer natural", "pointer-profile: natural"),
+        ("desktop input focus toggle", "focus-follows-mouse:"),
+        ("desktop input submap launch", "submap launch"),
+        ("desktop input submap reset", "submap default"),
         ("desktop pointer", "Orizon desktop pointer"),
         ("desktop keymap", "Orizon desktop keymap"),
         ("desktop apps", "Orizon desktop apps"),
@@ -857,7 +891,7 @@ def main() -> int:
                 )
                 if not ip:
                     if cfg["network_name"]:
-                        detail = "guest IP unavailable from libvirt lease table"
+                        detail = "guest IP unavailable from libvirt lease/arp/neighbor probes"
                         results.append(matrix_result(case_name, STATUS_FAIL, detail, cfg))
                         case_log.append(f"{STATUS_FAIL}: {detail}")
                         print(f"{STATUS_FAIL}: {detail}")

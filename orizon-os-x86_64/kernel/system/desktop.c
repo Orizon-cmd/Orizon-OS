@@ -6,6 +6,7 @@
  */
 
 #include "../include/desktop.h"
+#include "../include/input_layout.h"
 #include "../include/string.h"
 #include "../include/system_state.h"
 #include "../include/timer.h"
@@ -2134,6 +2135,197 @@ int orizon_desktop_set_setting(const char *key, const char *value, char *status,
              ORIZON_DESKTOP_SETTINGS_PATH);
   }
   return rc;
+}
+
+static const char *desktop_normalize_keyboard_layout(const char *value) {
+  if (!value) {
+    return NULL;
+  }
+  if (strcmp(value, "fr") == 0 || strcmp(value, "fr-azerty") == 0 ||
+      strcmp(value, "azerty") == 0) {
+    return "fr-azerty";
+  }
+  if (strcmp(value, "us") == 0 || strcmp(value, "us-qwerty") == 0 ||
+      strcmp(value, "qwerty") == 0) {
+    return "us-qwerty";
+  }
+  return NULL;
+}
+
+static int desktop_pointer_profile_supported(const char *value) {
+  return value && (strcmp(value, "flat") == 0 ||
+                   strcmp(value, "natural") == 0 ||
+                   strcmp(value, "precise") == 0 ||
+                   strcmp(value, "accelerated") == 0);
+}
+
+static int desktop_write_keyboard_layout_files(const char *layout) {
+  char text[32];
+
+  if (!layout) {
+    return -1;
+  }
+  snprintf(text, sizeof(text), "%s\n", layout);
+  vfs_mkdir("/workspace");
+  vfs_mkdir("/workspace/.orizon");
+  vfs_mkdir("/system");
+  desktop_write_text_file("/workspace/.orizon/keyboard", text);
+  return desktop_write_text_file("/system/keyboard", text);
+}
+
+void orizon_desktop_format_input(char *out, size_t out_size) {
+  orizon_desktop_settings_t settings;
+  orizon_desktop_session_t session;
+  size_t used = 0;
+  char line[192];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_load_settings(&settings);
+  orizon_desktop_load_session(&session);
+  desktop_append(out, out_size, &used, "Orizon desktop input\n");
+  desktop_append(out, out_size, &used,
+                 "model: Hyprland-style keyboard/pointer facade over VM framebuffer input\n");
+  snprintf(line, sizeof(line), "keyboard-layout: %s\n",
+           settings.keyboard_layout);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "active-kernel-layout: %s\n",
+           input_keyboard_layout());
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "pointer-profile: %s\n",
+           settings.pointer_profile);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "focus-follows-mouse: %s\n",
+           session.focus_follows_mouse ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "manual-window-drag: no\n");
+  desktop_append(out, out_size, &used,
+                 "set-layout: desktop input layout <fr|us>\n");
+  desktop_append(out, out_size, &used,
+                 "set-pointer: desktop input pointer <flat|natural|precise|accelerated>\n");
+  desktop_append(out, out_size, &used,
+                 "set-focus: desktop input focus <on|off|toggle>\n");
+  desktop_append(out, out_size, &used,
+                 "submaps: desktop keymap | desktop dispatch submap <default|resize|move|launch>\n");
+  desktop_append(out, out_size, &used,
+                 "paths: /system/desktop-settings.conf, /system/keyboard, /workspace/.orizon/keyboard\n");
+  desktop_append(out, out_size, &used,
+                 "limits: no libinput/Wayland backend yet; VM-safe diagnostics only\n");
+}
+
+int orizon_desktop_set_input(const char *key, const char *value, char *status,
+                             size_t status_size) {
+  orizon_desktop_settings_t settings;
+  orizon_desktop_session_t session;
+  const char *layout;
+  int rc = 0;
+
+  if (status && status_size) {
+    status[0] = '\0';
+  }
+  if (!key || !key[0] || !value || !value[0] || !desktop_token_safe(key) ||
+      !desktop_token_safe(value)) {
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop input: invalid key/value\n"
+               "usage: desktop input layout <fr|us> | pointer <flat|natural|precise|accelerated> | focus <on|off|toggle>\n");
+    }
+    return -1;
+  }
+
+  if (strcmp(key, "layout") == 0 || strcmp(key, "keyboard") == 0 ||
+      strcmp(key, "keyboard-layout") == 0 || strcmp(key, "kb-layout") == 0) {
+    layout = desktop_normalize_keyboard_layout(value);
+    if (!layout) {
+      if (status && status_size) {
+        snprintf(status, status_size,
+                 "desktop input: unsupported keyboard layout '%s'\n"
+                 "supported: fr, fr-azerty, us, us-qwerty\n",
+                 value);
+      }
+      return -2;
+    }
+    orizon_desktop_load_settings(&settings);
+    snprintf(settings.keyboard_layout, sizeof(settings.keyboard_layout), "%s",
+             layout);
+    rc = desktop_write_settings(&settings);
+    input_set_keyboard_layout(layout);
+    desktop_write_keyboard_layout_files(layout);
+    desktop_log_event("input keyboard layout updated");
+    vfs_persist_save();
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop input: updated\n"
+               "keyboard-layout: %s\n"
+               "active-kernel-layout: %s\n"
+               "paths: /system/desktop-settings.conf /system/keyboard /workspace/.orizon/keyboard\n"
+               "apply: desktop keymap | desktop input\n",
+               layout, input_keyboard_layout());
+    }
+    return rc;
+  }
+
+  if (strcmp(key, "pointer") == 0 || strcmp(key, "pointer-profile") == 0 ||
+      strcmp(key, "mouse") == 0) {
+    if (!desktop_pointer_profile_supported(value)) {
+      if (status && status_size) {
+        snprintf(status, status_size,
+                 "desktop input: unsupported pointer profile '%s'\n"
+                 "supported: flat, natural, precise, accelerated\n",
+                 value);
+      }
+      return -2;
+    }
+    orizon_desktop_load_settings(&settings);
+    snprintf(settings.pointer_profile, sizeof(settings.pointer_profile), "%s",
+             value);
+    rc = desktop_write_settings(&settings);
+    desktop_log_event("input pointer profile updated");
+    vfs_persist_save();
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop input: updated\n"
+               "pointer-profile: %s\n"
+               "manual-window-drag: no\n"
+               "note: profile is recorded for VM diagnostics; no libinput backend yet\n",
+               value);
+    }
+    return rc;
+  }
+
+  if (strcmp(key, "focus") == 0 || strcmp(key, "follow-mouse") == 0 ||
+      strcmp(key, "focus-follows-mouse") == 0) {
+    orizon_desktop_load_session(&session);
+    if (strcmp(value, "toggle") == 0) {
+      session.focus_follows_mouse = !session.focus_follows_mouse;
+    } else {
+      session.focus_follows_mouse =
+          desktop_bool_value(value, session.focus_follows_mouse);
+    }
+    rc = desktop_write_session(&session);
+    desktop_log_event("input focus policy updated");
+    vfs_persist_save();
+    if (status && status_size) {
+      snprintf(status, status_size,
+               "desktop input: updated\n"
+               "focus-follows-mouse: %s\n"
+               "manual-window-drag: no\n"
+               "apply: desktop pointer | desktop keymap\n",
+               session.focus_follows_mouse ? "yes" : "no");
+    }
+    return rc;
+  }
+
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop input: unknown key '%s'\n"
+             "keys: layout keyboard pointer pointer-profile focus focus-follows-mouse\n",
+             key);
+  }
+  return -2;
 }
 
 int orizon_desktop_repair_settings(char *status, size_t status_size) {

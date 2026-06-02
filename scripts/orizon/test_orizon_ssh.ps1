@@ -77,6 +77,13 @@ $commands = @(
   "desktop settings set gaps-in 10",
   "desktop settings set border-size 3",
   "desktop settings repair",
+  "desktop input",
+  "desktop input layout fr",
+  "desktop input layout us",
+  "desktop input pointer natural",
+  "desktop input focus toggle",
+  "desktop input submap launch",
+  "desktop input submap reset",
   "desktop pointer",
   "desktop apps",
   "desktop app settings",
@@ -458,6 +465,27 @@ run_cmd() {
       ;;
     "desktop settings repair")
       grep -q "desktop settings: repaired" "`$OUT" || { echo "missing desktop settings repair"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input")
+      grep -q "Orizon desktop input" "`$OUT" && grep -q "manual-window-drag: no" "`$OUT" || { echo "missing desktop input"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input layout fr")
+      grep -q "desktop input: updated" "`$OUT" && grep -q "keyboard-layout: fr-azerty" "`$OUT" || { echo "missing desktop input layout fr"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input layout us")
+      grep -q "desktop input: updated" "`$OUT" && grep -q "keyboard-layout: us-qwerty" "`$OUT" || { echo "missing desktop input layout us"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input pointer natural")
+      grep -q "desktop input: updated" "`$OUT" && grep -q "pointer-profile: natural" "`$OUT" || { echo "missing desktop input pointer"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input focus toggle")
+      grep -q "desktop input: updated" "`$OUT" && grep -q "focus-follows-mouse:" "`$OUT" || { echo "missing desktop input focus"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input submap launch")
+      grep -q "submap launch" "`$OUT" || { echo "missing desktop input submap launch"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop input submap reset")
+      grep -q "submap default" "`$OUT" || { echo "missing desktop input submap reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop pointer")
       grep -q "Orizon desktop pointer" "`$OUT" && grep -q "usb-hid:" "`$OUT" || { echo "missing desktop pointer"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
