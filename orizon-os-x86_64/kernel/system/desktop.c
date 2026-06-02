@@ -2950,7 +2950,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|fullscreen|pseudo|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -2960,7 +2960,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
-                 "windows: desktop windows | desktop workspace <n> | desktop dispatch movetoworkspace <n>\n");
+                 "windows: desktop windows | desktop workspace <1-10|next|empty|+/-n|previous> | desktop dispatch movetoworkspace <target>\n");
 }
 
 void orizon_desktop_format_session_state(char *out, size_t out_size) {
@@ -3414,7 +3414,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "SUPER+F: focus toggle placeholder; SUPER+P: profile list placeholder\n");
   desktop_append(out, out_size, &used,
-                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace\n");
+                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; dispatch supports next/empty/+/-n\n");
   desktop_append(out, out_size, &used,
                  "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin | resizeactive\n");
   desktop_append(out, out_size, &used,

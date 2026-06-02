@@ -222,7 +222,10 @@ desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop dispatch movetoworkspace 2
+desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace +1
+desktop dispatch workspace next
+desktop dispatch workspace empty
 desktop focus toggle
 desktop autostart
 desktop doctor

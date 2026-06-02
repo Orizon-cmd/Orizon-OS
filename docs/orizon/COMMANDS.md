@@ -185,9 +185,13 @@ desktop activewindow
 desktop workspace
 desktop workspace 2
 desktop dispatch movetoworkspace 2
+desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace 2
 desktop dispatch workspace previous
 desktop dispatch workspace +1
+desktop dispatch workspace next
+desktop dispatch workspace empty
+desktop workspace empty
 desktop dispatch movefocus next
 desktop shortcuts
 desktop keymap
@@ -307,7 +311,7 @@ animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `movetoworkspace`, `movefocus`, `cyclenext`, `swapnext`,
+`workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `cyclenext`, `swapnext`,
 `focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and

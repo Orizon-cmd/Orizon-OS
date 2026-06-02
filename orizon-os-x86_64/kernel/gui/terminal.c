@@ -3789,8 +3789,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop launch <app>    - Spawn terminal/settings/logs/packages/update\n");
     term_puts_t(term, "  desktop killactive      - Close focused tiled client\n");
     term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
-    term_puts_t(term, "  desktop workspace [n]   - Show or switch workspace\n");
-    term_puts_t(term, "  desktop dispatch movetoworkspace <n|+1|-1> - Move focused client\n");
+    term_puts_t(term, "  desktop workspace [n|next|empty|previous] - Show or switch workspace\n");
+    term_puts_t(term, "  desktop dispatch movetoworkspace <n|empty|+1|-1> - Move focused client\n");
+    term_puts_t(term, "  desktop dispatch movetoworkspacesilent <target> - Move focused client silently\n");
     term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster - Hyprland-like actions\n");
     term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/masterratio actions\n");
     term_puts_t(term, "  desktop dispatch resizeactive <x> <y> - Keyboard tiling ratio resize\n");
@@ -4328,27 +4329,32 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       term_puts_t(term, report);
       return;
     }
-    if (term_parse_uint(value, &workspace) < 0 ||
-        gui_desktop_switch_workspace(workspace) < 0) {
-      term_puts_t(term, "usage: desktop workspace <1-3>\n");
+    if (term_parse_uint(value, &workspace) == 0 &&
+        gui_desktop_switch_workspace(workspace) == 0) {
+      snprintf(report, sizeof(report), "desktop: workspace %d active\n",
+               workspace);
+      term_puts_t(term, report);
       return;
     }
-    snprintf(report, sizeof(report), "desktop: workspace %d active\n",
-             workspace);
-    term_puts_t(term, report);
+    if (gui_desktop_dispatch("workspace", value, report, sizeof(report)) == 0) {
+      term_puts_t(term, report);
+      return;
+    }
+    term_puts_t(term,
+                "usage: desktop workspace <1-10|next|empty|+/-n|previous>\n");
     return;
   }
   if (term_command_is(args, "move")) {
     const char *target = term_skip_spaces(args + 4);
     int workspace;
     if (!term_command_is(target, "terminal")) {
-      term_puts_t(term, "usage: desktop move terminal <1-3>\n");
+      term_puts_t(term, "usage: desktop move terminal <1-10>\n");
       return;
     }
     target = term_skip_spaces(target + 8);
     if (term_parse_uint(target, &workspace) < 0 ||
         gui_desktop_move_terminal_to_workspace(workspace) < 0) {
-      term_puts_t(term, "usage: desktop move terminal <1-3>\n");
+      term_puts_t(term, "usage: desktop move terminal <1-10>\n");
       return;
     }
     snprintf(report, sizeof(report), "desktop: terminal moved to workspace %d\n",

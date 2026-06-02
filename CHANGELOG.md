@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.25.0` with ten dynamic Hyprland-style
+  workspace slots, `workspace next`, `workspace empty`, wrap-around relative
+  workspace targets, and `movetoworkspacesilent`.
+- Expanded active/workspace diagnostics with workspace names, local client
+  counts, visit sequence data, and pinned-aware dynamic state.
 - Added desktop package version `0.24.0` with Hyprland-style framebuffer render
   diagnostics through `desktop render` and `desktop hyprctl render`.
 - Added software focus ring drawing, shadow/rounding diagnostics, and ticked

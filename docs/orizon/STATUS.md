@@ -53,8 +53,9 @@ work.
   `/system/desktop-modules.conf` split map for future module packages, plus generated
   `/system/desktop-binds.conf` and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
-  workspace switch, relative workspace dispatch, dispatcher-style
-  movetoworkspace/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
+  workspace switch, relative/dynamic workspace dispatch with next/empty targets,
+  dispatcher-style
+  movetoworkspace/movetoworkspacesilent/movefocus/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,

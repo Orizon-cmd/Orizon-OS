@@ -3370,8 +3370,9 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop launch <app>    spawn terminal/settings/logs/packages/update\r\n"
              "  desktop killactive      close focused tiled client\r\n"
              "  desktop focus-window next|prev change focused client\r\n"
-             "  desktop workspace [n]   show or switch workspace\r\n"
-             "  desktop dispatch movetoworkspace <n|+1|-1> move focused client\r\n"
+             "  desktop workspace [n|next|empty|previous] show or switch workspace\r\n"
+             "  desktop dispatch movetoworkspace <n|empty|+1|-1> move focused client\r\n"
+             "  desktop dispatch movetoworkspacesilent <target> move focused client silently\r\n"
              "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster client actions\r\n"
              "  desktop dispatch layoutmsg <msg> orientation/splitratio/masterratio actions\r\n"
              "  desktop dispatch resizeactive <x> <y> tiling ratio resize action\r\n"
@@ -3778,23 +3779,26 @@ static void ssh_shell_print_desktop(const char *args) {
     uint32_t workspace;
     if (*value == '\0') {
       gui_desktop_format_workspaces(out, sizeof(out));
-    } else if (ssh_shell_parse_uint(value, &workspace) < 0 ||
-               gui_desktop_switch_workspace((int)workspace) < 0) {
-      snprintf(out, sizeof(out), "usage: desktop workspace <1-3>\r\n");
-    } else {
+    } else if (ssh_shell_parse_uint(value, &workspace) == 0 &&
+               gui_desktop_switch_workspace((int)workspace) == 0) {
       snprintf(out, sizeof(out), "desktop: workspace %u active\r\n",
                (unsigned)workspace);
+    } else if (gui_desktop_dispatch("workspace", value, out, sizeof(out)) == 0) {
+      /* dispatch already formatted the response */
+    } else {
+      snprintf(out, sizeof(out),
+               "usage: desktop workspace <1-10|next|empty|+/-n|previous>\r\n");
     }
   } else if (ssh_shell_command_is(sub, "move")) {
     const char *target = ssh_shell_skip_spaces(sub + 4);
     uint32_t workspace;
     if (!ssh_shell_command_is(target, "terminal")) {
-      snprintf(out, sizeof(out), "usage: desktop move terminal <1-3>\r\n");
+      snprintf(out, sizeof(out), "usage: desktop move terminal <1-10>\r\n");
     } else {
       target = ssh_shell_skip_spaces(target + 8);
       if (ssh_shell_parse_uint(target, &workspace) < 0 ||
           gui_desktop_move_terminal_to_workspace((int)workspace) < 0) {
-        snprintf(out, sizeof(out), "usage: desktop move terminal <1-3>\r\n");
+        snprintf(out, sizeof(out), "usage: desktop move terminal <1-10>\r\n");
       } else {
         snprintf(out, sizeof(out),
                  "desktop: terminal moved to workspace %u\r\n",

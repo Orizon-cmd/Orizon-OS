@@ -144,6 +144,10 @@ $commands = @(
   "desktop dispatch workspace previous",
   "desktop dispatch workspace +1",
   "desktop workspace 2",
+  "desktop dispatch movetoworkspacesilent empty",
+  "desktop dispatch workspace next",
+  "desktop dispatch workspace empty",
+  "desktop workspace empty",
   "desktop dispatch movefocus next",
   "desktop shortcuts",
   "desktop doctor",
@@ -593,6 +597,18 @@ run_cmd() {
       ;;
     "desktop workspace 2")
       grep -q "desktop: workspace 2 active" "`$OUT" || { echo "missing desktop workspace switch"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch movetoworkspacesilent empty")
+      grep -q "desktop dispatch: silently moved active to workspace" "`$OUT" || { echo "missing desktop dispatch movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch workspace next")
+      grep -q "desktop dispatch: workspace 3" "`$OUT" || { echo "missing desktop dispatch workspace next"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch workspace empty")
+      grep -q "desktop dispatch: workspace 4" "`$OUT" || { echo "missing desktop dispatch workspace empty"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop workspace empty")
+      grep -q "desktop dispatch: workspace" "`$OUT" || { echo "missing desktop workspace empty"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch movetoworkspace 2")
       grep -q "desktop dispatch: moved active to workspace 2" "`$OUT" || { echo "missing desktop dispatch movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

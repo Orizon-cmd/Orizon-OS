@@ -63,7 +63,7 @@ le developpement noyau:
   `desktop modules`, separation preparee
   `orizon-desktop-core`/`orizon-terminal`/`orizon-settings`/`orizon-launcher`
   et `orizon-waybar` seulement prevu pour plus tard,
-  workspaces runtime, clients tiles avec adresses stables/focusHistoryID,
+  dix workspaces runtime dynamiques, clients tiles avec adresses stables/focusHistoryID,
   dispatchers Hyprland-like, fullscreen/pseudo/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
@@ -168,9 +168,10 @@ ulterieur, pas installe maintenant.
 `desktop launch terminal|settings|logs|packages|update` ouvre les premieres
 apps natives comme clients tiles geres par le compositor; elles ne sont pas des
 fenetres flottantes et aucune barre type Windows n'est ajoutee.
-`desktop dispatch exec|killactive|workspace|movetoworkspace|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
-client fullscreen/pseudo/pinned, workspaces relatifs, layouts
+client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
+deplacement silencieux de clients, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 `desktop windows`, `desktop clients`, `desktop activewindow` et `desktop

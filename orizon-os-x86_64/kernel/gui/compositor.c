@@ -40,6 +40,7 @@
 #define TIMER_BOOT_FALLBACK_LOOPS 8000
 #define TIMER_FALLBACK_IDLE_PAUSES 20000
 #define DESKTOP_MAX_CLIENTS 8
+#define DESKTOP_MAX_WORKSPACES 10
 #define DESKTOP_CLIENT_ADDRESS_BASE 0x100000u
 
 #define COLOR_BG_TOP MAKE_COLOR(10, 14, 24)
@@ -71,7 +72,7 @@ static orizon_desktop_session_t desktop_session = {
 static orizon_desktop_settings_t desktop_settings = {
     1, 6, 12, 2, 8, 1, 1, 0, 0, "orizon-terminal", "builtin", "top", "us",
     "flat"};
-static int desktop_workspace_count = 3;
+static int desktop_workspace_count = DESKTOP_MAX_WORKSPACES;
 static int desktop_active_workspace = 1;
 static int desktop_previous_workspace = 1;
 static int desktop_terminal_workspace = 1;
@@ -87,6 +88,7 @@ static int desktop_transition_from_workspace = 1;
 static int desktop_transition_to_workspace = 1;
 static const char *desktop_transition_reason = "initial";
 static uint64_t desktop_render_serial = 1;
+static uint64_t desktop_workspace_serial = 1;
 typedef struct {
   int id;
   int workspace;
@@ -105,7 +107,14 @@ typedef struct {
   char app_id[32];
 } desktop_client_t;
 
+typedef struct {
+  int used;
+  uint64_t visit_generation;
+  char name[16];
+} desktop_workspace_t;
+
 static desktop_client_t desktop_clients[DESKTOP_MAX_CLIENTS];
+static desktop_workspace_t desktop_workspaces[DESKTOP_MAX_WORKSPACES];
 static int desktop_next_client_id = 1;
 static int desktop_focused_client_id = 0;
 static int desktop_focus_history[DESKTOP_MAX_CLIENTS];
@@ -255,6 +264,53 @@ static int desktop_clamp_workspace(int workspace) {
   return workspace;
 }
 
+static int desktop_wrap_workspace(int workspace) {
+  while (workspace < 1) {
+    workspace += desktop_workspace_count;
+  }
+  while (workspace > desktop_workspace_count) {
+    workspace -= desktop_workspace_count;
+  }
+  return workspace;
+}
+
+static void desktop_workspace_mark_used(int workspace) {
+  int idx = workspace - 1;
+
+  if (workspace < 1 || workspace > DESKTOP_MAX_WORKSPACES) {
+    return;
+  }
+  desktop_workspaces[idx].used = 1;
+  if (!desktop_workspaces[idx].name[0]) {
+    snprintf(desktop_workspaces[idx].name,
+             sizeof(desktop_workspaces[idx].name), "%d", workspace);
+  }
+}
+
+static void desktop_workspace_mark_visited(int workspace) {
+  int idx = workspace - 1;
+
+  if (workspace < 1 || workspace > DESKTOP_MAX_WORKSPACES) {
+    return;
+  }
+  desktop_workspace_mark_used(workspace);
+  desktop_workspaces[idx].visit_generation = desktop_workspace_serial++;
+}
+
+static const char *desktop_workspace_name(int workspace) {
+  static char fallback[16];
+  int idx = workspace - 1;
+
+  if (workspace < 1 || workspace > DESKTOP_MAX_WORKSPACES) {
+    return "unknown";
+  }
+  if (desktop_workspaces[idx].name[0]) {
+    return desktop_workspaces[idx].name;
+  }
+  snprintf(fallback, sizeof(fallback), "%d", workspace);
+  return fallback;
+}
+
 static int desktop_parse_int_arg(const char *value, int *out) {
   int sign = 1;
   int n = 0;
@@ -282,6 +338,29 @@ static int desktop_parse_int_arg(const char *value, int *out) {
   }
   *out = n * sign;
   return 0;
+}
+
+static int desktop_workspace_local_client_count(int workspace) {
+  int count = 0;
+
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && !desktop_clients[i].pinned &&
+        desktop_clients[i].workspace == workspace) {
+      count++;
+    }
+  }
+  return count;
+}
+
+static int desktop_find_empty_workspace(void) {
+  for (int offset = 1; offset <= desktop_workspace_count; offset++) {
+    int candidate =
+        desktop_wrap_workspace(desktop_active_workspace + offset);
+    if (desktop_workspace_local_client_count(candidate) == 0) {
+      return candidate;
+    }
+  }
+  return desktop_active_workspace;
 }
 
 static void desktop_start_transition(const char *reason, int from_workspace,
@@ -534,6 +613,19 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
     *workspace = desktop_clamp_workspace(desktop_previous_workspace);
     return 0;
   }
+  if (strcmp(v, "next") == 0) {
+    *workspace = desktop_wrap_workspace(desktop_active_workspace + 1);
+    return 0;
+  }
+  if (strcmp(v, "empty") == 0 || strcmp(v, "emptynext") == 0 ||
+      strcmp(v, "e") == 0) {
+    *workspace = desktop_find_empty_workspace();
+    return 0;
+  }
+  if (strcmp(v, "last") == 0) {
+    *workspace = desktop_clamp_workspace(desktop_previous_workspace);
+    return 0;
+  }
   if (v[0] == 'e' && (v[1] == '+' || v[1] == '-')) {
     v++;
   }
@@ -541,7 +633,7 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
     if (desktop_parse_int_arg(v, &n) < 0) {
       return -1;
     }
-    *workspace = desktop_clamp_workspace(desktop_active_workspace + n);
+    *workspace = desktop_wrap_workspace(desktop_active_workspace + n);
     return 0;
   }
   if (desktop_parse_int_arg(v, &n) < 0) {
@@ -747,6 +839,7 @@ static int desktop_spawn_client(const char *title, const char *app_id,
       desktop_clients[i].id = desktop_next_client_id++;
       desktop_clients[i].workspace = desktop_active_workspace;
       desktop_clients[i].last_workspace = desktop_active_workspace;
+      desktop_workspace_mark_used(desktop_active_workspace);
       desktop_clients[i].visible = 1;
       desktop_clients[i].mapped = 1;
       desktop_clients[i].hidden = 0;
@@ -1980,6 +2073,7 @@ void gui_desktop_set_enabled(int enabled) {
   gui_desktop_reload_session();
   if (desktop_mode_enabled) {
     desktop_active_workspace = desktop_clamp_workspace(desktop_active_workspace);
+    desktop_workspace_mark_visited(desktop_active_workspace);
     desktop_terminal_workspace =
         desktop_clamp_workspace(desktop_terminal_workspace);
     desktop_terminal_visible = desktop_session.autostart_terminal ? 1 : 0;
@@ -2062,10 +2156,12 @@ int gui_desktop_switch_workspace(int workspace) {
   if (workspace < 1 || workspace > desktop_workspace_count) {
     return -1;
   }
+  desktop_workspace_mark_used(workspace);
   if (workspace != desktop_active_workspace) {
     desktop_previous_workspace = desktop_active_workspace;
   }
   desktop_active_workspace = workspace;
+  desktop_workspace_mark_visited(workspace);
   desktop_launcher_visible = 0;
   desktop_focused_client_index();
   desktop_sync_terminal_compat();
@@ -2088,6 +2184,7 @@ int gui_desktop_move_terminal_to_workspace(int workspace) {
   }
   desktop_clients[idx].last_workspace = desktop_clients[idx].workspace;
   desktop_clients[idx].workspace = workspace;
+  desktop_workspace_mark_used(workspace);
   desktop_set_focused_client_index(idx);
   desktop_sync_terminal_compat();
   desktop_start_transition("movetoworkspace", desktop_active_workspace,
@@ -2160,7 +2257,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
-               "workspace <n|+1|-1|previous> | movetoworkspace <n> | "
+               "workspace <n|next|empty|+1|-1|previous> | movetoworkspace <target> | movetoworkspacesilent <target> | "
                "movefocus next|prev | fullscreen | pseudo | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
@@ -2194,26 +2291,30 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       return 0;
     }
     if (out && out_size) {
-      snprintf(out, out_size, "desktop dispatch: workspace expects 1-%d\n",
+      snprintf(out, out_size, "desktop dispatch: workspace expects 1-%d, next, empty, +/-n or previous\n",
                desktop_workspace_count);
     }
     return -1;
   }
   if (strcmp(dispatcher, "movetoworkspace") == 0 ||
       strcmp(dispatcher, "movetoworkspacesilent") == 0) {
+    int silent = strcmp(dispatcher, "movetoworkspacesilent") == 0;
     int target = 0;
     if (desktop_parse_workspace_arg(a, &target) == 0 &&
         gui_desktop_move_terminal_to_workspace(target) == 0) {
       workspace = (uint32_t)target;
       if (out && out_size) {
-        snprintf(out, out_size, "desktop dispatch: moved active to workspace %u\n",
+        snprintf(out, out_size,
+                 silent
+                     ? "desktop dispatch: silently moved active to workspace %u\n"
+                     : "desktop dispatch: moved active to workspace %u\n",
                  (unsigned)workspace);
       }
       return 0;
     }
     if (out && out_size) {
       snprintf(out, out_size,
-               "desktop dispatch: movetoworkspace expects active client and 1-%d\n",
+               "desktop dispatch: movetoworkspace expects active client and 1-%d, empty or +/-n\n",
                desktop_workspace_count);
     }
     return -1;
@@ -2510,9 +2611,23 @@ static int desktop_last_focused_index_on_workspace(int workspace) {
   return -1;
 }
 
+static int desktop_workspace_is_used(int workspace) {
+  int idx = workspace - 1;
+
+  if (workspace == desktop_active_workspace ||
+      workspace == desktop_previous_workspace ||
+      desktop_workspace_local_client_count(workspace) > 0) {
+    return 1;
+  }
+  if (workspace >= 1 && workspace <= DESKTOP_MAX_WORKSPACES &&
+      desktop_workspaces[idx].used) {
+    return 1;
+  }
+  return 0;
+}
+
 void gui_desktop_format_workspaces(char *out, size_t out_size) {
   size_t used = 0;
-  char label[96];
 
   if (!out || out_size == 0) {
     return;
@@ -2521,28 +2636,40 @@ void gui_desktop_format_workspaces(char *out, size_t out_size) {
   used += snprintf(out + used, out_size - used,
                    "Orizon desktop workspaces\n"
                    "active: %d\n"
+                   "previous: %d\n"
                    "count: %d\n"
+                   "max: %d\n"
                    "model: dynamic workspaces with %s tiling\n"
                    "submap: %s\n",
-                   desktop_active_workspace, desktop_workspace_count,
-  desktop_layout_engine(), desktop_submap);
+                   desktop_active_workspace, desktop_previous_workspace,
+                   desktop_workspace_count, DESKTOP_MAX_WORKSPACES,
+                   desktop_layout_engine(), desktop_submap);
   for (int i = 1; i <= desktop_workspace_count && used < out_size; i++) {
     int count = desktop_client_count_on_workspace(i);
+    int local_count = desktop_workspace_local_client_count(i);
     int last_idx = desktop_last_focused_index_on_workspace(i);
-    snprintf(label, sizeof(label), "%d client%s", count,
-             count == 1 ? "" : "s");
+    int state_idx = i - 1;
+    int ws_used = desktop_workspace_is_used(i);
+    const char *state = i == desktop_active_workspace
+                            ? "active"
+                            : (i == desktop_previous_workspace ? "previous"
+                                                               : (ws_used ? "used" : "empty"));
     used += snprintf(
         out + used, out_size - used,
-        "workspace %d: %s%s lastwindow=0x%x lasttitle=\"%s\" pinned-aware=yes\n",
-        i, count > 0 ? label : "empty",
-        i == desktop_active_workspace ? " active" : "",
+        "workspace %d: name=\"%s\" state=%s clients=%d local=%d "
+        "lastwindow=0x%x lasttitle=\"%s\" visitSeq=%llu layout=%s "
+        "dynamic=%s pinned-aware=yes\n",
+        i, desktop_workspace_name(i), state, count, local_count,
         last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx]) : 0,
-        last_idx >= 0 ? desktop_clients[last_idx].title : "none");
+        last_idx >= 0 ? desktop_clients[last_idx].title : "none",
+        (unsigned long long)desktop_workspaces[state_idx].visit_generation,
+        desktop_layout_engine(), ws_used ? "yes" : "available");
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: desktop dispatch workspace <1-%d|+1|-1|previous> | "
-             "desktop dispatch movetoworkspace <1-%d|+1|-1> | "
+             "dispatch: desktop dispatch workspace <1-%d|next|empty|+1|-1|previous> | "
+             "desktop dispatch movetoworkspace <1-%d|empty|+1|-1> | "
+             "desktop dispatch movetoworkspacesilent <target> | "
              "desktop dispatch submap <name|reset>\n",
              desktop_workspace_count, desktop_workspace_count);
   }
@@ -2595,14 +2722,16 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
     used += snprintf(
         out + used, out_size - used,
         "client address=0x%x id=%d mapped=%s hidden=%s at=%d,%d size=%dx%d "
-        "workspace=%d title=\"%s\" class=%s app=%s tiled=yes floating=no "
+        "workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tiled=yes floating=no "
         "fullscreen=%s pseudo=%s pinned=%s focused=%s focusHistoryID=%d "
         "lastWorkspace=%d mappedSeq=%llu focusSeq=%llu backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].mapped ? "true" : "false",
         desktop_clients[i].hidden ? "true" : "false", rx, ry, rw, rh,
-        desktop_clients[i].workspace, desktop_clients[i].title,
-        desktop_clients[i].app_id, desktop_clients[i].app_id,
+        desktop_clients[i].workspace,
+        desktop_workspace_name(desktop_clients[i].workspace),
+        desktop_clients[i].title, desktop_clients[i].app_id,
+        desktop_clients[i].app_id,
         desktop_clients[i].fullscreen ? "yes" : "no",
         desktop_clients[i].pseudo ? "yes" : "no",
         desktop_clients[i].pinned ? "yes" : "no",
@@ -2618,7 +2747,8 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "killactive | movefocus next|prev | "
              "cyclenext | swapnext | focusmaster | swapwithmaster | "
              "fullscreen | pseudo | pin | "
-             "workspace <n|+1|-1> | movetoworkspace <n|+1|-1> | "
+             "workspace <n|next|empty|+1|-1|previous> | "
+             "movetoworkspace <n|empty|+1|-1> | "
              "togglesplit | layoutmsg <msg> | resizeactive <x> <y> | "
              "submap <name>\n"
              "rules: class/title/app selectors prepared via %s\n"
@@ -2684,28 +2814,40 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
 
 void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
   int clients;
+  int local_clients;
   int last_idx;
+  int state_idx = desktop_active_workspace - 1;
 
   if (!out || out_size == 0) {
     return;
   }
   clients = desktop_client_count_on_workspace(desktop_active_workspace);
+  local_clients =
+      desktop_workspace_local_client_count(desktop_active_workspace);
   last_idx = desktop_last_focused_index_on_workspace(desktop_active_workspace);
   snprintf(out, out_size,
            "active workspace:\n"
            "  id: %d\n"
-           "  name: %d\n"
+           "  name: %s\n"
+           "  dynamic: true\n"
+           "  previous: %d\n"
            "  monitor: Orizon framebuffer\n"
            "  windows: %d\n"
+           "  local-windows: %d\n"
+           "  pinned-aware: true\n"
            "  layout: %s\n"
            "  split: %s ratio=%d master=%d\n"
            "  submap: %s\n"
+           "  visitSeq: %llu\n"
            "  lastwindow: 0x%x\n"
            "  lastwindowtitle: %s\n",
-           desktop_active_workspace, desktop_active_workspace, clients,
+           desktop_active_workspace,
+           desktop_workspace_name(desktop_active_workspace),
+           desktop_previous_workspace, clients, local_clients,
            desktop_layout_engine(), desktop_split_mode_name(),
            desktop_split_ratio_percent, desktop_master_ratio_percent,
            desktop_submap,
+           (unsigned long long)desktop_workspaces[state_idx].visit_generation,
            last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx])
                          : 0,
            last_idx >= 0 ? desktop_clients[last_idx].title : "none");
@@ -2853,7 +2995,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
-             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, movetoworkspace, movefocus, "
+             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, "
              "cyclenext, swapnext, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
@@ -2989,7 +3131,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: monitors, binds, layers, layouts, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "dispatchers: exec, killactive, workspace, movetoworkspace, movefocus, cyclenext, swapnext\n"
+           "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, focusmaster, swapwithmaster\n"
