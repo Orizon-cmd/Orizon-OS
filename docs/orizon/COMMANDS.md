@@ -167,6 +167,8 @@ desktop dispatch pseudo
 desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
+desktop dispatch movefocus r
+desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
@@ -312,7 +314,7 @@ animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `cyclenext`, `swapnext`,
-`focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
+`swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,

@@ -212,6 +212,8 @@ desktop hyprctl reload
 desktop dispatch fullscreen
 desktop dispatch pseudo
 desktop dispatch cyclenext
+desktop dispatch movefocus r
+desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit

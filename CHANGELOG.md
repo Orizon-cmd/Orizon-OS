@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added desktop package version `0.26.0` with Hyprland-style directional
+  tiled focus/swap dispatchers: `movefocus l|r|u|d` and
+  `swapwindow l|r|u|d`, plus generated arrow/H-L binds and package metadata.
 - Added desktop package version `0.25.0` with ten dynamic Hyprland-style
   workspace slots, `workspace next`, `workspace empty`, wrap-around relative
   workspace targets, and `movetoworkspacesilent`.

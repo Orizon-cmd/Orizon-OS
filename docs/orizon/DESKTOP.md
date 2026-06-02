@@ -96,6 +96,8 @@ desktop dispatch pseudo
 desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
+desktop dispatch movefocus r
+desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
@@ -304,10 +306,10 @@ re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch exec terminal`,
 `desktop dispatch killactive`, `desktop dispatch workspace <target>`, `desktop
 dispatch movetoworkspace <target>`, `desktop dispatch movetoworkspacesilent <target>`,
-and `desktop dispatch movefocus next|prev`
+and `desktop dispatch movefocus l|r|u|d|next|prev`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
-`swapnext`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
+`swapnext`, directional `swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
 dispatchers now include `togglesplit`,
 `layoutmsg orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
@@ -357,7 +359,8 @@ Enter/Space on an empty focus dispatches exec terminal
 desktop workspace <1-10|next|empty|+/-n|previous> switches runtime workspace
 desktop dispatch movetoworkspace <target> moves the active tiled client
 desktop dispatch movetoworkspacesilent <target> moves without changing workspace
-desktop dispatch movefocus next|prev changes focus
+desktop dispatch movefocus l|r|u|d|next|prev changes focus
+desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pin controls active client state
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios
 desktop keymap shows keyboard/submap runtime diagnostics

@@ -151,6 +151,8 @@ desktop dispatch layoutmsg splitratio +5
 desktop dispatch layoutmsg masterratio 65
 desktop dispatch focusmaster
 desktop dispatch swapwithmaster
+desktop dispatch movefocus r
+desktop dispatch swapwindow l
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop dispatch movetoworkspacesilent empty
@@ -169,7 +171,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.25.0` because it includes policy/config files, the persisted session
+`0.26.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
@@ -178,7 +180,7 @@ commands, `desktop keyword`, input/version/systeminfo/layouts/animations/decorat
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
-focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
@@ -208,6 +210,9 @@ Hyprland-style Orizon compositor facade, not upstream Wayland/wlroots.
 Version `0.25.0` expands the workspace model to ten dynamic Hyprland-style
 slots, adds `workspace next`, `workspace empty`, relative wrap-around targets,
 `movetoworkspacesilent`, and richer active/workspace diagnostics.
+Version `0.26.0` adds Hyprland-style directional tiled focus and swap:
+`movefocus l|r|u|d`, `swapwindow l|r|u|d`, generated arrow/H-L binds, and package
+metadata for these dispatchers. It still does not enable manual window dragging.
 
 ## Package Format
 

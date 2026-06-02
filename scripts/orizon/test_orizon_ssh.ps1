@@ -126,6 +126,8 @@ $commands = @(
   "desktop dispatch exec terminal",
   "desktop dispatch cyclenext",
   "desktop dispatch swapnext",
+  "desktop dispatch movefocus r",
+  "desktop dispatch swapwindow l",
   "desktop dispatch togglesplit",
   "desktop dispatch layoutmsg splitratio 60",
   "desktop dispatch submap resize",
@@ -555,6 +557,12 @@ run_cmd() {
       ;;
     "desktop dispatch swapnext")
       grep -q "desktop dispatch: swapnext" "`$OUT" || { echo "missing desktop dispatch swapnext"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch movefocus r")
+      grep -q "desktop dispatch: movefocus" "`$OUT" || { echo "missing desktop dispatch movefocus directional"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch swapwindow l")
+      grep -q "desktop dispatch: swapwindow" "`$OUT" || { echo "missing desktop dispatch swapwindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch togglesplit")
       grep -q "desktop dispatch: togglesplit" "`$OUT" && grep -q "split=" "`$OUT" || { echo "missing desktop dispatch togglesplit"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

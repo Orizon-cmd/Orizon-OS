@@ -497,6 +497,8 @@ def run_ssh_checks(
         ("desktop dispatch focusmaster", "focusmaster ok"),
         ("desktop dispatch cyclenext", "cyclenext ok"),
         ("desktop dispatch swapnext", "swapnext ok"),
+        ("desktop dispatch movefocus r", "movefocus"),
+        ("desktop dispatch swapwindow l", "swapwindow ok"),
         ("desktop dispatch togglesplit", "togglesplit split="),
         ("desktop dispatch layoutmsg splitratio 60", "splitratio 60"),
         ("desktop dispatch layoutmsg splitratio +5", "splitratio 65"),

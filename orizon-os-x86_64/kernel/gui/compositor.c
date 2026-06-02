@@ -646,6 +646,54 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
   return 0;
 }
 
+static int desktop_parse_direction_arg(const char *value, int *dx, int *dy,
+                                       int *fallback_delta) {
+  const char *v = value ? value : "";
+
+  while (*v == ' ') {
+    v++;
+  }
+  if (!v[0] || strcmp(v, "next") == 0 || strcmp(v, "forward") == 0 ||
+      strcmp(v, "n") == 0) {
+    *dx = 1;
+    *dy = 0;
+    *fallback_delta = 1;
+    return 0;
+  }
+  if (strcmp(v, "prev") == 0 || strcmp(v, "previous") == 0 ||
+      strcmp(v, "-1") == 0) {
+    *dx = -1;
+    *dy = 0;
+    *fallback_delta = -1;
+    return 0;
+  }
+  if (strcmp(v, "l") == 0 || strcmp(v, "left") == 0) {
+    *dx = -1;
+    *dy = 0;
+    *fallback_delta = -1;
+    return 0;
+  }
+  if (strcmp(v, "r") == 0 || strcmp(v, "right") == 0) {
+    *dx = 1;
+    *dy = 0;
+    *fallback_delta = 1;
+    return 0;
+  }
+  if (strcmp(v, "u") == 0 || strcmp(v, "up") == 0) {
+    *dx = 0;
+    *dy = -1;
+    *fallback_delta = -1;
+    return 0;
+  }
+  if (strcmp(v, "d") == 0 || strcmp(v, "down") == 0) {
+    *dx = 0;
+    *dy = 1;
+    *fallback_delta = 1;
+    return 0;
+  }
+  return -1;
+}
+
 static int desktop_client_on_workspace(const desktop_client_t *client,
                                        int workspace) {
   if (!client || !client->visible) {
@@ -1066,6 +1114,21 @@ static int desktop_swap_relative(int delta) {
   return 0;
 }
 
+static int desktop_swap_client_indices(int focused_idx, int other_idx) {
+  desktop_client_t tmp;
+
+  if (focused_idx < 0 || other_idx < 0 || focused_idx == other_idx) {
+    return -1;
+  }
+  tmp = desktop_clients[focused_idx];
+  desktop_clients[focused_idx] = desktop_clients[other_idx];
+  desktop_clients[other_idx] = tmp;
+  desktop_set_focused_client_index(other_idx);
+  desktop_sync_terminal_compat();
+  needs_redraw = 1;
+  return 0;
+}
+
 static int desktop_focus_master_client(void) {
   int idx = desktop_nth_client_on_workspace(desktop_active_workspace, 0);
 
@@ -1081,18 +1144,11 @@ static int desktop_focus_master_client(void) {
 static int desktop_swap_with_master(void) {
   int focused_idx = desktop_focused_client_index();
   int master_idx = desktop_nth_client_on_workspace(desktop_active_workspace, 0);
-  desktop_client_t tmp;
 
   if (focused_idx < 0 || master_idx < 0 || focused_idx == master_idx) {
     return -1;
   }
-  tmp = desktop_clients[focused_idx];
-  desktop_clients[focused_idx] = desktop_clients[master_idx];
-  desktop_clients[master_idx] = tmp;
-  desktop_set_focused_client_index(master_idx);
-  desktop_sync_terminal_compat();
-  needs_redraw = 1;
-  return 0;
+  return desktop_swap_client_indices(focused_idx, master_idx);
 }
 
 static int desktop_toggle_active_fullscreen(void) {
@@ -1384,6 +1440,128 @@ static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
   if (*rh < 0) {
     *rh = 0;
   }
+}
+
+static int desktop_directional_neighbor_index(int focused_idx, int dx, int dy) {
+  int fx;
+  int fy;
+  int fw;
+  int fh;
+  int fcx;
+  int fcy;
+  int best_idx = -1;
+  int best_primary = 0;
+  int best_secondary = 0;
+
+  if (focused_idx < 0 || focused_idx >= DESKTOP_MAX_CLIENTS ||
+      (dx == 0 && dy == 0)) {
+    return -1;
+  }
+  desktop_client_rect(focused_idx, &fx, &fy, &fw, &fh);
+  if (fw <= 0 || fh <= 0) {
+    return -1;
+  }
+  fcx = fx + fw / 2;
+  fcy = fy + fh / 2;
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    int cx;
+    int cy;
+    int primary;
+    int secondary;
+
+    if (i == focused_idx ||
+        !desktop_client_on_workspace(&desktop_clients[i],
+                                     desktop_active_workspace)) {
+      continue;
+    }
+    desktop_client_rect(i, &rx, &ry, &rw, &rh);
+    if (rw <= 0 || rh <= 0) {
+      continue;
+    }
+    cx = rx + rw / 2;
+    cy = ry + rh / 2;
+    if (dx < 0) {
+      if (cx >= fcx) {
+        continue;
+      }
+      primary = fcx - cx;
+      secondary = cy > fcy ? cy - fcy : fcy - cy;
+    } else if (dx > 0) {
+      if (cx <= fcx) {
+        continue;
+      }
+      primary = cx - fcx;
+      secondary = cy > fcy ? cy - fcy : fcy - cy;
+    } else if (dy < 0) {
+      if (cy >= fcy) {
+        continue;
+      }
+      primary = fcy - cy;
+      secondary = cx > fcx ? cx - fcx : fcx - cx;
+    } else {
+      if (cy <= fcy) {
+        continue;
+      }
+      primary = cy - fcy;
+      secondary = cx > fcx ? cx - fcx : fcx - cx;
+    }
+    if (best_idx < 0 || primary < best_primary ||
+        (primary == best_primary && secondary < best_secondary)) {
+      best_idx = i;
+      best_primary = primary;
+      best_secondary = secondary;
+    }
+  }
+  return best_idx;
+}
+
+static int desktop_focus_directional(int dx, int dy, int fallback_delta,
+                                     int *used_fallback) {
+  int focused_idx = desktop_focused_client_index();
+  int target_idx;
+
+  if (used_fallback) {
+    *used_fallback = 0;
+  }
+  if (focused_idx < 0) {
+    return -1;
+  }
+  target_idx = desktop_directional_neighbor_index(focused_idx, dx, dy);
+  if (target_idx >= 0) {
+    desktop_set_focused_client_index(target_idx);
+    desktop_sync_terminal_compat();
+    needs_redraw = 1;
+    return 0;
+  }
+  if (used_fallback) {
+    *used_fallback = 1;
+  }
+  return desktop_focus_relative(fallback_delta);
+}
+
+static int desktop_swap_directional(int dx, int dy, int fallback_delta,
+                                    int *used_fallback) {
+  int focused_idx = desktop_focused_client_index();
+  int target_idx;
+
+  if (used_fallback) {
+    *used_fallback = 0;
+  }
+  if (focused_idx < 0) {
+    return -1;
+  }
+  target_idx = desktop_directional_neighbor_index(focused_idx, dx, dy);
+  if (target_idx >= 0) {
+    return desktop_swap_client_indices(focused_idx, target_idx);
+  }
+  if (used_fallback) {
+    *used_fallback = 1;
+  }
+  return desktop_swap_relative(fallback_delta);
 }
 
 static int desktop_focus_client_at(int x, int y) {
@@ -2258,7 +2436,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|next|empty|+1|-1|previous> | movetoworkspace <target> | movetoworkspacesilent <target> | "
-               "movefocus next|prev | fullscreen | pseudo | pin | swapnext | "
+               "movefocus <l|r|u|d|next|prev> | swapwindow <l|r|u|d|next|prev> | fullscreen | pseudo | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
     }
@@ -2320,13 +2498,23 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     return -1;
   }
   if (strcmp(dispatcher, "movefocus") == 0) {
-    int rc = (strcmp(a, "prev") == 0 || strcmp(a, "l") == 0 ||
-              strcmp(a, "u") == 0)
-                 ? gui_desktop_focus_prev_client()
-                 : gui_desktop_focus_next_client();
+    int dx = 0;
+    int dy = 0;
+    int delta = 1;
+    int fallback = 0;
+    int rc;
+    if (desktop_parse_direction_arg(a, &dx, &dy, &delta) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: movefocus expects l/r/u/d/next/prev\n");
+      }
+      return -1;
+    }
+    rc = desktop_focus_directional(dx, dy, delta, &fallback);
     if (out && out_size) {
-      snprintf(out, out_size, "desktop dispatch: movefocus %s\n",
-               rc == 0 ? "ok" : "no-client");
+      snprintf(out, out_size, "desktop dispatch: movefocus %s%s\n",
+               rc == 0 ? "ok" : "no-client",
+               fallback && rc == 0 ? " fallback=cycle" : "");
     }
     return rc;
   }
@@ -2349,6 +2537,27 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size, "desktop dispatch: swapnext %s\n",
                rc == 0 ? "ok" : "needs-two-clients");
+    }
+    return rc;
+  }
+  if (strcmp(dispatcher, "swapwindow") == 0) {
+    int dx = 0;
+    int dy = 0;
+    int delta = 1;
+    int fallback = 0;
+    int rc;
+    if (desktop_parse_direction_arg(a, &dx, &dy, &delta) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: swapwindow expects l/r/u/d/next/prev\n");
+      }
+      return -1;
+    }
+    rc = desktop_swap_directional(dx, dy, delta, &fallback);
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: swapwindow %s%s\n",
+               rc == 0 ? "ok" : "needs-two-clients",
+               fallback && rc == 0 ? " fallback=cycle" : "");
     }
     return rc;
   }
@@ -2744,8 +2953,8 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: exec terminal|settings|logs|packages|update | "
-             "killactive | movefocus next|prev | "
-             "cyclenext | swapnext | focusmaster | swapwithmaster | "
+             "killactive | movefocus l|r|u|d|next|prev | "
+             "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
              "fullscreen | pseudo | pin | "
              "workspace <n|next|empty|+1|-1|previous> | "
              "movetoworkspace <n|empty|+1|-1> | "
@@ -2892,8 +3101,9 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: desktop dispatch movefocus next|prev | "
+             "dispatch: desktop dispatch movefocus l|r|u|d|next|prev | "
              "desktop dispatch cyclenext [prev] | "
+             "desktop dispatch swapwindow l|r|u|d | "
              "desktop dispatch focusmaster\n");
   }
 }
@@ -2996,7 +3206,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
              "supported: exec terminal/settings/logs/packages/update, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, "
-             "cyclenext, swapnext, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
+             "cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
@@ -3026,7 +3236,7 @@ void gui_desktop_format_layouts(char *out, size_t out_size) {
            "submap: %s\n"
            "clients: total=%d workspace=%d focused=0x%x focus-history=%s\n"
            "set: desktop layout <dwindle|master|monocle>\n"
-           "dispatch: desktop dispatch togglesplit | desktop dispatch focusmaster | desktop dispatch swapwithmaster\n"
+           "dispatch: desktop dispatch togglesplit | desktop dispatch focusmaster | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d\n"
            "dispatch: desktop dispatch layoutmsg splitratio <10-90|+/-n> | desktop dispatch layoutmsg masterratio <10-90|+/-n>\n"
            "hyprctl: desktop hyprctl layouts\n"
            "limits: layout plugins and per-window layout rules are not implemented yet\n",
@@ -3131,7 +3341,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: monitors, binds, layers, layouts, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext\n"
+           "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, focusmaster, swapwithmaster\n"

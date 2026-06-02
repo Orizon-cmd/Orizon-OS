@@ -49,7 +49,7 @@
   `/system/desktop-modules.conf` split map for future module packages, generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, relative/dynamic
-  workspaces with next/empty targets, fullscreen/pseudo/pinned client state, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg`/`resizeactive`/`submap`,
+  workspaces with next/empty targets, fullscreen/pseudo/pinned client state, directional `movefocus`/`swapwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default

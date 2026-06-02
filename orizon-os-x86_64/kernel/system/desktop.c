@@ -108,6 +108,14 @@ static const char *desktop_user_config =
     "bind = $mod SHIFT, R, submap, reset\n"
     "bind = $mod, H, movefocus, l\n"
     "bind = $mod, L, movefocus, r\n"
+    "bind = $mod, left, movefocus, l\n"
+    "bind = $mod, right, movefocus, r\n"
+    "bind = $mod, up, movefocus, u\n"
+    "bind = $mod, down, movefocus, d\n"
+    "bind = $mod SHIFT, left, swapwindow, l\n"
+    "bind = $mod SHIFT, right, swapwindow, r\n"
+    "bind = $mod SHIFT, up, swapwindow, u\n"
+    "bind = $mod SHIFT, down, swapwindow, d\n"
     "bind = $mod, Tab, cyclenext\n"
     "bind = $mod SHIFT, Tab, swapnext\n"
     "bind = $mod, C, exec, desktop session\n"
@@ -162,6 +170,16 @@ static const char *desktop_binds_runtime_config =
     "bind = $mod, P, pseudo\n"
     "bind = $mod, J, togglesplit\n"
     "bind = $mod, S, layoutmsg, swapwithmaster\n"
+    "bind = $mod, H, movefocus, l\n"
+    "bind = $mod, L, movefocus, r\n"
+    "bind = $mod, left, movefocus, l\n"
+    "bind = $mod, right, movefocus, r\n"
+    "bind = $mod, up, movefocus, u\n"
+    "bind = $mod, down, movefocus, d\n"
+    "bind = $mod SHIFT, left, swapwindow, l\n"
+    "bind = $mod SHIFT, right, swapwindow, r\n"
+    "bind = $mod SHIFT, up, swapwindow, u\n"
+    "bind = $mod SHIFT, down, swapwindow, d\n"
     "bind = F9, submap, resize\n"
     "bind = F10, submap, move\n"
     "bind = F11, submap, launch\n"
@@ -643,6 +661,7 @@ static int desktop_hypr_dispatch_supported(const char *value) {
           strstr(value, "pseudo") || strstr(value, "pin") ||
           strstr(value, "focusmaster") || strstr(value, "swapwithmaster") ||
           strstr(value, "cyclenext") || strstr(value, "swapnext") ||
+          strstr(value, "swapwindow") ||
           strstr(value, "togglesplit") || strstr(value, "layoutmsg") ||
           strstr(value, "resizeactive") || strstr(value, "submap"));
 }
@@ -1306,6 +1325,14 @@ static int desktop_write_user_config_from_state(
            "bind = $mod SHIFT, R, submap, reset\n"
            "bind = $mod, H, movefocus, l\n"
            "bind = $mod, L, movefocus, r\n"
+           "bind = $mod, left, movefocus, l\n"
+           "bind = $mod, right, movefocus, r\n"
+           "bind = $mod, up, movefocus, u\n"
+           "bind = $mod, down, movefocus, d\n"
+           "bind = $mod SHIFT, left, swapwindow, l\n"
+           "bind = $mod SHIFT, right, swapwindow, r\n"
+           "bind = $mod SHIFT, up, swapwindow, u\n"
+           "bind = $mod SHIFT, down, swapwindow, d\n"
            "bind = $mod, Tab, cyclenext\n"
            "bind = $mod SHIFT, Tab, swapnext\n"
            "bind = $mod, C, exec, desktop session\n"
@@ -3416,7 +3443,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; dispatch supports next/empty/+/-n\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus | cyclenext | swapnext | fullscreen | pseudo | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus l/r/u/d | cyclenext | swapnext | swapwindow | fullscreen | pseudo | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

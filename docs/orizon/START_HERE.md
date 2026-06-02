@@ -48,7 +48,8 @@ design note.
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
   `desktop version/devices/systeminfo/layouts/animations/decorations/render/configerrors/rollinglog/focus-history`,
   `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
-  plus split/master ratio layout messages, workspace next/empty targets, and
+  plus split/master ratio layout messages, directional movefocus/swapwindow,
+  workspace next/empty targets, and
   silent move-to-workspace dispatch,
   preserved `layerrule`/`bindm`/`bindl`/animation/input hints without default
   free-drag window moving,
