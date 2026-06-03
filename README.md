@@ -71,8 +71,8 @@ le developpement noyau:
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
-  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/client-model/rule-matches`, facade
-  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -170,9 +170,9 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-state`, `desktop layout-tree`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
-`desktop focus-history`, `desktop client-model`, `desktop rule-matches`,
+`desktop focus-history`, `desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`,
 `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -203,6 +203,9 @@ workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 l'etat tiling par workspace: layout actif, split mode, split ratio et master
 ratio. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` modifie le
 workspace courant sans activer de fenetres flottantes ni de drag manuel.
+`desktop workspace-stack` et `desktop hyprctl workspacestack` exposent le stack
+par workspace: client master, clients stack/dwindle, scope local/pinned,
+rang de focus et geometrie, toujours avec `manual-drag=no`.
 `desktop client-model` et `desktop hyprctl clientmodel` agregent workspaces,
 clients, focus history, etats fullscreen/pseudo/pinned, regles et backend dans
 un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
@@ -227,7 +230,7 @@ direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
-focus-history`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
+focus-history`, `desktop workspace-stack`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
 stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned,
 regles appliquees au spawn, backend et workspace courant/precedent avec
 `focusHistoryID`. `desktop

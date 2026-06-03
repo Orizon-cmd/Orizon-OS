@@ -3364,6 +3364,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop configerrors    show Hyprland-style config parser errors\r\n"
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop focus-history   show Hyprland-style focusHistoryID order\r\n"
+             "  desktop workspace-stack show master/stack/focus order per workspace\r\n"
              "  desktop client-model    show client/workspace/focus state graph\r\n"
              "  desktop rule-matches    show windowrulev2 matches against tiled clients\r\n"
              "  desktop modules         show prepared modular desktop packages\r\n"
@@ -3627,6 +3628,10 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "focus-history") ||
              ssh_shell_command_is(sub, "focushistory")) {
     gui_desktop_format_focus_history(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "workspace-stack") ||
+             ssh_shell_command_is(sub, "workspacestack") ||
+             ssh_shell_command_is(sub, "stack")) {
+    gui_desktop_format_workspace_stack(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
     const char *app = ssh_shell_command_is(sub, "apps")
@@ -3689,7 +3694,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3721,6 +3726,10 @@ static void ssh_shell_print_desktop(const char *args) {
     } else if (ssh_shell_command_is(hypr, "focushistory") ||
                ssh_shell_command_is(hypr, "focus-history")) {
       gui_desktop_format_focus_history(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "workspacestack") ||
+               ssh_shell_command_is(hypr, "workspace-stack") ||
+               ssh_shell_command_is(hypr, "stack")) {
+      gui_desktop_format_workspace_stack(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "binds")) {

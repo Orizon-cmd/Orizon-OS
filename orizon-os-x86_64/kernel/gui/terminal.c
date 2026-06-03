@@ -3785,6 +3785,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop configerrors    - Show Hyprland-style config parser errors\n");
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop focus-history   - Show Hyprland-style focusHistoryID order\n");
+    term_puts_t(term, "  desktop workspace-stack - Show master/stack/focus order per workspace\n");
     term_puts_t(term, "  desktop client-model    - Show client/workspace/focus state graph\n");
     term_puts_t(term, "  desktop rule-matches    - Show windowrulev2 matches against tiled clients\n");
     term_puts_t(term, "  desktop modules         - Show prepared modular desktop packages\n");
@@ -4155,6 +4156,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "workspace-stack") ||
+      term_command_is(args, "workspacestack") ||
+      term_command_is(args, "stack")) {
+    gui_desktop_format_workspace_stack(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     const char *app = term_command_is(args, "apps")
                           ? term_skip_spaces(args + 4)
@@ -4237,7 +4245,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4271,6 +4279,10 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     } else if (term_command_is(hypr, "focushistory") ||
                term_command_is(hypr, "focus-history")) {
       gui_desktop_format_focus_history(report, sizeof(report));
+    } else if (term_command_is(hypr, "workspacestack") ||
+               term_command_is(hypr, "workspace-stack") ||
+               term_command_is(hypr, "stack")) {
+      gui_desktop_format_workspace_stack(report, sizeof(report));
     } else if (term_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(report, sizeof(report));
     } else if (term_command_is(hypr, "binds")) {

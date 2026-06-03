@@ -61,10 +61,10 @@
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, read-only config trace
   diagnostics, split/master ratio controls, active F9/F10/F11 keyboard submaps,
-  explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/configtrace/rollinglog/focushistory/cursorpos diagnostics,
+  explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
   software focus ring, persistent shadow range/render profile/animation
   tick budget controls, backend/protocol architecture truth maps, active
-  layout-tree diagnostics with client roles/rectangles/manual-drag boundary,
+  layout-tree and workspace-stack diagnostics with client roles/rectangles/master/focus order/manual-drag boundary,
   and ticked focus/workspace/layout transitions,
   pointer diagnostics, native tiling apps for settings/logs/packages/update,
   app catalog/details with class/module/surface diagnostics and launcher

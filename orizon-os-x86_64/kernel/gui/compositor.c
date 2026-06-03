@@ -1832,7 +1832,33 @@ static int desktop_client_position_on_workspace(int idx, int workspace) {
   return -1;
 }
 
-static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
+static const char *desktop_client_role_on_workspace(int workspace, int idx,
+                                                    int pos, int count) {
+  int layout_mode;
+
+  if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
+      !desktop_clients[idx].visible) {
+    return "missing";
+  }
+  if (desktop_clients[idx].fullscreen) {
+    return "fullscreen";
+  }
+  layout_mode = desktop_layout_mode_from_name(
+      desktop_layout_engine_for_workspace(workspace));
+  if (layout_mode == 2) {
+    return "monocle";
+  }
+  if (layout_mode == 1) {
+    return pos == 0 ? "master" : "stack";
+  }
+  if (count <= 1) {
+    return "single";
+  }
+  return pos == 0 ? "dwindle-root" : "dwindle-leaf";
+}
+
+static void desktop_client_rect_for_workspace(int idx, int workspace, int *rx,
+                                              int *ry, int *rw, int *rh) {
   int outer_gap = desktop_settings.gaps_out;
   int inner_gap = desktop_settings.gaps_in;
   int area_x = 44 + outer_gap;
@@ -1841,7 +1867,6 @@ static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
   int area_h = (int)screen_height - area_y - FOOTER_HEIGHT - 18 - outer_gap;
   int count;
   int pos;
-  int workspace;
   int layout_mode;
   int split_mode;
   int split_ratio_percent;
@@ -1858,8 +1883,9 @@ static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
       !desktop_clients[idx].visible) {
     return;
   }
-  workspace = desktop_clients[idx].pinned ? desktop_active_workspace
-                                          : desktop_clients[idx].workspace;
+  if (!desktop_client_on_workspace(&desktop_clients[idx], workspace)) {
+    return;
+  }
   if (area_w < 120) {
     area_w = 120;
   }
@@ -1896,6 +1922,30 @@ static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
   if (*rh < 0) {
     *rh = 0;
   }
+}
+
+static void desktop_client_rect(int idx, int *rx, int *ry, int *rw, int *rh) {
+  int workspace;
+
+  if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
+      !desktop_clients[idx].visible) {
+    if (rx) {
+      *rx = 0;
+    }
+    if (ry) {
+      *ry = 0;
+    }
+    if (rw) {
+      *rw = 0;
+    }
+    if (rh) {
+      *rh = 0;
+    }
+    return;
+  }
+  workspace = desktop_clients[idx].pinned ? desktop_active_workspace
+                                          : desktop_clients[idx].workspace;
+  desktop_client_rect_for_workspace(idx, workspace, rx, ry, rw, rh);
 }
 
 static int desktop_directional_neighbor_index(int focused_idx, int dx, int dy) {
@@ -4149,8 +4199,8 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
 
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "\ncommands: desktop clients | desktop workspaces | desktop focus-history | desktop rule-matches | desktop layout-tree\n"
-             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl rulematches | desktop hyprctl clients | desktop hyprctl workspaces\n"
+             "\ncommands: desktop clients | desktop workspaces | desktop focus-history | desktop workspace-stack | desktop rule-matches | desktop layout-tree\n"
+             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl workspacestack | desktop hyprctl rulematches | desktop hyprctl clients | desktop hyprctl workspaces\n"
              "limits: VM-safe diagnostic only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
 }
@@ -4417,6 +4467,92 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
   }
 }
 
+void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
+  size_t used = 0;
+  int active_idx;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_focus_history_compact();
+  active_idx = desktop_client_index_by_id(desktop_focused_client_id);
+  used += snprintf(out + used, out_size - used,
+                   "Orizon desktop workspace stack\n"
+                   "model: per-workspace tiled order, master/focus diagnostics, manual-drag=no floating=no\n"
+                   "active-workspace: %d name=\"%s\"\n"
+                   "active-client: 0x%x\n"
+                   "focus-history: most-recent-first focusHistoryID\n",
+                   desktop_active_workspace,
+                   desktop_workspace_name(desktop_active_workspace),
+                   active_idx >= 0
+                       ? desktop_client_address(&desktop_clients[active_idx])
+                       : 0);
+  for (int ws = 1; ws <= desktop_workspace_count && used < out_size; ws++) {
+    int count = desktop_client_count_on_workspace(ws);
+    int local_count = desktop_workspace_local_client_count(ws);
+    int master_idx = desktop_nth_client_on_workspace(ws, 0);
+    int focus_idx = desktop_last_focused_index_on_workspace(ws);
+    const char *state = ws == desktop_active_workspace
+                            ? "active"
+                            : (ws == desktop_previous_workspace ? "previous"
+                                                                 : (desktop_workspace_is_used(ws) ? "used" : "empty"));
+
+    used += snprintf(
+        out + used, out_size - used,
+        "workspace %d \"%s\": state=%s layout=%s clients=%d local=%d "
+        "master=0x%x focus=0x%x pinned-aware=yes\n",
+        ws, desktop_workspace_name(ws), state,
+        desktop_layout_engine_for_workspace(ws), count, local_count,
+        master_idx >= 0 ? desktop_client_address(&desktop_clients[master_idx])
+                        : 0,
+        focus_idx >= 0 ? desktop_client_address(&desktop_clients[focus_idx])
+                       : 0);
+    if (count <= 0 && used < out_size) {
+      used += snprintf(out + used, out_size - used,
+                       "  empty: dispatch exec terminal/settings/logs/packages/update to add a tiled client\n");
+    }
+    for (int pos = 0; pos < count && used < out_size; pos++) {
+      int idx = desktop_nth_client_on_workspace(ws, pos);
+      int rx;
+      int ry;
+      int rw;
+      int rh;
+      int rank;
+      const char *scope;
+
+      if (idx < 0) {
+        continue;
+      }
+      desktop_client_rect_for_workspace(idx, ws, &rx, &ry, &rw, &rh);
+      rank = desktop_focus_rank_for_id(desktop_clients[idx].id);
+      scope = desktop_clients[idx].pinned ? "pinned"
+                                          : (desktop_clients[idx].workspace == ws
+                                                 ? "local"
+                                                 : "foreign");
+      used += snprintf(
+          out + used, out_size - used,
+          "  %d: role=%s address=0x%x id=%d title=\"%s\" class=%s scope=%s "
+          "focused=%s focusRank=%d focusHistoryID=%d rect=%d,%d %dx%d "
+          "fullscreen=%s pseudo=%s pinned=%s\n",
+          pos, desktop_client_role_on_workspace(ws, idx, pos, count),
+          desktop_client_address(&desktop_clients[idx]), desktop_clients[idx].id,
+          desktop_clients[idx].title, desktop_clients[idx].app_id, scope,
+          idx == focus_idx ? "yes" : "no", rank,
+          desktop_clients[idx].focus_history_id, rx, ry, rw, rh,
+          desktop_clients[idx].fullscreen ? "yes" : "no",
+          desktop_clients[idx].pseudo ? "yes" : "no",
+          desktop_clients[idx].pinned ? "yes" : "no");
+    }
+  }
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "dispatch: desktop dispatch focusmaster | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d | desktop dispatch movetoworkspace <target>\n"
+             "hyprctl: desktop hyprctl workspacestack\n"
+             "limits: diagnostic stack only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
+  }
+}
+
 void gui_desktop_format_monitors(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -4659,25 +4795,18 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
     int ry;
     int rw;
     int rh;
-    const char *role = "dwindle-leaf";
 
     if (idx < 0) {
       continue;
     }
     desktop_client_rect(idx, &rx, &ry, &rw, &rh);
-    if (desktop_clients[idx].fullscreen) {
-      role = "fullscreen";
-    } else if (strcmp(engine, "monocle") == 0) {
-      role = "monocle";
-    } else if (strcmp(engine, "master") == 0) {
-      role = pos == 0 ? "master" : "stack";
-    } else if (count == 1) {
-      role = "single";
-    }
     used += snprintf(
         out + used, out_size - used,
         "node %d: role=%s address=0x%x id=%d title=\"%s\" class=%s rect=%d,%d %dx%d focused=%s fullscreen=%s pseudo=%s pinned=%s focusHistoryID=%d\n",
-        pos, role, desktop_client_address(&desktop_clients[idx]),
+        pos,
+        desktop_client_role_on_workspace(desktop_active_workspace, idx, pos,
+                                         count),
+        desktop_client_address(&desktop_clients[idx]),
         desktop_clients[idx].id, desktop_clients[idx].title,
         desktop_clients[idx].app_id, rx, ry, rw, rh,
         idx == active_idx ? "yes" : "no",
@@ -4795,7 +4924,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, clientmodel, rulematches, workspaces, activeworkspace, activewindow\n"
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
-           "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory\n"
+           "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"

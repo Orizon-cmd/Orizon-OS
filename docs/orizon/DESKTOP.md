@@ -70,6 +70,7 @@ desktop submap
 desktop configerrors
 desktop rollinglog
 desktop focus-history
+desktop workspace-stack
 desktop client-model
 desktop rule-matches
 desktop keyword general:gaps_in 9
@@ -81,6 +82,7 @@ desktop hyprctl clientmodel
 desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
+desktop hyprctl workspacestack
 desktop hyprctl layouts
 desktop hyprctl layoutstate
 desktop hyprctl layouttree
@@ -361,7 +363,7 @@ be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
 `desktop layouts`, `desktop layout-state`, `desktop layout-tree`, `desktop animations`,
 `desktop render`, `desktop configerrors`, `desktop config trace`,
-`desktop rollinglog`, `desktop focus-history`, `desktop client-model`, `desktop rule-matches`, `desktop decorations`,
+`desktop rollinglog`, `desktop focus-history`, `desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop render` is the most direct VM-safe renderer diagnostic: it reports the
@@ -383,6 +385,11 @@ per-workspace tiling state: layout engine, split mode, split ratio and master
 ratio for each workspace. `desktop dispatch layoutmsg layout
 <dwindle|master|monocle>` changes only the active workspace layout; it does not
 enable floating windows or manual drag.
+`desktop workspace-stack` and `desktop hyprctl workspacestack` expose a
+per-workspace stack view: master candidate, stack/dwindle order, focused client
+for that workspace, local vs pinned scope, focus rank, stable address, and
+geometry. This is a diagnostic over Orizon's framebuffer compositor, not a
+wlroots scene graph.
 `desktop backend` and `desktop protocol` expose the architecture seam for the
 future real compositor path. Today they report `current-backend:
 framebuffer-vm`, `protocol: orizon-desktop-ipc-v0`, software backbuffer
@@ -413,7 +420,7 @@ dispatchers now include `togglesplit`,
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
+version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -421,7 +428,7 @@ value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 [args]` maps to Orizon's dispatcher layer.
 
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
-focus-history`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
+focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
 Orizon addresses, `at/size` geometry, workspace graph, rules runtime, backend
 boundary, fullscreen/pseudo/pinned flags, and Hyprland-style `focusHistoryID`.
 `desktop hyprctl clientmodel` mirrors this read-only state graph.

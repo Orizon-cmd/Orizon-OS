@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.41.0` with `desktop workspace-stack` and
+  `desktop hyprctl workspacestack`, a VM-safe Hyprland-style diagnostic for
+  per-workspace master/stack/focus order, pinned/local client scope, stable
+  client addresses, focus ranks, and geometry while preserving
+  `manual-drag=no`.
 - Added desktop package version `0.40.0` with per-workspace tiling layout
   state. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` now
   changes the active workspace layout without enabling floating/free-drag

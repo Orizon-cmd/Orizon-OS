@@ -121,6 +121,7 @@ $commands = @(
   "desktop configerrors",
   "desktop rollinglog",
   "desktop client-model",
+  "desktop workspace-stack",
   "desktop rule-matches",
   "desktop keyword general:gaps_in 9",
   "desktop hyprctl version",
@@ -130,6 +131,7 @@ $commands = @(
   "desktop hyprctl clientmodel",
   "desktop hyprctl rulematches",
   "desktop hyprctl activeworkspace",
+  "desktop hyprctl workspacestack",
   "desktop hyprctl layouts",
   "desktop hyprctl layoutstate",
   "desktop hyprctl layouttree",
@@ -614,6 +616,9 @@ run_cmd() {
       ;;
     "desktop client-model"|"desktop hyprctl clientmodel")
       grep -q "Orizon desktop client model" "`$OUT" && grep -q "manual-drag=no" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop client model"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop workspace-stack"|"desktop hyprctl workspacestack")
+      grep -q "Orizon desktop workspace stack" "`$OUT" && grep -q "master/stack/focus" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop workspace stack"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop rule-matches"|"desktop hyprctl rulematches")
       grep -q "Orizon desktop rule matches" "`$OUT" && grep -q "windowrulev2" "`$OUT" && grep -q "safe-actions=tile" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop rule matches"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

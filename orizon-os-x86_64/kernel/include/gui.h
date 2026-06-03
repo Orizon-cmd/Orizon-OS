@@ -99,6 +99,7 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size);
 void gui_desktop_format_activewindow(char *out, size_t out_size);
 void gui_desktop_format_activeworkspace(char *out, size_t out_size);
 void gui_desktop_format_focus_history(char *out, size_t out_size);
+void gui_desktop_format_workspace_stack(char *out, size_t out_size);
 void gui_desktop_format_monitors(char *out, size_t out_size);
 void gui_desktop_format_layers(char *out, size_t out_size);
 void gui_desktop_format_binds(char *out, size_t out_size);

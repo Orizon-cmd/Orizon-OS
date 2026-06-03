@@ -208,6 +208,7 @@ desktop configerrors
 desktop config trace
 desktop rollinglog
 desktop focus-history
+desktop workspace-stack
 desktop client-model
 desktop rule-matches
 desktop keyword general:gaps_in 9
@@ -217,6 +218,7 @@ desktop hyprctl clientmodel
 desktop hyprctl rulematches
 desktop hyprctl activewindow
 desktop hyprctl focushistory
+desktop hyprctl workspacestack
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop backend

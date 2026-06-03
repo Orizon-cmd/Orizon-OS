@@ -143,6 +143,7 @@ desktop submap
 desktop configerrors
 desktop rollinglog
 desktop focus-history
+desktop workspace-stack
 desktop client-model
 desktop rule-matches
 desktop keyword general:gaps_in 9
@@ -154,6 +155,7 @@ desktop hyprctl clientmodel
 desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
+desktop hyprctl workspacestack
 desktop hyprctl layouts
 desktop hyprctl layoutstate
 desktop hyprctl layouttree
@@ -355,7 +357,7 @@ and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop render`, `desktop submap`, `desktop configerrors`,
 `desktop config trace`, `desktop rollinglog`, `desktop focus-history`,
-`desktop client-model`, and `desktop rule-matches` expose more Hyprland-like inspection surfaces,
+`desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
@@ -366,7 +368,7 @@ including `layoutmsg layout <dwindle|master|monocle>`,
 `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
@@ -375,6 +377,9 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `manual-drag=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
+`desktop workspace-stack` and `desktop hyprctl workspacestack` show
+master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
+and geometry for each workspace,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

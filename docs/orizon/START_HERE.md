@@ -48,7 +48,7 @@ design note.
   with F1 exec terminal, F2 killactive, F3 launcher, F4 fullscreen, F5 pseudo,
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
-  `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches`,
+  `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`,
   `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
   plus split/master ratio and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
@@ -60,8 +60,8 @@ design note.
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
   v2 state health/counters,
-  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`, `desktop backend`, `desktop protocol`, `desktop autostart`,
-  `desktop windows/clients/activewindow/client-model/rule-matches`, active tiling-tree diagnostics,
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`, `desktop backend`, `desktop protocol`, `desktop autostart`,
+  `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`
