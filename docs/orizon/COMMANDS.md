@@ -232,6 +232,9 @@ desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace 2
 desktop dispatch workspace previous
 desktop dispatch workspace +1
+desktop dispatch renameworkspace 2 dev
+desktop dispatch workspace name:dev
+desktop dispatch movetoworkspace name:dev
 desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop workspace empty
@@ -365,7 +368,7 @@ layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `cyclenext`, `swapnext`,
+`workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,

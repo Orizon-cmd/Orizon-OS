@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.43.0` with Hyprland-style workspace naming:
+  `desktop dispatch renameworkspace <target> <safe-name>`, `workspace
+  name:<name>`, and `movetoworkspace name:<name>` now work in the VM
+  compositor while keeping the tiling-only/no-manual-drag model.
 - Fixed a ZimaOS VM boot/reset loop seen after AHCI storage discovery by
   keeping the libvirt iTCO watchdog explicitly non-resetting, skipping automatic
   persistence auto-load during `orizon.safe=1`, and reading persistence slots

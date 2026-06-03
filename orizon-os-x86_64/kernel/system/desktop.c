@@ -3900,7 +3900,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
-                 "windows: desktop windows | desktop workspace <1-10|next|empty|+/-n|previous> | desktop dispatch movetoworkspace <target>\n");
+                 "windows: desktop windows | desktop workspace <1-10|name:<name>|next|empty|+/-n|previous> | desktop dispatch renameworkspace <target> <name> | desktop dispatch movetoworkspace <target>\n");
 }
 
 void orizon_desktop_format_session_state(char *out, size_t out_size) {

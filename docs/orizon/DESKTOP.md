@@ -153,6 +153,9 @@ desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace 2
 desktop dispatch workspace previous
 desktop dispatch workspace +1
+desktop dispatch renameworkspace 2 dev
+desktop dispatch workspace name:dev
+desktop dispatch movetoworkspace name:dev
 desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop workspace empty
@@ -410,8 +413,9 @@ runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
 input/misc/layout hints, variables, and binds. `desktop hyprctl reload` now
 re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch exec terminal`,
-`desktop dispatch killactive`, `desktop dispatch workspace <target>`, `desktop
-dispatch movetoworkspace <target>`, `desktop dispatch movetoworkspacesilent <target>`,
+`desktop dispatch killactive`, `desktop dispatch workspace <target>`,
+`desktop dispatch renameworkspace <target> <name>`, `desktop dispatch
+workspace name:<name>`, `desktop dispatch movetoworkspace <target>`, `desktop dispatch movetoworkspacesilent <target>`,
 `desktop dispatch movefocus l|r|u|d|next|prev`, and
 `desktop dispatch focuswindow <id|0xaddr|class:app|title:text>`
 exercise the same mental model as Hyprland dispatchers. The current client
@@ -452,7 +456,7 @@ dispatcher state such as fullscreen/pseudo/pinned, which is closer to the
 Hyprland mental model than manual window dragging.
 
 `desktop workspace` shows the current Hyprland-style workspace state.
-`desktop workspace <1-10|next|empty|+/-n|previous>` switches the active workspace.
+`desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>` switches the active workspace.
 Prefer `desktop dispatch movetoworkspace <target>` or
 `desktop dispatch movetoworkspacesilent <target>` to move the active tiled
 client between workspaces, matching Hyprland's dispatcher-style workflow.
@@ -474,7 +478,8 @@ F7/F8 dispatch workspace +1/-1
 F9/F10/F11 enter resize/move/launch submaps
 F12 or Esc returns to the default submap
 Enter/Space on an empty focus dispatches exec terminal
-desktop workspace <1-10|next|empty|+/-n|previous> switches runtime workspace
+desktop workspace <1-10|name:<name>|next|empty|+/-n|previous> switches runtime workspace
+desktop dispatch renameworkspace <target> <safe-name> names a workspace
 desktop dispatch movetoworkspace <target> moves the active tiled client
 desktop dispatch movetoworkspacesilent <target> moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus

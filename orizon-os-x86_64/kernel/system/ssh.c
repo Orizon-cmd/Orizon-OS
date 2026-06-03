@@ -3392,8 +3392,9 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop launch <app>    spawn terminal/settings/logs/packages/update/launcher\r\n"
              "  desktop killactive      close focused tiled client\r\n"
              "  desktop focus-window next|prev|<target> focus by id/address/class/title\r\n"
-             "  desktop workspace [n|next|empty|previous] show or switch workspace\r\n"
-             "  desktop dispatch movetoworkspace <n|empty|+1|-1> move focused client\r\n"
+             "  desktop workspace [n|name:name|next|empty|previous] show or switch workspace\r\n"
+             "  desktop dispatch renameworkspace <target> <name> rename a workspace\r\n"
+             "  desktop dispatch movetoworkspace <n|name:name|empty|+1|-1> move focused client\r\n"
              "  desktop dispatch movetoworkspacesilent <target> move focused client silently\r\n"
              "  desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] set client state\r\n"
              "  desktop dispatch fullscreenstate <on|off|1|0> set fullscreen state\r\n"
@@ -3927,7 +3928,7 @@ static void ssh_shell_print_desktop(const char *args) {
       /* dispatch already formatted the response */
     } else {
       snprintf(out, sizeof(out),
-               "usage: desktop workspace <1-10|next|empty|+/-n|previous>\r\n");
+               "usage: desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>\r\n");
     }
   } else if (ssh_shell_command_is(sub, "move")) {
     const char *target = ssh_shell_skip_spaces(sub + 4);
