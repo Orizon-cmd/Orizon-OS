@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.36.0` with `desktop client-model` and
+  `desktop hyprctl clientmodel`, a VM-safe diagnostic graph for clients,
+  workspaces, focus history, fullscreen/pseudo/pinned state, rules, and the
+  explicit `manual-drag=no` Hyprland-style boundary.
 - Added desktop package version `0.35.0` with read-only Hyprland config
   tracing: `desktop config trace` and `desktop hyprctl configtrace` explain
   line-by-line `APPLY`, `PREPARE`, `IGNORE`, and `ERROR` parser decisions

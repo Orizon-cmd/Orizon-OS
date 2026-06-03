@@ -3785,6 +3785,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop configerrors    - Show Hyprland-style config parser errors\n");
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop focus-history   - Show Hyprland-style focusHistoryID order\n");
+    term_puts_t(term, "  desktop client-model    - Show client/workspace/focus state graph\n");
     term_puts_t(term, "  desktop modules         - Show prepared modular desktop packages\n");
     term_puts_t(term, "  desktop apps            - List compositor-managed desktop apps\n");
     term_puts_t(term, "  desktop app <id>        - Show app class/module/surface details\n");
@@ -4226,7 +4227,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4241,6 +4242,11 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       orizon_desktop_format_protocol(report, sizeof(report));
     } else if (term_command_is(hypr, "clients")) {
       gui_desktop_format_windows(report, sizeof(report));
+    } else if (term_command_is(hypr, "clientmodel") ||
+               term_command_is(hypr, "client-model") ||
+               term_command_is(hypr, "clientmap") ||
+               term_command_is(hypr, "client-map")) {
+      gui_desktop_format_client_model(report, sizeof(report));
     } else if (term_command_is(hypr, "workspaces")) {
       gui_desktop_format_workspaces(report, sizeof(report));
     } else if (term_command_is(hypr, "activeworkspace")) {
@@ -4427,6 +4433,14 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   if (term_command_is(args, "windows") || term_command_is(args, "window") ||
       term_command_is(args, "clients") || term_command_is(args, "client")) {
     gui_desktop_format_windows(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
+  if (term_command_is(args, "client-model") ||
+      term_command_is(args, "clientmodel") ||
+      term_command_is(args, "client-map") ||
+      term_command_is(args, "clientmap") || term_command_is(args, "model")) {
+    gui_desktop_format_client_model(report, sizeof(report));
     term_puts_t(term, report);
     return;
   }

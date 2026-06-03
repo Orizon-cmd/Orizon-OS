@@ -2869,6 +2869,16 @@ static int desktop_last_focused_index_on_workspace(int workspace) {
   return -1;
 }
 
+static int desktop_focus_rank_for_id(int id) {
+  desktop_focus_history_compact();
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_focus_history[i] == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 static int desktop_workspace_is_used(int workspace) {
   int idx = workspace - 1;
 
@@ -3013,6 +3023,137 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "focus-history: desktop focus-history | desktop hyprctl focushistory\n"
              "limits: no mouse-drag window moving; true Wayland clients are future work\n",
              ORIZON_DESKTOP_RULES_PATH);
+  }
+}
+
+void gui_desktop_format_client_model(char *out, size_t out_size) {
+  size_t used = 0;
+  int total = 0;
+  int mapped = 0;
+  int hidden = 0;
+  int pinned = 0;
+  int fullscreen = 0;
+  int pseudo = 0;
+  int active_idx;
+  int used_workspaces = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_focus_history_compact();
+  active_idx = desktop_focused_client_index();
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (!desktop_clients[i].visible) {
+      continue;
+    }
+    total++;
+    if (desktop_clients[i].mapped) {
+      mapped++;
+    }
+    if (desktop_clients[i].hidden) {
+      hidden++;
+    }
+    if (desktop_clients[i].pinned) {
+      pinned++;
+    }
+    if (desktop_clients[i].fullscreen) {
+      fullscreen++;
+    }
+    if (desktop_clients[i].pseudo) {
+      pseudo++;
+    }
+  }
+  for (int ws = 1; ws <= desktop_workspace_count; ws++) {
+    if (desktop_workspace_is_used(ws)) {
+      used_workspaces++;
+    }
+  }
+
+  used += snprintf(
+      out + used, out_size - used,
+      "Orizon desktop client model\n"
+      "version: " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
+      "model: Hyprland-style internal tiled clients; manual-drag=no floating=no taskbar=no\n"
+      "backend: framebuffer-vm protocol=orizon-desktop-ipc-v0 wayland=no wlroots=no\n"
+      "layout: engine=%s configured=%s split=%s ratio=%d master=%d submap=%s\n"
+      "active: workspace=%d name=\"%s\" client=0x%x focusHistoryID=%d focusSeq=%llu\n"
+      "summary: clients=%d mapped=%d hidden=%d pinned=%d fullscreen=%d pseudo=%d workspaces-used=%d/%d\n"
+      "rules: runtime=%s selectors=class/title/app prepared=yes\n",
+      desktop_layout_engine(), desktop_session.layout, desktop_split_mode_name(),
+      desktop_split_ratio_percent, desktop_master_ratio_percent, desktop_submap,
+      desktop_active_workspace, desktop_workspace_name(desktop_active_workspace),
+      active_idx >= 0 ? desktop_client_address(&desktop_clients[active_idx]) : 0,
+      active_idx >= 0 ? desktop_clients[active_idx].focus_history_id : 0,
+      active_idx >= 0
+          ? (unsigned long long)desktop_clients[active_idx].focus_generation
+          : 0ull,
+      total, mapped, hidden, pinned, fullscreen, pseudo, used_workspaces,
+      desktop_workspace_count, ORIZON_DESKTOP_RULES_PATH);
+
+  if (used < out_size) {
+    used += snprintf(out + used, out_size - used, "\n== workspaces ==\n");
+  }
+  for (int ws = 1; ws <= desktop_workspace_count && used < out_size; ws++) {
+    int last_idx = desktop_last_focused_index_on_workspace(ws);
+    const char *state = ws == desktop_active_workspace
+                            ? "active"
+                            : (ws == desktop_previous_workspace ? "previous"
+                                                                 : (desktop_workspace_is_used(ws) ? "used" : "empty"));
+    used += snprintf(
+        out + used, out_size - used,
+        "ws %d \"%s\": state=%s visible=%d local=%d last=0x%x lastTitle=\"%s\" visitSeq=%llu\n",
+        ws, desktop_workspace_name(ws), state,
+        desktop_client_count_on_workspace(ws),
+        desktop_workspace_local_client_count(ws),
+        last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx]) : 0,
+        last_idx >= 0 ? desktop_clients[last_idx].title : "none",
+        (unsigned long long)desktop_workspaces[ws - 1].visit_generation);
+  }
+
+  if (used < out_size) {
+    used += snprintf(out + used, out_size - used, "\n== clients ==\n");
+  }
+  if (total == 0 && used < out_size) {
+    used += snprintf(out + used, out_size - used,
+                     "empty: dispatch exec terminal/settings/logs/packages/update to create a tiled client\n");
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS && used < out_size; i++) {
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    int rank;
+
+    if (!desktop_clients[i].visible) {
+      continue;
+    }
+    desktop_client_rect(i, &rx, &ry, &rw, &rh);
+    rank = desktop_focus_rank_for_id(desktop_clients[i].id);
+    used += snprintf(
+        out + used, out_size - used,
+        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s pinned=%s fullscreen=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d geom=%d,%d %dx%d backend=%s\n",
+        desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
+        desktop_clients[i].title, desktop_clients[i].app_id,
+        desktop_clients[i].app_id, desktop_clients[i].workspace,
+        desktop_client_on_workspace(&desktop_clients[i], desktop_active_workspace)
+            ? "yes"
+            : "no",
+        desktop_clients[i].mapped ? "yes" : "no",
+        desktop_clients[i].hidden ? "yes" : "no",
+        desktop_clients[i].pinned ? "yes" : "no",
+        desktop_clients[i].fullscreen ? "yes" : "no",
+        desktop_clients[i].pseudo ? "yes" : "no",
+        desktop_clients[i].id == desktop_focused_client_id ? "yes" : "no",
+        desktop_clients[i].focus_history_id, rank, rx, ry, rw, rh,
+        desktop_client_backend_name(&desktop_clients[i]));
+  }
+
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "\ncommands: desktop clients | desktop workspaces | desktop focus-history | desktop layout-tree\n"
+             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl clients | desktop hyprctl workspaces\n"
+             "limits: VM-safe diagnostic only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
 }
 
@@ -3481,7 +3622,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
   }
   snprintf(out, out_size,
            "Orizon desktop hyprctl descriptions\n"
-           "commands: version, systeminfo, clients, workspaces, activeworkspace, activewindow\n"
+           "commands: version, systeminfo, clients, clientmodel, workspaces, activeworkspace, activewindow\n"
            "commands: backend, protocol, monitors, binds, layers, layouts, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"

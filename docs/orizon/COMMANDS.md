@@ -142,11 +142,13 @@ desktop submap
 desktop configerrors
 desktop rollinglog
 desktop focus-history
+desktop client-model
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop hyprctl backend
 desktop hyprctl protocol
+desktop hyprctl clientmodel
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
@@ -207,6 +209,7 @@ desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop windows
 desktop clients
+desktop client-model
 desktop activewindow
 desktop workspace
 desktop workspace 2
@@ -342,8 +345,8 @@ the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop render`, `desktop submap`, `desktop configerrors`,
-`desktop config trace`, `desktop rollinglog`, and
-`desktop focus-history` expose more Hyprland-like inspection surfaces,
+`desktop config trace`, `desktop rollinglog`, `desktop focus-history`, and
+`desktop client-model` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
@@ -353,7 +356,7 @@ Hyprland-style runtime keyword, `desktop dispatch
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/clientmodel/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,

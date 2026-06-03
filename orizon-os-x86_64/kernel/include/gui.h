@@ -94,6 +94,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                          size_t out_size);
 void gui_desktop_format_workspaces(char *out, size_t out_size);
 void gui_desktop_format_windows(char *out, size_t out_size);
+void gui_desktop_format_client_model(char *out, size_t out_size);
 void gui_desktop_format_activewindow(char *out, size_t out_size);
 void gui_desktop_format_activeworkspace(char *out, size_t out_size);
 void gui_desktop_format_focus_history(char *out, size_t out_size);

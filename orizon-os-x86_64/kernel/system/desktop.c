@@ -339,6 +339,8 @@ static const char *desktop_state_config =
     "crash-recover ready\n"
     "recover-command desktop recover\n"
     "rescue-command desktop rescue\n"
+    "client-model-command desktop client-model\n"
+    "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
     "manual-window-drag no\n";
 
 static void desktop_append(char *out, size_t out_size, size_t *used,
@@ -2032,6 +2034,8 @@ static int desktop_write_session_state(const char *desired,
            "rescue-command desktop rescue\n"
            "config-apply-command desktop config apply\n"
            "config-trace-command desktop config trace\n"
+           "client-model-command desktop client-model\n"
+           "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
            "settings-doctor-command desktop settings doctor\n"
            "state-path " ORIZON_DESKTOP_STATE_PATH "\n"
            "session-log " ORIZON_DESKTOP_SESSION_LOG_PATH "\n"

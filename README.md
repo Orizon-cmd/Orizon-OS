@@ -71,8 +71,8 @@ le developpement noyau:
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
-  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-tree/animations/configerrors/rollinglog/focus-history`, facade
-  `desktop hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-tree/animations/configerrors/rollinglog/focus-history/client-model`, facade
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -170,8 +170,8 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-tree`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
-`desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop focus-history`, `desktop client-model`, `desktop keyword <key> <value>` et
+`desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|workspaces|activeworkspace|activewindow|focushistory|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -198,6 +198,9 @@ xdg-shell, layer-shell reel, XWayland ni clients Wayland externes.
 `desktop layout-tree` et `desktop hyprctl layouttree` exposent l'arbre actif du
 workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.
+`desktop client-model` et `desktop hyprctl clientmodel` agregent workspaces,
+clients, focus history, etats fullscreen/pseudo/pinned, regles et backend dans
+un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 `desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
 detaille classe/module/surface, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les
@@ -210,9 +213,10 @@ client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
 deplacement silencieux de clients, focus/swap directionnels `l/r/u/d`, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
-`desktop windows`, `desktop clients`, `desktop activewindow` et `desktop
-focus-history` exposent les clients tiles, adresses stables, geometries,
-workspace courant/precedent et `focusHistoryID`. `desktop
+`desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
+focus-history` et `desktop client-model` exposent les clients tiles, adresses
+stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned,
+backend et workspace courant/precedent avec `focusHistoryID`. `desktop
 profiles` liste les profils symboliques, `desktop preset <name>` applique une
 session complete, et `desktop autostart terminal on|off|toggle` controle le
 terminal au demarrage. F1 lance un terminal, F2 ferme le client actif, F3
