@@ -284,6 +284,9 @@ The package writes:
 `desktop session` shows the persisted session options: theme, symbolic
 wallpaper, layout, bar, launcher, terminal autostart, and focus-follows-mouse.
 The default layout is `dwindle`; `master` and `monocle` are also understood.
+The optional bar layer defaults to `bar no` so the Hyprland-style profile stays
+tiling-first and does not enable a Waybar/taskbar-like surface until a future
+separate package or an explicit local choice enables it.
 `desktop theme <name>`, `desktop wallpaper <name>`, `desktop layout <name>`,
 `desktop focus on|off|toggle`, and `desktop bar on|off|toggle` update
 `/system/desktop-session.conf`; `desktop apply` reloads that session into the
@@ -389,7 +392,9 @@ diagnostic: they print the current workspace root area, split/master ratios,
 `nmaster`, client roles, rectangles, focused client, fullscreen/pseudo/pinned flags, and
 `focusHistoryID`. The output explicitly reports `manual-drag=no` and
 `floating-tree=no`; it is not a floating scene graph and it is not a Wayland
-scene graph yet.
+scene graph yet. In `monocle`, only the active tiled client is rendered; other
+clients remain managed and focusable as `monocle-deck` nodes with
+`rendered=no`.
 `desktop layout-state` and `desktop hyprctl layoutstate` expose the
 per-workspace tiling state: layout engine, split mode, split ratio and master
 ratio plus `nmaster` for each workspace. `desktop dispatch layoutmsg layout
@@ -445,7 +450,8 @@ value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
 Orizon addresses, `at/size` geometry, workspace graph, rules runtime, backend
-boundary, fullscreen/pseudo/pinned flags, and Hyprland-style `focusHistoryID`.
+boundary, fullscreen/pseudo/pinned flags, current `rendered=yes/no` state, and
+Hyprland-style `focusHistoryID`.
 `desktop hyprctl clientmodel` mirrors this read-only state graph.
 `desktop hyprctl rulematches` reads `/system/desktop-rules.conf` and explains
 which `windowrulev2` selectors match current clients by class/title/app with a

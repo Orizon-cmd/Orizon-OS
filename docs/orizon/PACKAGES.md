@@ -222,7 +222,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.45.0` because it includes policy/config files, the persisted session
+`0.46.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -233,7 +233,7 @@ facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/fullscreenstate/pseudo/pseudotile/pinned client
 state, safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
-focus-cycle/focuswindow/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/focuswindow/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,

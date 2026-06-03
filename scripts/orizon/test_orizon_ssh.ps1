@@ -173,6 +173,9 @@ $commands = @(
   "desktop dispatch layoutmsg nmaster 2",
   "desktop dispatch layoutmsg addmaster",
   "desktop dispatch layoutmsg removemaster",
+  "desktop dispatch layoutmsg layout monocle",
+  "desktop layout-tree",
+  "desktop dispatch layoutmsg layout master",
   "desktop dispatch submap resize",
   "desktop hyprctl submap",
   "desktop hyprctl submap reset",
@@ -700,6 +703,9 @@ run_cmd() {
       ;;
     "desktop dispatch layoutmsg layout master")
       grep -q "desktop dispatch: layoutmsg layout master" "`$OUT" && grep -q "workspace=" "`$OUT" || { echo "missing desktop dispatch layoutmsg layout"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg layout monocle")
+      grep -q "desktop dispatch: layoutmsg layout monocle" "`$OUT" && grep -q "workspace=" "`$OUT" || { echo "missing desktop dispatch layoutmsg monocle"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch layoutmsg splitratio 60")
       grep -q "desktop dispatch: layoutmsg splitratio 60" "`$OUT" || { echo "missing desktop dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -42,7 +42,7 @@ static const char *desktop_session_config =
     "theme graphite\n"
     "wallpaper aurora\n"
     "layout dwindle\n"
-    "bar yes\n"
+    "bar no\n"
     "launcher yes\n"
     "autostart-terminal yes\n"
     "focus-follows-mouse no\n";
@@ -2197,7 +2197,7 @@ int orizon_desktop_load_session(orizon_desktop_session_t *session) {
   snprintf(session->theme, sizeof(session->theme), "%s", "graphite");
   snprintf(session->wallpaper, sizeof(session->wallpaper), "%s", "aurora");
   snprintf(session->layout, sizeof(session->layout), "%s", "dwindle");
-  session->bar_enabled = 1;
+  session->bar_enabled = 0;
   session->launcher_enabled = 1;
   session->autostart_terminal = 1;
   session->focus_follows_mouse = 0;
@@ -2222,9 +2222,9 @@ int orizon_desktop_load_session(orizon_desktop_session_t *session) {
       desktop_token_safe(value)) {
     snprintf(session->layout, sizeof(session->layout), "%s", value);
   }
-  if (desktop_session_get_value(cfg, "bar", value, sizeof(value), "yes") ==
+  if (desktop_session_get_value(cfg, "bar", value, sizeof(value), "no") ==
       0) {
-    session->bar_enabled = desktop_bool_value(value, 1);
+    session->bar_enabled = desktop_bool_value(value, 0);
   }
   if (desktop_session_get_value(cfg, "launcher", value, sizeof(value),
                                 "yes") == 0) {
@@ -2945,7 +2945,7 @@ int orizon_desktop_apply_preset(const char *preset, char *status,
     snprintf(session.theme, sizeof(session.theme), "%s", "graphite");
     snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "aurora");
     snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
-    session.bar_enabled = 1;
+    session.bar_enabled = 0;
     session.launcher_enabled = 1;
     session.autostart_terminal = 1;
     session.focus_follows_mouse = 0;
@@ -2953,7 +2953,7 @@ int orizon_desktop_apply_preset(const char *preset, char *status,
     snprintf(session.theme, sizeof(session.theme), "%s", "moss");
     snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "moss");
     snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
-    session.bar_enabled = 1;
+    session.bar_enabled = 0;
     session.launcher_enabled = 1;
     session.autostart_terminal = 1;
     session.focus_follows_mouse = 1;
@@ -2961,7 +2961,7 @@ int orizon_desktop_apply_preset(const char *preset, char *status,
     snprintf(session.theme, sizeof(session.theme), "%s", "ember");
     snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "dawn");
     snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
-    session.bar_enabled = 1;
+    session.bar_enabled = 0;
     session.launcher_enabled = 1;
     session.autostart_terminal = 1;
     session.focus_follows_mouse = 0;
@@ -2969,7 +2969,7 @@ int orizon_desktop_apply_preset(const char *preset, char *status,
     snprintf(session.theme, sizeof(session.theme), "%s", "frost");
     snprintf(session.wallpaper, sizeof(session.wallpaper), "%s", "noir");
     snprintf(session.layout, sizeof(session.layout), "%s", "dwindle");
-    session.bar_enabled = 1;
+    session.bar_enabled = 0;
     session.launcher_enabled = 1;
     session.autostart_terminal = 1;
     session.focus_follows_mouse = 0;

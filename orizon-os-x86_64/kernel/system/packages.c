@@ -4300,7 +4300,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "theme graphite\n"
       "wallpaper aurora\n"
       "layout dwindle\n"
-      "bar yes\n"
+      "bar no\n"
       "launcher yes\n"
       "autostart-terminal yes\n"
       "focus-follows-mouse no\n"

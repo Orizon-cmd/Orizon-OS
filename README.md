@@ -57,7 +57,8 @@ le developpement noyau:
   choix dans l'installateur, commandes `desktop`, paquet
   `orizon-desktop-hypr`, config `/system/desktop.conf`,
   `/system/desktop-session.conf`, `/system/desktop-settings.conf` et
-  `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar,
+  `/home/orizon/.config/hypr/orizon-hypr.conf`, session theme/wallpaper/bar
+  off by default,
   hub de settings `/system` synchronisable avec `desktop settings paths/export/sync`,
   carte de modules `/system/desktop-modules.conf` consultable avec
   `desktop modules`, carte backend `/system/desktop-backend.conf` consultable
@@ -202,8 +203,11 @@ workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.
 `desktop layout-state` et `desktop hyprctl layoutstate` exposent maintenant
 l'etat tiling par workspace: layout actif, split mode, split ratio et master
-ratio et `nmaster`. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` modifie le
-workspace courant sans activer de fenetres flottantes ni de drag manuel.
+ratio et `nmaster`. `desktop dispatch layoutmsg layout
+<dwindle|master|monocle>` modifie le workspace courant sans activer de
+fenetres flottantes ni de drag manuel; en monocle, seul le client focus est
+rendu et les autres restent visibles dans les diagnostics comme
+`monocle-deck`/`rendered=no`.
 `desktop workspace-stack` et `desktop hyprctl workspacestack` exposent le stack
 par workspace: client master, clients stack/dwindle, scope local/pinned,
 rang de focus et geometrie, toujours avec `manual-drag=no`.

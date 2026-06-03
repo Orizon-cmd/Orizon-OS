@@ -2221,21 +2221,67 @@ static int desktop_client_position_on_workspace(int idx, int workspace) {
   return -1;
 }
 
+static int desktop_focused_client_index_for_workspace(int workspace) {
+  int idx = desktop_client_index_by_id(desktop_focused_client_id);
+
+  if (idx >= 0 &&
+      desktop_client_on_workspace(&desktop_clients[idx], workspace)) {
+    return idx;
+  }
+  return desktop_last_focused_index_on_workspace_scope(workspace, 0);
+}
+
+static int desktop_client_rendered_on_workspace(int idx, int workspace) {
+  int focused_idx;
+  int layout_mode;
+
+  if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
+      !desktop_client_on_workspace(&desktop_clients[idx], workspace)) {
+    return 0;
+  }
+  focused_idx = desktop_focused_client_index_for_workspace(workspace);
+  if (focused_idx >= 0 && desktop_clients[focused_idx].fullscreen) {
+    return idx == focused_idx;
+  }
+  if (desktop_clients[idx].fullscreen && idx != focused_idx) {
+    return 0;
+  }
+  layout_mode = desktop_layout_mode_from_name(
+      desktop_layout_engine_for_workspace(workspace));
+  if (layout_mode == 2) {
+    return idx == focused_idx;
+  }
+  return 1;
+}
+
+static int desktop_rendered_client_count_on_workspace(int workspace) {
+  int count = 0;
+
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_client_rendered_on_workspace(i, workspace)) {
+      count++;
+    }
+  }
+  return count;
+}
+
 static const char *desktop_client_role_on_workspace(int workspace, int idx,
                                                     int pos, int count) {
   int layout_mode;
+  int focused_idx;
 
   if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
       !desktop_clients[idx].visible) {
     return "missing";
   }
+  focused_idx = desktop_focused_client_index_for_workspace(workspace);
   if (desktop_clients[idx].fullscreen) {
-    return "fullscreen";
+    return idx == focused_idx ? "fullscreen" : "fullscreen-deck";
   }
   layout_mode = desktop_layout_mode_from_name(
       desktop_layout_engine_for_workspace(workspace));
   if (layout_mode == 2) {
-    return "monocle";
+    return idx == focused_idx ? "monocle-visible" : "monocle-deck";
   }
   if (layout_mode == 1) {
     int master_count = desktop_master_count_for_workspace(workspace);
@@ -2708,6 +2754,7 @@ static void draw_desktop_scene(void) {
   int area_w = (int)screen_width - 88 - outer_gap * 2;
   int area_h = (int)screen_height - area_y - FOOTER_HEIGHT - 18 - outer_gap;
   int client_count;
+  int rendered_count;
   int focused_idx;
 
   if (area_w < 120) {
@@ -2740,6 +2787,8 @@ static void draw_desktop_scene(void) {
                    COLOR_TEXT_MUTED);
 
   client_count = desktop_client_count_on_workspace(desktop_active_workspace);
+  rendered_count =
+      desktop_rendered_client_count_on_workspace(desktop_active_workspace);
   focused_idx = desktop_focused_client_index();
   if (client_count <= 0) {
     draw_centered_string((int)screen_height / 2 + 56,
@@ -2755,6 +2804,14 @@ static void draw_desktop_scene(void) {
     if (focused_idx >= 0) {
       draw_desktop_client_tile(&desktop_clients[focused_idx], area_x, area_y,
                                area_w, area_h, 1);
+      if (client_count > 1) {
+        char deck_line[96];
+        snprintf(deck_line, sizeof(deck_line),
+                 "monocle deck: showing focused client, %d tiled clients held",
+                 client_count);
+        font_draw_string(54, area_y + area_h - 18, deck_line,
+                         COLOR_TEXT_MUTED);
+      }
     }
   } else {
     int pos = 0;
@@ -2767,11 +2824,14 @@ static void draw_desktop_scene(void) {
                                        desktop_active_workspace)) {
         continue;
       }
+      if (!desktop_client_rendered_on_workspace(i, desktop_active_workspace)) {
+        continue;
+      }
       if (desktop_layout_mode == 1) {
-        desktop_master_rect(pos, client_count, area_x, area_y, area_w, area_h,
+        desktop_master_rect(pos, rendered_count, area_x, area_y, area_w, area_h,
                             &rx, &ry, &rw, &rh);
       } else {
-        desktop_dwindle_rect(pos, client_count, area_x, area_y, area_w, area_h,
+        desktop_dwindle_rect(pos, rendered_count, area_x, area_y, area_w, area_h,
                              &rx, &ry, &rw, &rh);
       }
       draw_desktop_client_tile(&desktop_clients[i], rx + inner_gap,
@@ -4609,13 +4669,16 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
     used += snprintf(
         out + used, out_size - used,
         "client address=0x%x id=%d mapped=%s hidden=%s at=%d,%d size=%dx%d "
-        "workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tiled=yes floating=no "
+        "rendered=%s workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tiled=yes floating=no "
         "fullscreen=%s pseudo=%s pinned=%s focused=%s focusHistoryID=%d "
         "rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" "
         "lastWorkspace=%d mappedSeq=%llu focusSeq=%llu backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].mapped ? "true" : "false",
         desktop_clients[i].hidden ? "true" : "false", rx, ry, rw, rh,
+        desktop_client_rendered_on_workspace(i, desktop_active_workspace)
+            ? "yes"
+            : "no",
         desktop_clients[i].workspace,
         desktop_workspace_name(desktop_clients[i].workspace),
         desktop_clients[i].title, desktop_clients[i].app_id,
@@ -4764,7 +4827,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
     rank = desktop_focus_rank_for_id(desktop_clients[i].id);
     used += snprintf(
         out + used, out_size - used,
-        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s pinned=%s fullscreen=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
+        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id, desktop_clients[i].workspace,
@@ -4773,6 +4836,9 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
             : "no",
         desktop_clients[i].mapped ? "yes" : "no",
         desktop_clients[i].hidden ? "yes" : "no",
+        desktop_client_rendered_on_workspace(i, desktop_active_workspace)
+            ? "yes"
+            : "no",
         desktop_clients[i].pinned ? "yes" : "no",
         desktop_clients[i].fullscreen ? "yes" : "no",
         desktop_clients[i].pseudo ? "yes" : "no",
@@ -4932,6 +4998,7 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            "  address: 0x%x\n"
            "  mapped: %s\n"
            "  hidden: %s\n"
+           "  rendered: %s\n"
            "  title: %s\n"
            "  class: %s\n"
            "  initialClass: %s\n"
@@ -4953,6 +5020,9 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            desktop_client_address(&desktop_clients[idx]),
            desktop_clients[idx].mapped ? "true" : "false",
            desktop_clients[idx].hidden ? "true" : "false",
+           desktop_client_rendered_on_workspace(idx, desktop_active_workspace)
+               ? "true"
+               : "false",
            desktop_clients[idx].title, desktop_clients[idx].app_id,
            desktop_clients[idx].app_id, desktop_clients[idx].title,
            desktop_clients[idx].workspace, rx, ry, rw, rh,
@@ -5385,12 +5455,15 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
   active_idx = desktop_focused_client_index();
   used += snprintf(out + used, out_size - used,
                    "Orizon desktop layout tree\n"
-                   "workspace: %d name=\"%s\" engine=%s clients=%d local=%d pinned-aware=yes\n"
+                   "workspace: %d name=\"%s\" engine=%s clients=%d rendered=%d local=%d pinned-aware=yes\n"
                    "root: area=%d,%d size=%dx%d gaps-in=%d gaps-out=%d split=%s ratio=%d master=%d nmaster=%d\n"
                    "model: tiling-only manual-drag=no floating-tree=no backend=framebuffer-vm\n",
                    desktop_active_workspace,
                    desktop_workspace_name(desktop_active_workspace), engine,
-                   count, local_count, area_x, area_y, area_w, area_h,
+                   count,
+                   desktop_rendered_client_count_on_workspace(
+                       desktop_active_workspace),
+                   local_count, area_x, area_y, area_w, area_h,
                    inner_gap, outer_gap, desktop_split_mode_name(),
                    desktop_split_ratio_percent, desktop_master_ratio_percent,
                    desktop_master_count);
@@ -5411,10 +5484,13 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
     desktop_client_rect(idx, &rx, &ry, &rw, &rh);
     used += snprintf(
         out + used, out_size - used,
-        "node %d: role=%s address=0x%x id=%d title=\"%s\" class=%s rect=%d,%d %dx%d focused=%s fullscreen=%s pseudo=%s pinned=%s focusHistoryID=%d\n",
+        "node %d: role=%s rendered=%s address=0x%x id=%d title=\"%s\" class=%s rect=%d,%d %dx%d focused=%s fullscreen=%s pseudo=%s pinned=%s focusHistoryID=%d\n",
         pos,
         desktop_client_role_on_workspace(desktop_active_workspace, idx, pos,
                                          count),
+        desktop_client_rendered_on_workspace(idx, desktop_active_workspace)
+            ? "yes"
+            : "no",
         desktop_client_address(&desktop_clients[idx]),
         desktop_clients[idx].id, desktop_clients[idx].title,
         desktop_clients[idx].app_id, rx, ry, rw, rh,
@@ -5538,7 +5614,8 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <on|off|1|0>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: layout <dwindle|master|monocle>, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
-           "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, focusmaster, swapwithmaster\n"
+           "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, nmaster <1-8|+/-n>, addmaster, removemaster, focusmaster, swapwithmaster\n"
+           "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"
            "truth: Hyprland-style facade for Orizon's framebuffer compositor\n");
 }
 
@@ -5585,7 +5662,7 @@ void gui_desktop_reload_session(void) {
              "%s", "aurora");
     snprintf(desktop_session.layout, sizeof(desktop_session.layout), "%s",
              "dwindle");
-    desktop_session.bar_enabled = 1;
+    desktop_session.bar_enabled = 0;
     desktop_session.launcher_enabled = 1;
     desktop_session.autostart_terminal = 1;
     desktop_session.focus_follows_mouse = 0;

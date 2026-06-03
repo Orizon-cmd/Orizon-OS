@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.46.0` with stricter monocle/fullscreen deck
+  rendering diagnostics: only the focused tiled client is rendered in monocle
+  while other clients remain focusable as `monocle-deck`, and `layout-tree`,
+  `clients`, and `activewindow` now report `rendered=yes/no`. The optional
+  bar layer now defaults to `bar no` in the VM desktop profile and package
+  payload, keeping Waybar/status-bar work planned but not enabled by default.
 - Added desktop package version `0.45.0` with Hyprland-style master layout
   `nmaster` support: `layoutmsg nmaster`, `addmaster`, and `removemaster`
   update per-workspace master/stack tiling state and diagnostics without

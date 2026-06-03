@@ -389,7 +389,8 @@ the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
 `desktop layout-tree` and `desktop hyprctl layouttree` show the active
 workspace tiling tree with client roles, rectangles, focus state, and
-`manual-drag=no`,
+`manual-drag=no`; monocle clients outside the active surface are reported as
+`monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
