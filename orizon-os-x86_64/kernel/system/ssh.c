@@ -3376,6 +3376,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop monitors        show Hyprland-style monitor hints\r\n"
              "  desktop runtime         show generated Hyprland-style runtime files\r\n"
              "  desktop layers          show compositor layer model\r\n"
+             "  desktop layout-state    show per-workspace tiling layout state\r\n"
              "  desktop keyword <k> <v> apply one Hyprland-style runtime keyword\r\n"
              "  desktop dispatch <d>    run exec/workspace/layoutmsg/master/swapwindow/submap\r\n"
              "  desktop hyprctl <cmd>   Hyprland-like status/keyword/dispatch facade\r\n"
@@ -3586,6 +3587,10 @@ static void ssh_shell_print_desktop(const char *args) {
     orizon_desktop_format_protocol(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "layouts")) {
     gui_desktop_format_layouts(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "layout-state") ||
+             ssh_shell_command_is(sub, "layoutstate") ||
+             ssh_shell_command_is(sub, "workspace-layouts")) {
+    gui_desktop_format_layout_state(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "layout-tree") ||
              ssh_shell_command_is(sub, "layouttree") ||
              ssh_shell_command_is(sub, "tree")) {
@@ -3684,7 +3689,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3727,6 +3732,10 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_layers(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layouts")) {
       gui_desktop_format_layouts(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "layoutstate") ||
+               ssh_shell_command_is(hypr, "layout-state") ||
+               ssh_shell_command_is(hypr, "workspacelayouts")) {
+      gui_desktop_format_layout_state(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layouttree") ||
                ssh_shell_command_is(hypr, "layout-tree") ||
                ssh_shell_command_is(hypr, "tree")) {

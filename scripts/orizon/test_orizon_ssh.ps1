@@ -111,6 +111,7 @@ $commands = @(
   "desktop protocol",
   "desktop layouts",
   "desktop layout-tree",
+  "desktop layout-state",
   "desktop animations",
   "desktop decorations",
   "desktop render",
@@ -130,6 +131,7 @@ $commands = @(
   "desktop hyprctl rulematches",
   "desktop hyprctl activeworkspace",
   "desktop hyprctl layouts",
+  "desktop hyprctl layoutstate",
   "desktop hyprctl layouttree",
   "desktop hyprctl animations",
   "desktop hyprctl decorations",
@@ -164,6 +166,7 @@ $commands = @(
   "desktop dispatch movefocus r",
   "desktop dispatch swapwindow l",
   "desktop dispatch togglesplit",
+  "desktop dispatch layoutmsg layout master",
   "desktop dispatch layoutmsg splitratio 60",
   "desktop dispatch submap resize",
   "desktop hyprctl submap",
@@ -579,6 +582,9 @@ run_cmd() {
     "desktop layouts"|"desktop hyprctl layouts")
       grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop layout-state"|"desktop hyprctl layoutstate")
+      grep -q "Orizon desktop layout state" "`$OUT" && grep -q "per-workspace" "`$OUT" && grep -q "workspace 1" "`$OUT" || { echo "missing desktop layout state"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop layout-tree"|"desktop hyprctl layouttree")
       grep -q "Orizon desktop layout tree" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop layout tree"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -674,6 +680,9 @@ run_cmd() {
       ;;
     "desktop dispatch togglesplit")
       grep -q "desktop dispatch: togglesplit" "`$OUT" && grep -q "split=" "`$OUT" || { echo "missing desktop dispatch togglesplit"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg layout master")
+      grep -q "desktop dispatch: layoutmsg layout master" "`$OUT" && grep -q "workspace=" "`$OUT" || { echo "missing desktop dispatch layoutmsg layout"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch layoutmsg splitratio 60")
       grep -q "desktop dispatch: layoutmsg splitratio 60" "`$OUT" || { echo "missing desktop dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

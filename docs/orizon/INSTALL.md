@@ -196,6 +196,7 @@ desktop devices
 desktop keymap
 desktop systeminfo
 desktop layouts
+desktop layout-state
 desktop layout-tree
 desktop animations
 desktop decorations
@@ -224,6 +225,7 @@ desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
+desktop hyprctl layoutstate
 desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
@@ -260,6 +262,7 @@ desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
+desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg orientationleft

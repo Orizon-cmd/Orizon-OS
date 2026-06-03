@@ -40,7 +40,7 @@
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs/keymap`,
-  `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/apps/app/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
+  `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/apps/app/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   `pkg install orizon-desktop-hypr`, and split module samples for
   `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
@@ -52,7 +52,7 @@
   `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`, generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, relative/dynamic
-  workspaces with next/empty targets, fullscreen/pseudo/pinned client state, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg`/`resizeactive`/`submap`,
+  workspaces with next/empty targets, fullscreen/pseudo/pinned client state, per-workspace layout state, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default

@@ -43,7 +43,7 @@ work.
   `/logs/init.log`, expose a small service policy, export VM-safe state reports,
   and recreate missing defaults without partitioning or installing.
 - Optional desktop profile: `desktop status/config/config doctor/config apply/doctor/logs/shortcuts/keymap`,
-  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/apps/app/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
+  `desktop session/settings/settings paths/settings export/settings sync/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/apps/app/profiles/preset/focus/autostart/windows/clients/activewindow/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl/theme/wallpaper/layout/bar/launcher/workspace`,
   `desktop enable/disable/reset/package`, `pkg sample desktop`,
   `pkg install orizon-desktop-hypr`, and split module samples/install names for
   `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
@@ -58,7 +58,7 @@ work.
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative/dynamic workspace dispatch with next/empty targets,
   dispatcher-style
-  movetoworkspace/movetoworkspacesilent/movefocus directionnel/focuswindow/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
+  movetoworkspace/movetoworkspacesilent/movefocus directionnel/focuswindow/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/resizeactive/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
   class/module/surface diagnostics, launcher overlay dispatch,
@@ -70,7 +70,7 @@ work.
   with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
   runtime keyword/getoption/reload inspection, persistent render controls for
   focus ring, shadow range, animation tick budget/curve and render profile,
-  split/master ratio controls, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, read-only config trace diagnostics for apply/prepare/ignore parser decisions, software focus ring, ticked focus/workspace/layout transition state, active tiling-tree diagnostics with client roles/rectangles/manual-drag boundary, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  split/master ratio controls, per-workspace layout-state diagnostics, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focushistory/cursorpos diagnostics, pointer diagnostics, read-only config trace diagnostics for apply/prepare/ignore parser decisions, software focus ring, ticked focus/workspace/layout transition state, active tiling-tree diagnostics with client roles/rectangles/manual-drag boundary, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor. `desktop backend` and `desktop protocol` document the
   current `framebuffer-vm` backend and internal `orizon-desktop-ipc-v0`

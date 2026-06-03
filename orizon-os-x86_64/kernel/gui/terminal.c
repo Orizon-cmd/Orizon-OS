@@ -3797,6 +3797,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop monitors        - Show Hyprland-style monitor hints\n");
     term_puts_t(term, "  desktop runtime         - Show generated Hyprland-style runtime files\n");
     term_puts_t(term, "  desktop layers          - Show compositor layer model\n");
+    term_puts_t(term, "  desktop layout-state    - Show per-workspace tiling layout state\n");
     term_puts_t(term, "  desktop keyword <k> <v> - Apply one Hyprland-style runtime keyword\n");
     term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/master/swapwindow/submap\n");
     term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like status/keyword/dispatch facade\n");
@@ -4082,6 +4083,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "layout-state") ||
+      term_command_is(args, "layoutstate") ||
+      term_command_is(args, "workspace-layouts")) {
+    gui_desktop_format_layout_state(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "layout-tree") ||
       term_command_is(args, "layouttree") ||
       term_command_is(args, "tree")) {
@@ -4229,7 +4237,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4274,6 +4282,10 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_layers(report, sizeof(report));
     } else if (term_command_is(hypr, "layouts")) {
       gui_desktop_format_layouts(report, sizeof(report));
+    } else if (term_command_is(hypr, "layoutstate") ||
+               term_command_is(hypr, "layout-state") ||
+               term_command_is(hypr, "workspacelayouts")) {
+      gui_desktop_format_layout_state(report, sizeof(report));
     } else if (term_command_is(hypr, "layouttree") ||
                term_command_is(hypr, "layout-tree") ||
                term_command_is(hypr, "tree")) {

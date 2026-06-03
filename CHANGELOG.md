@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.40.0` with per-workspace tiling layout
+  state. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` now
+  changes the active workspace layout without enabling floating/free-drag
+  behavior, and `desktop layout-state` / `desktop hyprctl layoutstate` expose
+  each workspace's layout, split mode, split ratio, and master ratio.
 - Added desktop package version `0.39.0` with Hyprland-style
   `focuswindow` targeting for tiled clients. `desktop dispatch focuswindow`
   and `desktop focus-window` can now focus by id, stable `0x...` address,

@@ -132,6 +132,7 @@ desktop systeminfo
 desktop backend
 desktop protocol
 desktop layouts
+desktop layout-state
 desktop layout-tree
 desktop animations
 desktop decorations
@@ -154,6 +155,7 @@ desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
+desktop hyprctl layoutstate
 desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
@@ -202,6 +204,7 @@ desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
+desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg splitratio +5
 desktop dispatch layoutmsg masterratio 65
@@ -349,7 +352,7 @@ and `desktop runtime` show the generated Hyprland-style runtime files,
 `desktop layers` shows the compositor layer model, `desktop version` identifies
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
-layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
+layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop render`, `desktop submap`, `desktop configerrors`,
 `desktop config trace`, `desktop rollinglog`, `desktop focus-history`,
 `desktop client-model`, and `desktop rule-matches` expose more Hyprland-like inspection surfaces,
@@ -359,16 +362,19 @@ Hyprland-style runtime keyword, `desktop dispatch
 `workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
-including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
+including `layoutmsg layout <dwindle|master|monocle>`,
+`layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
 `desktop layout-tree` and `desktop hyprctl layouttree` show the active
 workspace tiling tree with client roles, rectangles, focus state, and
 `manual-drag=no`,
+`desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
+layout, split mode, split ratio, and master ratio,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

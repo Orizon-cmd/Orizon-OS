@@ -59,6 +59,7 @@ desktop systeminfo
 desktop backend
 desktop protocol
 desktop layouts
+desktop layout-state
 desktop layout-tree
 desktop animations
 desktop decorations
@@ -81,6 +82,7 @@ desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
+desktop hyprctl layoutstate
 desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
@@ -123,6 +125,7 @@ desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
+desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg splitratio +5
 desktop dispatch layoutmsg masterratio 65
@@ -356,7 +359,7 @@ runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
-`desktop layouts`, `desktop layout-tree`, `desktop animations`,
+`desktop layouts`, `desktop layout-state`, `desktop layout-tree`, `desktop animations`,
 `desktop render`, `desktop configerrors`, `desktop config trace`,
 `desktop rollinglog`, `desktop focus-history`, `desktop client-model`, `desktop rule-matches`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
@@ -375,6 +378,11 @@ client roles, rectangles, focused client, fullscreen/pseudo/pinned flags, and
 `focusHistoryID`. The output explicitly reports `manual-drag=no` and
 `floating-tree=no`; it is not a floating scene graph and it is not a Wayland
 scene graph yet.
+`desktop layout-state` and `desktop hyprctl layoutstate` expose the
+per-workspace tiling state: layout engine, split mode, split ratio and master
+ratio for each workspace. `desktop dispatch layoutmsg layout
+<dwindle|master|monocle>` changes only the active workspace layout; it does not
+enable floating windows or manual drag.
 `desktop backend` and `desktop protocol` expose the architecture seam for the
 future real compositor path. Today they report `current-backend:
 framebuffer-vm`, `protocol: orizon-desktop-ipc-v0`, software backbuffer
@@ -399,13 +407,13 @@ exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
 `swapnext`, directional `swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
 dispatchers now include `togglesplit`,
-`layoutmsg orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
+`layoutmsg layout <dwindle|master|monocle>|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
+version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -456,6 +464,7 @@ desktop dispatch movetoworkspace <target> moves the active tiled client
 desktop dispatch movetoworkspacesilent <target> moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
 desktop dispatch focuswindow <target> focuses by id/address/class/title
+desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active workspace layout
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pin controls active client state
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios

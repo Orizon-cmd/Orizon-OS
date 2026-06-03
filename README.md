@@ -71,8 +71,8 @@ le developpement noyau:
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
-  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-tree/animations/configerrors/rollinglog/focus-history/client-model/rule-matches`, facade
-  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/client-model/rule-matches`, facade
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -167,12 +167,12 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
 `desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`,
-`desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-tree`,
+`desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-state`, `desktop layout-tree`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop client-model`, `desktop rule-matches`,
 `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -199,6 +199,10 @@ xdg-shell, layer-shell reel, XWayland ni clients Wayland externes.
 `desktop layout-tree` et `desktop hyprctl layouttree` exposent l'arbre actif du
 workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.
+`desktop layout-state` et `desktop hyprctl layoutstate` exposent maintenant
+l'etat tiling par workspace: layout actif, split mode, split ratio et master
+ratio. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` modifie le
+workspace courant sans activer de fenetres flottantes ni de drag manuel.
 `desktop client-model` et `desktop hyprctl clientmodel` agregent workspaces,
 clients, focus history, etats fullscreen/pseudo/pinned, regles et backend dans
 un graphe de diagnostic read-only pour comprendre l'etat tiling courant.

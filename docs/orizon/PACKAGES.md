@@ -130,6 +130,7 @@ desktop systeminfo
 desktop backend
 desktop protocol
 desktop layouts
+desktop layout-state
 desktop layout-tree
 desktop animations
 desktop decorations
@@ -153,6 +154,7 @@ desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
+desktop hyprctl layoutstate
 desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
@@ -184,6 +186,7 @@ desktop hyprctl clientmodel
 desktop hyprctl rulematches
 desktop hyprctl activewindow
 desktop dispatch togglesplit
+desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg splitratio +5
 desktop dispatch layoutmsg masterratio 65
@@ -214,18 +217,18 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.39.0` because it includes policy/config files, the persisted session
+`0.40.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/keymap diagnostics, the
-`hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/keymap diagnostics, the
+`hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
-focus-cycle/focuswindow/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/focuswindow/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/resizeactive/submap actions, per-workspace layout state, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
