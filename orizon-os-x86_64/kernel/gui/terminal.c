@@ -3747,6 +3747,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop config          - Show Hyprland-style config template\n");
     term_puts_t(term, "  desktop config doctor   - Validate Hyprland-style user config\n");
     term_puts_t(term, "  desktop config apply    - Apply supported config keys to session/settings\n");
+    term_puts_t(term, "  desktop config trace    - Trace apply/prepare/ignore decisions per config line\n");
     term_puts_t(term, "  desktop start|stop      - Start/stop Hyprland-style session manager\n");
     term_puts_t(term, "  desktop restart|reload  - Restart/reload session manager/config\n");
     term_puts_t(term, "  desktop recover         - Repair/recover desktop session state\n");
@@ -3838,9 +3839,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
                term_command_is(config_args, "reload")) {
       orizon_desktop_apply_hypr_config(report, sizeof(report));
       gui_desktop_reload_session();
+    } else if (term_command_is(config_args, "trace") ||
+               term_command_is(config_args, "explain") ||
+               term_command_is(config_args, "why")) {
+      orizon_desktop_format_config_trace(report, sizeof(report));
     } else {
       snprintf(report, sizeof(report),
-               "usage: desktop config [show|doctor|apply]\n");
+               "usage: desktop config [show|doctor|apply|trace]\n");
     }
     term_puts_t(term, report);
     return;
@@ -4221,7 +4226,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4287,6 +4292,9 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_splash(report, sizeof(report));
     } else if (term_command_is(hypr, "configerrors")) {
       orizon_desktop_format_config_errors(report, sizeof(report));
+    } else if (term_command_is(hypr, "configtrace") ||
+               term_command_is(hypr, "config-trace")) {
+      orizon_desktop_format_config_trace(report, sizeof(report));
     } else if (term_command_is(hypr, "rollinglog")) {
       orizon_desktop_format_rolling_log(report, sizeof(report));
     } else if (term_command_is(hypr, "getoption")) {

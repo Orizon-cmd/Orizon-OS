@@ -87,6 +87,7 @@ desktop status
 desktop config
 desktop config doctor
 desktop config apply
+desktop config trace
 desktop start
 desktop stop
 desktop restart
@@ -161,6 +162,7 @@ desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
+desktop hyprctl configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
@@ -305,12 +307,14 @@ compositor desktop session; `desktop enable` remains a compatibility alias.
 desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
 and recovery commands. `desktop rescue` is read-only and prints the safe
 checklist before `desktop recover` repairs/reapplies anything. `desktop config doctor` validates the Hyprland-style
-user config, and `desktop config apply` imports the supported subset into the
+user config, `desktop config apply` imports the supported subset into the
 session/settings files plus generated runtime hint files such as
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`, and
 `/system/desktop-layers.conf`, `/system/desktop-runtime.conf`, and
-`/system/desktop-state.conf`.
+`/system/desktop-state.conf`, and `desktop config trace` explains each config
+line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR` without changing runtime
+state.
 `layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and
 input/device/decoration/cursor/render/debug/misc/layout hints are preserved
 there until the real Wayland backend exists; mouse binds are parsed for
@@ -337,7 +341,8 @@ and `desktop runtime` show the generated Hyprland-style runtime files,
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
-`desktop render`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`, and
+`desktop render`, `desktop submap`, `desktop configerrors`,
+`desktop config trace`, `desktop rollinglog`, and
 `desktop focus-history` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
@@ -348,7 +353,7 @@ Hyprland-style runtime keyword, `desktop dispatch
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,

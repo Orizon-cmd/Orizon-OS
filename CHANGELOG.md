@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.35.0` with read-only Hyprland config
+  tracing: `desktop config trace` and `desktop hyprctl configtrace` explain
+  line-by-line `APPLY`, `PREPARE`, `IGNORE`, and `ERROR` parser decisions
+  without changing runtime state.
 - Added desktop package version `0.34.0` with active tiling tree diagnostics:
   `desktop layout-tree` and `desktop hyprctl layouttree` show workspace root
   geometry, client roles, rectangles, focus state, `focusHistoryID`, and the

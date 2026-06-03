@@ -3483,7 +3483,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, workspaces, activeworkspace, activewindow\n"
            "commands: backend, protocol, monitors, binds, layers, layouts, layouttree, animations, decorations, render, devices\n"
-           "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
+           "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"

@@ -1464,6 +1464,177 @@ static int desktop_hypr_scan_config(const char *cfg, int apply,
   return 0;
 }
 
+static int desktop_hypr_exec_once_applies(const char *key, const char *value) {
+  return key && value && strcmp(key, "exec-once") == 0 &&
+         strstr(value, "terminal") != NULL;
+}
+
+static const char *desktop_hypr_trace_route(const char *key,
+                                            const char *value) {
+  const char *runtime_path;
+
+  if (!key) {
+    return "none";
+  }
+  runtime_path = desktop_hypr_runtime_path_for_key(key);
+  if (desktop_hypr_is_supported_setting_key(key)) {
+    return runtime_path ? "session/settings+runtime" : "session/settings";
+  }
+  if (desktop_hypr_exec_once_applies(key, value)) {
+    return "session+autostart-runtime";
+  }
+  return runtime_path ? runtime_path : "none";
+}
+
+void orizon_desktop_format_config_trace(char *out, size_t out_size) {
+  char cfg[4096];
+  char line[256];
+  size_t used = 0;
+  int n;
+  int pos = 0;
+  int len;
+  int depth = 0;
+  int line_no = 0;
+  int traced = 0;
+  int apply_count = 0;
+  int prepare_count = 0;
+  int ignored_count = 0;
+  int malformed_count = 0;
+  int section_count = 0;
+  int truncated = 0;
+  char sections[4][32];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  memset(sections, 0, sizeof(sections));
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Orizon desktop Hyprland config trace\n");
+  snprintf(line, sizeof(line), "path: %s\n",
+           ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append(out, out_size, &used, line);
+  n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                             sizeof(cfg));
+  if (n <= 0) {
+    snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
+    desktop_append(out, out_size, &used,
+                   "source: built-in template preview\n");
+  } else {
+    desktop_append(out, out_size, &used, "source: user config\n");
+  }
+  desktop_append(out, out_size, &used,
+                 "model: read-only parser trace; no Wayland/wlroots, no manual-drag\n");
+  len = (int)strlen(cfg);
+  while (pos < len) {
+    int start = pos;
+    int end;
+    char raw[224];
+    char key[64];
+    char value[128];
+    char full_key[96];
+    desktop_hypr_summary_t local;
+    const char *status = "IGNORE";
+    const char *route = "none";
+
+    if (used + 220 >= out_size) {
+      truncated = 1;
+      break;
+    }
+    while (pos < len && cfg[pos] != '\n') {
+      pos++;
+    }
+    end = pos;
+    if (pos < len && cfg[pos] == '\n') {
+      pos++;
+    }
+    line_no++;
+    desktop_trim_copy(raw, sizeof(raw), cfg + start, end - start);
+    desktop_strip_inline_comment(raw);
+    desktop_trim_copy(raw, sizeof(raw), raw, (int)strlen(raw));
+    if (!raw[0]) {
+      continue;
+    }
+    if (strcmp(raw, "}") == 0) {
+      if (depth > 0) {
+        depth--;
+        snprintf(line, sizeof(line),
+                 "line %d: SECTION-CLOSE depth=%d status=OK\n",
+                 line_no, depth);
+        section_count++;
+      } else {
+        malformed_count++;
+        snprintf(line, sizeof(line),
+                 "line %d: ERROR unmatched-section-close\n", line_no);
+      }
+      desktop_append(out, out_size, &used, line);
+      traced++;
+      continue;
+    }
+    if (raw[strlen(raw) - 1] == '{') {
+      raw[strlen(raw) - 1] = '\0';
+      desktop_trim_copy(key, sizeof(key), raw, (int)strlen(raw));
+      if (desktop_token_safe(key) && depth < 4) {
+        snprintf(sections[depth], sizeof(sections[depth]), "%s", key);
+        depth++;
+        section_count++;
+        snprintf(line, sizeof(line),
+                 "line %d: SECTION %s depth=%d status=OK\n", line_no, key,
+                 depth);
+      } else {
+        malformed_count++;
+        snprintf(line, sizeof(line),
+                 "line %d: ERROR malformed-section name=%s\n", line_no,
+                 key[0] ? key : "(empty)");
+      }
+      desktop_append(out, out_size, &used, line);
+      traced++;
+      continue;
+    }
+    if (desktop_hypr_key_value(raw, key, sizeof(key), value,
+                               sizeof(value)) < 0) {
+      malformed_count++;
+      snprintf(line, sizeof(line),
+               "line %d: ERROR malformed-key-value text=\"%s\"\n",
+               line_no, raw);
+      desktop_append(out, out_size, &used, line);
+      traced++;
+      continue;
+    }
+    desktop_hypr_join_key(sections, depth, key, full_key, sizeof(full_key));
+    memset(&local, 0, sizeof(local));
+    desktop_hypr_apply_pair(full_key, value, NULL, NULL, &local, 0, NULL);
+    route = desktop_hypr_trace_route(full_key, value);
+    if (desktop_hypr_is_supported_setting_key(full_key) ||
+        desktop_hypr_exec_once_applies(full_key, value)) {
+      status = local.prepared_keywords > 0 ? "APPLY+PREPARE" : "APPLY";
+      apply_count++;
+      if (local.prepared_keywords > 0) {
+        prepare_count++;
+      }
+    } else if (local.prepared_keywords > 0) {
+      status = "PREPARE";
+      prepare_count++;
+    } else {
+      status = "IGNORE";
+      ignored_count++;
+    }
+    snprintf(line, sizeof(line),
+             "line %d: %s key=%s route=%s value=\"%s\"\n", line_no, status,
+             full_key, route, value);
+    desktop_append(out, out_size, &used, line);
+    traced++;
+  }
+  snprintf(line, sizeof(line),
+           "summary: lines=%d traced=%d sections=%d apply=%d prepare=%d ignored=%d malformed=%d truncated=%s\n",
+           line_no, traced, section_count, apply_count, prepare_count,
+           ignored_count, malformed_count, truncated ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  desktop_append(out, out_size, &used,
+                 "commands: desktop config doctor | desktop config apply | desktop hyprctl configtrace\n");
+}
+
 static int desktop_write_session(const orizon_desktop_session_t *session) {
   char text[384];
 
@@ -1860,6 +2031,7 @@ static int desktop_write_session_state(const char *desired,
            "recover-command desktop recover\n"
            "rescue-command desktop rescue\n"
            "config-apply-command desktop config apply\n"
+           "config-trace-command desktop config trace\n"
            "settings-doctor-command desktop settings doctor\n"
            "state-path " ORIZON_DESKTOP_STATE_PATH "\n"
            "session-log " ORIZON_DESKTOP_SESSION_LOG_PATH "\n"

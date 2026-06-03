@@ -113,6 +113,7 @@ desktop settings doctor
 desktop settings preset compact
 desktop config doctor
 desktop config apply
+desktop config trace
 desktop input
 desktop input layout fr
 desktop input layout us
@@ -137,6 +138,7 @@ desktop descriptions
 desktop instances
 desktop submap
 desktop configerrors
+desktop config trace
 desktop rollinglog
 desktop focus-history
 desktop keyword general:gaps_in 9
@@ -158,6 +160,7 @@ desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
+desktop hyprctl configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
@@ -203,13 +206,13 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.34.0` because it includes policy/config files, the persisted session
+`0.35.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
-`/system/desktop-protocol.conf`, Hyprland-style config doctor/apply import, generated
+`/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
-`hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focus-history/keymap diagnostics, the
+`hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
@@ -292,6 +295,10 @@ Version `0.34.0` adds active tiling tree diagnostics with
 workspace root geometry, client roles, rectangles, fullscreen/pseudo/pinned
 state, focus status, `focusHistoryID`, and the explicit tiling-only
 `manual-drag=no` boundary.
+Version `0.35.0` adds read-only Hyprland config tracing with
+`desktop config trace` and `desktop hyprctl configtrace`, showing line-by-line
+`APPLY`, `PREPARE`, `IGNORE`, and `ERROR` decisions plus the runtime route for
+each parsed key.
 
 ## Package Format
 

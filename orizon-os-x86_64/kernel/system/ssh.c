@@ -3326,6 +3326,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop config          show Hyprland-style config template\r\n"
              "  desktop config doctor   validate Hyprland-style user config\r\n"
              "  desktop config apply    apply supported config keys to session/settings\r\n"
+             "  desktop config trace    trace apply/prepare/ignore decisions per config line\r\n"
              "  desktop start|stop      start/stop Hyprland-style session manager\r\n"
              "  desktop restart|reload  restart/reload session manager/config\r\n"
              "  desktop recover         repair/recover desktop session state\r\n"
@@ -3414,9 +3415,13 @@ static void ssh_shell_print_desktop(const char *args) {
                ssh_shell_command_is(config_args, "reload")) {
       orizon_desktop_apply_hypr_config(out, sizeof(out));
       gui_desktop_reload_session();
+    } else if (ssh_shell_command_is(config_args, "trace") ||
+               ssh_shell_command_is(config_args, "explain") ||
+               ssh_shell_command_is(config_args, "why")) {
+      orizon_desktop_format_config_trace(out, sizeof(out));
     } else {
       snprintf(out, sizeof(out),
-               "usage: desktop config [show|doctor|apply]\r\n");
+               "usage: desktop config [show|doctor|apply|trace]\r\n");
     }
   } else if (ssh_shell_command_is(sub, "doctor") ||
              ssh_shell_command_is(sub, "check")) {
@@ -3676,7 +3681,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3740,6 +3745,9 @@ static void ssh_shell_print_desktop(const char *args) {
       gui_desktop_format_splash(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "configerrors")) {
       orizon_desktop_format_config_errors(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "configtrace") ||
+               ssh_shell_command_is(hypr, "config-trace")) {
+      orizon_desktop_format_config_trace(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "rollinglog")) {
       orizon_desktop_format_rolling_log(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "getoption")) {

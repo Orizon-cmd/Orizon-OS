@@ -143,8 +143,10 @@ runtime inspectables `/system/desktop-binds.conf`,
 `/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
 `/system/desktop-monitors.conf`, `/system/desktop-layers.conf`,
 `/system/desktop-runtime.conf`, `/system/desktop-backend.conf`,
-`/system/desktop-protocol.conf` et `/system/desktop-state.conf`. `desktop
-start|stop|restart|reload|recover|rescue` gere la session Hyprland-style avec etat
+`/system/desktop-protocol.conf` et `/system/desktop-state.conf`.
+`desktop config trace` explique ligne par ligne ce qui est applique, prepare
+comme hint, ignore ou malforme, sans modifier la session.
+`desktop start|stop|restart|reload|recover|rescue` gere la session Hyprland-style avec etat
 persistant et log `/logs/desktop-session.log`; `desktop state`, `desktop
 session`, `desktop theme`, `desktop wallpaper`, `desktop preset`, `desktop
 focus`, `desktop bar` et `desktop launcher` reglent la session persistante.
@@ -169,7 +171,7 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,

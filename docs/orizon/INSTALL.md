@@ -128,6 +128,9 @@ pointer policy are created in `/system/desktop-settings.conf` at the same time.
 `desktop settings paths`, `desktop settings export`, and `desktop settings sync`
 keep that central `/system` hub aligned with
 `/home/orizon/.config/hypr/orizon-hypr.conf` and generated runtime hints.
+`desktop config trace` is a read-only parser trace for installer/package
+debugging: it shows which `hyprland.conf` lines apply, become runtime hints, or
+remain ignored without changing the desktop session.
 `desktop config apply` also generates inspectable runtime hints for binds,
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
@@ -201,6 +204,7 @@ desktop descriptions
 desktop instances
 desktop submap
 desktop configerrors
+desktop config trace
 desktop rollinglog
 desktop focus-history
 desktop keyword general:gaps_in 9
@@ -228,6 +232,7 @@ desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
+desktop hyprctl configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11

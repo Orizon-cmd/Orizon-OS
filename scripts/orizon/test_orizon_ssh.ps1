@@ -73,6 +73,7 @@ $commands = @(
   "desktop config",
   "desktop config doctor",
   "desktop config apply",
+  "desktop config trace",
   "desktop session",
   "desktop settings",
   "desktop settings presets",
@@ -136,6 +137,7 @@ $commands = @(
   "desktop hyprctl devices",
   "desktop hyprctl splash",
   "desktop hyprctl configerrors",
+  "desktop hyprctl configtrace",
   "desktop hyprctl rollinglog",
   "desktop hyprctl getoption general:gaps_in",
   "desktop hyprctl keyword decoration:rounding 11",
@@ -474,6 +476,9 @@ run_cmd() {
       ;;
     "desktop config apply")
       grep -q "desktop config apply: applied" "`$OUT" && grep -q "runtime-files:" "`$OUT" || { echo "missing desktop config apply"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop config trace"|"desktop hyprctl configtrace")
+      grep -q "Orizon desktop Hyprland config trace" "`$OUT" && grep -q "APPLY" "`$OUT" && grep -q "PREPARE" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop config trace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop session")
       grep -q "Orizon desktop session" "`$OUT" && grep -q "theme:" "`$OUT" || { echo "missing desktop session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

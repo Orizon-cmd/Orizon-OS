@@ -16,6 +16,7 @@ desktop status
 desktop config
 desktop config doctor
 desktop config apply
+desktop config trace
 desktop start
 desktop stop
 desktop restart
@@ -88,6 +89,7 @@ desktop hyprctl cursorpos
 desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
+desktop hyprctl configtrace
 desktop hyprctl rollinglog
 desktop dispatch exec terminal
 desktop hyprctl clients
@@ -221,7 +223,9 @@ persisted as runtime hints, ignored, or malformed. It now keeps additional
 Hyprland-style families such as `device`, `decoration`, `cursor`, `render`,
 `debug`, `group`, `plugin`, `permission`, `gestures`, `xwayland`, and
 `ecosystem` as inspectable runtime hints when Orizon does not have the real
-Wayland implementation yet. `desktop config apply`
+Wayland implementation yet. `desktop config trace` is read-only and explains
+each line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR`, including the route to
+session/settings or generated runtime files. `desktop config apply`
 imports the supported subset into Orizon's runtime files: layout, gaps, border
 size, rounding, shadows, animations, keyboard layout, focus-follows-mouse, and
 terminal autostart. It also rewrites the generated Hyprland-style runtime files
@@ -344,7 +348,8 @@ runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
 `desktop layouts`, `desktop layout-tree`, `desktop animations`,
-`desktop render`, `desktop configerrors`, `desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
+`desktop render`, `desktop configerrors`, `desktop config trace`,
+`desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop render` is the most direct VM-safe renderer diagnostic: it reports the
@@ -390,7 +395,7 @@ dispatchers now include `togglesplit`,
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
+version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -447,11 +452,13 @@ desktop devices shows keyboard/pointer input state
 desktop backend shows the current framebuffer-vm backend map
 desktop protocol shows the internal orizon-desktop-ipc-v0 protocol map
 desktop layout-tree shows the active tiling tree and rectangles
+desktop config trace explains apply/prepare/ignore parser decisions
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
 desktop hyprctl layouttree mirrors desktop layout-tree
+desktop hyprctl configtrace mirrors desktop config trace
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 ```
 
