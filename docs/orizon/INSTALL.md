@@ -270,6 +270,9 @@ desktop dispatch togglesplit
 desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg masterratio 65
+desktop dispatch layoutmsg nmaster 2
+desktop dispatch layoutmsg addmaster
+desktop dispatch layoutmsg removemaster
 desktop dispatch layoutmsg orientationleft
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize

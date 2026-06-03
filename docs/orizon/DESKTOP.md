@@ -136,6 +136,9 @@ desktop dispatch layoutmsg splitratio 60
 desktop dispatch layoutmsg splitratio +5
 desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg mfact -5
+desktop dispatch layoutmsg nmaster 2
+desktop dispatch layoutmsg addmaster
+desktop dispatch layoutmsg removemaster
 desktop dispatch layoutmsg orientationleft
 desktop dispatch layoutmsg orientationtop
 desktop dispatch resizeactive 5 0
@@ -383,13 +386,13 @@ values without enabling floating windows or manual dragging. It is
 Hyprland-style compositor UX, not upstream Wayland/wlroots.
 `desktop layout-tree` and `desktop hyprctl layouttree` are the active tiling
 diagnostic: they print the current workspace root area, split/master ratios,
-client roles, rectangles, focused client, fullscreen/pseudo/pinned flags, and
+`nmaster`, client roles, rectangles, focused client, fullscreen/pseudo/pinned flags, and
 `focusHistoryID`. The output explicitly reports `manual-drag=no` and
 `floating-tree=no`; it is not a floating scene graph and it is not a Wayland
 scene graph yet.
 `desktop layout-state` and `desktop hyprctl layoutstate` expose the
 per-workspace tiling state: layout engine, split mode, split ratio and master
-ratio for each workspace. `desktop dispatch layoutmsg layout
+ratio plus `nmaster` for each workspace. `desktop dispatch layoutmsg layout
 <dwindle|master|monocle>` changes only the active workspace layout; it does not
 enable floating windows or manual drag.
 `desktop workspace-stack` and `desktop hyprctl workspacestack` expose a
@@ -426,7 +429,7 @@ dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
 `fullscreenstate <on|off|1|0>` set or toggle the active client state without
 ambiguous script-side guessing. Layout/submap
 dispatchers now include `togglesplit`,
-`layoutmsg layout <dwindle|master|monocle>|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
+`layoutmsg layout <dwindle|master|monocle>|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|nmaster <1-8|+/-n>|addmaster|removemaster|focusmaster|swapwithmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.

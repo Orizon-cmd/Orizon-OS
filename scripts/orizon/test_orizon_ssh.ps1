@@ -170,6 +170,9 @@ $commands = @(
   "desktop dispatch togglesplit",
   "desktop dispatch layoutmsg layout master",
   "desktop dispatch layoutmsg splitratio 60",
+  "desktop dispatch layoutmsg nmaster 2",
+  "desktop dispatch layoutmsg addmaster",
+  "desktop dispatch layoutmsg removemaster",
   "desktop dispatch submap resize",
   "desktop hyprctl submap",
   "desktop hyprctl submap reset",
@@ -700,6 +703,15 @@ run_cmd() {
       ;;
     "desktop dispatch layoutmsg splitratio 60")
       grep -q "desktop dispatch: layoutmsg splitratio 60" "`$OUT" || { echo "missing desktop dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg nmaster 2")
+      grep -q "desktop dispatch: layoutmsg nmaster 2" "`$OUT" && grep -q "master=" "`$OUT" || { echo "missing desktop dispatch layoutmsg nmaster"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg addmaster")
+      grep -q "desktop dispatch: layoutmsg addmaster nmaster=3" "`$OUT" || { echo "missing desktop dispatch layoutmsg addmaster"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg removemaster")
+      grep -q "desktop dispatch: layoutmsg removemaster nmaster=2" "`$OUT" || { echo "missing desktop dispatch layoutmsg removemaster"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch submap resize")
       grep -q "desktop dispatch: submap resize" "`$OUT" || { echo "missing desktop dispatch submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

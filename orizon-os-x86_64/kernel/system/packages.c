@@ -3903,6 +3903,8 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "bind = $mod, D, exec, orizon-launcher\n"
       "bind = $mod, M, fullscreen\n"
       "bind = $mod, P, pseudo\n"
+      "bind = $mod, bracketleft, layoutmsg, removemaster\n"
+      "bind = $mod, bracketright, layoutmsg, addmaster\n"
       "bind = F11, submap, launch\n"
       "submap = launch\n"
       "bind = , t, exec, terminal\n"

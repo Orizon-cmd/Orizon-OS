@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.45.0` with Hyprland-style master layout
+  `nmaster` support: `layoutmsg nmaster`, `addmaster`, and `removemaster`
+  update per-workspace master/stack tiling state and diagnostics without
+  enabling floating windows or manual drag.
 - Added desktop package version `0.44.0` with per-workspace focus restore and
   closer Hyprland-style move semantics: `movetoworkspace` follows the moved
   tiled client, while `movetoworkspacesilent` keeps the current workspace active.

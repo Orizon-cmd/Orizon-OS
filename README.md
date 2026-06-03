@@ -202,7 +202,7 @@ workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.
 `desktop layout-state` et `desktop hyprctl layoutstate` exposent maintenant
 l'etat tiling par workspace: layout actif, split mode, split ratio et master
-ratio. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` modifie le
+ratio et `nmaster`. `desktop dispatch layoutmsg layout <dwindle|master|monocle>` modifie le
 workspace courant sans activer de fenetres flottantes ni de drag manuel.
 `desktop workspace-stack` et `desktop hyprctl workspacestack` exposent le stack
 par workspace: client master, clients stack/dwindle, scope local/pinned,
@@ -230,7 +230,7 @@ workspaces nommes via `renameworkspace` puis `workspace name:<nom>`,
 restauration du focus par workspace, `movetoworkspace` qui suit le client et
 deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, ciblage
 direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
-`dwindle/master/monocle`, split/master ratios, orientations explicites
+`dwindle/master/monocle`, split/master ratios, `nmaster`, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 Les etats du client actif acceptent aussi des valeurs idempotentes:
 `desktop dispatch fullscreen|pseudo|pseudotile|pin on|off|toggle|1|0` et

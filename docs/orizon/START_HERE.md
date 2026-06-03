@@ -50,7 +50,7 @@ design note.
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
   `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`,
   `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
-  plus split/master ratio and per-workspace layout messages, directional movefocus/swapwindow,
+  plus split/master ratio, `nmaster`, and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
   workspace next/empty targets, and
   silent move-to-workspace dispatch,

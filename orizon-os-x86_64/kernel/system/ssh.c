@@ -3401,7 +3401,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop dispatch cyclenext|swapnext|swapwindow|focusmaster|swapwithmaster client actions\r\n"
              "  desktop dispatch movefocus <l|r|u|d|next|prev> directional tiled focus\r\n"
              "  desktop dispatch focuswindow <id|0xaddr|class:app|title:text> focus matching client\r\n"
-             "  desktop dispatch layoutmsg <msg> orientation/splitratio/masterratio actions\r\n"
+             "  desktop dispatch layoutmsg <msg> orientation/splitratio/masterratio/nmaster actions\r\n"
              "  desktop dispatch resizeactive <x> <y> tiling ratio resize action\r\n"
              "  desktop dispatch submap <name|reset> set active submap\r\n"
              "  desktop reset           disable and restore default policy\r\n"
