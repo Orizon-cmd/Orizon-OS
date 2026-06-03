@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.38.0` with safe spawn-time
+  `windowrulev2` application for tiled clients: `tile`, `fullscreen`,
+  `pseudo`, `pin`, and `workspace N` can now set initial client state, while
+  floating/free-drag style actions stay ignored and visible in diagnostics.
 - Added desktop package version `0.37.0` with `desktop rule-matches` and
   `desktop hyprctl rulematches`, a VM-safe diagnostic that reads
   `/system/desktop-rules.conf`, maps `windowrulev2` selectors to current tiled

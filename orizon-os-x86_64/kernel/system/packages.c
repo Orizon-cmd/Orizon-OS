@@ -4222,6 +4222,8 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "clients-command = desktop clients\n"
       "client-model-command = desktop client-model\n"
       "rule-matches-command = desktop rule-matches\n"
+      "rule-spawn-apply = tile/fullscreen/pseudo/pin/workspace\n"
+      "rule-ignored-actions = floating/move/center\n"
       "activewindow-command = desktop activewindow\n"
       "focus-history-command = desktop focus-history\n"
       "binds-runtime = " ORIZON_DESKTOP_BINDS_PATH "\n"

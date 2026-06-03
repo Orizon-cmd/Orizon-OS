@@ -415,7 +415,10 @@ boundary, fullscreen/pseudo/pinned flags, and Hyprland-style `focusHistoryID`.
 `desktop hyprctl clientmodel` mirrors this read-only state graph.
 `desktop hyprctl rulematches` reads `/system/desktop-rules.conf` and explains
 which `windowrulev2` selectors match current clients by class/title/app with a
-simplified matcher, not the upstream Hyprland regex/Wayland engine. The model is intentionally no-drag: clients are placed by
+simplified matcher. Safe spawn-time actions `tile`, `fullscreen`, `pseudo`,
+`pin`, and `workspace N` can set initial tiled client state; floating/free-drag
+style actions are ignored and reported, not applied. This is still not the
+upstream Hyprland regex/Wayland engine. The model is intentionally no-drag: clients are placed by
 `dwindle`, `master`, or `monocle`, not by mouse-moving windows around like a
 traditional desktop. The active client can still be controlled through
 dispatcher state such as fullscreen/pseudo/pinned, which is closer to the

@@ -205,7 +205,10 @@ un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 `desktop rule-matches` et `desktop hyprctl rulematches` lisent
 `/system/desktop-rules.conf` et indiquent quelles regles `windowrulev2`
 correspondent aux clients actuels par class/title/app avec un matching
-simplifie; ce n'est pas encore le moteur regex/Wayland d'Hyprland upstream.
+simplifie. Les actions sures `tile`, `fullscreen`, `pseudo`, `pin` et
+`workspace N` sont appliquees au spawn des clients tiles; les actions
+floating/free-drag restent ignorees et visibles dans le diagnostic. Ce n'est
+pas encore le moteur regex/Wayland d'Hyprland upstream.
 `desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
 detaille classe/module/surface, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les
@@ -221,7 +224,8 @@ deplacement silencieux de clients, focus/swap directionnels `l/r/u/d`, layouts
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
 stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned,
-backend et workspace courant/precedent avec `focusHistoryID`. `desktop
+regles appliquees au spawn, backend et workspace courant/precedent avec
+`focusHistoryID`. `desktop
 profiles` liste les profils symboliques, `desktop preset <name>` applique une
 session complete, et `desktop autostart terminal on|off|toggle` controle le
 terminal au demarrage. F1 lance un terminal, F2 ferme le client actif, F3

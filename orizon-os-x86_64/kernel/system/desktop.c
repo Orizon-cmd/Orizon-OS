@@ -341,6 +341,7 @@ static const char *desktop_state_config =
     "rescue-command desktop rescue\n"
     "client-model-command desktop client-model\n"
     "rule-matches-command desktop rule-matches\n"
+    "rule-spawn-apply tile/fullscreen/pseudo/pin/workspace\n"
     "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
     "hyprctl-rulematches-command desktop hyprctl rulematches\n"
     "manual-window-drag no\n";
@@ -2038,6 +2039,7 @@ static int desktop_write_session_state(const char *desired,
            "config-trace-command desktop config trace\n"
            "client-model-command desktop client-model\n"
            "rule-matches-command desktop rule-matches\n"
+           "rule-spawn-apply tile/fullscreen/pseudo/pin/workspace\n"
            "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
            "hyprctl-rulematches-command desktop hyprctl rulematches\n"
            "settings-doctor-command desktop settings doctor\n"

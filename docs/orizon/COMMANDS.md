@@ -374,6 +374,8 @@ tiled clients or toggles the launcher overlay. `desktop windows`/`desktop client
 list tiled clients with stable addresses, geometry and `focusHistoryID`;
 `desktop rule-matches`/`desktop hyprctl rulematches` explain which
 `windowrulev2` class/title/app selectors match those clients,
+which safe spawn-time actions are applied (`tile`, `fullscreen`, `pseudo`,
+`pin`, `workspace N`), and which floating/free-drag style actions are ignored,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
 F9/F10/F11 enter resize/move/launch submaps and F12/Esc returns to default,

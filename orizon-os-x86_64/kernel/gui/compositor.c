@@ -105,6 +105,9 @@ typedef struct {
   uint64_t focus_generation;
   char title[48];
   char app_id[32];
+  int rule_match_count;
+  int rule_apply_count;
+  char rule_actions[80];
 } desktop_client_t;
 
 typedef struct {
@@ -134,6 +137,7 @@ static int i2c_hid_deferred_probe = 0;
 static const char *boot_stage_hint = "Starting Orizon shell";
 
 static int desktop_submap_is_default(void);
+static void desktop_apply_spawn_rules_to_client(int idx);
 
 static void draw_circle(int cx, int cy, int radius, color_t color) {
   for (int y = -radius; y <= radius; y++) {
@@ -937,14 +941,23 @@ static int desktop_spawn_client(const char *title, const char *app_id,
       desktop_clients[i].focus_history_id = -1;
       desktop_clients[i].mapped_generation = desktop_client_serial++;
       desktop_clients[i].focus_generation = 0;
+      desktop_clients[i].rule_match_count = 0;
+      desktop_clients[i].rule_apply_count = 0;
+      desktop_clients[i].rule_actions[0] = '\0';
       snprintf(desktop_clients[i].title, sizeof(desktop_clients[i].title),
                "%s", title ? title : "client");
       snprintf(desktop_clients[i].app_id, sizeof(desktop_clients[i].app_id),
                "%s", app_id ? app_id : "orizon-client");
-      desktop_set_focused_client_index(i);
+      desktop_apply_spawn_rules_to_client(i);
       if (terminal_backed) {
         desktop_terminal_visible = 1;
-        desktop_terminal_workspace = desktop_active_workspace;
+        desktop_terminal_workspace = desktop_clients[i].workspace;
+      }
+      if (desktop_client_on_workspace(&desktop_clients[i],
+                                      desktop_active_workspace)) {
+        desktop_set_focused_client_index(i);
+      } else {
+        desktop_focused_client_index();
       }
       desktop_launcher_visible = 0;
       needs_redraw = 1;
@@ -2451,6 +2464,9 @@ int gui_desktop_close_active_client(void) {
   desktop_clients[idx].focus_history_id = -1;
   desktop_clients[idx].mapped_generation = 0;
   desktop_clients[idx].focus_generation = 0;
+  desktop_clients[idx].rule_match_count = 0;
+  desktop_clients[idx].rule_apply_count = 0;
+  desktop_clients[idx].rule_actions[0] = '\0';
   desktop_clients[idx].title[0] = '\0';
   desktop_clients[idx].app_id[0] = '\0';
   desktop_set_focused_client_index(-1);
@@ -3236,6 +3252,173 @@ static int desktop_rule_load_runtime(char *cfg, size_t cfg_size) {
   return (int)strlen(cfg);
 }
 
+static int desktop_rule_action_is(const char *action, const char *name) {
+  size_t len;
+
+  if (!action || !name) {
+    return 0;
+  }
+  len = strlen(name);
+  if (strncmp(action, name, len) != 0) {
+    return 0;
+  }
+  return action[len] == '\0' || desktop_rule_is_space(action[len]) ||
+         action[len] == ':' || action[len] == '=';
+}
+
+static int desktop_rule_parse_workspace_target(const char *action) {
+  const char *p;
+  int workspace = 0;
+  int saw_digit = 0;
+
+  if (!action || !desktop_rule_action_is(action, "workspace")) {
+    return -1;
+  }
+  p = action + 9;
+  while (*p && (desktop_rule_is_space(*p) || *p == ':' || *p == '=')) {
+    p++;
+  }
+  while (*p >= '0' && *p <= '9') {
+    saw_digit = 1;
+    workspace = workspace * 10 + (*p - '0');
+    p++;
+  }
+  if (!saw_digit || workspace < 1 || workspace > desktop_workspace_count) {
+    return -1;
+  }
+  return workspace;
+}
+
+static void desktop_rule_record_client_action(desktop_client_t *client,
+                                              const char *action,
+                                              int applied) {
+  char label[56];
+  size_t used;
+  size_t label_len;
+
+  if (!client || !action || !action[0]) {
+    return;
+  }
+  snprintf(label, sizeof(label), "%s%s", applied ? "" : "ignored:", action);
+  for (size_t i = 0; label[i]; i++) {
+    if (desktop_rule_is_space(label[i])) {
+      label[i] = ':';
+    }
+  }
+  used = strlen(client->rule_actions);
+  if (used + 1 >= sizeof(client->rule_actions)) {
+    return;
+  }
+  if (used > 0) {
+    client->rule_actions[used++] = ',';
+    client->rule_actions[used] = '\0';
+  }
+  label_len = strlen(label);
+  if (used + label_len >= sizeof(client->rule_actions)) {
+    label_len = sizeof(client->rule_actions) - used - 1;
+  }
+  memcpy(client->rule_actions + used, label, label_len);
+  client->rule_actions[used + label_len] = '\0';
+}
+
+static int desktop_rule_apply_action_to_client(
+    const desktop_rule_match_t *rule, desktop_client_t *client) {
+  int workspace;
+
+  if (!rule || !client || !rule->action[0]) {
+    return 0;
+  }
+  if (desktop_rule_action_is(rule->action, "tile")) {
+    desktop_rule_record_client_action(client, "tile", 1);
+    return 1;
+  }
+  if (desktop_rule_action_is(rule->action, "fullscreen")) {
+    client->fullscreen = 1;
+    desktop_rule_record_client_action(client, "fullscreen", 1);
+    return 1;
+  }
+  if (desktop_rule_action_is(rule->action, "pseudo") ||
+      desktop_rule_action_is(rule->action, "pseudotile")) {
+    client->pseudo = 1;
+    desktop_rule_record_client_action(client, "pseudo", 1);
+    return 1;
+  }
+  if (desktop_rule_action_is(rule->action, "pin")) {
+    client->pinned = 1;
+    desktop_rule_record_client_action(client, "pin", 1);
+    return 1;
+  }
+  workspace = desktop_rule_parse_workspace_target(rule->action);
+  if (workspace > 0) {
+    if (client->workspace != workspace) {
+      client->last_workspace = client->workspace;
+      client->workspace = workspace;
+      desktop_workspace_mark_used(workspace);
+    }
+    desktop_rule_record_client_action(client, rule->action, 1);
+    return 1;
+  }
+  if (desktop_rule_action_is(rule->action, "float") ||
+      desktop_rule_action_is(rule->action, "floating") ||
+      desktop_rule_action_is(rule->action, "move") ||
+      desktop_rule_action_is(rule->action, "center")) {
+    desktop_rule_record_client_action(client, rule->action, 0);
+    return 0;
+  }
+  desktop_rule_record_client_action(client, rule->action, 0);
+  return 0;
+}
+
+static int desktop_rule_action_is_safe(const char *action) {
+  if (!action || !action[0]) {
+    return 0;
+  }
+  return desktop_rule_action_is(action, "tile") ||
+         desktop_rule_action_is(action, "fullscreen") ||
+         desktop_rule_action_is(action, "pseudo") ||
+         desktop_rule_action_is(action, "pseudotile") ||
+         desktop_rule_action_is(action, "pin") ||
+         desktop_rule_parse_workspace_target(action) > 0;
+}
+
+static void desktop_apply_spawn_rules_to_client(int idx) {
+  char cfg[1024];
+  char line[192];
+  const char *p;
+  int line_number = 1;
+  desktop_client_t *client;
+
+  if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS || !desktop_clients[idx].visible) {
+    return;
+  }
+  client = &desktop_clients[idx];
+  desktop_rule_load_runtime(cfg, sizeof(cfg));
+  p = cfg;
+  while (*p) {
+    const char *start = p;
+    size_t len;
+    desktop_rule_match_t rule;
+    char reason[40];
+
+    while (*p && *p != '\n') {
+      p++;
+    }
+    len = (size_t)(p - start);
+    if (*p == '\n') {
+      p++;
+    }
+    desktop_rule_copy_trim(line, sizeof(line), start, len);
+    if (desktop_rule_parse_line(line, line_number, &rule) &&
+        desktop_rule_matches_client(&rule, client, reason, sizeof(reason))) {
+      client->rule_match_count++;
+      if (desktop_rule_apply_action_to_client(&rule, client)) {
+        client->rule_apply_count++;
+      }
+    }
+    line_number++;
+  }
+}
+
 static int desktop_workspace_is_used(int workspace) {
   int idx = workspace - 1;
 
@@ -3349,6 +3532,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         "client address=0x%x id=%d mapped=%s hidden=%s at=%d,%d size=%dx%d "
         "workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tiled=yes floating=no "
         "fullscreen=%s pseudo=%s pinned=%s focused=%s focusHistoryID=%d "
+        "rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" "
         "lastWorkspace=%d mappedSeq=%llu focusSeq=%llu backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].mapped ? "true" : "false",
@@ -3361,7 +3545,11 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         desktop_clients[i].pseudo ? "yes" : "no",
         desktop_clients[i].pinned ? "yes" : "no",
         desktop_clients[i].id == desktop_focused_client_id ? "yes" : "no",
-        desktop_clients[i].focus_history_id, desktop_clients[i].last_workspace,
+        desktop_clients[i].focus_history_id, desktop_clients[i].rule_match_count,
+        desktop_clients[i].rule_apply_count,
+        desktop_clients[i].rule_actions[0] ? desktop_clients[i].rule_actions
+                                           : "none",
+        desktop_clients[i].last_workspace,
         (unsigned long long)desktop_clients[i].mapped_generation,
         (unsigned long long)desktop_clients[i].focus_generation,
         desktop_client_backend_name(&desktop_clients[i]));
@@ -3376,7 +3564,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "movetoworkspace <n|empty|+1|-1> | "
              "togglesplit | layoutmsg <msg> | resizeactive <x> <y> | "
              "submap <name>\n"
-             "rules: class/title/app selectors prepared via %s\n"
+             "rules: class/title/app selectors applied-on-spawn via %s\n"
              "focus-history: desktop focus-history | desktop hyprctl focushistory\n"
              "limits: no mouse-drag window moving; true Wayland clients are future work\n",
              ORIZON_DESKTOP_RULES_PATH);
@@ -3436,7 +3624,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
       "layout: engine=%s configured=%s split=%s ratio=%d master=%d submap=%s\n"
       "active: workspace=%d name=\"%s\" client=0x%x focusHistoryID=%d focusSeq=%llu\n"
       "summary: clients=%d mapped=%d hidden=%d pinned=%d fullscreen=%d pseudo=%d workspaces-used=%d/%d\n"
-      "rules: runtime=%s selectors=class/title/app prepared=yes\n",
+      "rules: runtime=%s selectors=class/title/app spawn-apply=tile/fullscreen/pseudo/pin/workspace\n",
       desktop_layout_engine(), desktop_session.layout, desktop_split_mode_name(),
       desktop_split_ratio_percent, desktop_master_ratio_percent, desktop_submap,
       desktop_active_workspace, desktop_workspace_name(desktop_active_workspace),
@@ -3489,7 +3677,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
     rank = desktop_focus_rank_for_id(desktop_clients[i].id);
     used += snprintf(
         out + used, out_size - used,
-        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s pinned=%s fullscreen=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d geom=%d,%d %dx%d backend=%s\n",
+        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s pinned=%s fullscreen=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id, desktop_clients[i].workspace,
@@ -3502,7 +3690,12 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
         desktop_clients[i].fullscreen ? "yes" : "no",
         desktop_clients[i].pseudo ? "yes" : "no",
         desktop_clients[i].id == desktop_focused_client_id ? "yes" : "no",
-        desktop_clients[i].focus_history_id, rank, rx, ry, rw, rh,
+        desktop_clients[i].focus_history_id, rank,
+        desktop_clients[i].rule_match_count,
+        desktop_clients[i].rule_apply_count,
+        desktop_clients[i].rule_actions[0] ? desktop_clients[i].rule_actions
+                                           : "none",
+        rx, ry, rw, rh,
         desktop_client_backend_name(&desktop_clients[i]));
   }
 
@@ -3543,7 +3736,8 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size) {
            "version: " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
            "runtime: %s bytes=%d\n"
            "model: Hyprland-style windowrule diagnostics; manual-drag=no floating=no taskbar=no\n"
-           "selectors: class/title/app simplified-regex=yes read-only=yes\n",
+           "selectors: class/title/app simplified-regex=yes diagnostic=yes\n"
+           "spawn-apply: safe-actions=tile/fullscreen/pseudo/pin/workspace ignored=floating/move/center\n",
            ORIZON_DESKTOP_RULES_PATH, runtime_bytes);
   desktop_rule_append_text(out, out_size, &used, rendered);
 
@@ -3566,8 +3760,9 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size) {
 
       rules++;
       snprintf(rendered, sizeof(rendered),
-               "\nrule %d line=%d kind=%s action=\"%s\" selectors=\"%s\"\n",
+               "\nrule %d line=%d kind=%s action=\"%s\" safeAction=%s selectors=\"%s\"\n",
                rules, rule.line_number, rule.kind, rule.action,
+               desktop_rule_action_is_safe(rule.action) ? "yes" : "no",
                rule.selectors[0] ? rule.selectors : "none");
       desktop_rule_append_text(out, out_size, &used, rendered);
 
@@ -3591,16 +3786,22 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size) {
           matched_for_rule++;
         }
         snprintf(rendered, sizeof(rendered),
-                 "  client 0x%x: class=%s app=%s title=\"%s\" workspace=%d match=%s reason=%s\n",
+                 "  client 0x%x: class=%s app=%s title=\"%s\" workspace=%d match=%s reason=%s spawnRulesMatched=%d spawnRulesApplied=%d spawnActions=\"%s\"\n",
                  desktop_client_address(&desktop_clients[i]),
                  desktop_clients[i].app_id, desktop_clients[i].app_id,
                  desktop_clients[i].title, desktop_clients[i].workspace,
-                 matched ? "yes" : "no", reason);
+                 matched ? "yes" : "no", reason,
+                 desktop_clients[i].rule_match_count,
+                 desktop_clients[i].rule_apply_count,
+                 desktop_clients[i].rule_actions[0]
+                     ? desktop_clients[i].rule_actions
+                     : "none");
         desktop_rule_append_text(out, out_size, &used, rendered);
       }
       snprintf(rendered, sizeof(rendered),
-               "  result: matches=%d clients=%d action-prepared=%s\n",
-               matched_for_rule, clients, rule.action[0] ? rule.action : "none");
+               "  result: matches=%d clients=%d spawn-action=%s action-safe=%s\n",
+               matched_for_rule, clients, rule.action[0] ? rule.action : "none",
+               desktop_rule_action_is_safe(rule.action) ? "yes" : "no");
       desktop_rule_append_text(out, out_size, &used, rendered);
     }
     line_number++;
@@ -3655,6 +3856,9 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            "  fullscreen: %s\n"
            "  pseudo: %s\n"
            "  pinned: %s\n"
+           "  rulesMatched: %d\n"
+           "  rulesApplied: %d\n"
+           "  ruleActions: %s\n"
            "  focusHistoryID: %d\n"
            "  mappedSeq: %llu\n"
            "  focusSeq: %llu\n"
@@ -3668,6 +3872,10 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            desktop_clients[idx].fullscreen ? "true" : "false",
            desktop_clients[idx].pseudo ? "true" : "false",
            desktop_clients[idx].pinned ? "true" : "false",
+           desktop_clients[idx].rule_match_count,
+           desktop_clients[idx].rule_apply_count,
+           desktop_clients[idx].rule_actions[0] ? desktop_clients[idx].rule_actions
+                                                : "none",
            desktop_clients[idx].focus_history_id,
            (unsigned long long)desktop_clients[idx].mapped_generation,
            (unsigned long long)desktop_clients[idx].focus_generation);

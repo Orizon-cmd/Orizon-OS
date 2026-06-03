@@ -212,7 +212,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.37.0` because it includes policy/config files, the persisted session
+`0.38.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -221,7 +221,8 @@ commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/l
 `hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
-state, stable client addresses, `focusHistoryID`, active-window/client geometry,
+state, safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
+stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
@@ -313,6 +314,10 @@ Version `0.37.0` adds `desktop rule-matches` and `desktop hyprctl rulematches`
 as read-only diagnostics for `/system/desktop-rules.conf`, mapping
 `windowrulev2` class/title/app selectors to current tiled clients with a
 simplified matcher and the same no-drag/no-floating boundary.
+Version `0.38.0` applies a safe subset of matching `windowrulev2` actions when
+clients spawn: `tile`, `fullscreen`, `pseudo`, `pin`, and `workspace N`. The
+client diagnostics now show `rulesMatched`, `rulesApplied`, and `ruleActions`,
+while floating/free-drag style actions remain ignored and visible.
 
 ## Package Format
 
