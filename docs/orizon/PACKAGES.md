@@ -190,12 +190,14 @@ desktop dispatch layoutmsg masterratio 65
 desktop dispatch focusmaster
 desktop dispatch swapwithmaster
 desktop dispatch movefocus r
+desktop dispatch focuswindow class:orizon-terminal
 desktop dispatch swapwindow l
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace next
 desktop dispatch workspace empty
+desktop focus-window title:Terminal
 desktop hyprctl submap reset
 desktop keymap
 desktop doctor
@@ -212,7 +214,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.38.0` because it includes policy/config files, the persisted session
+`0.39.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -223,7 +225,7 @@ facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
-focus-cycle/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/focuswindow/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg split/master ratio/resizeactive/submap actions, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,

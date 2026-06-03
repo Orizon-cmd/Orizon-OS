@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.39.0` with Hyprland-style
+  `focuswindow` targeting for tiled clients. `desktop dispatch focuswindow`
+  and `desktop focus-window` can now focus by id, stable `0x...` address,
+  class/app, or title while preserving the no-free-drag tiling boundary.
 - Added desktop package version `0.38.0` with safe spawn-time
   `windowrulev2` application for tiled clients: `tile`, `fullscreen`,
   `pseudo`, `pin`, and `workspace N` can now set initial client state, while

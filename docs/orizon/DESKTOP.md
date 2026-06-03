@@ -117,6 +117,8 @@ desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
 desktop dispatch movefocus r
+desktop dispatch focuswindow class:orizon-terminal
+desktop focus-window title:Terminal
 desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
@@ -146,6 +148,7 @@ desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop workspace empty
 desktop dispatch movefocus next
+desktop dispatch focuswindow 0x1100
 desktop shortcuts
 desktop keymap
 desktop doctor
@@ -390,7 +393,8 @@ re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch exec terminal`,
 `desktop dispatch killactive`, `desktop dispatch workspace <target>`, `desktop
 dispatch movetoworkspace <target>`, `desktop dispatch movetoworkspacesilent <target>`,
-and `desktop dispatch movefocus l|r|u|d|next|prev`
+`desktop dispatch movefocus l|r|u|d|next|prev`, and
+`desktop dispatch focuswindow <id|0xaddr|class:app|title:text>`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
 `swapnext`, directional `swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
@@ -451,6 +455,7 @@ desktop workspace <1-10|next|empty|+/-n|previous> switches runtime workspace
 desktop dispatch movetoworkspace <target> moves the active tiled client
 desktop dispatch movetoworkspacesilent <target> moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
+desktop dispatch focuswindow <target> focuses by id/address/class/title
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pin controls active client state
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios

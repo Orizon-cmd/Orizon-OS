@@ -555,6 +555,8 @@ def run_ssh_checks(
         ("desktop autostart terminal on", "desktop session: updated"),
         ("desktop dispatch exec terminal", "exec orizon-terminal client spawned"),
         ("desktop dispatch exec terminal", "exec orizon-terminal client spawned"),
+        ("desktop dispatch focuswindow class:orizon-terminal", "focuswindow ok"),
+        ("desktop focus-window title:Terminal", "focuswindow ok"),
         ("desktop dispatch swapwithmaster", "swapwithmaster ok"),
         ("desktop dispatch focusmaster", "focusmaster ok"),
         ("desktop dispatch cyclenext", "cyclenext ok"),

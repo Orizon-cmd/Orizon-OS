@@ -196,6 +196,8 @@ desktop dispatch pin
 desktop dispatch cyclenext
 desktop dispatch swapnext
 desktop dispatch movefocus r
+desktop dispatch focuswindow class:orizon-terminal
+desktop focus-window title:Terminal
 desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
@@ -225,6 +227,7 @@ desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop workspace empty
 desktop dispatch movefocus next
+desktop dispatch focuswindow 0x1100
 desktop shortcuts
 desktop keymap
 desktop doctor
@@ -353,7 +356,7 @@ layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `cyclenext`, `swapnext`,
+`workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and

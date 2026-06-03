@@ -3389,12 +3389,13 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop launcher [show|hide|toggle] control launcher\r\n"
              "  desktop launch <app>    spawn terminal/settings/logs/packages/update/launcher\r\n"
              "  desktop killactive      close focused tiled client\r\n"
-             "  desktop focus-window next|prev change focused client\r\n"
+             "  desktop focus-window next|prev|<target> focus by id/address/class/title\r\n"
              "  desktop workspace [n|next|empty|previous] show or switch workspace\r\n"
              "  desktop dispatch movetoworkspace <n|empty|+1|-1> move focused client\r\n"
              "  desktop dispatch movetoworkspacesilent <target> move focused client silently\r\n"
              "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|swapwindow|focusmaster|swapwithmaster client actions\r\n"
              "  desktop dispatch movefocus <l|r|u|d|next|prev> directional tiled focus\r\n"
+             "  desktop dispatch focuswindow <id|0xaddr|class:app|title:text> focus matching client\r\n"
              "  desktop dispatch layoutmsg <msg> orientation/splitratio/masterratio actions\r\n"
              "  desktop dispatch resizeactive <x> <y> tiling ratio resize action\r\n"
              "  desktop dispatch submap <name|reset> set active submap\r\n"
@@ -3936,7 +3937,10 @@ static void ssh_shell_print_desktop(const char *args) {
                ssh_shell_command_is(value, "up")) {
       rc = gui_desktop_focus_prev_client();
     } else {
-      snprintf(out, sizeof(out), "usage: desktop focus-window next|prev\r\n");
+      rc = gui_desktop_dispatch("focuswindow", value, out, sizeof(out));
+      if (rc == 0) {
+        return;
+      }
       rc = -2;
     }
     if (rc != -2) {

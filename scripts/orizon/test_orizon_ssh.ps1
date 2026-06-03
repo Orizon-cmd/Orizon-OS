@@ -157,6 +157,8 @@ $commands = @(
   "desktop autostart terminal on",
   "desktop dispatch exec terminal",
   "desktop dispatch exec terminal",
+  "desktop dispatch focuswindow class:orizon-terminal",
+  "desktop focus-window title:Terminal",
   "desktop dispatch cyclenext",
   "desktop dispatch swapnext",
   "desktop dispatch movefocus r",
@@ -654,6 +656,9 @@ run_cmd() {
       ;;
     "desktop dispatch exec terminal")
       grep -q "desktop dispatch: exec terminal client spawned" "`$OUT" || { echo "missing desktop dispatch exec"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch focuswindow class:orizon-terminal"|"desktop focus-window title:Terminal")
+      grep -q "desktop dispatch: focuswindow ok" "`$OUT" && grep -q "tiled=yes" "`$OUT" || { echo "missing desktop dispatch focuswindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch cyclenext")
       grep -q "desktop dispatch: cyclenext" "`$OUT" || { echo "missing desktop dispatch cyclenext"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

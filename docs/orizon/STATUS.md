@@ -58,7 +58,7 @@ work.
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
   workspace switch, relative/dynamic workspace dispatch with next/empty targets,
   dispatcher-style
-  movetoworkspace/movetoworkspacesilent/movefocus directionnel/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
+  movetoworkspace/movetoworkspacesilent/movefocus directionnel/focuswindow/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg/resizeactive/submap, fullscreen/pseudo/pinned client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
   class/module/surface diagnostics, launcher overlay dispatch,

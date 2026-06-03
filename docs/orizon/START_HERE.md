@@ -51,6 +51,7 @@ design note.
   `desktop version/devices/systeminfo/layouts/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches`,
   `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
   plus split/master ratio layout messages, directional movefocus/swapwindow,
+  direct focuswindow targeting,
   workspace next/empty targets, and
   silent move-to-workspace dispatch,
   persistent render tuning for focus ring, shadow range, render profile and

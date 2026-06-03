@@ -255,6 +255,7 @@ desktop dispatch fullscreen
 desktop dispatch pseudo
 desktop dispatch cyclenext
 desktop dispatch movefocus r
+desktop dispatch focuswindow class:orizon-terminal
 desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
@@ -270,6 +271,7 @@ desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace +1
 desktop dispatch workspace next
 desktop dispatch workspace empty
+desktop focus-window title:Terminal
 desktop focus toggle
 desktop autostart
 desktop doctor

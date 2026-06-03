@@ -3810,12 +3810,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop launcher [show|hide|toggle] - Control launcher\n");
     term_puts_t(term, "  desktop launch <app>    - Spawn terminal/settings/logs/packages/update/launcher\n");
     term_puts_t(term, "  desktop killactive      - Close focused tiled client\n");
-    term_puts_t(term, "  desktop focus-window next|prev - Change focused client\n");
+    term_puts_t(term, "  desktop focus-window next|prev|<target> - Focus by id/address/class/title\n");
     term_puts_t(term, "  desktop workspace [n|next|empty|previous] - Show or switch workspace\n");
     term_puts_t(term, "  desktop dispatch movetoworkspace <n|empty|+1|-1> - Move focused client\n");
     term_puts_t(term, "  desktop dispatch movetoworkspacesilent <target> - Move focused client silently\n");
     term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pin|cyclenext|swapnext|swapwindow|focusmaster|swapwithmaster - Hyprland-like actions\n");
     term_puts_t(term, "  desktop dispatch movefocus <l|r|u|d|next|prev> - Directional tiled focus\n");
+    term_puts_t(term, "  desktop dispatch focuswindow <id|0xaddr|class:app|title:text> - Focus a matching client\n");
     term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/masterratio actions\n");
     term_puts_t(term, "  desktop dispatch resizeactive <x> <y> - Keyboard tiling ratio resize\n");
     term_puts_t(term, "  desktop dispatch submap <name|reset> - Set active submap\n");
@@ -4520,7 +4521,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
                term_command_is(value, "up")) {
       rc = gui_desktop_focus_prev_client();
     } else {
-      term_puts_t(term, "usage: desktop focus-window next|prev\n");
+      rc = gui_desktop_dispatch("focuswindow", value, report, sizeof(report));
+      term_puts_t(term, report);
       return;
     }
     term_puts_t(term, rc == 0 ? "desktop: focus changed\n"

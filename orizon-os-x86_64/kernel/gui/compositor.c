@@ -379,6 +379,119 @@ static int desktop_parse_int_arg(const char *value, int *out) {
   return 0;
 }
 
+static int desktop_ascii_lower(int c) {
+  if (c >= 'A' && c <= 'Z') {
+    return c + ('a' - 'A');
+  }
+  return c;
+}
+
+static int desktop_starts_with_icase(const char *value, const char *prefix) {
+  if (!value || !prefix) {
+    return 0;
+  }
+  while (*prefix) {
+    if (desktop_ascii_lower((unsigned char)*value) !=
+        desktop_ascii_lower((unsigned char)*prefix)) {
+      return 0;
+    }
+    value++;
+    prefix++;
+  }
+  return 1;
+}
+
+static int desktop_contains_icase(const char *value, const char *needle) {
+  size_t needle_len;
+
+  if (!value || !needle || !needle[0]) {
+    return 0;
+  }
+  needle_len = strlen(needle);
+  for (const char *p = value; *p; p++) {
+    size_t i = 0;
+    while (i < needle_len && p[i] &&
+           desktop_ascii_lower((unsigned char)p[i]) ==
+               desktop_ascii_lower((unsigned char)needle[i])) {
+      i++;
+    }
+    if (i == needle_len) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int desktop_parse_positive_token(const char *value, int *out) {
+  int n = 0;
+  int seen = 0;
+
+  if (!value || !out) {
+    return -1;
+  }
+  while (*value == ' ') {
+    value++;
+  }
+  while (*value >= '0' && *value <= '9') {
+    seen = 1;
+    n = n * 10 + (*value - '0');
+    value++;
+  }
+  while (*value == ' ') {
+    value++;
+  }
+  if (!seen || *value != '\0') {
+    return -1;
+  }
+  *out = n;
+  return 0;
+}
+
+static int desktop_hex_digit_value(char c) {
+  if (c >= '0' && c <= '9') {
+    return c - '0';
+  }
+  if (c >= 'a' && c <= 'f') {
+    return 10 + c - 'a';
+  }
+  if (c >= 'A' && c <= 'F') {
+    return 10 + c - 'A';
+  }
+  return -1;
+}
+
+static int desktop_parse_address_token(const char *value, uint32_t *address) {
+  uint32_t parsed = 0;
+  int seen = 0;
+
+  if (!value || !address) {
+    return -1;
+  }
+  while (*value == ' ') {
+    value++;
+  }
+  if (value[0] == '0' && (value[1] == 'x' || value[1] == 'X')) {
+    value += 2;
+  }
+  while (*value) {
+    int digit = desktop_hex_digit_value(*value);
+    if (digit < 0) {
+      break;
+    }
+    seen = 1;
+    parsed = (parsed << 4) | (uint32_t)digit;
+    value++;
+  }
+  while (*value == ' ') {
+    value++;
+  }
+  if (!seen || *value != '\0') {
+    return -1;
+  }
+  *address = parsed;
+  return 0;
+}
+
 static int desktop_workspace_local_client_count(int workspace) {
   int count = 0;
 
@@ -1129,6 +1242,127 @@ static int desktop_focus_relative(int delta) {
   desktop_set_focused_client_index(focused_idx);
   desktop_sync_terminal_compat();
   needs_redraw = 1;
+  return 0;
+}
+
+static int desktop_client_matches_focus_query(const desktop_client_t *client,
+                                             const char *query) {
+  const char *q = query ? query : "";
+  int parsed_id = 0;
+  uint32_t parsed_address = 0;
+
+  if (!client || !client->visible) {
+    return 0;
+  }
+  while (*q == ' ') {
+    q++;
+  }
+  if (!q[0]) {
+    return 0;
+  }
+  if (desktop_starts_with_icase(q, "id:")) {
+    return desktop_parse_positive_token(q + 3, &parsed_id) == 0 &&
+           client->id == parsed_id;
+  }
+  if (desktop_starts_with_icase(q, "address:")) {
+    return desktop_parse_address_token(q + 8, &parsed_address) == 0 &&
+           desktop_client_address(client) == parsed_address;
+  }
+  if (desktop_starts_with_icase(q, "addr:")) {
+    return desktop_parse_address_token(q + 5, &parsed_address) == 0 &&
+           desktop_client_address(client) == parsed_address;
+  }
+  if (desktop_starts_with_icase(q, "0x")) {
+    return desktop_parse_address_token(q, &parsed_address) == 0 &&
+           desktop_client_address(client) == parsed_address;
+  }
+  if (desktop_starts_with_icase(q, "class:")) {
+    return desktop_contains_icase(client->app_id, q + 6);
+  }
+  if (desktop_starts_with_icase(q, "app:")) {
+    return desktop_contains_icase(client->app_id, q + 4);
+  }
+  if (desktop_starts_with_icase(q, "title:")) {
+    return desktop_contains_icase(client->title, q + 6);
+  }
+  if (desktop_starts_with_icase(q, "active")) {
+    return client->id == desktop_focused_client_id;
+  }
+  if (desktop_parse_positive_token(q, &parsed_id) == 0) {
+    return client->id == parsed_id;
+  }
+  return desktop_contains_icase(client->app_id, q) ||
+         desktop_contains_icase(client->title, q);
+}
+
+static int desktop_find_client_by_focus_query(const char *query) {
+  desktop_focus_history_compact();
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    int idx = desktop_client_index_by_id(desktop_focus_history[i]);
+    if (idx >= 0 &&
+        desktop_client_matches_focus_query(&desktop_clients[idx], query)) {
+      return idx;
+    }
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_client_matches_focus_query(&desktop_clients[i], query)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int desktop_focus_window_query(const char *query, char *out,
+                                      size_t out_size) {
+  const char *q = query ? query : "";
+  int previous_workspace = desktop_active_workspace;
+  int switched = 0;
+  int idx;
+
+  while (*q == ' ') {
+    q++;
+  }
+  if (!q[0]) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: focuswindow expects <id|0xaddress|class:app|app:id|title:text>\n");
+    }
+    return -1;
+  }
+  idx = desktop_find_client_by_focus_query(q);
+  if (idx < 0) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: focuswindow no-match target=\"%s\"\n", q);
+    }
+    return -1;
+  }
+  if (!desktop_clients[idx].pinned &&
+      desktop_clients[idx].workspace != desktop_active_workspace) {
+    desktop_previous_workspace = desktop_active_workspace;
+    desktop_active_workspace =
+        desktop_clamp_workspace(desktop_clients[idx].workspace);
+    desktop_workspace_mark_used(desktop_active_workspace);
+    desktop_workspace_mark_visited(desktop_active_workspace);
+    switched = 1;
+  }
+  desktop_launcher_visible = 0;
+  desktop_set_focused_client_index(idx);
+  desktop_sync_terminal_compat();
+  if (switched) {
+    desktop_start_transition("focuswindow", previous_workspace,
+                             desktop_active_workspace);
+  } else {
+    needs_redraw = 1;
+  }
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "desktop dispatch: focuswindow ok target=\"%s\" address=0x%x id=%d class=%s title=\"%s\" workspace=%d switched=%s tiled=yes\n",
+             q, desktop_client_address(&desktop_clients[idx]),
+             desktop_clients[idx].id, desktop_clients[idx].app_id,
+             desktop_clients[idx].title, desktop_clients[idx].workspace,
+             switched ? "yes" : "no");
+  }
   return 0;
 }
 
@@ -2501,7 +2735,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|next|empty|+1|-1|previous> | movetoworkspace <target> | movetoworkspacesilent <target> | "
-               "movefocus <l|r|u|d|next|prev> | swapwindow <l|r|u|d|next|prev> | fullscreen | pseudo | pin | swapnext | "
+               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | swapwindow <l|r|u|d|next|prev> | fullscreen | pseudo | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
     }
@@ -2582,6 +2816,10 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                fallback && rc == 0 ? " fallback=cycle" : "");
     }
     return rc;
+  }
+  if (strcmp(dispatcher, "focuswindow") == 0 ||
+      strcmp(dispatcher, "focus-window") == 0) {
+    return desktop_focus_window_query(a, out, out_size);
   }
   if (strcmp(dispatcher, "cyclenext") == 0) {
     int rc = (strcmp(a, "prev") == 0 || strcmp(a, "previous") == 0 ||
@@ -3558,6 +3796,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: exec terminal|settings|logs|packages|update | "
              "killactive | movefocus l|r|u|d|next|prev | "
+             "focuswindow <id|0xaddr|class:app|title:text> | "
              "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
              "fullscreen | pseudo | pin | "
              "workspace <n|next|empty|+1|-1|previous> | "
@@ -3962,6 +4201,7 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: desktop dispatch movefocus l|r|u|d|next|prev | "
+             "desktop dispatch focuswindow <id|0xaddr|class:app|title:text> | "
              "desktop dispatch cyclenext [prev] | "
              "desktop dispatch swapwindow l|r|u|d | "
              "desktop dispatch focusmaster\n");
@@ -4066,7 +4306,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
              "supported: exec terminal/settings/logs/packages/update, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, "
-             "cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
+             "focuswindow, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
@@ -4187,7 +4427,7 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: layoutmsg splitratio/masterratio/togglesplit | focusmaster | swapwithmaster | movefocus l|r|u|d\n"
+           "dispatch: layoutmsg splitratio/masterratio/togglesplit | focusmaster | swapwithmaster | movefocus l|r|u|d | focuswindow <target>\n"
              "hyprctl: desktop hyprctl layouttree\n"
              "limits: diagnostic tree only; no mouse free-drag, no floating scene graph, no Wayland scene graph yet\n");
   }
@@ -4296,7 +4536,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext, swapwindow\n"
+           "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, focusmaster, swapwithmaster\n"

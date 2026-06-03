@@ -865,7 +865,8 @@ static int desktop_hypr_dispatch_supported(const char *value) {
   return value &&
          (strstr(value, "exec") || strstr(value, "killactive") ||
           strstr(value, "workspace") || strstr(value, "movetoworkspace") ||
-          strstr(value, "movefocus") || strstr(value, "fullscreen") ||
+          strstr(value, "movefocus") || strstr(value, "focuswindow") ||
+          strstr(value, "fullscreen") ||
           strstr(value, "pseudo") || strstr(value, "pin") ||
           strstr(value, "focusmaster") || strstr(value, "swapwithmaster") ||
           strstr(value, "cyclenext") || strstr(value, "swapnext") ||
@@ -3869,7 +3870,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|fullscreen|pseudo|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|fullscreen|pseudo|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -4567,7 +4568,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; dispatch supports next/empty/+/-n\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus l/r/u/d | cyclenext | swapnext | swapwindow | fullscreen | pseudo | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus l/r/u/d | focuswindow <target> | cyclenext | swapnext | swapwindow | fullscreen | pseudo | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

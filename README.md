@@ -215,10 +215,11 @@ detaille classe/module/surface, et
 premieres apps natives comme clients tiles geres par le compositor. Le launcher
 est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
 menu demarrer permanent, ni fenetres flottantes.
-`desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|swapwindow|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|swapwindow|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
-deplacement silencieux de clients, focus/swap directionnels `l/r/u/d`, layouts
+deplacement silencieux de clients, focus/swap directionnels `l/r/u/d`, ciblage
+direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
