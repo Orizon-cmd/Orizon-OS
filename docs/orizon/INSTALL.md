@@ -256,7 +256,10 @@ desktop hyprctl keyword input:repeat_rate 40
 desktop hyprctl getoption input:repeat_rate
 desktop hyprctl reload
 desktop dispatch fullscreen
+desktop dispatch fullscreen off
+desktop dispatch fullscreenstate 1
 desktop dispatch pseudo
+desktop dispatch pseudotile on
 desktop dispatch cyclenext
 desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal

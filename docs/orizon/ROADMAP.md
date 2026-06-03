@@ -52,7 +52,7 @@
   `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`, generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, relative/dynamic
-  workspaces with next/empty targets, fullscreen/pseudo/pinned client state, per-workspace layout state, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
+  workspaces with next/empty targets, idempotent fullscreen/fullscreenstate/pseudo/pseudotile/pinned client state, per-workspace layout state, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default

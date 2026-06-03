@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.42.0` with idempotent Hyprland-style client
+  state dispatchers: `desktop dispatch fullscreen|pseudo|pseudotile|pin
+  <on|off|toggle|1|0>` plus the simplified `fullscreenstate` alias. Existing
+  no-argument dispatchers still toggle state, while scripted VM flows can now
+  set fullscreen, pseudo and pinned state without ambiguity.
+- Hardened the ZimaOS VM smoke boot path so first-boot OVMF/Limine screens are
+  handled before console DHCP/SSH commands are injected, and documented the
+  red `Configuration is INVALID` Limine symptom.
 - Added desktop package version `0.41.0` with `desktop workspace-stack` and
   `desktop hyprctl workspacestack`, a VM-safe Hyprland-style diagnostic for
   per-workspace master/stack/focus order, pinned/local client scope, stable

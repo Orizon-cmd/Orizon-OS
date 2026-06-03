@@ -116,8 +116,12 @@ desktop autostart
 desktop autostart terminal off
 desktop autostart terminal on
 desktop dispatch fullscreen
+desktop dispatch fullscreen off
+desktop dispatch fullscreenstate 1
 desktop dispatch pseudo
+desktop dispatch pseudotile on
 desktop dispatch pin
+desktop dispatch pin off
 desktop dispatch cyclenext
 desktop dispatch swapnext
 desktop dispatch movefocus r
@@ -411,8 +415,12 @@ dispatch movetoworkspace <target>`, `desktop dispatch movetoworkspacesilent <tar
 `desktop dispatch movefocus l|r|u|d|next|prev`, and
 `desktop dispatch focuswindow <id|0xaddr|class:app|title:text>`
 exercise the same mental model as Hyprland dispatchers. The current client
-dispatchers also include `fullscreen`, `pseudo`, `pin`, `cyclenext`, and
-`swapnext`, directional `swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases. Layout/submap
+dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
+`pseudotile`, `pin`, `cyclenext`, and `swapnext`, directional
+`swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases.
+`fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
+`fullscreenstate <on|off|1|0>` set or toggle the active client state without
+ambiguous script-side guessing. Layout/submap
 dispatchers now include `togglesplit`,
 `layoutmsg layout <dwindle|master|monocle>|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|focusmaster|swapwithmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
@@ -473,7 +481,8 @@ desktop dispatch movefocus l|r|u|d|next|prev changes focus
 desktop dispatch focuswindow <target> focuses by id/address/class/title
 desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active workspace layout
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
-desktop dispatch fullscreen|pseudo|pin controls active client state
+desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state
+desktop dispatch fullscreenstate <on|off|1|0> sets fullscreen state explicitly
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios
 desktop input layout fr|us syncs desktop and kernel keyboard layout
 desktop input pointer flat|natural|precise|accelerated records pointer policy

@@ -57,6 +57,7 @@ tail /workspace/hardware-report.txt
 | Symptom | First checks | Likely next action |
 | --- | --- | --- |
 | ISO boots but SSH is unreachable | `net status`, `ssh status`, `logs network`, host VM IP inventory | Restart DHCP/SSH from console; check NAT vs bridge IP discovery |
+| Limine shows `Configuration is INVALID` with `net dhcp`/`ssh` in red | VM screenshot, `test_vm_matrix.py` per-case log | The OS did not boot yet; discard Limine edits with `Esc`, then boot the entry. The VM smoke script must not inject Orizon console commands while still in Limine |
 | DHCP is missing | `net status`, `net daily`, `logs network` | Use NAT e1000e first; avoid bridge until host IP discovery is clear |
 | DNS/TCP fails | `dns raw.githubusercontent.com`, `net tcp raw.githubusercontent.com 443 attempts 2` | Re-run DHCP, inspect gateway/DNS, then retry update/pkg |
 | Release validation fails | `release.txt`, `manifest.txt`, `manifest.sig`, `Orizon-OS.iso` hashes | Rebuild with `orizon_update.py --mode zimaos-iso`; do not edit hashes by hand |

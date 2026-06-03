@@ -552,6 +552,53 @@ static int desktop_contains_icase(const char *value, const char *needle) {
   return 0;
 }
 
+static int desktop_parse_bool_state_arg(const char *value, int current,
+                                        int *out) {
+  char token[24];
+  size_t len = 0;
+
+  if (!out) {
+    return -1;
+  }
+  while (value && *value == ' ') {
+    value++;
+  }
+  if (!value || !value[0]) {
+    *out = current ? 0 : 1;
+    return 0;
+  }
+  while (value[len] && value[len] != ' ' && len + 1 < sizeof(token)) {
+    token[len] = (char)desktop_ascii_lower((unsigned char)value[len]);
+    len++;
+  }
+  token[len] = '\0';
+  while (value[len] == ' ') {
+    len++;
+  }
+  if (value[len] != '\0' && strcmp(token, "0") != 0 &&
+      strcmp(token, "1") != 0) {
+    return -1;
+  }
+  if (strcmp(token, "toggle") == 0 || strcmp(token, "togglestate") == 0 ||
+      strcmp(token, "switch") == 0) {
+    *out = current ? 0 : 1;
+    return 0;
+  }
+  if (strcmp(token, "on") == 0 || strcmp(token, "yes") == 0 ||
+      strcmp(token, "true") == 0 || strcmp(token, "enable") == 0 ||
+      strcmp(token, "enabled") == 0 || strcmp(token, "1") == 0) {
+    *out = 1;
+    return 0;
+  }
+  if (strcmp(token, "off") == 0 || strcmp(token, "no") == 0 ||
+      strcmp(token, "false") == 0 || strcmp(token, "disable") == 0 ||
+      strcmp(token, "disabled") == 0 || strcmp(token, "0") == 0) {
+    *out = 0;
+    return 0;
+  }
+  return -1;
+}
+
 static int desktop_parse_positive_token(const char *value, int *out) {
   int n = 0;
   int seen = 0;
@@ -1573,34 +1620,73 @@ static int desktop_swap_with_master(void) {
 }
 
 static int desktop_toggle_active_fullscreen(void) {
+  int desired;
   int idx = desktop_focused_client_index();
 
   if (idx < 0) {
     return -1;
   }
-  desktop_clients[idx].fullscreen = desktop_clients[idx].fullscreen ? 0 : 1;
+  desired = desktop_clients[idx].fullscreen ? 0 : 1;
+  desktop_clients[idx].fullscreen = desired;
+  needs_redraw = 1;
+  return desktop_clients[idx].fullscreen;
+}
+
+static int desktop_set_active_fullscreen(int desired) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].fullscreen = desired ? 1 : 0;
   needs_redraw = 1;
   return desktop_clients[idx].fullscreen;
 }
 
 static int desktop_toggle_active_pseudo(void) {
+  int desired;
   int idx = desktop_focused_client_index();
 
   if (idx < 0) {
     return -1;
   }
-  desktop_clients[idx].pseudo = desktop_clients[idx].pseudo ? 0 : 1;
+  desired = desktop_clients[idx].pseudo ? 0 : 1;
+  desktop_clients[idx].pseudo = desired;
+  needs_redraw = 1;
+  return desktop_clients[idx].pseudo;
+}
+
+static int desktop_set_active_pseudo(int desired) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].pseudo = desired ? 1 : 0;
   needs_redraw = 1;
   return desktop_clients[idx].pseudo;
 }
 
 static int desktop_toggle_active_pin(void) {
+  int desired;
   int idx = desktop_focused_client_index();
 
   if (idx < 0) {
     return -1;
   }
-  desktop_clients[idx].pinned = desktop_clients[idx].pinned ? 0 : 1;
+  desired = desktop_clients[idx].pinned ? 0 : 1;
+  desktop_clients[idx].pinned = desired;
+  needs_redraw = 1;
+  return desktop_clients[idx].pinned;
+}
+
+static int desktop_set_active_pin(int desired) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_clients[idx].pinned = desired ? 1 : 0;
   needs_redraw = 1;
   return desktop_clients[idx].pinned;
 }
@@ -2952,7 +3038,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|next|empty|+1|-1|previous> | movetoworkspace <target> | movetoworkspacesilent <target> | "
-               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | swapwindow <l|r|u|d|next|prev> | fullscreen | pseudo | pin | swapnext | "
+               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | swapwindow <l|r|u|d|next|prev> | fullscreen/fullscreenstate | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
     }
@@ -3328,29 +3414,85 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     }
     return -1;
   }
-  if (strcmp(dispatcher, "fullscreen") == 0) {
-    int state = desktop_toggle_active_fullscreen();
-    if (out && out_size) {
-      snprintf(out, out_size, "desktop dispatch: fullscreen %s\n",
-               state < 0 ? "no-client" : (state ? "on" : "off"));
+  if (strcmp(dispatcher, "fullscreen") == 0 ||
+      strcmp(dispatcher, "fullscreenstate") == 0) {
+    int desired = 0;
+    int idx = desktop_focused_client_index();
+    int state;
+    if (idx < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: %s no-client\n",
+                 dispatcher);
+      }
+      return -1;
     }
-    return state < 0 ? -1 : 0;
+    if (desktop_parse_bool_state_arg(a, desktop_clients[idx].fullscreen,
+                                     &desired) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: %s expects on/off/toggle/1/0\n",
+                 dispatcher);
+      }
+      return -1;
+    }
+    state = desktop_set_active_fullscreen(desired);
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: %s %s\n", dispatcher,
+               state ? "on" : "off");
+    }
+    return 0;
   }
   if (strcmp(dispatcher, "pseudo") == 0 || strcmp(dispatcher, "pseudotile") == 0) {
-    int state = desktop_toggle_active_pseudo();
-    if (out && out_size) {
-      snprintf(out, out_size, "desktop dispatch: pseudo %s\n",
-               state < 0 ? "no-client" : (state ? "on" : "off"));
+    int desired = 0;
+    int idx = desktop_focused_client_index();
+    int state;
+    if (idx < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: %s no-client\n",
+                 dispatcher);
+      }
+      return -1;
     }
-    return state < 0 ? -1 : 0;
+    if (desktop_parse_bool_state_arg(a, desktop_clients[idx].pseudo,
+                                     &desired) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: %s expects on/off/toggle/1/0\n",
+                 dispatcher);
+      }
+      return -1;
+    }
+    state = desktop_set_active_pseudo(desired);
+    if (out && out_size) {
+      snprintf(out, out_size, "desktop dispatch: %s %s\n", dispatcher,
+               state ? "on" : "off");
+    }
+    return 0;
   }
   if (strcmp(dispatcher, "pin") == 0) {
-    int state = desktop_toggle_active_pin();
+    int desired = 0;
+    int idx = desktop_focused_client_index();
+    int state;
+    if (idx < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: pin no-client\n");
+      }
+      return -1;
+    }
+    if (desktop_parse_bool_state_arg(a, desktop_clients[idx].pinned,
+                                     &desired) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: pin expects on/off/toggle/1/0\n");
+      }
+      return -1;
+    }
+    state = desktop_set_active_pin(desired);
     if (out && out_size) {
       snprintf(out, out_size, "desktop dispatch: pin %s\n",
-               state < 0 ? "no-client" : (state ? "on" : "off"));
+               state ? "on" : "off");
     }
-    return state < 0 ? -1 : 0;
+    return 0;
   }
   if (out && out_size) {
     snprintf(out, out_size, "desktop dispatch: unknown '%s'\n", dispatcher);
@@ -4053,7 +4195,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "killactive | movefocus l|r|u|d|next|prev | "
              "focuswindow <id|0xaddr|class:app|title:text> | "
              "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
-             "fullscreen | pseudo | pin | "
+             "fullscreen [on|off|toggle] | fullscreenstate <on|off|1|0> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
              "workspace <n|next|empty|+1|-1|previous> | "
              "movetoworkspace <n|empty|+1|-1> | "
              "togglesplit | layoutmsg <msg> | resizeactive <x> <y> | "
@@ -4651,7 +4793,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
              "supported: exec terminal/settings/logs/packages/update, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, "
-             "focuswindow, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, "
+             "focuswindow, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
@@ -4927,7 +5069,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, cyclenext, swapnext, swapwindow\n"
-           "dispatchers: focusmaster, swapwithmaster, fullscreen, pseudo, pin, togglesplit, layoutmsg, resizeactive, submap\n"
+           "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <on|off|1|0>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: layout <dwindle|master|monocle>, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, focusmaster, swapwithmaster\n"
            "truth: Hyprland-style facade for Orizon's framebuffer compositor\n");

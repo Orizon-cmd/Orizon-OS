@@ -4254,6 +4254,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "dispatch-swapwindow-command = desktop dispatch swapwindow <l|r|u|d|next|prev>\n"
       "dispatch-movefocus-directional-command = desktop dispatch movefocus <l|r|u|d|next|prev>\n"
       "dispatch-focuswindow-command = desktop dispatch focuswindow <id|0xaddr|class:app|title:text>\n"
+      "dispatch-state-command = desktop dispatch fullscreen|fullscreenstate|pseudo|pseudotile|pin <on|off|toggle|1|0>\n"
       "dispatch-splitratio-command = desktop dispatch layoutmsg splitratio <10-90|+/-n>\n"
       "dispatch-masterratio-command = desktop dispatch layoutmsg masterratio <10-90|+/-n>\n"
       "dispatch-resizeactive-command = desktop dispatch resizeactive <x> <y>\n"

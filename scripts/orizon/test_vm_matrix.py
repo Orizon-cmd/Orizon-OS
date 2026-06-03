@@ -119,6 +119,35 @@ def send_console_text(client, sudo_password: str, vm_name: str, text: str) -> No
         time.sleep(0.12 if ch != "\n" else 0.5)
 
 
+def send_console_key(client, sudo_password: str, vm_name: str, key: str) -> None:
+    run_sudo_command(
+        client,
+        sudo_password,
+        f"virsh send-key --holdtime 80 {vm_name} {key}",
+        check=False,
+    )
+
+
+def confirm_boot_menu(client, sudo_password: str, vm_name: str) -> None:
+    # The VM console input is blind. Fresh OVMF NVRAM can stop at the language
+    # chooser before Limine; Limine itself can also wait at its menu. Walk the
+    # safe firmware path (close language picker, Continue), then confirm Limine
+    # boot so later Orizon commands do not get typed into firmware/edit screens.
+    for key in ("KEY_ESC", "KEY_DOWN", "KEY_DOWN", "KEY_DOWN", "KEY_DOWN", "KEY_ENTER"):
+        send_console_key(client, sudo_password, vm_name, key)
+        time.sleep(0.35)
+    # If the previous sequence came from OVMF's first-boot menu, Limine appears
+    # only after a firmware transition. On this ZimaOS/libvirt firmware path,
+    # Limine receives letters reliably but Enter can leave the countdown stuck.
+    # Open the selected entry and use Limine's editor-level F10 boot action
+    # without changing the config.
+    time.sleep(10)
+    send_console_key(client, sudo_password, vm_name, "KEY_E")
+    time.sleep(0.5)
+    send_console_key(client, sudo_password, vm_name, "KEY_F10")
+    time.sleep(20)
+
+
 def configure_ssh_console(
     client,
     sudo_password: str,
@@ -127,6 +156,7 @@ def configure_ssh_console(
     *,
     rounds: int = 1,
     initial_wait: int = 0,
+    boot_confirm: bool = False,
 ) -> None:
     # Console input is sent blind through libvirt. Keep this sequence
     # idempotent so tests can safely re-arm SSH after DHCP/IP discovery.
@@ -140,6 +170,8 @@ def configure_ssh_console(
         "ssh auth lockout 30",
         "ssh start",
     )
+    if boot_confirm:
+        confirm_boot_menu(client, sudo_password, vm_name)
     if initial_wait:
         time.sleep(initial_wait)
     for round_index in range(rounds):
@@ -160,6 +192,7 @@ def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) 
         password,
         rounds=2,
         initial_wait=20,
+        boot_confirm=True,
     )
 
 
@@ -580,8 +613,14 @@ def run_ssh_checks(
         ("desktop hyprctl submap", "submap: resize"),
         ("desktop hyprctl submap reset", "submap default"),
         ("desktop dispatch fullscreen", "fullscreen on"),
+        ("desktop dispatch fullscreen off", "fullscreen off"),
+        ("desktop dispatch fullscreenstate 1", "fullscreenstate on"),
         ("desktop dispatch pseudo", "pseudo on"),
+        ("desktop dispatch pseudo off", "pseudo off"),
+        ("desktop dispatch pseudotile on", "pseudotile on"),
         ("desktop dispatch pin", "pin on"),
+        ("desktop dispatch pin off", "pin off"),
+        ("desktop dispatch pin on", "pin on"),
         ("desktop hyprctl clients", "Orizon desktop windows"),
         ("desktop hyprctl activewindow", "activewindow:"),
         ("desktop hyprctl monitors", "Monitor 0"),

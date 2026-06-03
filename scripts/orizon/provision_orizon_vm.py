@@ -30,6 +30,9 @@ def build_domain_xml(config: dict) -> str:
     video_model = config.get("video_model", "virtio")
     video_width = int(config.get("video_width", 1280))
     video_height = int(config.get("video_height", 800))
+    bootmenu_enable = str(config.get("bootmenu_enable", "no")).lower()
+    if bootmenu_enable not in {"yes", "no"}:
+        bootmenu_enable = "no"
     loader = config.get("firmware_loader", "/usr/share/qemu/edk2-x86_64-code.fd")
     nvram_template = config.get(
         "firmware_nvram_template", "/usr/share/qemu/edk2-i386-vars.fd"
@@ -61,7 +64,7 @@ def build_domain_xml(config: dict) -> str:
     </firmware>
     <loader readonly='yes' type='pflash'>{loader}</loader>
     <nvram template='{nvram_template}'>{nvram_path}</nvram>
-    <bootmenu enable='yes'/>
+    <bootmenu enable='{bootmenu_enable}'/>
   </os>
   <features>
     <acpi/>

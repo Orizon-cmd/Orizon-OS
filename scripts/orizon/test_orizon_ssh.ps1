@@ -174,8 +174,14 @@ $commands = @(
   "desktop hyprctl submap",
   "desktop hyprctl submap reset",
   "desktop dispatch fullscreen",
+  "desktop dispatch fullscreen off",
+  "desktop dispatch fullscreenstate 1",
   "desktop dispatch pseudo",
+  "desktop dispatch pseudo off",
+  "desktop dispatch pseudotile on",
   "desktop dispatch pin",
+  "desktop dispatch pin off",
+  "desktop dispatch pin on",
   "desktop hyprctl clients",
   "desktop hyprctl activewindow",
   "desktop hyprctl monitors",
@@ -704,11 +710,29 @@ run_cmd() {
     "desktop dispatch fullscreen")
       grep -q "desktop dispatch: fullscreen" "`$OUT" || { echo "missing desktop dispatch fullscreen"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop dispatch fullscreen off")
+      grep -q "desktop dispatch: fullscreen off" "`$OUT" || { echo "missing desktop dispatch fullscreen off"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch fullscreenstate 1")
+      grep -q "desktop dispatch: fullscreenstate on" "`$OUT" || { echo "missing desktop dispatch fullscreenstate"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop dispatch pseudo")
       grep -q "desktop dispatch: pseudo" "`$OUT" || { echo "missing desktop dispatch pseudo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop dispatch pseudo off")
+      grep -q "desktop dispatch: pseudo off" "`$OUT" || { echo "missing desktop dispatch pseudo off"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch pseudotile on")
+      grep -q "desktop dispatch: pseudotile on" "`$OUT" || { echo "missing desktop dispatch pseudotile on"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop dispatch pin")
       grep -q "desktop dispatch: pin" "`$OUT" || { echo "missing desktop dispatch pin"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch pin off")
+      grep -q "desktop dispatch: pin off" "`$OUT" || { echo "missing desktop dispatch pin off"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch pin on")
+      grep -q "desktop dispatch: pin on" "`$OUT" || { echo "missing desktop dispatch pin on"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl clients")
       grep -q "Orizon desktop windows" "`$OUT" || { echo "missing desktop hyprctl clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

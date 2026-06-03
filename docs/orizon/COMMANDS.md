@@ -195,8 +195,12 @@ desktop autostart
 desktop autostart terminal off
 desktop autostart terminal on
 desktop dispatch fullscreen
+desktop dispatch fullscreen off
+desktop dispatch fullscreenstate 1
 desktop dispatch pseudo
+desktop dispatch pseudotile on
 desktop dispatch pin
+desktop dispatch pin off
 desktop dispatch cyclenext
 desktop dispatch swapnext
 desktop dispatch movefocus r
@@ -362,11 +366,15 @@ layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `cyclenext`, `swapnext`,
-`swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`, `pseudo`, `pin`,
+`swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,
+`fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg layout <dwindle|master|monocle>`,
 `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
+idempotent client-state dispatchers
+`fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
+`fullscreenstate <on|off|1|0>`,
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,

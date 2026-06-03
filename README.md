@@ -67,7 +67,8 @@ le developpement noyau:
   `orizon-desktop-core`/`orizon-terminal`/`orizon-settings`/`orizon-launcher`
   et `orizon-waybar` seulement prevu pour plus tard,
   dix workspaces runtime dynamiques, clients tiles avec adresses stables/focusHistoryID,
-  dispatchers Hyprland-like, focus directionnel HJKL, fullscreen/pseudo/pin,
+  dispatchers Hyprland-like, focus directionnel HJKL,
+  fullscreen/fullscreenstate/pseudo/pseudotile/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
@@ -222,13 +223,17 @@ detaille classe/module/surface, et
 premieres apps natives comme clients tiles geres par le compositor. Le launcher
 est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
 menu demarrer permanent, ni fenetres flottantes.
-`desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|swapwindow|fullscreen|pseudo|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
 deplacement silencieux de clients, focus/swap directionnels `l/r/u/d`, ciblage
 direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
+Les etats du client actif acceptent aussi des valeurs idempotentes:
+`desktop dispatch fullscreen|pseudo|pseudotile|pin on|off|toggle|1|0` et
+`desktop dispatch fullscreenstate on|off|1|0`, ce qui evite les bascules
+ambigues dans les scripts et tests VM.
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
 stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned,
