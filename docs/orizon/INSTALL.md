@@ -143,7 +143,10 @@ in `/logs/desktop-session.log`. `desktop rescue` is non-destructive and reports
 state health, live/install mode, policy, and file checks before `desktop
 recover` repairs/reapplies the session.
 The model is closer to Hyprland dispatchers and automatic tiling than to a
-mouse-drag window desktop. The same profile can be installed later through
+mouse-drag window desktop. `desktop layout-tree` and
+`desktop hyprctl layouttree` show the active tiling tree, rectangles and
+`manual-drag=no` boundary when debugging the installed VM session. The same
+profile can be installed later through
 packages:
 
 ```text
@@ -190,6 +193,7 @@ desktop devices
 desktop keymap
 desktop systeminfo
 desktop layouts
+desktop layout-tree
 desktop animations
 desktop decorations
 desktop render
@@ -212,6 +216,7 @@ desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
+desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
 desktop hyprctl render

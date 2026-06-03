@@ -3774,6 +3774,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop backend         - Show current framebuffer backend and future split\n");
     term_puts_t(term, "  desktop protocol        - Show internal client/compositor protocol map\n");
     term_puts_t(term, "  desktop layouts         - Show available tiling layouts\n");
+    term_puts_t(term, "  desktop layout-tree     - Show active workspace tiling tree/rectangles\n");
     term_puts_t(term, "  desktop animations      - Show animation/runtime transition state\n");
     term_puts_t(term, "  desktop decorations     - Show border/shadow/rounding state\n");
     term_puts_t(term, "  desktop render          - Show render/focus/transition diagnostics\n");
@@ -4073,6 +4074,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "layout-tree") ||
+      term_command_is(args, "layouttree") ||
+      term_command_is(args, "tree")) {
+    gui_desktop_format_layout_tree(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "animations")) {
     gui_desktop_format_animations(report, sizeof(report));
     term_puts_t(term, report);
@@ -4213,7 +4221,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     const char *hypr = term_skip_spaces(args + 7);
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4248,6 +4256,10 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       gui_desktop_format_layers(report, sizeof(report));
     } else if (term_command_is(hypr, "layouts")) {
       gui_desktop_format_layouts(report, sizeof(report));
+    } else if (term_command_is(hypr, "layouttree") ||
+               term_command_is(hypr, "layout-tree") ||
+               term_command_is(hypr, "tree")) {
+      gui_desktop_format_layout_tree(report, sizeof(report));
     } else if (term_command_is(hypr, "animations")) {
       gui_desktop_format_animations(report, sizeof(report));
     } else if (term_command_is(hypr, "decorations")) {

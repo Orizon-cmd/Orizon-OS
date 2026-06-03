@@ -58,6 +58,7 @@ desktop systeminfo
 desktop backend
 desktop protocol
 desktop layouts
+desktop layout-tree
 desktop animations
 desktop decorations
 desktop render
@@ -75,6 +76,7 @@ desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
+desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
 desktop hyprctl render
@@ -341,7 +343,7 @@ runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
-`desktop layouts`, `desktop animations`,
+`desktop layouts`, `desktop layout-tree`, `desktop animations`,
 `desktop render`, `desktop configerrors`, `desktop rollinglog`, `desktop focus-history`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
@@ -353,6 +355,12 @@ animations:tick_budget <4-60>`, `desktop keyword render:focus_ring
 <true|false>`, and `desktop settings set render-profile <name>` persist those
 values without enabling floating windows or manual dragging. It is
 Hyprland-style compositor UX, not upstream Wayland/wlroots.
+`desktop layout-tree` and `desktop hyprctl layouttree` are the active tiling
+diagnostic: they print the current workspace root area, split/master ratios,
+client roles, rectangles, focused client, fullscreen/pseudo/pinned flags, and
+`focusHistoryID`. The output explicitly reports `manual-drag=no` and
+`floating-tree=no`; it is not a floating scene graph and it is not a Wayland
+scene graph yet.
 `desktop backend` and `desktop protocol` expose the architecture seam for the
 future real compositor path. Today they report `current-backend:
 framebuffer-vm`, `protocol: orizon-desktop-ipc-v0`, software backbuffer
@@ -382,7 +390,7 @@ dispatchers now include `togglesplit`,
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
+version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -438,10 +446,12 @@ desktop focus on|off|toggle controls focus-follows-mouse
 desktop devices shows keyboard/pointer input state
 desktop backend shows the current framebuffer-vm backend map
 desktop protocol shows the internal orizon-desktop-ipc-v0 protocol map
+desktop layout-tree shows the active tiling tree and rectangles
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
+desktop hyprctl layouttree mirrors desktop layout-tree
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 ```
 

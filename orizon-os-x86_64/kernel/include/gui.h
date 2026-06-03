@@ -101,6 +101,7 @@ void gui_desktop_format_monitors(char *out, size_t out_size);
 void gui_desktop_format_layers(char *out, size_t out_size);
 void gui_desktop_format_binds(char *out, size_t out_size);
 void gui_desktop_format_layouts(char *out, size_t out_size);
+void gui_desktop_format_layout_tree(char *out, size_t out_size);
 void gui_desktop_format_animations(char *out, size_t out_size);
 void gui_desktop_format_decorations(char *out, size_t out_size);
 void gui_desktop_format_render(char *out, size_t out_size);

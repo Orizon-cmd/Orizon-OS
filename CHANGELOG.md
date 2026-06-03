@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added desktop package version `0.34.0` with active tiling tree diagnostics:
+  `desktop layout-tree` and `desktop hyprctl layouttree` show workspace root
+  geometry, client roles, rectangles, focus state, `focusHistoryID`, and the
+  explicit `manual-drag=no` boundary.
 - Added desktop package version `0.33.0` with architecture truth-map commands
   `desktop backend`, `desktop protocol`, `desktop hyprctl backend`, and
   `desktop hyprctl protocol`, backed by `/system/desktop-backend.conf` and

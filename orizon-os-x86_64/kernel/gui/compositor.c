@@ -3287,6 +3287,7 @@ void gui_desktop_format_layouts(char *out, size_t out_size) {
            "set: desktop layout <dwindle|master|monocle>\n"
            "dispatch: desktop dispatch togglesplit | desktop dispatch focusmaster | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d\n"
            "dispatch: desktop dispatch layoutmsg splitratio <10-90|+/-n> | desktop dispatch layoutmsg masterratio <10-90|+/-n>\n"
+           "tree: desktop layout-tree | desktop hyprctl layouttree\n"
            "hyprctl: desktop hyprctl layouts\n"
            "limits: layout plugins and per-window layout rules are not implemented yet\n",
            desktop_session.layout, desktop_split_mode_name(),
@@ -3297,6 +3298,88 @@ void gui_desktop_format_layouts(char *out, size_t out_size) {
                      ((uint32_t)desktop_focused_client_id * 0x100u)
                : 0,
            desktop_focus_history[0] > 0 ? "ready" : "empty");
+}
+
+void gui_desktop_format_layout_tree(char *out, size_t out_size) {
+  size_t used = 0;
+  int count;
+  int local_count;
+  int active_idx;
+  int outer_gap = desktop_settings.gaps_out;
+  int inner_gap = desktop_settings.gaps_in;
+  int area_x = 44 + outer_gap;
+  int area_y = TOP_BAR_HEIGHT + 92;
+  int area_w = (int)screen_width - 88 - outer_gap * 2;
+  int area_h = (int)screen_height - area_y - FOOTER_HEIGHT - 18 - outer_gap;
+  const char *engine;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (area_w < 120) {
+    area_w = 120;
+  }
+  if (area_h < 80) {
+    area_h = 80;
+  }
+  engine = desktop_layout_engine();
+  count = desktop_client_count_on_workspace(desktop_active_workspace);
+  local_count = desktop_workspace_local_client_count(desktop_active_workspace);
+  active_idx = desktop_focused_client_index();
+  used += snprintf(out + used, out_size - used,
+                   "Orizon desktop layout tree\n"
+                   "workspace: %d name=\"%s\" engine=%s clients=%d local=%d pinned-aware=yes\n"
+                   "root: area=%d,%d size=%dx%d gaps-in=%d gaps-out=%d split=%s ratio=%d master=%d\n"
+                   "model: tiling-only manual-drag=no floating-tree=no backend=framebuffer-vm\n",
+                   desktop_active_workspace,
+                   desktop_workspace_name(desktop_active_workspace), engine,
+                   count, local_count, area_x, area_y, area_w, area_h,
+                   inner_gap, outer_gap, desktop_split_mode_name(),
+                   desktop_split_ratio_percent, desktop_master_ratio_percent);
+  if (count <= 0 && used < out_size) {
+    used += snprintf(out + used, out_size - used,
+                     "tree: empty workspace; dispatch exec terminal to create the first tiled client\n");
+  }
+  for (int pos = 0; pos < count && used < out_size; pos++) {
+    int idx = desktop_nth_client_on_workspace(desktop_active_workspace, pos);
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    const char *role = "dwindle-leaf";
+
+    if (idx < 0) {
+      continue;
+    }
+    desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+    if (desktop_clients[idx].fullscreen) {
+      role = "fullscreen";
+    } else if (strcmp(engine, "monocle") == 0) {
+      role = "monocle";
+    } else if (strcmp(engine, "master") == 0) {
+      role = pos == 0 ? "master" : "stack";
+    } else if (count == 1) {
+      role = "single";
+    }
+    used += snprintf(
+        out + used, out_size - used,
+        "node %d: role=%s address=0x%x id=%d title=\"%s\" class=%s rect=%d,%d %dx%d focused=%s fullscreen=%s pseudo=%s pinned=%s focusHistoryID=%d\n",
+        pos, role, desktop_client_address(&desktop_clients[idx]),
+        desktop_clients[idx].id, desktop_clients[idx].title,
+        desktop_clients[idx].app_id, rx, ry, rw, rh,
+        idx == active_idx ? "yes" : "no",
+        desktop_clients[idx].fullscreen ? "yes" : "no",
+        desktop_clients[idx].pseudo ? "yes" : "no",
+        desktop_clients[idx].pinned ? "yes" : "no",
+        desktop_clients[idx].focus_history_id);
+  }
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "dispatch: layoutmsg splitratio/masterratio/togglesplit | focusmaster | swapwithmaster | movefocus l|r|u|d\n"
+             "hyprctl: desktop hyprctl layouttree\n"
+             "limits: diagnostic tree only; no mouse free-drag, no floating scene graph, no Wayland scene graph yet\n");
+  }
 }
 
 void gui_desktop_format_animations(char *out, size_t out_size) {
@@ -3399,7 +3482,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, workspaces, activeworkspace, activewindow\n"
-           "commands: backend, protocol, monitors, binds, layers, layouts, animations, decorations, render, devices\n"
+           "commands: backend, protocol, monitors, binds, layers, layouts, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, movetoworkspace, movetoworkspacesilent, movefocus, cyclenext, swapnext, swapwindow\n"

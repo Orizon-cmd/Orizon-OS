@@ -129,6 +129,7 @@ desktop systeminfo
 desktop backend
 desktop protocol
 desktop layouts
+desktop layout-tree
 desktop animations
 desktop decorations
 desktop render
@@ -146,6 +147,7 @@ desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
+desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
 desktop hyprctl render
@@ -201,13 +203,13 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.33.0` because it includes policy/config files, the persisted session
+`0.34.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply import, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
-`hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/rollinglog/focus-history/keymap diagnostics, the
+`hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, fullscreen/pseudo/pinned client
 state, stable client addresses, `focusHistoryID`, active-window/client geometry,
@@ -285,6 +287,11 @@ Version `0.33.0` adds the desktop architecture truth map:
 `framebuffer-vm` backend and internal `orizon-desktop-ipc-v0` dispatcher
 protocol while keeping Wayland/wlroots/upstream Hyprland marked prepared-only
 and not implemented.
+Version `0.34.0` adds active tiling tree diagnostics with
+`desktop layout-tree` and `desktop hyprctl layouttree`. The output reports
+workspace root geometry, client roles, rectangles, fullscreen/pseudo/pinned
+state, focus status, `focusHistoryID`, and the explicit tiling-only
+`manual-drag=no` boundary.
 
 ## Package Format
 

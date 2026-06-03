@@ -131,6 +131,7 @@ desktop systeminfo
 desktop backend
 desktop protocol
 desktop layouts
+desktop layout-tree
 desktop animations
 desktop decorations
 desktop render
@@ -148,6 +149,7 @@ desktop hyprctl protocol
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
+desktop hyprctl layouttree
 desktop hyprctl animations
 desktop hyprctl decorations
 desktop hyprctl render
@@ -334,7 +336,7 @@ and `desktop runtime` show the generated Hyprland-style runtime files,
 `desktop layers` shows the compositor layer model, `desktop version` identifies
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
-animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
+layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop render`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`, and
 `desktop focus-history` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
@@ -350,6 +352,9 @@ a small Hyprland-like facade for version/systeminfo/clients/workspaces/activewor
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
+`desktop layout-tree` and `desktop hyprctl layouttree` show the active
+workspace tiling tree with client roles, rectangles, focus state, and
+`manual-drag=no`,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

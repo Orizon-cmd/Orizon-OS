@@ -109,6 +109,7 @@ $commands = @(
   "desktop backend",
   "desktop protocol",
   "desktop layouts",
+  "desktop layout-tree",
   "desktop animations",
   "desktop decorations",
   "desktop render",
@@ -124,6 +125,7 @@ $commands = @(
   "desktop hyprctl protocol",
   "desktop hyprctl activeworkspace",
   "desktop hyprctl layouts",
+  "desktop hyprctl layouttree",
   "desktop hyprctl animations",
   "desktop hyprctl decorations",
   "desktop hyprctl render",
@@ -565,6 +567,9 @@ run_cmd() {
       ;;
     "desktop layouts"|"desktop hyprctl layouts")
       grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop layout-tree"|"desktop hyprctl layouttree")
+      grep -q "Orizon desktop layout tree" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop layout tree"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop animations"|"desktop hyprctl animations")
       grep -q "Orizon desktop animations" "`$OUT" && grep -q "animations:enabled" "`$OUT" || { echo "missing desktop animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

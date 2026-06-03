@@ -71,8 +71,8 @@ le developpement noyau:
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
-  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/animations/configerrors/rollinglog/focus-history`, facade
-  `desktop hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-tree/animations/configerrors/rollinglog/focus-history`, facade
+  `desktop hyprctl version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/layouts/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -165,11 +165,11 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
 `desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`,
-`desktop backend`, `desktop protocol`, `desktop layouts`,
+`desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-tree`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -193,6 +193,9 @@ maintenant.
 backend actuel `framebuffer-vm`, protocole interne `orizon-desktop-ipc-v0`,
 future cible `wayland-wlroots` preparee, mais pas encore Wayland/wlroots,
 xdg-shell, layer-shell reel, XWayland ni clients Wayland externes.
+`desktop layout-tree` et `desktop hyprctl layouttree` exposent l'arbre actif du
+workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
+`focusHistoryID`, et la limite explicite `manual-drag=no`.
 `desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
 detaille classe/module/surface, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les
