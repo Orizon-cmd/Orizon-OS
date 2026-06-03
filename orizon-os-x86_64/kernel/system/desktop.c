@@ -254,6 +254,9 @@ static const char *desktop_runtime_config =
     "debug-hints 0\n"
     "animation-hints 0\n"
     "submap = default\n"
+    "cursor:no_hardware_cursors = true\n"
+    "render:direct_scanout = false\n"
+    "decoration:blur:enabled = false\n"
     "settings-hub yes\n"
     "settings-path " ORIZON_DESKTOP_SETTINGS_PATH "\n"
     "session-path " ORIZON_DESKTOP_SESSION_PATH "\n"
@@ -1094,6 +1097,20 @@ static int desktop_hypr_runtime_get_value(const char *path, const char *key,
     }
   }
   return found ? 0 : -1;
+}
+
+static const char *desktop_hypr_runtime_default_value(const char *key) {
+  if (!key) {
+    return NULL;
+  }
+  if (strcmp(key, "cursor:no_hardware_cursors") == 0) {
+    return "true";
+  }
+  if (strcmp(key, "render:direct_scanout") == 0 ||
+      strcmp(key, "decoration:blur:enabled") == 0) {
+    return "false";
+  }
+  return NULL;
 }
 
 static int desktop_hypr_apply_pair(const char *key, const char *value,
@@ -2136,14 +2153,10 @@ int orizon_desktop_ensure_defaults(void) {
   }
   if (!vfs_exists(ORIZON_DESKTOP_STATE_PATH)) {
     policy_enabled = desktop_policy_enabled_from_file();
-    if (desktop_write_session_state(policy_enabled ? "started" : "stopped",
-                                    policy_enabled ? "active" : "inactive",
-                                    "defaults",
-                                    "created-missing-state") < 0) {
-      if (desktop_write_text_file(ORIZON_DESKTOP_STATE_PATH,
-                                  desktop_state_config) < 0) {
-        rc = -1;
-      }
+    (void)policy_enabled;
+    if (desktop_write_text_file(ORIZON_DESKTOP_STATE_PATH,
+                                desktop_state_config) < 0) {
+      rc = -1;
     }
   }
   return rc;
@@ -3808,10 +3821,13 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
     snprintf(value, sizeof(value), "%s",
              session.focus_follows_mouse ? "true" : "false");
   } else if ((runtime_path = desktop_hypr_runtime_path_for_key(key)) != NULL) {
+    const char *default_value;
     kind = "runtime";
     if (desktop_hypr_runtime_get_value(runtime_path, key, value,
                                        sizeof(value)) < 0) {
-      snprintf(value, sizeof(value), "%s", "prepared-no-value-yet");
+      default_value = desktop_hypr_runtime_default_value(key);
+      snprintf(value, sizeof(value), "%s",
+               default_value ? default_value : "prepared-no-value-yet");
     }
   } else {
     known = "no";

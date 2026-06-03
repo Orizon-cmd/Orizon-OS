@@ -33,6 +33,11 @@ def build_domain_xml(config: dict) -> str:
     bootmenu_enable = str(config.get("bootmenu_enable", "no")).lower()
     if bootmenu_enable not in {"yes", "no"}:
         bootmenu_enable = "no"
+    watchdog_model = str(config.get("watchdog_model", "itco")).strip()
+    watchdog_action = str(config.get("watchdog_action", "none")).strip() or "none"
+    watchdog_xml = ""
+    if watchdog_model:
+        watchdog_xml = f"    <watchdog model='{watchdog_model}' action='{watchdog_action}'/>\n"
     loader = config.get("firmware_loader", "/usr/share/qemu/edk2-x86_64-code.fd")
     nvram_template = config.get(
         "firmware_nvram_template", "/usr/share/qemu/edk2-i386-vars.fd"
@@ -117,7 +122,7 @@ def build_domain_xml(config: dict) -> str:
         <resolution x='{video_width}' y='{video_height}'/>
       </model>
     </video>
-    <watchdog model='itco' action='reset'/>
+{watchdog_xml.rstrip()}
     <memballoon model='virtio'/>
   </devices>
 </domain>

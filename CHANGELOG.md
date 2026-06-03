@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Fixed a ZimaOS VM boot/reset loop seen after AHCI storage discovery by
+  keeping the libvirt iTCO watchdog explicitly non-resetting, skipping automatic
+  persistence auto-load during `orizon.safe=1`, and reading persistence slots
+  header-first with small boot I/O chunks.
+- Allowed explicit `persist save` to prepare persistence metadata lazily after a
+  safe boot skipped auto-load, preserving the safer boot path while keeping VM
+  persistence smoke checks usable.
+- Fixed desktop first-state creation so missing `/system/desktop-state.conf`
+  no longer recurses through session loading during boot.
+- Fixed the SSH `desktop focus-window <target>` wrapper so dispatcher success
+  output is actually sent back to the remote shell.
+- Hardened VM matrix boot automation to select the Limine entry before sending
+  Orizon console commands, preventing accidental red `Configuration is INVALID`
+  edits in Limine.
+- Added safe default `hyprctl getoption` values for prepared runtime hints such
+  as `cursor:no_hardware_cursors`, `render:direct_scanout`, and
+  `decoration:blur:enabled`.
 - Added desktop package version `0.42.0` with idempotent Hyprland-style client
   state dispatchers: `desktop dispatch fullscreen|pseudo|pseudotile|pin
   <on|off|toggle|1|0>` plus the simplified `fullscreenstate` alias. Existing

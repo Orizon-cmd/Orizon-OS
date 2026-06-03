@@ -183,16 +183,21 @@ def configure_ssh_console(
 
 
 def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) -> None:
-    # Give the framebuffer shell time to appear, then replay the setup once to
-    # avoid losing password/start commands during slower boots.
+    # Do not send text while Limine is still active: a blind "keyboard us" can
+    # become an edit command in the bootloader. On this ZimaOS/OVMF path,
+    # ENTER reliably selects Limine's highlighted "Boot" action, while F10 can
+    # leave the menu stuck. After that, wait for Orizon's framebuffer shell
+    # before replaying the idempotent DHCP/SSH setup.
+    time.sleep(12)
+    send_console_key(client, sudo_password, vm_name, "KEY_ENTER")
     configure_ssh_console(
         client,
         sudo_password,
         vm_name,
         password,
         rounds=2,
-        initial_wait=20,
-        boot_confirm=True,
+        initial_wait=100,
+        boot_confirm=False,
     )
 
 

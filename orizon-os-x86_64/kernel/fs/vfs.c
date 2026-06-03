@@ -14,7 +14,12 @@
 #define PERSIST_SECTORS (PERSIST_BYTES / ORIZON_SECTOR_SIZE)
 #define PERSIST_SLOT_COUNT 2U
 #define PERSIST_HEADER_SIZE ORIZON_SECTOR_SIZE
-#define PERSIST_IO_MAX_SECTORS 128U
+/*
+ * Keep persistence boot I/O deliberately small while the AHCI path still uses a
+ * single PRDT entry. Large early reads can reset QEMU/OVMF instead of failing
+ * cleanly, which looks like a black screen followed by a Limine reboot loop.
+ */
+#define PERSIST_IO_MAX_SECTORS 1U
 #define PERSIST_SEQUENCE_OFFSET 24U
 
 /* Inode structure */
@@ -62,6 +67,8 @@ static char persist_status_buf[192];
 static int create_inode(const char *path, int type);
 static void persist_set_status(const char *status);
 static int persist_storage_read(uint64_t lba, void *buf, uint32_t sectors);
+static int persist_read_slot_snapshot(uint32_t slot,
+                                      persist_snapshot_meta_t *meta);
 
 /* String helpers */
 static int str_eq(const char *a, const char *b) {
@@ -400,12 +407,7 @@ static void persist_append_text(char *out, size_t out_size, size_t *used,
 
 static int persist_read_slot_meta(uint32_t slot,
                                   persist_snapshot_meta_t *meta) {
-  if (!meta || slot >= persist_slots_available ||
-      persist_storage_read(persist_slot_lba(slot), persist_buf,
-                           PERSIST_SECTORS) < 0) {
-    return -1;
-  }
-  return persist_snapshot_validate(persist_buf, meta, slot);
+  return persist_read_slot_snapshot(slot, meta);
 }
 
 static int persist_append_entry(size_t *offset, uint32_t *entry_count,
@@ -459,6 +461,58 @@ static int persist_storage_read(uint64_t lba, void *buf, uint32_t sectors) {
     done += chunk;
   }
   return 0;
+}
+
+static uint32_t persist_snapshot_sector_count(uint32_t payload_size) {
+  uint64_t bytes = (uint64_t)PERSIST_HEADER_SIZE + payload_size;
+  uint64_t sectors = (bytes + ORIZON_SECTOR_SIZE - 1U) / ORIZON_SECTOR_SIZE;
+  if (sectors == 0) {
+    sectors = 1;
+  }
+  if (sectors > PERSIST_SECTORS) {
+    sectors = PERSIST_SECTORS;
+  }
+  return (uint32_t)sectors;
+}
+
+static int persist_read_slot_snapshot(uint32_t slot,
+                                      persist_snapshot_meta_t *meta) {
+  uint64_t lba;
+  uint32_t version;
+  uint32_t entry_count;
+  uint32_t payload_size;
+  uint32_t sectors;
+
+  if (!meta || slot >= persist_slots_available) {
+    return -1;
+  }
+  memset(meta, 0, sizeof(*meta));
+  meta->slot = slot;
+
+  lba = persist_slot_lba(slot);
+  if (persist_storage_read(lba, persist_buf, 1) < 0) {
+    return -1;
+  }
+  if (memcmp(persist_buf, PERSIST_MAGIC, 7) != 0) {
+    return -2;
+  }
+
+  version = get_u32(persist_buf + 8);
+  entry_count = get_u32(persist_buf + 12);
+  payload_size = get_u32(persist_buf + 16);
+  if ((version != PERSIST_VERSION && version != PERSIST_LEGACY_VERSION) ||
+      entry_count > MAX_FILES ||
+      payload_size > PERSIST_BYTES - PERSIST_HEADER_SIZE) {
+    return -2;
+  }
+
+  sectors = persist_snapshot_sector_count(payload_size);
+  if (sectors > 1 &&
+      persist_storage_read(lba + 1, persist_buf + ORIZON_SECTOR_SIZE,
+                           sectors - 1) < 0) {
+    return -1;
+  }
+  return persist_snapshot_validate(persist_buf, meta, slot) == 0 ? 0 : -2;
 }
 
 static int persist_storage_write(uint64_t lba, const void *buf,
@@ -810,10 +864,41 @@ static int persist_apply_snapshot_entries(const persist_snapshot_meta_t *meta) {
   return malformed ? -EINVAL : 0;
 }
 
+static void persist_prepare_metadata_for_save(void) {
+  persist_snapshot_meta_t best;
+  persist_snapshot_meta_t meta;
+  uint32_t slots;
+
+  memset(&best, 0, sizeof(best));
+  slots = persist_slots_available;
+  if (slots == 0 || slots > PERSIST_SLOT_COUNT) {
+    slots = 1;
+  }
+  for (uint32_t slot = 0; slot < slots; slot++) {
+    if (persist_read_slot_snapshot(slot, &meta) == 0 &&
+        persist_snapshot_is_newer(&meta, &best)) {
+      best = meta;
+    }
+  }
+  if (best.valid) {
+    persist_set_loaded_meta(&best);
+    persist_set_status(
+        "Orizon data persistence prepared for explicit save from latest slot");
+  } else {
+    persist_active_slot = -1;
+    persist_sequence = 0;
+    persist_last_entry_count = 0;
+    persist_last_payload_size = 0;
+    persist_last_checksum = 0;
+    persist_last_version = 0;
+    persist_format_status_initialized();
+  }
+}
+
 int vfs_persist_save(void) {
   uint32_t target_slot;
   uint32_t next_sequence;
-  if (!persist_ready || persist_loading) {
+  if (persist_loading) {
     return -EINVAL;
   }
   if (!storage_available()) {
@@ -824,6 +909,10 @@ int vfs_persist_save(void) {
     persist_ready = 0;
     persist_set_status("Orizon data persistence disabled: no Orizon data partition");
     return -EIO;
+  }
+  if (!persist_ready) {
+    persist_ready = 1;
+    persist_prepare_metadata_for_save();
   }
 
   target_slot = 0;
@@ -922,13 +1011,14 @@ void vfs_persist_load(void) {
     slots = 1;
   }
   for (uint32_t slot = 0; slot < slots; slot++) {
-    if (persist_storage_read(persist_slot_lba(slot), persist_buf,
-                             PERSIST_SECTORS) < 0) {
-      read_error = 1;
+    int slot_status = persist_read_slot_snapshot(slot, &meta);
+    if (slot_status < 0) {
+      if (slot_status == -1) {
+        read_error = 1;
+      }
       continue;
     }
-    if (persist_snapshot_validate(persist_buf, &meta, slot) == 0 &&
-        persist_snapshot_is_newer(&meta, &best)) {
+    if (persist_snapshot_is_newer(&meta, &best)) {
       best = meta;
     }
   }
@@ -951,9 +1041,7 @@ void vfs_persist_load(void) {
     return;
   }
 
-  if (persist_storage_read(persist_slot_lba(best.slot), persist_buf,
-                           PERSIST_SECTORS) < 0 ||
-      persist_snapshot_validate(persist_buf, &meta, best.slot) < 0) {
+  if (persist_read_slot_snapshot(best.slot, &meta) < 0) {
     persist_loading = 0;
     persist_set_status("Orizon data persistence selected snapshot reread failed");
     return;

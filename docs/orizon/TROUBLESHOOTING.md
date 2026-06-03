@@ -58,6 +58,7 @@ tail /workspace/hardware-report.txt
 | --- | --- | --- |
 | ISO boots but SSH is unreachable | `net status`, `ssh status`, `logs network`, host VM IP inventory | Restart DHCP/SSH from console; check NAT vs bridge IP discovery |
 | Limine shows `Configuration is INVALID` with `net dhcp`/`ssh` in red | VM screenshot, `test_vm_matrix.py` per-case log | The OS did not boot yet; discard Limine edits with `Esc`, then boot the entry. The VM smoke script must not inject Orizon console commands while still in Limine |
+| VM returns to Limine or black-screens after `[storage] selected disk0` | Serial boot log, watchdog XML, `orizon.safe=1`, persistence state | Keep testing in VM only. Verify the libvirt watchdog is `action='none'`, boot safe mode, and avoid automatic persistence reads until AHCI persistence is explicitly tested |
 | DHCP is missing | `net status`, `net daily`, `logs network` | Use NAT e1000e first; avoid bridge until host IP discovery is clear |
 | DNS/TCP fails | `dns raw.githubusercontent.com`, `net tcp raw.githubusercontent.com 443 attempts 2` | Re-run DHCP, inspect gateway/DNS, then retry update/pkg |
 | Release validation fails | `release.txt`, `manifest.txt`, `manifest.sig`, `Orizon-OS.iso` hashes | Rebuild with `orizon_update.py --mode zimaos-iso`; do not edit hashes by hand |
@@ -83,6 +84,19 @@ python scripts/orizon/setup_zimaos_access.py
 The ZimaOS root filesystem has previously been seen at 100% usage. If builds
 or VM provisioning fail before Orizon boots, check free space on the host before
 changing Orizon code.
+
+## Limine Or Black Screen Notes
+
+If the Limine editor contains red Orizon shell commands such as `net dhcp`,
+`ssh start`, or `ssh password ...`, the VM has not booted Orizon yet. Exit the
+editor with `Esc`, boot the highlighted entry, and only send shell commands
+after the Orizon console is active.
+
+If the serial log repeatedly reaches AHCI storage discovery and then OVMF
+starts again, treat it as a VM boot-path failure, not hardware evidence. The
+default safe boot path skips automatic persistence loading so the desktop and
+SSH smoke can run first; persistence/AHCI reads should be validated later with
+dedicated non-destructive VM storage tests.
 
 ## Captures To Keep
 

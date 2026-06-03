@@ -3948,6 +3948,7 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "focus-window")) {
     const char *value = ssh_shell_skip_spaces(sub + 12);
     int rc;
+    int formatted = 0;
     if (*value == '\0' || ssh_shell_command_is(value, "next") ||
         ssh_shell_command_is(value, "right") ||
         ssh_shell_command_is(value, "down")) {
@@ -3959,11 +3960,12 @@ static void ssh_shell_print_desktop(const char *args) {
     } else {
       rc = gui_desktop_dispatch("focuswindow", value, out, sizeof(out));
       if (rc == 0) {
-        return;
+        formatted = 1;
+      } else {
+        rc = -2;
       }
-      rc = -2;
     }
-    if (rc != -2) {
+    if (!formatted && rc != -2) {
       snprintf(out, sizeof(out), rc == 0 ? "desktop: focus changed\r\n"
                                          : "desktop: no client to focus\r\n");
     }

@@ -27,6 +27,8 @@
 #include "../include/vfs.h"
 #include "../include/wifi.h"
 
+extern void serial_puts(const char *s);
+
 #define TOP_BAR_HEIGHT 30
 #define FOOTER_HEIGHT 28
 #define PANEL_PADDING 12
@@ -4621,7 +4623,7 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
   active_idx = desktop_client_index_by_id(desktop_focused_client_id);
   used += snprintf(out + used, out_size - used,
                    "Orizon desktop workspace stack\n"
-                   "model: per-workspace tiled order, master/focus diagnostics, manual-drag=no floating=no\n"
+                   "model: per-workspace master/stack/focus tiled order, manual-drag=no floating=no\n"
                    "active-workspace: %d name=\"%s\"\n"
                    "active-client: 0x%x\n"
                    "focus-history: most-recent-first focusHistoryID\n",
@@ -5410,6 +5412,9 @@ void gui_desktop_format_splash(char *out, size_t out_size) {
 
 static void gui_show_boot_stage(const char *stage) {
   boot_stage_hint = stage;
+  serial_puts("[boot] ");
+  serial_puts(stage ? stage : "(null)");
+  serial_puts("\n");
   needs_redraw = 1;
   gui_compose();
 }
@@ -5445,8 +5450,12 @@ static void gui_run_deferred_core_services(void) {
 
   if (!boot_cmdline_has("orizon.nohw=1") &&
       !boot_cmdline_has("orizon.minimal=1")) {
-    gui_show_boot_stage("Loading persistent workspace from disk...");
-    vfs_persist_load();
+    if (boot_cmdline_has("orizon.safe=1")) {
+      gui_show_boot_stage("Safe boot: persistent workspace auto-load skipped.");
+    } else {
+      gui_show_boot_stage("Loading persistent workspace from disk...");
+      vfs_persist_load();
+    }
     gui_desktop_set_enabled(orizon_desktop_is_enabled());
     gui_show_boot_stage("Running installed/live init tasks...");
     orizon_system_run_boot_tasks(NULL, 0);

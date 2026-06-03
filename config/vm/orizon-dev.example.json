@@ -8,6 +8,8 @@
   "vcpu_count": 4,
   "network_name": "default",
   "bootmenu_enable": "no",
+  "watchdog_model": "itco",
+  "watchdog_action": "none",
   "bridge_device": "eth0",
   "network_model": "e1000e",
   "video_model": "virtio",
