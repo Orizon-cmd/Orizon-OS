@@ -120,12 +120,14 @@ $commands = @(
   "desktop configerrors",
   "desktop rollinglog",
   "desktop client-model",
+  "desktop rule-matches",
   "desktop keyword general:gaps_in 9",
   "desktop hyprctl version",
   "desktop hyprctl systeminfo",
   "desktop hyprctl backend",
   "desktop hyprctl protocol",
   "desktop hyprctl clientmodel",
+  "desktop hyprctl rulematches",
   "desktop hyprctl activeworkspace",
   "desktop hyprctl layouts",
   "desktop hyprctl layouttree",
@@ -604,6 +606,9 @@ run_cmd() {
       ;;
     "desktop client-model"|"desktop hyprctl clientmodel")
       grep -q "Orizon desktop client model" "`$OUT" && grep -q "manual-drag=no" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop client model"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop rule-matches"|"desktop hyprctl rulematches")
+      grep -q "Orizon desktop rule matches" "`$OUT" && grep -q "windowrulev2" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop rule matches"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop keyword general:gaps_in 9"|"desktop hyprctl keyword decoration:rounding 11"|"desktop hyprctl keyword decoration:shadow:range 22"|"desktop hyprctl keyword animations:tick_budget 24")
       grep -q "desktop keyword: applied" "`$OUT" || { echo "missing desktop keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

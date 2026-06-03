@@ -208,10 +208,12 @@ desktop config trace
 desktop rollinglog
 desktop focus-history
 desktop client-model
+desktop rule-matches
 desktop keyword general:gaps_in 9
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl clientmodel
+desktop hyprctl rulematches
 desktop hyprctl activewindow
 desktop hyprctl focushistory
 desktop hyprctl version

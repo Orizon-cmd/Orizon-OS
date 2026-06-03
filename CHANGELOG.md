@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.37.0` with `desktop rule-matches` and
+  `desktop hyprctl rulematches`, a VM-safe diagnostic that reads
+  `/system/desktop-rules.conf`, maps `windowrulev2` selectors to current tiled
+  clients by class/title/app, and keeps the explicit `manual-drag=no`
+  Hyprland-style boundary.
 - Added desktop package version `0.36.0` with `desktop client-model` and
   `desktop hyprctl clientmodel`, a VM-safe diagnostic graph for clients,
   workspaces, focus history, fullscreen/pseudo/pinned state, rules, and the

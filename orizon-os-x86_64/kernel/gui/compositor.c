@@ -2879,6 +2879,363 @@ static int desktop_focus_rank_for_id(int id) {
   return -1;
 }
 
+typedef struct {
+  int used;
+  int line_number;
+  char kind[16];
+  char action[48];
+  char selectors[128];
+  char raw[176];
+} desktop_rule_match_t;
+
+static int desktop_rule_is_space(char c) {
+  return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+}
+
+static const char *desktop_rule_find_char(const char *text, char needle) {
+  if (!text) {
+    return NULL;
+  }
+  while (*text) {
+    if (*text == needle) {
+      return text;
+    }
+    text++;
+  }
+  return NULL;
+}
+
+static void desktop_rule_append_text(char *out, size_t out_size, size_t *used,
+                                     const char *text) {
+  size_t len;
+
+  if (!out || !used || !text || *used >= out_size) {
+    return;
+  }
+  len = strlen(text);
+  if (*used + len >= out_size) {
+    len = out_size - *used - 1;
+  }
+  memcpy(out + *used, text, len);
+  *used += len;
+  out[*used] = '\0';
+}
+
+static void desktop_rule_copy_trim(char *out, size_t out_size,
+                                   const char *start, size_t len) {
+  size_t first = 0;
+  size_t last = len;
+  size_t copy_len;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  if (!start) {
+    out[0] = '\0';
+    return;
+  }
+  while (first < len && desktop_rule_is_space(start[first])) {
+    first++;
+  }
+  while (last > first && desktop_rule_is_space(start[last - 1])) {
+    last--;
+  }
+  copy_len = last - first;
+  if (copy_len >= out_size) {
+    copy_len = out_size - 1;
+  }
+  memcpy(out, start + first, copy_len);
+  out[copy_len] = '\0';
+}
+
+static int desktop_rule_kind_matches(const char *line, const char *kind) {
+  size_t len;
+
+  if (!line || !kind) {
+    return 0;
+  }
+  len = strlen(kind);
+  if (strncmp(line, kind, len) != 0) {
+    return 0;
+  }
+  return line[len] == '\0' || desktop_rule_is_space(line[len]) ||
+         line[len] == '=';
+}
+
+static int desktop_rule_parse_line(const char *line, int line_number,
+                                   desktop_rule_match_t *rule) {
+  const char *eq;
+  const char *comma;
+  char key[32];
+  size_t key_len;
+
+  if (!line || !rule) {
+    return 0;
+  }
+  memset(rule, 0, sizeof(*rule));
+  rule->line_number = line_number;
+  snprintf(rule->raw, sizeof(rule->raw), "%s", line);
+  if (!line[0] || line[0] == '#') {
+    return 0;
+  }
+  if (!desktop_rule_kind_matches(line, "windowrulev2") &&
+      !desktop_rule_kind_matches(line, "windowrule")) {
+    return 0;
+  }
+  eq = desktop_rule_find_char(line, '=');
+  if (!eq) {
+    return 0;
+  }
+  key_len = (size_t)(eq - line);
+  desktop_rule_copy_trim(key, sizeof(key), line, key_len);
+  snprintf(rule->kind, sizeof(rule->kind), "%s", key);
+  comma = desktop_rule_find_char(eq + 1, ',');
+  if (comma) {
+    desktop_rule_copy_trim(rule->action, sizeof(rule->action), eq + 1,
+                           (size_t)(comma - (eq + 1)));
+    desktop_rule_copy_trim(rule->selectors, sizeof(rule->selectors), comma + 1,
+                           strlen(comma + 1));
+  } else {
+    desktop_rule_copy_trim(rule->action, sizeof(rule->action), eq + 1,
+                           strlen(eq + 1));
+    rule->selectors[0] = '\0';
+  }
+  rule->used = 1;
+  return 1;
+}
+
+static void desktop_rule_simplify_pattern(char *out, size_t out_size,
+                                          const char *pattern) {
+  const char *start = pattern;
+  size_t len;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  if (!pattern) {
+    out[0] = '\0';
+    return;
+  }
+  len = strlen(pattern);
+  while (len > 0 && desktop_rule_is_space(start[0])) {
+    start++;
+    len--;
+  }
+  while (len > 0 && desktop_rule_is_space(start[len - 1])) {
+    len--;
+  }
+  while (len > 0 && (start[0] == '^' || start[0] == '(')) {
+    start++;
+    len--;
+  }
+  while (len > 0 && (start[len - 1] == '$' || start[len - 1] == ')')) {
+    len--;
+  }
+  if (len >= out_size) {
+    len = out_size - 1;
+  }
+  memcpy(out, start, len);
+  out[len] = '\0';
+}
+
+static int desktop_rule_pattern_matches(const char *pattern, const char *value,
+                                        char *style, size_t style_size) {
+  char clean[96];
+  char chunk[96];
+  char *wild;
+  size_t chunk_len;
+
+  if (style && style_size) {
+    snprintf(style, style_size, "%s", "miss");
+  }
+  if (!pattern || !value || !value[0]) {
+    return 0;
+  }
+  desktop_rule_simplify_pattern(clean, sizeof(clean), pattern);
+  if (!clean[0] || strcmp(clean, "*") == 0 || strcmp(clean, ".*") == 0) {
+    if (style && style_size) {
+      snprintf(style, style_size, "%s", "wildcard");
+    }
+    return 1;
+  }
+  wild = strstr(clean, ".*");
+  if (wild) {
+    chunk_len = (size_t)(wild - clean);
+    if (chunk_len > 0) {
+      if (chunk_len >= sizeof(chunk)) {
+        chunk_len = sizeof(chunk) - 1;
+      }
+      memcpy(chunk, clean, chunk_len);
+      chunk[chunk_len] = '\0';
+      if (strncmp(value, chunk, chunk_len) == 0 || strstr(value, chunk)) {
+        if (style && style_size) {
+          snprintf(style, style_size, "%s", "prefix");
+        }
+        return 1;
+      }
+    }
+    if (wild[2]) {
+      snprintf(chunk, sizeof(chunk), "%s", wild + 2);
+      if (strstr(value, chunk)) {
+        if (style && style_size) {
+          snprintf(style, style_size, "%s", "contains");
+        }
+        return 1;
+      }
+    }
+    return 0;
+  }
+  if (strcmp(value, clean) == 0) {
+    if (style && style_size) {
+      snprintf(style, style_size, "%s", "exact");
+    }
+    return 1;
+  }
+  if (strstr(value, clean)) {
+    if (style && style_size) {
+      snprintf(style, style_size, "%s", "contains");
+    }
+    return 1;
+  }
+  return 0;
+}
+
+static int desktop_rule_key_is_class(const char *key) {
+  return key && (strstr(key, "class") || strstr(key, "Class"));
+}
+
+static int desktop_rule_key_is_title(const char *key) {
+  return key && (strstr(key, "title") || strstr(key, "Title"));
+}
+
+static int desktop_rule_key_is_app(const char *key) {
+  return key && (strstr(key, "app") || strstr(key, "App"));
+}
+
+static int desktop_rule_match_token(const char *token,
+                                    const desktop_client_t *client,
+                                    char *reason, size_t reason_size) {
+  char local[128];
+  char key[32];
+  char pattern[96];
+  char style[24];
+  const char *sep;
+  const char *target = NULL;
+  const char *target_name = NULL;
+
+  if (!token || !client) {
+    return -1;
+  }
+  desktop_rule_copy_trim(local, sizeof(local), token, strlen(token));
+  sep = desktop_rule_find_char(local, ':');
+  if (!sep) {
+    sep = desktop_rule_find_char(local, '=');
+  }
+  if (!sep) {
+    return -1;
+  }
+  desktop_rule_copy_trim(key, sizeof(key), local, (size_t)(sep - local));
+  desktop_rule_copy_trim(pattern, sizeof(pattern), sep + 1, strlen(sep + 1));
+  if (desktop_rule_key_is_class(key)) {
+    target = client->app_id;
+    target_name = "class";
+  } else if (desktop_rule_key_is_title(key)) {
+    target = client->title;
+    target_name = "title";
+  } else if (desktop_rule_key_is_app(key)) {
+    target = client->app_id;
+    target_name = "app";
+  } else {
+    return -1;
+  }
+  if (desktop_rule_pattern_matches(pattern, target, style, sizeof(style))) {
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s-%s", target_name, style);
+    }
+    return 1;
+  }
+  if (reason && reason_size) {
+    snprintf(reason, reason_size, "%s-miss", target_name);
+  }
+  return 0;
+}
+
+static int desktop_rule_matches_client(const desktop_rule_match_t *rule,
+                                       const desktop_client_t *client,
+                                       char *reason, size_t reason_size) {
+  const char *p;
+  int selector_count = 0;
+
+  if (reason && reason_size) {
+    snprintf(reason, reason_size, "%s", "selector-miss");
+  }
+  if (!rule || !client || !rule->used || !rule->selectors[0]) {
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "selector-missing");
+    }
+    return 0;
+  }
+  p = rule->selectors;
+  while (*p) {
+    const char *comma = desktop_rule_find_char(p, ',');
+    char token[128];
+    int rc;
+
+    if (comma) {
+      desktop_rule_copy_trim(token, sizeof(token), p, (size_t)(comma - p));
+    } else {
+      desktop_rule_copy_trim(token, sizeof(token), p, strlen(p));
+    }
+    rc = desktop_rule_match_token(token, client, reason, reason_size);
+    if (rc >= 0) {
+      selector_count++;
+    }
+    if (rc > 0) {
+      return 1;
+    }
+    if (!comma) {
+      break;
+    }
+    p = comma + 1;
+  }
+  if (selector_count == 0) {
+    if (strstr(rule->selectors, client->app_id) ||
+        strstr(rule->selectors, client->title)) {
+      if (reason && reason_size) {
+        snprintf(reason, reason_size, "%s", "literal-fallback");
+      }
+      return 1;
+    }
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "unsupported-selector");
+    }
+  }
+  return 0;
+}
+
+static int desktop_rule_load_runtime(char *cfg, size_t cfg_size) {
+  file_t *f;
+  ssize_t n;
+
+  if (!cfg || cfg_size == 0) {
+    return -1;
+  }
+  cfg[0] = '\0';
+  f = vfs_open(ORIZON_DESKTOP_RULES_PATH, O_RDONLY);
+  if (f) {
+    n = vfs_read(f, cfg, cfg_size - 1);
+    vfs_close(f);
+    if (n > 0) {
+      cfg[n] = '\0';
+      return (int)n;
+    }
+  }
+  snprintf(cfg, cfg_size,
+           "# fallback when runtime rules are not mounted yet\n"
+           "windowrulev2 = tile,class:^(orizon-.*)$\n");
+  return (int)strlen(cfg);
+}
+
 static int desktop_workspace_is_used(int workspace) {
   int idx = workspace - 1;
 
@@ -3151,10 +3508,115 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
 
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "\ncommands: desktop clients | desktop workspaces | desktop focus-history | desktop layout-tree\n"
-             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl clients | desktop hyprctl workspaces\n"
+             "\ncommands: desktop clients | desktop workspaces | desktop focus-history | desktop rule-matches | desktop layout-tree\n"
+             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl rulematches | desktop hyprctl clients | desktop hyprctl workspaces\n"
              "limits: VM-safe diagnostic only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
+}
+
+void gui_desktop_format_rule_matches(char *out, size_t out_size) {
+  char cfg[1024];
+  char line[192];
+  char rendered[320];
+  const char *p;
+  size_t used = 0;
+  int line_number = 1;
+  int rules = 0;
+  int clients = 0;
+  int comparisons = 0;
+  int matches = 0;
+  int runtime_bytes;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  runtime_bytes = desktop_rule_load_runtime(cfg, sizeof(cfg));
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      clients++;
+    }
+  }
+
+  snprintf(rendered, sizeof(rendered),
+           "Orizon desktop rule matches\n"
+           "version: " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
+           "runtime: %s bytes=%d\n"
+           "model: Hyprland-style windowrule diagnostics; manual-drag=no floating=no taskbar=no\n"
+           "selectors: class/title/app simplified-regex=yes read-only=yes\n",
+           ORIZON_DESKTOP_RULES_PATH, runtime_bytes);
+  desktop_rule_append_text(out, out_size, &used, rendered);
+
+  p = cfg;
+  while (*p && used < out_size) {
+    const char *start = p;
+    size_t len;
+    desktop_rule_match_t rule;
+
+    while (*p && *p != '\n') {
+      p++;
+    }
+    len = (size_t)(p - start);
+    if (*p == '\n') {
+      p++;
+    }
+    desktop_rule_copy_trim(line, sizeof(line), start, len);
+    if (desktop_rule_parse_line(line, line_number, &rule)) {
+      int matched_for_rule = 0;
+
+      rules++;
+      snprintf(rendered, sizeof(rendered),
+               "\nrule %d line=%d kind=%s action=\"%s\" selectors=\"%s\"\n",
+               rules, rule.line_number, rule.kind, rule.action,
+               rule.selectors[0] ? rule.selectors : "none");
+      desktop_rule_append_text(out, out_size, &used, rendered);
+
+      if (clients == 0) {
+        desktop_rule_append_text(
+            out, out_size, &used,
+            "  clients: none-visible; dispatch exec terminal/settings/logs/packages/update to test\n");
+      }
+      for (int i = 0; i < DESKTOP_MAX_CLIENTS && used < out_size; i++) {
+        char reason[40];
+        int matched;
+
+        if (!desktop_clients[i].visible) {
+          continue;
+        }
+        comparisons++;
+        matched = desktop_rule_matches_client(&rule, &desktop_clients[i],
+                                              reason, sizeof(reason));
+        if (matched) {
+          matches++;
+          matched_for_rule++;
+        }
+        snprintf(rendered, sizeof(rendered),
+                 "  client 0x%x: class=%s app=%s title=\"%s\" workspace=%d match=%s reason=%s\n",
+                 desktop_client_address(&desktop_clients[i]),
+                 desktop_clients[i].app_id, desktop_clients[i].app_id,
+                 desktop_clients[i].title, desktop_clients[i].workspace,
+                 matched ? "yes" : "no", reason);
+        desktop_rule_append_text(out, out_size, &used, rendered);
+      }
+      snprintf(rendered, sizeof(rendered),
+               "  result: matches=%d clients=%d action-prepared=%s\n",
+               matched_for_rule, clients, rule.action[0] ? rule.action : "none");
+      desktop_rule_append_text(out, out_size, &used, rendered);
+    }
+    line_number++;
+  }
+
+  if (rules == 0) {
+    desktop_rule_append_text(
+        out, out_size, &used,
+        "\nrules: none parsed; add with desktop keyword windowrulev2 <rule>\n");
+  }
+  snprintf(rendered, sizeof(rendered),
+           "\nsummary: rules=%d clients=%d comparisons=%d matches=%d\n"
+           "commands: desktop rules | desktop clients | desktop client-model | desktop hyprctl rulematches\n"
+           "limits: simplified class/title/app matching only; no upstream Hyprland regex engine, no wlroots/Wayland scene graph, no free-drag/floating behavior\n",
+           rules, clients, comparisons, matches);
+  desktop_rule_append_text(out, out_size, &used, rendered);
 }
 
 void gui_desktop_format_activewindow(char *out, size_t out_size) {
@@ -3622,7 +4084,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
   }
   snprintf(out, out_size,
            "Orizon desktop hyprctl descriptions\n"
-           "commands: version, systeminfo, clients, clientmodel, workspaces, activeworkspace, activewindow\n"
+           "commands: version, systeminfo, clients, clientmodel, rulematches, workspaces, activeworkspace, activewindow\n"
            "commands: backend, protocol, monitors, binds, layers, layouts, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"

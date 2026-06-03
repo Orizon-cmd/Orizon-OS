@@ -143,12 +143,14 @@ desktop configerrors
 desktop rollinglog
 desktop focus-history
 desktop client-model
+desktop rule-matches
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl clientmodel
+desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
@@ -210,6 +212,7 @@ desktop hyprctl submap reset
 desktop windows
 desktop clients
 desktop client-model
+desktop rule-matches
 desktop activewindow
 desktop workspace
 desktop workspace 2
@@ -345,8 +348,8 @@ the honest Orizon compatibility facade, `desktop devices` summarizes keyboard
 and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop render`, `desktop submap`, `desktop configerrors`,
-`desktop config trace`, `desktop rollinglog`, `desktop focus-history`, and
-`desktop client-model` expose more Hyprland-like inspection surfaces,
+`desktop config trace`, `desktop rollinglog`, `desktop focus-history`,
+`desktop client-model`, and `desktop rule-matches` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
@@ -356,7 +359,7 @@ Hyprland-style runtime keyword, `desktop dispatch
 including `layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
 explicit `orientationleft/right/top/bottom` tiling hints,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/clientmodel/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/binds/keymap/layers/layouts/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
@@ -368,7 +371,9 @@ workspace tiling tree with client roles, rectangles, focus state, and
 class/module/surface details, and `desktop launch
 terminal|settings|logs|packages|update|launcher` opens the first native apps as
 tiled clients or toggles the launcher overlay. `desktop windows`/`desktop clients`
-list tiled clients with stable addresses, geometry and `focusHistoryID`,
+list tiled clients with stable addresses, geometry and `focusHistoryID`;
+`desktop rule-matches`/`desktop hyprctl rulematches` explain which
+`windowrulev2` class/title/app selectors match those clients,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
 F9/F10/F11 enter resize/move/launch submaps and F12/Esc returns to default,

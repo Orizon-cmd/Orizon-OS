@@ -70,12 +70,14 @@ desktop configerrors
 desktop rollinglog
 desktop focus-history
 desktop client-model
+desktop rule-matches
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl clientmodel
+desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl layouts
@@ -131,6 +133,7 @@ desktop hyprctl submap reset
 desktop windows
 desktop clients
 desktop client-model
+desktop rule-matches
 desktop activewindow
 desktop workspace
 desktop workspace 2
@@ -352,7 +355,7 @@ be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
 input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
 `desktop layouts`, `desktop layout-tree`, `desktop animations`,
 `desktop render`, `desktop configerrors`, `desktop config trace`,
-`desktop rollinglog`, `desktop focus-history`, `desktop client-model`, `desktop decorations`,
+`desktop rollinglog`, `desktop focus-history`, `desktop client-model`, `desktop rule-matches`, `desktop decorations`,
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop render` is the most direct VM-safe renderer diagnostic: it reports the
@@ -398,7 +401,7 @@ dispatchers now include `togglesplit`,
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|backend|protocol|clients|clientmodel|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
+version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
@@ -406,10 +409,13 @@ value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 [args]` maps to Orizon's dispatcher layer.
 
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
-focus-history`, and `desktop client-model` list the tiled clients with stable
+focus-history`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
 Orizon addresses, `at/size` geometry, workspace graph, rules runtime, backend
 boundary, fullscreen/pseudo/pinned flags, and Hyprland-style `focusHistoryID`.
-`desktop hyprctl clientmodel` mirrors this read-only state graph. The model is intentionally no-drag: clients are placed by
+`desktop hyprctl clientmodel` mirrors this read-only state graph.
+`desktop hyprctl rulematches` reads `/system/desktop-rules.conf` and explains
+which `windowrulev2` selectors match current clients by class/title/app with a
+simplified matcher, not the upstream Hyprland regex/Wayland engine. The model is intentionally no-drag: clients are placed by
 `dwindle`, `master`, or `monocle`, not by mouse-moving windows around like a
 traditional desktop. The active client can still be controlled through
 dispatcher state such as fullscreen/pseudo/pinned, which is closer to the

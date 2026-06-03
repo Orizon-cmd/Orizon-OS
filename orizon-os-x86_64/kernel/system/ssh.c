@@ -3365,6 +3365,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop focus-history   show Hyprland-style focusHistoryID order\r\n"
              "  desktop client-model    show client/workspace/focus state graph\r\n"
+             "  desktop rule-matches    show windowrulev2 matches against tiled clients\r\n"
              "  desktop modules         show prepared modular desktop packages\r\n"
              "  desktop apps            list compositor-managed desktop apps\r\n"
              "  desktop app <id>        show app class/module/surface details\r\n"
@@ -3682,7 +3683,7 @@ static void ssh_shell_print_desktop(const char *args) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|monitors|binds|keymap|layers|layouts|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3700,6 +3701,11 @@ static void ssh_shell_print_desktop(const char *args) {
                ssh_shell_command_is(hypr, "clientmap") ||
                ssh_shell_command_is(hypr, "client-map")) {
       gui_desktop_format_client_model(out, sizeof(out));
+    } else if (ssh_shell_command_is(hypr, "rulematches") ||
+               ssh_shell_command_is(hypr, "rule-matches") ||
+               ssh_shell_command_is(hypr, "windowrules") ||
+               ssh_shell_command_is(hypr, "window-rules")) {
+      gui_desktop_format_rule_matches(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "workspaces")) {
       gui_desktop_format_workspaces(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "activeworkspace")) {
@@ -3877,6 +3883,11 @@ static void ssh_shell_print_desktop(const char *args) {
              ssh_shell_command_is(sub, "clientmap") ||
              ssh_shell_command_is(sub, "model")) {
     gui_desktop_format_client_model(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "rule-matches") ||
+             ssh_shell_command_is(sub, "rulematches") ||
+             ssh_shell_command_is(sub, "windowrules") ||
+             ssh_shell_command_is(sub, "window-rules")) {
+    gui_desktop_format_rule_matches(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "activewindow") ||
              ssh_shell_command_is(sub, "active-window")) {
     gui_desktop_format_activewindow(out, sizeof(out));
