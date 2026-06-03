@@ -460,6 +460,9 @@ Hyprland mental model than manual window dragging.
 Prefer `desktop dispatch movetoworkspace <target>` or
 `desktop dispatch movetoworkspacesilent <target>` to move the active tiled
 client between workspaces, matching Hyprland's dispatcher-style workflow.
+The non-silent dispatcher follows the moved client to the target workspace;
+the silent variant keeps the current workspace active and restores the local
+workspace focus when another client is available.
 
 `desktop doctor` checks the policy file, session file, template, user config,
 optional package metadata, and reports PASS/WARN/FAIL without validating real
@@ -480,7 +483,7 @@ F12 or Esc returns to the default submap
 Enter/Space on an empty focus dispatches exec terminal
 desktop workspace <1-10|name:<name>|next|empty|+/-n|previous> switches runtime workspace
 desktop dispatch renameworkspace <target> <safe-name> names a workspace
-desktop dispatch movetoworkspace <target> moves the active tiled client
+desktop dispatch movetoworkspace <target> moves and follows the active tiled client
 desktop dispatch movetoworkspacesilent <target> moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
 desktop dispatch focuswindow <target> focuses by id/address/class/title

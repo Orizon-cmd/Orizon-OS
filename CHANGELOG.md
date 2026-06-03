@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added desktop package version `0.44.0` with per-workspace focus restore and
+  closer Hyprland-style move semantics: `movetoworkspace` follows the moved
+  tiled client, while `movetoworkspacesilent` keeps the current workspace active.
 - Added desktop package version `0.43.0` with Hyprland-style workspace naming:
   `desktop dispatch renameworkspace <target> <safe-name>`, `workspace
   name:<name>`, and `movetoworkspace name:<name>` now work in the VM

@@ -227,7 +227,8 @@ menu demarrer permanent, ni fenetres flottantes.
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
 workspaces nommes via `renameworkspace` puis `workspace name:<nom>`,
-deplacement silencieux de clients, focus/swap directionnels `l/r/u/d`, ciblage
+restauration du focus par workspace, `movetoworkspace` qui suit le client et
+deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, ciblage
 direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
 `dwindle/master/monocle`, split/master ratios, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.

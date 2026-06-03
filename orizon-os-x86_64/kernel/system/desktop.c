@@ -3890,7 +3890,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,

@@ -3815,8 +3815,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop focus-window next|prev|<target> - Focus by id/address/class/title\n");
     term_puts_t(term, "  desktop workspace [n|name:name|next|empty|previous] - Show or switch workspace\n");
     term_puts_t(term, "  desktop dispatch renameworkspace <target> <name> - Rename a workspace\n");
-    term_puts_t(term, "  desktop dispatch movetoworkspace <n|name:name|empty|+1|-1> - Move focused client\n");
-    term_puts_t(term, "  desktop dispatch movetoworkspacesilent <target> - Move focused client silently\n");
+    term_puts_t(term, "  desktop dispatch movetoworkspace <n|name:name|empty|+1|-1> - Move focused client and follow\n");
+    term_puts_t(term, "  desktop dispatch movetoworkspacesilent <target> - Move focused client without switching\n");
     term_puts_t(term, "  desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] - Hyprland-like client state\n");
     term_puts_t(term, "  desktop dispatch fullscreenstate <on|off|1|0> - Set fullscreen state\n");
     term_puts_t(term, "  desktop dispatch cyclenext|swapnext|swapwindow|focusmaster|swapwithmaster - Hyprland-like actions\n");

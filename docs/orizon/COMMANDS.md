@@ -391,6 +391,8 @@ layout, split mode, split ratio, and master ratio,
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
 and geometry for each workspace,
+`movetoworkspace` follows the moved tiled client while `movetoworkspacesilent`
+keeps the current workspace active and restores workspace-local focus,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

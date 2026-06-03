@@ -122,6 +122,8 @@ typedef struct {
   int split_mode;
   int split_ratio_percent;
   int master_ratio_percent;
+  int last_focused_client_id;
+  uint64_t focus_generation;
   uint64_t visit_generation;
   uint64_t layout_generation;
   char name[16];
@@ -1187,6 +1189,14 @@ static int desktop_client_on_workspace(const desktop_client_t *client,
   return client->pinned || client->workspace == workspace;
 }
 
+static int desktop_client_local_to_workspace(const desktop_client_t *client,
+                                             int workspace) {
+  if (!client || !client->visible || client->pinned) {
+    return 0;
+  }
+  return client->workspace == workspace;
+}
+
 static int desktop_client_index_by_id(int id) {
   if (id <= 0) {
     return -1;
@@ -1204,6 +1214,37 @@ static uint32_t desktop_client_address(const desktop_client_t *client) {
     return 0;
   }
   return DESKTOP_CLIENT_ADDRESS_BASE + ((uint32_t)client->id * 0x100u);
+}
+
+static void desktop_workspace_record_focus_index(int idx) {
+  int workspace;
+
+  if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS || !desktop_clients[idx].visible ||
+      desktop_clients[idx].id <= 0) {
+    return;
+  }
+  workspace = desktop_clients[idx].pinned ? desktop_active_workspace
+                                          : desktop_clients[idx].workspace;
+  if (workspace < 1 || workspace > DESKTOP_MAX_WORKSPACES) {
+    return;
+  }
+  desktop_workspace_mark_used(workspace);
+  desktop_workspaces[workspace - 1].last_focused_client_id =
+      desktop_clients[idx].id;
+  desktop_workspaces[workspace - 1].focus_generation =
+      desktop_clients[idx].focus_generation;
+}
+
+static void desktop_workspace_forget_focus_id(int id) {
+  if (id <= 0) {
+    return;
+  }
+  for (int i = 0; i < DESKTOP_MAX_WORKSPACES; i++) {
+    if (desktop_workspaces[i].last_focused_client_id == id) {
+      desktop_workspaces[i].last_focused_client_id = 0;
+      desktop_workspaces[i].focus_generation = 0;
+    }
+  }
 }
 
 static void desktop_refresh_focus_history_ids(void) {
@@ -1295,6 +1336,46 @@ static void desktop_focus_history_touch(int id) {
   desktop_refresh_focus_history_ids();
 }
 
+static int desktop_last_focused_index_on_workspace_scope(int workspace,
+                                                         int local_only) {
+  int remembered = 0;
+
+  if (workspace < 1 || workspace > DESKTOP_MAX_WORKSPACES) {
+    return -1;
+  }
+  remembered = desktop_workspaces[workspace - 1].last_focused_client_id;
+  if (remembered > 0) {
+    int idx = desktop_client_index_by_id(remembered);
+    if (idx >= 0 &&
+        (local_only ? desktop_client_local_to_workspace(&desktop_clients[idx],
+                                                        workspace)
+                    : desktop_client_on_workspace(&desktop_clients[idx],
+                                                  workspace))) {
+      return idx;
+    }
+  }
+  desktop_focus_history_compact();
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    int idx = desktop_client_index_by_id(desktop_focus_history[i]);
+    if (idx >= 0 &&
+        (local_only ? desktop_client_local_to_workspace(&desktop_clients[idx],
+                                                        workspace)
+                    : desktop_client_on_workspace(&desktop_clients[idx],
+                                                  workspace))) {
+      return idx;
+    }
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (local_only ? desktop_client_local_to_workspace(&desktop_clients[i],
+                                                       workspace)
+                   : desktop_client_on_workspace(&desktop_clients[i],
+                                                 workspace)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 static void desktop_set_focused_client_index(int idx) {
   int previous = desktop_focused_client_id;
   int id;
@@ -1312,10 +1393,25 @@ static void desktop_set_focused_client_index(int idx) {
     desktop_clients[idx].focus_generation = desktop_focus_serial++;
   }
   desktop_focus_history_touch(id);
+  desktop_workspace_record_focus_index(idx);
   if (previous != desktop_focused_client_id) {
     desktop_start_transition("focus", desktop_active_workspace,
                              desktop_active_workspace);
   }
+}
+
+static int desktop_restore_focus_for_workspace(int workspace) {
+  int idx = desktop_last_focused_index_on_workspace_scope(workspace, 1);
+
+  if (idx < 0) {
+    idx = desktop_last_focused_index_on_workspace_scope(workspace, 0);
+  }
+  if (idx < 0) {
+    desktop_set_focused_client_index(-1);
+    return -1;
+  }
+  desktop_set_focused_client_index(idx);
+  return 0;
 }
 
 static int desktop_focused_client_index(void) {
@@ -1325,15 +1421,9 @@ static int desktop_focused_client_index(void) {
                                   desktop_active_workspace)) {
     return idx;
   }
-  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
-    if (desktop_client_on_workspace(&desktop_clients[i],
-                                    desktop_active_workspace)) {
-      desktop_set_focused_client_index(i);
-      return i;
-    }
-  }
-  desktop_set_focused_client_index(-1);
-  return -1;
+  return desktop_restore_focus_for_workspace(desktop_active_workspace) == 0
+             ? desktop_client_index_by_id(desktop_focused_client_id)
+             : -1;
 }
 
 static int desktop_focused_client_is_terminal(void) {
@@ -3089,7 +3179,7 @@ int gui_desktop_switch_workspace(int workspace) {
   desktop_workspace_mark_visited(workspace);
   desktop_load_layout_state_for_workspace(workspace);
   desktop_launcher_visible = 0;
-  desktop_focused_client_index();
+  desktop_restore_focus_for_workspace(workspace);
   desktop_sync_terminal_compat();
   if (workspace != previous_workspace) {
     desktop_start_transition("workspace", previous_workspace, workspace);
@@ -3099,8 +3189,10 @@ int gui_desktop_switch_workspace(int workspace) {
   return 0;
 }
 
-int gui_desktop_move_terminal_to_workspace(int workspace) {
+static int desktop_move_active_client_to_workspace(int workspace, int follow) {
   int idx = desktop_focused_client_index();
+  int source_workspace = desktop_active_workspace;
+  int moved_id;
 
   if (workspace < 1 || workspace > desktop_workspace_count) {
     return -1;
@@ -3110,12 +3202,33 @@ int gui_desktop_move_terminal_to_workspace(int workspace) {
   }
   desktop_clients[idx].last_workspace = desktop_clients[idx].workspace;
   desktop_clients[idx].workspace = workspace;
+  moved_id = desktop_clients[idx].id;
   desktop_workspace_mark_used(workspace);
-  desktop_set_focused_client_index(idx);
+  desktop_workspaces[workspace - 1].last_focused_client_id = moved_id;
+  desktop_workspaces[workspace - 1].focus_generation =
+      desktop_clients[idx].focus_generation;
+  if (follow) {
+    gui_desktop_switch_workspace(workspace);
+    idx = desktop_client_index_by_id(moved_id);
+    if (idx >= 0) {
+      desktop_set_focused_client_index(idx);
+    }
+    desktop_start_transition("movetoworkspace", source_workspace, workspace);
+  } else if (!desktop_client_on_workspace(&desktop_clients[idx],
+                                          source_workspace)) {
+    desktop_restore_focus_for_workspace(source_workspace);
+    desktop_start_transition("movetoworkspacesilent", source_workspace,
+                             workspace);
+  } else {
+    desktop_set_focused_client_index(idx);
+    desktop_start_transition("movetoworkspace", source_workspace, workspace);
+  }
   desktop_sync_terminal_compat();
-  desktop_start_transition("movetoworkspace", desktop_active_workspace,
-                           workspace);
   return 0;
+}
+
+int gui_desktop_move_terminal_to_workspace(int workspace) {
+  return desktop_move_active_client_to_workspace(workspace, 0);
 }
 
 int gui_desktop_spawn_terminal_client(void) {
@@ -3136,6 +3249,7 @@ int gui_desktop_close_active_client(void) {
   if (idx < 0) {
     return -1;
   }
+  desktop_workspace_forget_focus_id(desktop_clients[idx].id);
   desktop_focus_history_remove(desktop_clients[idx].id);
   desktop_clients[idx].visible = 0;
   desktop_clients[idx].id = 0;
@@ -3258,14 +3372,15 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     int silent = strcmp(dispatcher, "movetoworkspacesilent") == 0;
     int target = 0;
     if (desktop_parse_workspace_arg(a, &target) == 0 &&
-        gui_desktop_move_terminal_to_workspace(target) == 0) {
+        desktop_move_active_client_to_workspace(target, silent ? 0 : 1) == 0) {
       workspace = (uint32_t)target;
       if (out && out_size) {
         snprintf(out, out_size,
                  silent
-                     ? "desktop dispatch: silently moved active to workspace %u name=\"%s\"\n"
-                     : "desktop dispatch: moved active to workspace %u name=\"%s\"\n",
-                 (unsigned)workspace, desktop_workspace_name(target));
+                     ? "desktop dispatch: silently moved active to workspace %u name=\"%s\" follow=no active=%d\n"
+                     : "desktop dispatch: moved active to workspace %u name=\"%s\" follow=yes active=%d\n",
+                 (unsigned)workspace, desktop_workspace_name(target),
+                 desktop_active_workspace);
       }
       return 0;
     }
@@ -3678,15 +3793,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
 }
 
 static int desktop_last_focused_index_on_workspace(int workspace) {
-  desktop_focus_history_compact();
-  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
-    int idx = desktop_client_index_by_id(desktop_focus_history[i]);
-    if (idx >= 0 &&
-        desktop_client_on_workspace(&desktop_clients[idx], workspace)) {
-      return idx;
-    }
-  }
-  return -1;
+  return desktop_last_focused_index_on_workspace_scope(workspace, 0);
 }
 
 static int desktop_focus_rank_for_id(int id) {
@@ -4272,12 +4379,18 @@ void gui_desktop_format_workspaces(char *out, size_t out_size) {
     used += snprintf(
         out + used, out_size - used,
         "workspace %d: name=\"%s\" state=%s clients=%d local=%d "
-        "lastwindow=0x%x lasttitle=\"%s\" visitSeq=%llu layout=%s "
+        "lastwindow=0x%x lasttitle=\"%s\" rememberedFocus=0x%x focusSeq=%llu visitSeq=%llu layout=%s "
         "split=%s ratio=%d master=%d layoutSeq=%llu "
         "dynamic=%s pinned-aware=yes\n",
         i, desktop_workspace_name(i), state, count, local_count,
         last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx]) : 0,
         last_idx >= 0 ? desktop_clients[last_idx].title : "none",
+        desktop_workspaces[state_idx].last_focused_client_id > 0
+            ? DESKTOP_CLIENT_ADDRESS_BASE +
+                  ((uint32_t)desktop_workspaces[state_idx].last_focused_client_id *
+                   0x100u)
+            : 0,
+        (unsigned long long)desktop_workspaces[state_idx].focus_generation,
         (unsigned long long)desktop_workspaces[state_idx].visit_generation,
         desktop_layout_engine_for_workspace(i),
         desktop_split_mode_name_for_value(ws_split), ws_split_ratio,
@@ -4727,6 +4840,8 @@ void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
            "  split: %s ratio=%d master=%d\n"
            "  submap: %s\n"
            "  visitSeq: %llu\n"
+           "  rememberedFocus: 0x%x\n"
+           "  focusSeq: %llu\n"
            "  lastwindow: 0x%x\n"
            "  lastwindowtitle: %s\n",
            desktop_active_workspace,
@@ -4736,8 +4851,15 @@ void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
            desktop_split_ratio_percent, desktop_master_ratio_percent,
            desktop_submap,
            (unsigned long long)desktop_workspaces[state_idx].visit_generation,
+           desktop_workspaces[state_idx].last_focused_client_id > 0
+               ? DESKTOP_CLIENT_ADDRESS_BASE +
+                     ((uint32_t)desktop_workspaces[state_idx]
+                          .last_focused_client_id *
+                      0x100u)
+               : 0,
+           (unsigned long long)desktop_workspaces[state_idx].focus_generation,
            last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx])
-                         : 0,
+                          : 0,
            last_idx >= 0 ? desktop_clients[last_idx].title : "none");
 }
 
@@ -4822,13 +4944,19 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
     used += snprintf(
         out + used, out_size - used,
         "workspace %d \"%s\": state=%s layout=%s clients=%d local=%d "
-        "master=0x%x focus=0x%x pinned-aware=yes\n",
+        "master=0x%x focus=0x%x remembered=0x%x focusSeq=%llu pinned-aware=yes\n",
         ws, desktop_workspace_name(ws), state,
         desktop_layout_engine_for_workspace(ws), count, local_count,
         master_idx >= 0 ? desktop_client_address(&desktop_clients[master_idx])
                         : 0,
         focus_idx >= 0 ? desktop_client_address(&desktop_clients[focus_idx])
-                       : 0);
+                       : 0,
+        desktop_workspaces[ws - 1].last_focused_client_id > 0
+            ? DESKTOP_CLIENT_ADDRESS_BASE +
+                  ((uint32_t)desktop_workspaces[ws - 1].last_focused_client_id *
+                   0x100u)
+            : 0,
+        (unsigned long long)desktop_workspaces[ws - 1].focus_generation);
     if (count <= 0 && used < out_size) {
       used += snprintf(out + used, out_size - used,
                        "  empty: dispatch exec terminal/settings/logs/packages/update to add a tiled client\n");

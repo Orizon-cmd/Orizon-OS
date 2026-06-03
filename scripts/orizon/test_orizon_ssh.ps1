@@ -756,7 +756,7 @@ run_cmd() {
       grep -q "desktop: workspace 2 active" "`$OUT" || { echo "missing desktop workspace switch"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch movetoworkspacesilent empty")
-      grep -q "desktop dispatch: silently moved active to workspace" "`$OUT" || { echo "missing desktop dispatch movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "desktop dispatch: silently moved active to workspace" "`$OUT" && grep -q "follow=no active=2" "`$OUT" || { echo "missing desktop dispatch movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch workspace next")
       grep -q "desktop dispatch: workspace 3" "`$OUT" || { echo "missing desktop dispatch workspace next"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -768,7 +768,7 @@ run_cmd() {
       grep -q "desktop dispatch: workspace" "`$OUT" || { echo "missing desktop workspace empty"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch movetoworkspace 2")
-      grep -q "desktop dispatch: moved active to workspace 2" "`$OUT" || { echo "missing desktop dispatch movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "desktop dispatch: moved active to workspace 2" "`$OUT" && grep -q "follow=yes active=2" "`$OUT" || { echo "missing desktop dispatch movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch workspace 2")
       grep -q "desktop dispatch: workspace 2" "`$OUT" || { echo "missing desktop dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -786,7 +786,7 @@ run_cmd() {
       grep -q "desktop dispatch: workspace 2" "`$OUT" && grep -q 'name="dev"' "`$OUT" || { echo "missing desktop named workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch movetoworkspace name:dev")
-      grep -q "desktop dispatch: moved active to workspace 2" "`$OUT" && grep -q 'name="dev"' "`$OUT" || { echo "missing desktop named movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "desktop dispatch: moved active to workspace 2" "`$OUT" && grep -q 'name="dev"' "`$OUT" && grep -q "follow=yes active=2" "`$OUT" || { echo "missing desktop named movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch movefocus next")
       grep -q "desktop dispatch: movefocus" "`$OUT" || { echo "missing desktop dispatch movefocus"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

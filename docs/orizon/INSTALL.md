@@ -276,6 +276,9 @@ desktop dispatch submap resize
 desktop hyprctl submap reset
 desktop dispatch movetoworkspace 2
 desktop dispatch movetoworkspacesilent empty
+desktop dispatch renameworkspace 2 dev
+desktop dispatch workspace name:dev
+desktop dispatch movetoworkspace name:dev
 desktop dispatch workspace +1
 desktop dispatch workspace next
 desktop dispatch workspace empty
