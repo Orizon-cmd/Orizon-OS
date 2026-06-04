@@ -4246,9 +4246,16 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "hyprctl")) {
     const char *hypr = term_skip_spaces(args + 7);
+    int json = 0;
+    if (term_command_is(hypr, "-j") || term_command_is(hypr, "--json")) {
+      size_t flag_len = term_command_is(hypr, "--json") ? 6 : 2;
+      json = 1;
+      hypr = term_skip_spaces(hypr + flag_len);
+    }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j currently supports clients, workspaces, activeworkspace and activewindow as VM-safe Hyprland-style diagnostics\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4262,7 +4269,11 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
                term_command_is(hypr, "protocols")) {
       orizon_desktop_format_protocol(report, sizeof(report));
     } else if (term_command_is(hypr, "clients")) {
-      gui_desktop_format_windows(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_clients_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_windows(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "clientmodel") ||
                term_command_is(hypr, "client-model") ||
                term_command_is(hypr, "clientmap") ||
@@ -4274,11 +4285,23 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
                term_command_is(hypr, "window-rules")) {
       gui_desktop_format_rule_matches(report, sizeof(report));
     } else if (term_command_is(hypr, "workspaces")) {
-      gui_desktop_format_workspaces(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_workspaces_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_workspaces(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "activeworkspace")) {
-      gui_desktop_format_activeworkspace(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_activeworkspace_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_activeworkspace(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "activewindow")) {
-      gui_desktop_format_activewindow(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_activewindow_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_activewindow(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "focushistory") ||
                term_command_is(hypr, "focus-history")) {
       gui_desktop_format_focus_history(report, sizeof(report));

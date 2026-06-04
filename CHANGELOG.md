@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.51.0` with a VM-safe `desktop hyprctl -j`
+  facade for `clients`, `workspaces`, `activeworkspace`, and `activewindow`.
+  The JSON exposes Hyprland-style fields such as `address`, `workspace`,
+  `fullscreenClient`, `tags`, `windows`, and `lastwindow`, while clearly
+  marking `hyprlandStyleFacade=true` and keeping Wayland/wlroots/upstream
+  Hyprland unimplemented.
 - Added desktop package version `0.50.0` with VM-safe Hyprland-style client
   tags: `desktop dispatch tagwindow <+tag|-tag|clear|tag> [target]`, `tag:`
   selectors for `focuswindow` and move-to-workspace dispatchers, tag fields in

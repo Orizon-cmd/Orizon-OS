@@ -190,6 +190,10 @@ desktop hyprctl layers
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl activewindow
+desktop hyprctl -j clients
+desktop hyprctl -j activewindow
+desktop hyprctl -j workspaces
+desktop hyprctl -j activeworkspace
 desktop hyprctl monitors
 desktop autostart
 desktop autostart terminal off
@@ -401,6 +405,9 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` emits a
+compact VM-safe JSON facade for future desktop tooling. It is Hyprland-style
+diagnostic data, not real Wayland/wlroots client state.
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
 urgent state, and geometry for each workspace,

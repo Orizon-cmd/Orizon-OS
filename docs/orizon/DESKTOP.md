@@ -76,6 +76,10 @@ desktop rule-matches
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
+desktop hyprctl -j clients
+desktop hyprctl -j activewindow
+desktop hyprctl -j workspaces
+desktop hyprctl -j activeworkspace
 desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl clientmodel
@@ -457,12 +461,18 @@ dispatchers now include `togglesplit`,
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 
 `desktop hyprctl
-version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
+[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` provides
+compact JSON for status tooling and future separate bar packages. It mirrors
+Hyprland-style fields such as `address`, `workspace`, `fullscreenClient`,
+`tags`, `windows`, and `lastwindow`, but every object also carries
+`hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
+not upstream Wayland/wlroots Hyprland.
 
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable

@@ -3902,7 +3902,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl version|systeminfo|clients|clientmodel|rulematches|workspacestack|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|layoutstate|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|clients|clientmodel|rulematches|workspacestack|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|layoutstate|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
+  desktop_append(out, out_size, &used,
+                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow as VM-safe diagnostics\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,

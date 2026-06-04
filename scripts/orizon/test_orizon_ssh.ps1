@@ -131,6 +131,10 @@ $commands = @(
   "desktop hyprctl clientmodel",
   "desktop hyprctl rulematches",
   "desktop hyprctl activeworkspace",
+  "desktop hyprctl -j clients",
+  "desktop hyprctl -j activewindow",
+  "desktop hyprctl -j workspaces",
+  "desktop hyprctl -j activeworkspace",
   "desktop hyprctl workspacestack",
   "desktop hyprctl layouts",
   "desktop hyprctl layoutstate",
@@ -659,6 +663,18 @@ run_cmd() {
       ;;
     "desktop hyprctl activeworkspace")
       grep -q "active workspace:" "`$OUT" && grep -q "layout:" "`$OUT" || { echo "missing hyprctl activeworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j clients")
+      grep -q '"hyprlandStyleFacade":true' "`$OUT" && grep -q '"address":"0x' "`$OUT" && grep -q '"floating":false' "`$OUT" || { echo "missing hyprctl json clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j activewindow")
+      grep -q '"fullscreenClient":' "`$OUT" && grep -q '"workspace":{"id":' "`$OUT" || { echo "missing hyprctl json activewindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j workspaces")
+      grep -q '"windows":' "`$OUT" && grep -q '"monitor":"Orizon framebuffer"' "`$OUT" && grep -q '"pinnedAware":true' "`$OUT" || { echo "missing hyprctl json workspaces"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j activeworkspace")
+      grep -q '"active":true' "`$OUT" && grep -q '"hyprlandStyleFacade":true' "`$OUT" || { echo "missing hyprctl json activeworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl cursorpos")
       grep -q "cursorpos:" "`$OUT" && grep -q "profile:" "`$OUT" || { echo "missing hyprctl cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

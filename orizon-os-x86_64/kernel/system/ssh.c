@@ -3695,9 +3695,17 @@ static void ssh_shell_print_desktop(const char *args) {
     }
   } else if (ssh_shell_command_is(sub, "hyprctl")) {
     const char *hypr = ssh_shell_skip_spaces(sub + 7);
+    int json = 0;
+    if (ssh_shell_command_is(hypr, "-j") ||
+        ssh_shell_command_is(hypr, "--json")) {
+      size_t flag_len = ssh_shell_command_is(hypr, "--json") ? 6 : 2;
+      json = 1;
+      hypr = ssh_shell_skip_spaces(hypr + flag_len);
+    }
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n");
+               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
+               "json: -j currently supports clients, workspaces, activeworkspace and activewindow as VM-safe Hyprland-style diagnostics\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3709,7 +3717,11 @@ static void ssh_shell_print_desktop(const char *args) {
                ssh_shell_command_is(hypr, "protocols")) {
       orizon_desktop_format_protocol(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "clients")) {
-      gui_desktop_format_windows(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_clients_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_windows(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "clientmodel") ||
                ssh_shell_command_is(hypr, "client-model") ||
                ssh_shell_command_is(hypr, "clientmap") ||
@@ -3721,11 +3733,23 @@ static void ssh_shell_print_desktop(const char *args) {
                ssh_shell_command_is(hypr, "window-rules")) {
       gui_desktop_format_rule_matches(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "workspaces")) {
-      gui_desktop_format_workspaces(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_workspaces_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_workspaces(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "activeworkspace")) {
-      gui_desktop_format_activeworkspace(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_activeworkspace_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_activeworkspace(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "activewindow")) {
-      gui_desktop_format_activewindow(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_activewindow_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_activewindow(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "focushistory") ||
                ssh_shell_command_is(hypr, "focus-history")) {
       gui_desktop_format_focus_history(out, sizeof(out));

@@ -5458,6 +5458,232 @@ static int desktop_workspace_is_used(int workspace) {
   return 0;
 }
 
+static void desktop_json_append_raw(char *out, size_t out_size, size_t *used,
+                                    const char *text) {
+  if (!out || out_size == 0 || !used || !text) {
+    return;
+  }
+  while (*text && *used + 1 < out_size) {
+    out[*used] = *text++;
+    (*used)++;
+  }
+  out[*used < out_size ? *used : out_size - 1] = '\0';
+}
+
+static void desktop_json_append_string(char *out, size_t out_size, size_t *used,
+                                       const char *text) {
+  const char *p = text ? text : "";
+
+  desktop_json_append_raw(out, out_size, used, "\"");
+  while (*p && used && *used + 1 < out_size) {
+    unsigned char c = (unsigned char)*p++;
+    if (c == '"' || c == '\\') {
+      char esc[3];
+      esc[0] = '\\';
+      esc[1] = (char)c;
+      esc[2] = '\0';
+      desktop_json_append_raw(out, out_size, used, esc);
+    } else if (c == '\n') {
+      desktop_json_append_raw(out, out_size, used, "\\n");
+    } else if (c == '\r') {
+      desktop_json_append_raw(out, out_size, used, "\\r");
+    } else if (c == '\t') {
+      desktop_json_append_raw(out, out_size, used, "\\t");
+    } else if (c < 0x20) {
+      desktop_json_append_raw(out, out_size, used, " ");
+    } else {
+      char one[2];
+      one[0] = (char)c;
+      one[1] = '\0';
+      desktop_json_append_raw(out, out_size, used, one);
+    }
+  }
+  desktop_json_append_raw(out, out_size, used, "\"");
+}
+
+static void desktop_json_append_client(char *out, size_t out_size, size_t *used,
+                                       int idx) {
+  char line[512];
+  int rx = 0;
+  int ry = 0;
+  int rw = 0;
+  int rh = 0;
+  const desktop_client_t *client;
+
+  if (!out || !used || idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
+      !desktop_clients[idx].visible) {
+    return;
+  }
+  client = &desktop_clients[idx];
+  desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+  snprintf(line, sizeof(line),
+           "{\"address\":\"0x%x\",\"id\":%d,\"mapped\":%s,\"hidden\":%s,"
+           "\"at\":[%d,%d],\"size\":[%d,%d],\"workspace\":{\"id\":%d,\"name\":",
+           desktop_client_address(client), client->id,
+           client->mapped ? "true" : "false",
+           client->hidden ? "true" : "false", rx, ry, rw, rh,
+           client->workspace);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             desktop_workspace_name(client->workspace));
+  desktop_json_append_raw(out, out_size, used, "},\"title\":");
+  desktop_json_append_string(out, out_size, used, client->title);
+  desktop_json_append_raw(out, out_size, used, ",\"class\":");
+  desktop_json_append_string(out, out_size, used, client->app_id);
+  desktop_json_append_raw(out, out_size, used, ",\"initialClass\":");
+  desktop_json_append_string(out, out_size, used, client->app_id);
+  desktop_json_append_raw(out, out_size, used, ",\"initialTitle\":");
+  desktop_json_append_string(out, out_size, used, client->title);
+  desktop_json_append_raw(out, out_size, used, ",\"tag\":");
+  desktop_json_append_string(out, out_size, used,
+                             client->tag[0] ? client->tag : "");
+  desktop_json_append_raw(out, out_size, used, ",\"tags\":");
+  if (client->tag[0]) {
+    desktop_json_append_raw(out, out_size, used, "[");
+    desktop_json_append_string(out, out_size, used, client->tag);
+    desktop_json_append_raw(out, out_size, used, "]");
+  } else {
+    desktop_json_append_raw(out, out_size, used, "[]");
+  }
+  snprintf(line, sizeof(line),
+           ",\"floating\":false,\"fullscreen\":%d,\"fullscreenClient\":%d,"
+           "\"fullscreenState\":{\"internal\":%d,\"client\":%d},"
+           "\"pseudo\":%s,\"pinned\":%s,\"urgent\":%s,\"focusHistoryID\":%d,"
+           "\"mappedSeq\":%llu,\"focusSeq\":%llu,\"pid\":0,\"xwayland\":false,"
+           "\"rendered\":%s,\"hyprlandStyleFacade\":true}",
+           client->fullscreen_state_internal, client->fullscreen_state_client,
+           client->fullscreen_state_internal, client->fullscreen_state_client,
+           client->pseudo ? "true" : "false",
+           client->pinned ? "true" : "false",
+           client->urgent ? "true" : "false", client->focus_history_id,
+           (unsigned long long)client->mapped_generation,
+           (unsigned long long)client->focus_generation,
+           desktop_client_rendered_on_workspace(idx, desktop_active_workspace)
+               ? "true"
+               : "false");
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
+static void desktop_json_append_workspace(char *out, size_t out_size,
+                                          size_t *used, int workspace) {
+  char line[512];
+  int count = desktop_client_count_on_workspace(workspace);
+  int local_count = desktop_workspace_local_client_count(workspace);
+  int last_idx = desktop_last_focused_index_on_workspace(workspace);
+  int state_idx = workspace - 1;
+  int has_fullscreen = 0;
+
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_client_on_workspace(&desktop_clients[i], workspace) &&
+        desktop_clients[i].fullscreen_state_internal > 0) {
+      has_fullscreen = 1;
+      break;
+    }
+  }
+
+  snprintf(line, sizeof(line), "{\"id\":%d,\"name\":", workspace);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             desktop_workspace_name(workspace));
+  snprintf(line, sizeof(line),
+           ",\"monitor\":\"Orizon framebuffer\",\"monitorID\":0,"
+           "\"windows\":%d,\"localWindows\":%d,\"hasfullscreen\":%s,"
+           "\"lastwindow\":\"0x%x\",\"lastwindowtitle\":",
+           count, local_count, has_fullscreen ? "true" : "false",
+           last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx])
+                          : 0);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             last_idx >= 0 ? desktop_clients[last_idx].title
+                                           : "");
+  snprintf(line, sizeof(line),
+           ",\"layout\":\"%s\",\"split\":\"%s\",\"splitRatio\":%d,"
+           "\"masterRatio\":%d,\"nmaster\":%d,\"active\":%s,\"previous\":%s,"
+           "\"dynamic\":true,\"pinnedAware\":true,\"focusSeq\":%llu,"
+           "\"visitSeq\":%llu,\"hyprlandStyleFacade\":true}",
+           desktop_layout_engine_for_workspace(workspace),
+           desktop_split_mode_name_for_value(
+               desktop_split_mode_for_workspace(workspace)),
+           desktop_split_ratio_for_workspace(workspace),
+           desktop_master_ratio_for_workspace(workspace),
+           desktop_master_count_for_workspace(workspace),
+           workspace == desktop_active_workspace ? "true" : "false",
+           workspace == desktop_previous_workspace ? "true" : "false",
+           (unsigned long long)desktop_workspaces[state_idx].focus_generation,
+           (unsigned long long)desktop_workspaces[state_idx].visit_generation);
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
+void gui_desktop_format_clients_json(char *out, size_t out_size) {
+  size_t used = 0;
+  int first = 1;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(out, out_size, &used, "[");
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (!desktop_clients[i].visible) {
+      continue;
+    }
+    if (!first) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_json_append_client(out, out_size, &used, i);
+    first = 0;
+  }
+  desktop_json_append_raw(out, out_size, &used, "]\n");
+}
+
+void gui_desktop_format_workspaces_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(out, out_size, &used, "[");
+  for (int ws = 1; ws <= desktop_workspace_count; ws++) {
+    if (ws > 1) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_json_append_workspace(out, out_size, &used, ws);
+  }
+  desktop_json_append_raw(out, out_size, &used, "]\n");
+}
+
+void gui_desktop_format_activewindow_json(char *out, size_t out_size) {
+  size_t used = 0;
+  int idx;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  idx = desktop_focused_client_index();
+  if (idx < 0) {
+    desktop_json_append_raw(
+        out, out_size, &used,
+        "{\"address\":\"0x0\",\"mapped\":false,\"hyprlandStyleFacade\":true,"
+        "\"reason\":\"no focused tiled client\"}\n");
+    return;
+  }
+  desktop_json_append_client(out, out_size, &used, idx);
+  desktop_json_append_raw(out, out_size, &used, "\n");
+}
+
+void gui_desktop_format_activeworkspace_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_workspace(out, out_size, &used, desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, "\n");
+}
+
 void gui_desktop_format_workspaces(char *out, size_t out_size) {
   size_t used = 0;
 
@@ -6556,6 +6782,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
+           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow\n"
            "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: layout <dwindle|master|monocle>, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"

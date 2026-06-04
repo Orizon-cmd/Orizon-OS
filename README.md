@@ -74,7 +74,8 @@ le developpement noyau:
   `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
   (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
   `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
-  `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, mutation
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, diagnostics JSON compacts
+  `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -174,7 +175,7 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`,
 `desktop keyword <key> <value>` et
-`desktop hyprctl version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
+`desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|keymap|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -214,6 +215,10 @@ rang de focus et geometrie, toujours avec `manual-drag=no`.
 `desktop client-model` et `desktop hyprctl clientmodel` agregent workspaces,
 clients, focus history, etats fullscreen/pseudo/pinned/urgent, regles et backend dans
 un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` ajoute une
+sortie JSON compacte pour les futurs paquets/outils de status, avec des champs
+Hyprland-style (`address`, `workspace`, `fullscreenClient`, `tags`, `windows`,
+`lastwindow`) et le marqueur explicite `hyprlandStyleFacade=true`.
 `desktop rule-matches` et `desktop hyprctl rulematches` lisent
 `/system/desktop-rules.conf` et indiquent quelles regles `windowrulev2`
 correspondent aux clients actuels par class/title/app/tag, initialClass,
