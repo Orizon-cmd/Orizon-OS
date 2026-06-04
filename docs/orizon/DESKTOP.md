@@ -118,6 +118,8 @@ desktop autostart terminal on
 desktop dispatch fullscreen
 desktop dispatch fullscreen off
 desktop dispatch fullscreenstate 1
+desktop dispatch fullscreenstate 2 0
+desktop dispatch fullscreenstate 0 2
 desktop dispatch pseudo
 desktop dispatch pseudotile on
 desktop dispatch pin
@@ -431,8 +433,13 @@ dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
 `pseudotile`, `pin`, `cyclenext`, and `swapnext`, directional
 `swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases.
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
-`fullscreenstate <on|off|1|0>` set or toggle the active client state without
-ambiguous script-side guessing. Layout/submap
+`fullscreenstate <internal 0-3|-1> <client 0-3|-1>` set or toggle the active
+client state without ambiguous script-side guessing. The old
+`fullscreenstate on|off|toggle|1|0` form remains accepted and maps both
+states together; the two-value form mirrors Hyprland's split between the
+compositor state and the state sent to the client. In Orizon today the
+`client` side is diagnostic/prepared only because the backend is still the VM
+framebuffer facade, not Wayland/wlroots. Layout/submap
 dispatchers now include `togglesplit`,
 `layoutmsg layout <dwindle|master|monocle>|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|nmaster <1-8|+/-n>|addmaster|removemaster|focusmaster|swapwithmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
@@ -450,7 +457,8 @@ value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
 Orizon addresses, `at/size` geometry, workspace graph, rules runtime, backend
-boundary, fullscreen/pseudo/pinned flags, current `rendered=yes/no` state, and
+boundary, fullscreen/pseudo/pinned flags, `fullscreenClient`, current
+`rendered=yes/no` state, and
 Hyprland-style `focusHistoryID`.
 `desktop hyprctl clientmodel` mirrors this read-only state graph.
 `desktop hyprctl rulematches` reads `/system/desktop-rules.conf` and explains
@@ -499,7 +507,7 @@ desktop dispatch focuswindow <target> focuses by id/address/class/title
 desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active workspace layout
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state
-desktop dispatch fullscreenstate <on|off|1|0> sets fullscreen state explicitly
+desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1> sets split fullscreen state
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios
 desktop input layout fr|us syncs desktop and kernel keyboard layout
 desktop input pointer flat|natural|precise|accelerated records pointer policy

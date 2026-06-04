@@ -182,6 +182,10 @@ $commands = @(
   "desktop dispatch fullscreen",
   "desktop dispatch fullscreen off",
   "desktop dispatch fullscreenstate 1",
+  "desktop dispatch fullscreenstate 2 0",
+  "desktop hyprctl activewindow",
+  "desktop dispatch fullscreenstate -1 2",
+  "desktop dispatch fullscreenstate 0 0",
   "desktop dispatch pseudo",
   "desktop dispatch pseudo off",
   "desktop dispatch pseudotile on",
@@ -737,6 +741,15 @@ run_cmd() {
     "desktop dispatch fullscreenstate 1")
       grep -q "desktop dispatch: fullscreenstate on" "`$OUT" || { echo "missing desktop dispatch fullscreenstate"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop dispatch fullscreenstate 2 0")
+      grep -q "desktop dispatch: fullscreenstate internal=2 client=0" "`$OUT" || { echo "missing desktop dispatch fullscreenstate split"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch fullscreenstate -1 2")
+      grep -q "desktop dispatch: fullscreenstate internal=2 client=2" "`$OUT" || { echo "missing desktop dispatch fullscreenstate keep-current"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch fullscreenstate 0 0")
+      grep -q "desktop dispatch: fullscreenstate internal=0 client=0" "`$OUT" || { echo "missing desktop dispatch fullscreenstate reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop dispatch pseudo")
       grep -q "desktop dispatch: pseudo" "`$OUT" || { echo "missing desktop dispatch pseudo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -759,7 +772,7 @@ run_cmd() {
       grep -q "Orizon desktop windows" "`$OUT" || { echo "missing desktop hyprctl clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl activewindow")
-      grep -q "activewindow:" "`$OUT" || { echo "missing desktop hyprctl activewindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "activewindow:" "`$OUT" && grep -q "fullscreenClient:" "`$OUT" || { echo "missing desktop hyprctl activewindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl monitors")
       grep -q "Monitor 0" "`$OUT" || { echo "missing desktop hyprctl monitors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

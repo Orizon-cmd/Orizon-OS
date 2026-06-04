@@ -258,6 +258,7 @@ desktop hyprctl reload
 desktop dispatch fullscreen
 desktop dispatch fullscreen off
 desktop dispatch fullscreenstate 1
+desktop dispatch fullscreenstate 2 0
 desktop dispatch pseudo
 desktop dispatch pseudotile on
 desktop dispatch cyclenext

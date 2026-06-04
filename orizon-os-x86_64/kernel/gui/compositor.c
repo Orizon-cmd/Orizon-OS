@@ -70,7 +70,7 @@ static int desktop_mode_enabled = 0;
 static int desktop_terminal_visible = 1;
 static int desktop_launcher_visible = 0;
 static orizon_desktop_session_t desktop_session = {
-    "graphite", "aurora", "dwindle", 1, 1, 1, 0};
+    "graphite", "aurora", "dwindle", 0, 1, 1, 0};
 static orizon_desktop_settings_t desktop_settings = {
     1, 6, 12, 2, 8, 1, 1, 1, 18, 18, 0, 0, "orizon-terminal",
     "builtin", "top", "us", "flat", "orizon-pop", "balanced"};
@@ -104,6 +104,8 @@ typedef struct {
   int hidden;
   int terminal_backed;
   int fullscreen;
+  int fullscreen_state_internal;
+  int fullscreen_state_client;
   int pseudo;
   int pinned;
   int focus_history_id;
@@ -708,6 +710,165 @@ static int desktop_parse_bool_state_arg(const char *value, int current,
     return 0;
   }
   return -1;
+}
+
+static const char *desktop_fullscreen_state_name(int state) {
+  switch (state) {
+  case 0:
+    return "none";
+  case 1:
+    return "maximize";
+  case 2:
+    return "fullscreen";
+  case 3:
+    return "maximize-fullscreen";
+  default:
+    return "current";
+  }
+}
+
+static int desktop_parse_fullscreen_state_token(const char *value,
+                                                int current, int *out) {
+  char token[24];
+  size_t len = 0;
+  int parsed;
+
+  if (!out) {
+    return -1;
+  }
+  while (value && *value == ' ') {
+    value++;
+  }
+  if (!value || !value[0]) {
+    return -1;
+  }
+  while (value[len] && value[len] != ' ' && value[len] != '\t' &&
+         len + 1 < sizeof(token)) {
+    token[len] = (char)desktop_ascii_lower((unsigned char)value[len]);
+    len++;
+  }
+  token[len] = '\0';
+  if (strcmp(token, "-1") == 0 || strcmp(token, "current") == 0 ||
+      strcmp(token, "keep") == 0) {
+    *out = current;
+    return 0;
+  }
+  if (strcmp(token, "none") == 0 || strcmp(token, "off") == 0 ||
+      strcmp(token, "false") == 0 || strcmp(token, "0") == 0) {
+    *out = 0;
+    return 0;
+  }
+  if (strcmp(token, "maximize") == 0 || strcmp(token, "max") == 0 ||
+      strcmp(token, "1") == 0) {
+    *out = 1;
+    return 0;
+  }
+  if (strcmp(token, "fullscreen") == 0 || strcmp(token, "full") == 0 ||
+      strcmp(token, "on") == 0 || strcmp(token, "true") == 0 ||
+      strcmp(token, "2") == 0) {
+    *out = 2;
+    return 0;
+  }
+  if (strcmp(token, "both") == 0 ||
+      strcmp(token, "maximize-fullscreen") == 0 ||
+      strcmp(token, "maximized-fullscreen") == 0 || strcmp(token, "3") == 0) {
+    *out = 3;
+    return 0;
+  }
+  if (desktop_parse_int_arg(token, &parsed) == 0 && parsed >= -1 &&
+      parsed <= 3) {
+    *out = parsed < 0 ? current : parsed;
+    return 0;
+  }
+  return -1;
+}
+
+static int desktop_parse_fullscreen_state_pair(const char *value,
+                                               int current_internal,
+                                               int current_client,
+                                               int *internal_state,
+                                               int *client_state,
+                                               int *legacy_toggle) {
+  char first[24];
+  const char *second;
+  size_t len = 0;
+
+  if (!internal_state || !client_state) {
+    return -1;
+  }
+  if (legacy_toggle) {
+    *legacy_toggle = 0;
+  }
+  while (value && *value == ' ') {
+    value++;
+  }
+  if (!value || !value[0]) {
+    int next = current_internal > 0 ? 0 : 2;
+    *internal_state = next;
+    *client_state = next;
+    if (legacy_toggle) {
+      *legacy_toggle = 1;
+    }
+    return 0;
+  }
+  while (value[len] && value[len] != ' ' && value[len] != '\t' &&
+         len + 1 < sizeof(first)) {
+    first[len] = value[len];
+    len++;
+  }
+  first[len] = '\0';
+  second = value + len;
+  while (*second == ' ' || *second == '\t') {
+    second++;
+  }
+  if (*second == '\0') {
+    int desired;
+    if (desktop_parse_bool_state_arg(first, current_internal > 0, &desired) ==
+        0) {
+      *internal_state = desired ? 2 : 0;
+      *client_state = desired ? 2 : 0;
+      if (legacy_toggle) {
+        *legacy_toggle = 1;
+      }
+      return 0;
+    }
+    if (desktop_parse_fullscreen_state_token(first, current_internal,
+                                             internal_state) == 0) {
+      *client_state = *internal_state;
+      return 0;
+    }
+    return -1;
+  }
+  if (desktop_parse_fullscreen_state_token(first, current_internal,
+                                           internal_state) < 0 ||
+      desktop_parse_fullscreen_state_token(second, current_client,
+                                           client_state) < 0) {
+    return -1;
+  }
+  return 0;
+}
+
+static void desktop_client_apply_fullscreen_state(desktop_client_t *client,
+                                                  int internal_state,
+                                                  int client_state) {
+  if (!client) {
+    return;
+  }
+  if (internal_state < 0) {
+    internal_state = client->fullscreen_state_internal;
+  }
+  if (client_state < 0) {
+    client_state = client->fullscreen_state_client;
+  }
+  if (internal_state > 3) {
+    internal_state = 3;
+  }
+  if (client_state > 3) {
+    client_state = 3;
+  }
+  client->fullscreen_state_internal = internal_state;
+  client->fullscreen_state_client = client_state;
+  client->fullscreen = internal_state > 0 ? 1 : 0;
 }
 
 static int desktop_parse_positive_token(const char *value, int *out) {
@@ -1505,6 +1666,8 @@ static int desktop_spawn_client(const char *title, const char *app_id,
       desktop_clients[i].hidden = 0;
       desktop_clients[i].terminal_backed = terminal_backed ? 1 : 0;
       desktop_clients[i].fullscreen = 0;
+      desktop_clients[i].fullscreen_state_internal = 0;
+      desktop_clients[i].fullscreen_state_client = 0;
       desktop_clients[i].pseudo = 0;
       desktop_clients[i].pinned = 0;
       desktop_clients[i].focus_history_id = -1;
@@ -1903,7 +2066,8 @@ static int desktop_toggle_active_fullscreen(void) {
     return -1;
   }
   desired = desktop_clients[idx].fullscreen ? 0 : 1;
-  desktop_clients[idx].fullscreen = desired;
+  desktop_client_apply_fullscreen_state(&desktop_clients[idx],
+                                        desired ? 2 : 0, desired ? 2 : 0);
   needs_redraw = 1;
   return desktop_clients[idx].fullscreen;
 }
@@ -1914,9 +2078,23 @@ static int desktop_set_active_fullscreen(int desired) {
   if (idx < 0) {
     return -1;
   }
-  desktop_clients[idx].fullscreen = desired ? 1 : 0;
+  desktop_client_apply_fullscreen_state(&desktop_clients[idx],
+                                        desired ? 2 : 0, desired ? 2 : 0);
   needs_redraw = 1;
   return desktop_clients[idx].fullscreen;
+}
+
+static int desktop_set_active_fullscreen_state(int internal_state,
+                                               int client_state) {
+  int idx = desktop_focused_client_index();
+
+  if (idx < 0) {
+    return -1;
+  }
+  desktop_client_apply_fullscreen_state(&desktop_clients[idx], internal_state,
+                                        client_state);
+  needs_redraw = 1;
+  return 0;
 }
 
 static int desktop_toggle_active_pseudo(void) {
@@ -3390,6 +3568,8 @@ int gui_desktop_close_active_client(void) {
   desktop_clients[idx].hidden = 0;
   desktop_clients[idx].terminal_backed = 0;
   desktop_clients[idx].fullscreen = 0;
+  desktop_clients[idx].fullscreen_state_internal = 0;
+  desktop_clients[idx].fullscreen_state_client = 0;
   desktop_clients[idx].pseudo = 0;
   desktop_clients[idx].pinned = 0;
   desktop_clients[idx].focus_history_id = -1;
@@ -3432,7 +3612,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|name:name|next|empty|+1|-1|previous> | renameworkspace <target> <name> | movetoworkspace <target> | movetoworkspacesilent <target> | "
-               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | swapwindow <l|r|u|d|next|prev> | fullscreen/fullscreenstate | pseudo/pseudotile | pin | swapnext | "
+               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | swapwindow <l|r|u|d|next|prev> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
     }
@@ -3916,8 +4096,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     }
     return -1;
   }
-  if (strcmp(dispatcher, "fullscreen") == 0 ||
-      strcmp(dispatcher, "fullscreenstate") == 0) {
+  if (strcmp(dispatcher, "fullscreen") == 0) {
     int desired = 0;
     int idx = desktop_focused_client_index();
     int state;
@@ -3932,15 +4111,66 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                                      &desired) < 0) {
       if (out && out_size) {
         snprintf(out, out_size,
-                 "desktop dispatch: %s expects on/off/toggle/1/0\n",
-                 dispatcher);
+                 "desktop dispatch: fullscreen expects on/off/toggle/1/0\n");
       }
       return -1;
     }
     state = desktop_set_active_fullscreen(desired);
     if (out && out_size) {
-      snprintf(out, out_size, "desktop dispatch: %s %s\n", dispatcher,
-               state ? "on" : "off");
+      snprintf(out, out_size,
+               "desktop dispatch: fullscreen %s internal=%d client=%d\n",
+               state ? "on" : "off",
+               desktop_clients[idx].fullscreen_state_internal,
+               desktop_clients[idx].fullscreen_state_client);
+    }
+    return 0;
+  }
+  if (strcmp(dispatcher, "fullscreenstate") == 0) {
+    int idx = desktop_focused_client_index();
+    int internal_state = 0;
+    int client_state = 0;
+    int legacy_toggle = 0;
+
+    if (idx < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size, "desktop dispatch: fullscreenstate no-client\n");
+      }
+      return -1;
+    }
+    if (desktop_parse_fullscreen_state_pair(
+            a, desktop_clients[idx].fullscreen_state_internal,
+            desktop_clients[idx].fullscreen_state_client, &internal_state,
+            &client_state, &legacy_toggle) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: fullscreenstate expects <internal 0-3|-1> <client 0-3|-1> or on/off/toggle\n");
+      }
+      return -1;
+    }
+    if (desktop_set_active_fullscreen_state(internal_state, client_state) < 0) {
+      return -1;
+    }
+    if (out && out_size) {
+      if (legacy_toggle) {
+        snprintf(out, out_size,
+                 "desktop dispatch: fullscreenstate %s internal=%d client=%d internalMode=%s clientMode=%s\n",
+                 desktop_clients[idx].fullscreen ? "on" : "off",
+                 desktop_clients[idx].fullscreen_state_internal,
+                 desktop_clients[idx].fullscreen_state_client,
+                 desktop_fullscreen_state_name(
+                     desktop_clients[idx].fullscreen_state_internal),
+                 desktop_fullscreen_state_name(
+                     desktop_clients[idx].fullscreen_state_client));
+      } else {
+        snprintf(out, out_size,
+                 "desktop dispatch: fullscreenstate internal=%d client=%d internalMode=%s clientMode=%s\n",
+                 desktop_clients[idx].fullscreen_state_internal,
+                 desktop_clients[idx].fullscreen_state_client,
+                 desktop_fullscreen_state_name(
+                     desktop_clients[idx].fullscreen_state_internal),
+                 desktop_fullscreen_state_name(
+                     desktop_clients[idx].fullscreen_state_client));
+      }
     }
     return 0;
   }
@@ -4454,7 +4684,7 @@ static int desktop_rule_apply_action_to_client(
     return 1;
   }
   if (desktop_rule_action_is(rule->action, "fullscreen")) {
-    client->fullscreen = 1;
+    desktop_client_apply_fullscreen_state(client, 2, 2);
     desktop_rule_record_client_action(client, "fullscreen", 1);
     return 1;
   }
@@ -4670,7 +4900,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         out + used, out_size - used,
         "client address=0x%x id=%d mapped=%s hidden=%s at=%d,%d size=%dx%d "
         "rendered=%s workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tiled=yes floating=no "
-        "fullscreen=%s pseudo=%s pinned=%s focused=%s focusHistoryID=%d "
+        "fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s pinned=%s focused=%s focusHistoryID=%d "
         "rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" "
         "lastWorkspace=%d mappedSeq=%llu focusSeq=%llu backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
@@ -4683,7 +4913,11 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         desktop_workspace_name(desktop_clients[i].workspace),
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id,
-        desktop_clients[i].fullscreen ? "yes" : "no",
+        desktop_clients[i].fullscreen_state_internal,
+        desktop_clients[i].fullscreen_state_client,
+        desktop_fullscreen_state_name(
+            desktop_clients[i].fullscreen_state_internal),
+        desktop_fullscreen_state_name(desktop_clients[i].fullscreen_state_client),
         desktop_clients[i].pseudo ? "yes" : "no",
         desktop_clients[i].pinned ? "yes" : "no",
         desktop_clients[i].id == desktop_focused_client_id ? "yes" : "no",
@@ -4702,7 +4936,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "killactive | movefocus l|r|u|d|next|prev | "
              "focuswindow <id|0xaddr|class:app|title:text> | "
              "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
-             "fullscreen [on|off|toggle] | fullscreenstate <on|off|1|0> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
+             "fullscreen [on|off|toggle] | fullscreenstate <internal 0-3|-1> <client 0-3|-1> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
              "workspace <n|name:name|next|empty|+1|-1|previous> | "
              "renameworkspace <target> <name> | "
              "movetoworkspace <n|name:name|empty|+1|-1> | "
@@ -4827,7 +5061,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
     rank = desktop_focus_rank_for_id(desktop_clients[i].id);
     used += snprintf(
         out + used, out_size - used,
-        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
+        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id, desktop_clients[i].workspace,
@@ -4840,7 +5074,11 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
             ? "yes"
             : "no",
         desktop_clients[i].pinned ? "yes" : "no",
-        desktop_clients[i].fullscreen ? "yes" : "no",
+        desktop_clients[i].fullscreen_state_internal,
+        desktop_clients[i].fullscreen_state_client,
+        desktop_fullscreen_state_name(
+            desktop_clients[i].fullscreen_state_internal),
+        desktop_fullscreen_state_name(desktop_clients[i].fullscreen_state_client),
         desktop_clients[i].pseudo ? "yes" : "no",
         desktop_clients[i].id == desktop_focused_client_id ? "yes" : "no",
         desktop_clients[i].focus_history_id, rank,
@@ -5007,7 +5245,9 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            "  at: %d,%d\n"
            "  size: %d,%d\n"
            "  floating: false\n"
-           "  fullscreen: %s\n"
+           "  fullscreen: %d\n"
+           "  fullscreenClient: %d\n"
+           "  fullscreenState: internal=%d client=%d internalMode=%s clientMode=%s\n"
            "  pseudo: %s\n"
            "  pinned: %s\n"
            "  rulesMatched: %d\n"
@@ -5026,7 +5266,14 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            desktop_clients[idx].title, desktop_clients[idx].app_id,
            desktop_clients[idx].app_id, desktop_clients[idx].title,
            desktop_clients[idx].workspace, rx, ry, rw, rh,
-           desktop_clients[idx].fullscreen ? "true" : "false",
+           desktop_clients[idx].fullscreen_state_internal,
+           desktop_clients[idx].fullscreen_state_client,
+           desktop_clients[idx].fullscreen_state_internal,
+           desktop_clients[idx].fullscreen_state_client,
+           desktop_fullscreen_state_name(
+               desktop_clients[idx].fullscreen_state_internal),
+           desktop_fullscreen_state_name(
+               desktop_clients[idx].fullscreen_state_client),
            desktop_clients[idx].pseudo ? "true" : "false",
            desktop_clients[idx].pinned ? "true" : "false",
            desktop_clients[idx].rule_match_count,
@@ -5484,7 +5731,7 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
     desktop_client_rect(idx, &rx, &ry, &rw, &rh);
     used += snprintf(
         out + used, out_size - used,
-        "node %d: role=%s rendered=%s address=0x%x id=%d title=\"%s\" class=%s rect=%d,%d %dx%d focused=%s fullscreen=%s pseudo=%s pinned=%s focusHistoryID=%d\n",
+        "node %d: role=%s rendered=%s address=0x%x id=%d title=\"%s\" class=%s rect=%d,%d %dx%d focused=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s pinned=%s focusHistoryID=%d\n",
         pos,
         desktop_client_role_on_workspace(desktop_active_workspace, idx, pos,
                                          count),
@@ -5495,7 +5742,11 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
         desktop_clients[idx].id, desktop_clients[idx].title,
         desktop_clients[idx].app_id, rx, ry, rw, rh,
         idx == active_idx ? "yes" : "no",
-        desktop_clients[idx].fullscreen ? "yes" : "no",
+        desktop_clients[idx].fullscreen_state_internal,
+        desktop_clients[idx].fullscreen_state_client,
+        desktop_fullscreen_state_name(
+            desktop_clients[idx].fullscreen_state_internal),
+        desktop_fullscreen_state_name(desktop_clients[idx].fullscreen_state_client),
         desktop_clients[idx].pseudo ? "yes" : "no",
         desktop_clients[idx].pinned ? "yes" : "no",
         desktop_clients[idx].focus_history_id);
@@ -5612,10 +5863,11 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, cyclenext, swapnext, swapwindow\n"
-           "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <on|off|1|0>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
+           "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: layout <dwindle|master|monocle>, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, nmaster <1-8|+/-n>, addmaster, removemaster, focusmaster, swapwithmaster\n"
            "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"
+           "fullscreenstate: internal controls compositor layout; fullscreenClient records state exposed to future clients\n"
            "truth: Hyprland-style facade for Orizon's framebuffer compositor\n");
 }
 

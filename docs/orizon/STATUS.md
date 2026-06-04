@@ -59,7 +59,7 @@ work.
   workspace switch, relative/dynamic workspace dispatch with next/empty targets,
   dispatcher-style
   movetoworkspace/movetoworkspacesilent with follow-vs-silent workspace focus
-  restore, movefocus directionnel/focuswindow/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/nmaster/monocle-deck/resizeactive/submap, idempotent fullscreen/fullscreenstate/pseudo/pseudotile/pinned client
+  restore, movefocus directionnel/focuswindow/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
   class/module/surface diagnostics, launcher overlay dispatch,

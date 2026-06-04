@@ -238,8 +238,10 @@ direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 Les etats du client actif acceptent aussi des valeurs idempotentes:
 `desktop dispatch fullscreen|pseudo|pseudotile|pin on|off|toggle|1|0` et
-`desktop dispatch fullscreenstate on|off|1|0`, ce qui evite les bascules
-ambigues dans les scripts et tests VM.
+`desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1>`, avec
+compatibilite `on|off|toggle|1|0`, ce qui evite les bascules ambigues dans les
+scripts et tests VM. `fullscreenClient` est expose en diagnostic, prepare pour
+de futurs vrais clients, mais le backend reste framebuffer VM.
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
 stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned,

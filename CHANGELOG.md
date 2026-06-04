@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.47.0` with a closer Hyprland-style
+  `fullscreenstate internal client` dispatcher: Orizon now tracks compositor
+  fullscreen state separately from the future client-visible fullscreen state,
+  accepts `-1..3` plus the legacy `on/off/toggle` form, and reports
+  `fullscreenClient`/`fullscreenState` in client diagnostics.
 - Added desktop package version `0.46.0` with stricter monocle/fullscreen deck
   rendering diagnostics: only the focused tiled client is rendered in monocle
   while other clients remain focusable as `monocle-deck`, and `layout-tree`,

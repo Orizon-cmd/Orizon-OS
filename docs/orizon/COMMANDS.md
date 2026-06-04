@@ -197,6 +197,8 @@ desktop autostart terminal on
 desktop dispatch fullscreen
 desktop dispatch fullscreen off
 desktop dispatch fullscreenstate 1
+desktop dispatch fullscreenstate 2 0
+desktop dispatch fullscreenstate 0 2
 desktop dispatch pseudo
 desktop dispatch pseudotile on
 desktop dispatch pin
@@ -381,7 +383,8 @@ including `layoutmsg layout <dwindle|master|monocle>`,
 `orientationleft/right/top/bottom` tiling hints,
 idempotent client-state dispatchers
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
-`fullscreenstate <on|off|1|0>`,
+`fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy
+`fullscreenstate <on|off|toggle|1|0>`,
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
