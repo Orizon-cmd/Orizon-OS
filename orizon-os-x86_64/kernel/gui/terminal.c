@@ -4540,7 +4540,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       return;
     }
     term_puts_t(term,
-                "usage: desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>\n");
+                "usage: desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous>\n");
     return;
   }
   if (term_command_is(args, "move")) {

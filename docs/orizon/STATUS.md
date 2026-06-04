@@ -56,7 +56,8 @@ work.
   `/system/desktop-backend.conf` and `/system/desktop-protocol.conf` truth maps, plus generated
   `/system/desktop-binds.conf` and related runtime hint files, and
   currently supports F1 exec terminal, F2 killactive, launcher F3, runtime
-  workspace switch, relative/dynamic workspace dispatch with next/empty targets,
+  workspace switch, relative/dynamic workspace dispatch with next/empty targets
+  plus Hyprland-style `r/m/e +/-n` and `r/m/e ~n` prefixes,
   dispatcher-style
   movetoworkspace/movetoworkspacesilent with follow-vs-silent workspace focus
   restore plus optional `workspace,window` selectors, tag selectors and

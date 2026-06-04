@@ -662,6 +662,12 @@ def run_ssh_checks(
         ("desktop dispatch workspace 2", "workspace 2"),
         ("desktop dispatch workspace previous", "workspace 1"),
         ("desktop dispatch workspace +1", "workspace 2"),
+        ("desktop dispatch workspace r+1", "workspace 3"),
+        ("desktop dispatch workspace r~2", "workspace 2"),
+        ("desktop dispatch workspace m~1", "workspace 1"),
+        ("desktop dispatch workspace m+1", "workspace 2"),
+        ("desktop dispatch workspace e+1", "workspace 3"),
+        ("desktop dispatch workspace e-1", "workspace 2"),
         ("desktop dispatch renameworkspace 2 dev", 'renameworkspace 2 name="dev"'),
         ("desktop dispatch workspace name:dev", "workspace 2"),
         ("desktop dispatch movetoworkspace name:dev", "moved active to workspace 2"),
@@ -693,6 +699,10 @@ def run_ssh_checks(
             'tagwindow set tag="settings"',
         ),
         ("desktop dispatch focuswindow tag:settings", "focuswindow ok"),
+        (
+            "desktop dispatch movetoworkspacesilent r+1,tag:settings",
+            'selector="tag:settings"',
+        ),
         (
             "desktop dispatch movetoworkspacesilent 2,tag:settings",
             'selector="tag:settings"',

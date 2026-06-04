@@ -241,6 +241,10 @@ desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace 2
 desktop dispatch workspace previous
 desktop dispatch workspace +1
+desktop dispatch workspace r+1
+desktop dispatch workspace r~2
+desktop dispatch workspace m~1
+desktop dispatch workspace e+1
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
@@ -415,6 +419,8 @@ urgent state, and geometry for each workspace,
 `movetoworkspacesilent <workspace>[,<window>]` keeps the current workspace
 active and restores workspace-local focus; window selectors accept `id`,
 `0xaddress`, `class:app`, `title:text`, `tag:name`, or `activewindow`,
+workspace targets accept Hyprland-style `r+/-n`/`r~n` including empty slots and
+single-monitor VM `m/e +/-n`/`m/e ~n` open-workspace selectors,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

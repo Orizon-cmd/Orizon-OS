@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.52.0` with Hyprland-style workspace target
+  prefixes for the VM compositor facade: `r+/-n` and `r~n` select relative or
+  absolute workspace slots including empty ones, while `m+/-n`, `e+/-n`,
+  `m~n`, and `e~n` walk open Orizon workspaces on the current single
+  framebuffer monitor. The same parser backs `workspace`, `movetoworkspace`,
+  and `movetoworkspacesilent`; real multi-monitor Wayland/wlroots workspace
+  routing remains prepared-only.
 - Added desktop package version `0.51.0` with a VM-safe `desktop hyprctl -j`
   facade for `clients`, `workspaces`, `activeworkspace`, and `activewindow`.
   The JSON exposes Hyprland-style fields such as `address`, `workspace`,

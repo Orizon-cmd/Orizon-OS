@@ -165,6 +165,9 @@ desktop dispatch movetoworkspacesilent empty
 desktop dispatch workspace 2
 desktop dispatch workspace previous
 desktop dispatch workspace +1
+desktop dispatch workspace r+1
+desktop dispatch workspace m~1
+desktop dispatch workspace e+1
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
@@ -459,6 +462,11 @@ dispatchers now include `togglesplit`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
+Hyprland-style prefixed targets are also accepted by the shared workspace
+parser: `r+1`/`r-1` and `r~3` walk or select numeric slots including empty
+ones, while `m+1`/`m-1`, `e+1`/`e-1`, `m~1`, and `e~1` walk open Orizon
+workspaces on the current framebuffer monitor. In today's VM backend `m` and
+`e` are honest single-monitor aliases, not real Wayland multi-output routing.
 
 `desktop hyprctl
 [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
@@ -501,7 +509,7 @@ state for exercising Hyprland-style tags before real XDG tags exist. This is
 closer to the Hyprland mental model than manual window dragging.
 
 `desktop workspace` shows the current Hyprland-style workspace state.
-`desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>` switches the active workspace.
+`desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous>` switches the active workspace.
 Prefer `desktop dispatch movetoworkspace <target>[,<window>]` or
 `desktop dispatch movetoworkspacesilent <target>[,<window>]` to move the active
 or selected tiled client between workspaces, matching Hyprland's
@@ -528,7 +536,7 @@ F7/F8 dispatch workspace +1/-1
 F9/F10/F11 enter resize/move/launch submaps
 F12 or Esc returns to the default submap
 Enter/Space on an empty focus dispatches exec terminal
-desktop workspace <1-10|name:<name>|next|empty|+/-n|previous> switches runtime workspace
+desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> switches runtime workspace
 desktop dispatch renameworkspace <target> <safe-name> names a workspace
 desktop dispatch movetoworkspace <target>[,<window>] moves and follows the active/selected tiled client
 desktop dispatch movetoworkspacesilent <target>[,<window>] moves without changing workspace

@@ -986,6 +986,57 @@ static int desktop_find_empty_workspace(void) {
   return desktop_active_workspace;
 }
 
+static int desktop_workspace_is_open(int workspace) {
+  int idx = workspace - 1;
+
+  if (workspace < 1 || workspace > desktop_workspace_count) {
+    return 0;
+  }
+  return workspace == desktop_active_workspace || desktop_workspaces[idx].used ||
+         desktop_workspaces[idx].last_focused_client_id > 0 ||
+         desktop_workspace_local_client_count(workspace) > 0;
+}
+
+static int desktop_find_open_workspace_relative(int delta) {
+  int direction = delta >= 0 ? 1 : -1;
+  int remaining = delta >= 0 ? delta : -delta;
+  int workspace = desktop_active_workspace;
+  int guard = desktop_workspace_count * (remaining + 1);
+
+  if (remaining == 0) {
+    return desktop_clamp_workspace(desktop_active_workspace);
+  }
+  while (guard-- > 0) {
+    workspace = desktop_wrap_workspace(workspace + direction);
+    if (!desktop_workspace_is_open(workspace)) {
+      continue;
+    }
+    remaining--;
+    if (remaining == 0) {
+      return workspace;
+    }
+  }
+  return desktop_clamp_workspace(desktop_active_workspace);
+}
+
+static int desktop_find_open_workspace_ordinal(int ordinal) {
+  int seen = 0;
+
+  if (ordinal < 1) {
+    return -1;
+  }
+  for (int workspace = 1; workspace <= desktop_workspace_count; workspace++) {
+    if (!desktop_workspace_is_open(workspace)) {
+      continue;
+    }
+    seen++;
+    if (seen == ordinal) {
+      return workspace;
+    }
+  }
+  return -1;
+}
+
 static void desktop_start_transition(const char *reason, int from_workspace,
                                      int to_workspace) {
   if (!reason || !reason[0]) {
@@ -1279,7 +1330,8 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
     *workspace = desktop_clamp_workspace(desktop_active_workspace);
     return 0;
   }
-  if (strcmp(v, "previous") == 0 || strcmp(v, "prev") == 0) {
+  if (strcmp(v, "previous") == 0 || strcmp(v, "prev") == 0 ||
+      strcmp(v, "previous_per_monitor") == 0) {
     *workspace = desktop_clamp_workspace(desktop_previous_workspace);
     return 0;
   }
@@ -1288,6 +1340,8 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
     return 0;
   }
   if (strcmp(v, "empty") == 0 || strcmp(v, "emptynext") == 0 ||
+      strcmp(v, "emptym") == 0 || strcmp(v, "emptyn") == 0 ||
+      strcmp(v, "emptynm") == 0 || strcmp(v, "emptymn") == 0 ||
       strcmp(v, "e") == 0) {
     *workspace = desktop_find_empty_workspace();
     return 0;
@@ -1296,8 +1350,39 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
     *workspace = desktop_clamp_workspace(desktop_previous_workspace);
     return 0;
   }
-  if (v[0] == 'e' && (v[1] == '+' || v[1] == '-')) {
-    v++;
+  if ((v[0] == 'r' || v[0] == 'm' || v[0] == 'e') &&
+      (v[1] == '+' || v[1] == '-' || v[1] == '~')) {
+    char prefix = v[0];
+    char op = v[1];
+    int resolved = 0;
+
+    if (op == '~') {
+      if (desktop_parse_int_arg(v + 2, &n) < 0 || n < 1) {
+        return -1;
+      }
+      if (prefix == 'r') {
+        if (n > desktop_workspace_count) {
+          return -1;
+        }
+        *workspace = n;
+        return 0;
+      }
+      resolved = desktop_find_open_workspace_ordinal(n);
+      if (resolved < 1) {
+        return -1;
+      }
+      *workspace = resolved;
+      return 0;
+    }
+    if (desktop_parse_int_arg(v + 1, &n) < 0) {
+      return -1;
+    }
+    if (prefix == 'r') {
+      *workspace = desktop_wrap_workspace(desktop_active_workspace + n);
+      return 0;
+    }
+    *workspace = desktop_find_open_workspace_relative(n);
+    return 0;
   }
   if (v[0] == '+' || v[0] == '-') {
     if (desktop_parse_int_arg(v, &n) < 0) {
@@ -4003,7 +4088,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
-               "workspace <n|name:name|next|empty|+1|-1|previous> | renameworkspace <target> <name> | movetoworkspace <target>[,<window>] | movetoworkspacesilent <target>[,<window>] | "
+               "workspace <n|name:name|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | renameworkspace <target> <name> | movetoworkspace <target>[,<window>] | movetoworkspacesilent <target>[,<window>] | "
                "movefocus <l|r|u|d|next|prev> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | tagwindow <tag> [target] | swapwindow <l|r|u|d|next|prev> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
@@ -4037,7 +4122,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       return 0;
     }
     if (out && out_size) {
-      snprintf(out, out_size, "desktop dispatch: workspace expects 1-%d, name:<name>, next, empty, +/-n, active or previous\n",
+      snprintf(out, out_size, "desktop dispatch: workspace expects 1-%d, name:<name>, next, empty, +/-n, r+/-n, m+/-n, e+/-n, r~n, m~n, e~n, active or previous\n",
                desktop_workspace_count);
     }
     return -1;
@@ -4083,7 +4168,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                                            sizeof(selector)) < 0) {
       if (out && out_size) {
         snprintf(out, out_size,
-                 "desktop dispatch: movetoworkspace expects active/selectable client and <1-%d|name:<name>|empty|+/-n>[,<id|address|class:app|title:text|tag:name|activewindow>]\n",
+                 "desktop dispatch: movetoworkspace expects active/selectable client and <1-%d|name:<name>|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n>[,<id|address|class:app|title:text|tag:name|activewindow>]\n",
                  desktop_workspace_count);
       }
       return -1;
@@ -4098,7 +4183,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                    selector, target);
         } else {
           snprintf(out, out_size,
-                   "desktop dispatch: movetoworkspace expects active client and 1-%d, name:<name>, empty or +/-n\n",
+                   "desktop dispatch: movetoworkspace expects active client and 1-%d, name:<name>, empty, +/-n, r/m/e +/-n or r/m/e ~n\n",
                    desktop_workspace_count);
         }
       }
@@ -4133,7 +4218,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     }
     if (out && out_size) {
       snprintf(out, out_size,
-               "desktop dispatch: movetoworkspace failed for workspace 1-%d, name:<name>, empty or +/-n\n",
+               "desktop dispatch: movetoworkspace failed for workspace 1-%d, name:<name>, empty, +/-n, r/m/e +/-n or r/m/e ~n\n",
                desktop_workspace_count);
     }
     return -1;

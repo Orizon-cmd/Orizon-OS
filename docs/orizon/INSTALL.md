@@ -296,6 +296,9 @@ desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace +1
+desktop dispatch workspace r+1
+desktop dispatch workspace m~1
+desktop dispatch workspace e+1
 desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop focus-window title:Terminal

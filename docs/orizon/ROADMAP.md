@@ -52,7 +52,8 @@
   `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`, generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, named and
-  relative/dynamic workspaces with next/empty targets, focus restore per
+  relative/dynamic workspaces with next/empty and Hyprland-style `r/m/e +/-n`
+  plus `r/m/e ~n` targets, focus restore per
   workspace, follow-vs-silent `movetoworkspace` with optional `workspace,window`
   selectors including `tag:name`, split fullscreenstate internal/client
   diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent

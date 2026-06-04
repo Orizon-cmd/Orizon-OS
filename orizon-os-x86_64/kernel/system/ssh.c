@@ -3952,7 +3952,7 @@ static void ssh_shell_print_desktop(const char *args) {
       /* dispatch already formatted the response */
     } else {
       snprintf(out, sizeof(out),
-               "usage: desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>\r\n");
+               "usage: desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous>\r\n");
     }
   } else if (ssh_shell_command_is(sub, "move")) {
     const char *target = ssh_shell_skip_spaces(sub + 4);

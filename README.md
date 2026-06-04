@@ -215,6 +215,9 @@ rang de focus et geometrie, toujours avec `manual-drag=no`.
 `desktop client-model` et `desktop hyprctl clientmodel` agregent workspaces,
 clients, focus history, etats fullscreen/pseudo/pinned/urgent, regles et backend dans
 un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
+Les cibles workspace acceptent maintenant les prefixes Hyprland-style
+`r+/-n`, `r~n`, `m+/-n`, `e+/-n`, `m~n` et `e~n`; `r` inclut les slots vides
+et `m/e` parcourent les workspaces ouverts dans la facade VM mono-moniteur.
 `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` ajoute une
 sortie JSON compacte pour les futurs paquets/outils de status, avec des champs
 Hyprland-style (`address`, `workspace`, `fullscreenClient`, `tags`, `windows`,
