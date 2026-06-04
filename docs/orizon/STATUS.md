@@ -59,7 +59,7 @@ work.
   workspace switch, relative/dynamic workspace dispatch with next/empty targets,
   dispatcher-style
   movetoworkspace/movetoworkspacesilent with follow-vs-silent workspace focus
-  restore, movefocus directionnel/focuswindow/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned client
+  restore, movefocus directionnel/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/urgent client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
   class/module/surface diagnostics, launcher overlay dispatch,
@@ -71,7 +71,7 @@ work.
   with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
   runtime keyword/getoption/reload inspection, persistent render controls for
   focus ring, shadow range, animation tick budget/curve and render profile,
-  split/master ratio controls, per-workspace layout-state diagnostics, workspace-stack master/focus diagnostics, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focushistory/workspacestack/cursorpos diagnostics, pointer diagnostics, read-only config trace diagnostics for apply/prepare/ignore parser decisions, software focus ring, ticked focus/workspace/layout transition state, active tiling-tree diagnostics with client roles/rectangles/manual-drag boundary, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  split/master ratio controls, per-workspace layout-state diagnostics, workspace-stack master/focus/urgent diagnostics, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focushistory/workspacestack/cursorpos diagnostics, pointer diagnostics, read-only config trace diagnostics for apply/prepare/ignore parser decisions, software focus ring, ticked focus/workspace/layout transition state, active tiling-tree diagnostics with client roles/rectangles/manual-drag boundary, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor. `desktop backend` and `desktop protocol` document the
   current `framebuffer-vm` backend and internal `orizon-desktop-ipc-v0`

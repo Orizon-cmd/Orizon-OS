@@ -53,7 +53,7 @@
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, named and
   relative/dynamic workspaces with next/empty targets, focus restore per
-  workspace, follow-vs-silent `movetoworkspace`, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned client state, per-workspace layout state with `nmaster` and monocle deck rendered diagnostics, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
+  workspace, follow-vs-silent `movetoworkspace`, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/urgent client state, per-workspace layout state with `nmaster` and monocle deck rendered diagnostics, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `focuscurrentorlast`/`focusurgentorlast` with VM-only `markurgent`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
@@ -65,7 +65,7 @@
   explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
   software focus ring, persistent shadow range/render profile/animation
   tick budget controls, backend/protocol architecture truth maps, active
-  layout-tree and workspace-stack diagnostics with client roles/rectangles/master/focus order/manual-drag boundary,
+  layout-tree and workspace-stack diagnostics with client roles/rectangles/master/focus/urgent order/manual-drag boundary,
   and ticked focus/workspace/layout transitions,
   pointer diagnostics, native tiling apps for settings/logs/packages/update,
   app catalog/details with class/module/surface diagnostics and launcher

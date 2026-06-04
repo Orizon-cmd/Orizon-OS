@@ -162,6 +162,12 @@ $commands = @(
   "desktop dispatch exec terminal",
   "desktop dispatch exec terminal",
   "desktop dispatch focuswindow class:orizon-terminal",
+  "desktop dispatch focuscurrentorlast",
+  "desktop dispatch markurgent on",
+  "desktop activewindow",
+  "desktop dispatch focuscurrentorlast",
+  "desktop focus-history",
+  "desktop dispatch focusurgentorlast",
   "desktop focus-window title:Terminal",
   "desktop dispatch cyclenext",
   "desktop dispatch swapnext",
@@ -689,6 +695,21 @@ run_cmd() {
       ;;
     "desktop dispatch focuswindow class:orizon-terminal"|"desktop focus-window title:Terminal")
       grep -q "desktop dispatch: focuswindow ok" "`$OUT" && grep -q "tiled=yes" "`$OUT" || { echo "missing desktop dispatch focuswindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch focuscurrentorlast")
+      grep -q "desktop dispatch: focuscurrentorlast ok" "`$OUT" || { echo "missing desktop dispatch focuscurrentorlast"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch markurgent on")
+      grep -q "desktop dispatch: markurgent on" "`$OUT" && grep -q "diagnostic=vm-only" "`$OUT" || { echo "missing desktop dispatch markurgent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop activewindow")
+      grep -q "activewindow:" "`$OUT" && grep -q "urgent: true" "`$OUT" || { echo "missing urgent activewindow diagnostic"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop focus-history")
+      grep -q "Orizon desktop focus history" "`$OUT" && grep -q "urgent=true" "`$OUT" || { echo "missing urgent focus history"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch focusurgentorlast")
+      grep -q "desktop dispatch: focusurgentorlast ok mode=urgent" "`$OUT" || { echo "missing desktop dispatch focusurgentorlast"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch cyclenext")
       grep -q "desktop dispatch: cyclenext" "`$OUT" || { echo "missing desktop dispatch cyclenext"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

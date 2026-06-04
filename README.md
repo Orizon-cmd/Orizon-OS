@@ -212,7 +212,7 @@ rendu et les autres restent visibles dans les diagnostics comme
 par workspace: client master, clients stack/dwindle, scope local/pinned,
 rang de focus et geometrie, toujours avec `manual-drag=no`.
 `desktop client-model` et `desktop hyprctl clientmodel` agregent workspaces,
-clients, focus history, etats fullscreen/pseudo/pinned, regles et backend dans
+clients, focus history, etats fullscreen/pseudo/pinned/urgent, regles et backend dans
 un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 `desktop rule-matches` et `desktop hyprctl rulematches` lisent
 `/system/desktop-rules.conf` et indiquent quelles regles `windowrulev2`
@@ -227,9 +227,9 @@ detaille classe/module/surface, et
 premieres apps natives comme clients tiles geres par le compositor. Le launcher
 est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
 menu demarrer permanent, ni fenetres flottantes.
-`desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
-client fullscreen/pseudo/pinned, workspaces relatifs/dynamiques `next`/`empty`,
+client fullscreen/pseudo/pinned/urgent, workspaces relatifs/dynamiques `next`/`empty`,
 workspaces nommes via `renameworkspace` puis `workspace name:<nom>`,
 restauration du focus par workspace, `movetoworkspace` qui suit le client et
 deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, ciblage
@@ -242,9 +242,11 @@ Les etats du client actif acceptent aussi des valeurs idempotentes:
 compatibilite `on|off|toggle|1|0`, ce qui evite les bascules ambigues dans les
 scripts et tests VM. `fullscreenClient` est expose en diagnostic, prepare pour
 de futurs vrais clients, mais le backend reste framebuffer VM.
+`markurgent` est un diagnostic VM pour exercer `focusurgentorlast`; ce n'est
+pas encore un signal d'urgence Wayland/wlroots venant d'une application reelle.
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
-stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned,
+stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned/urgent,
 regles appliquees au spawn, backend et workspace courant/precedent avec
 `focusHistoryID`. `desktop
 profiles` liste les profils symboliques, `desktop preset <name>` applique une

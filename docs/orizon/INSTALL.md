@@ -264,6 +264,9 @@ desktop dispatch pseudotile on
 desktop dispatch cyclenext
 desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal
+desktop dispatch focuscurrentorlast
+desktop dispatch markurgent on
+desktop dispatch focusurgentorlast
 desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster

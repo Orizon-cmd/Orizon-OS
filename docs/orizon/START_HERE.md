@@ -61,7 +61,7 @@ design note.
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
   v2 state health/counters,
   `desktop hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`, `desktop backend`, `desktop protocol`, `desktop autostart`,
-  `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, active tiling-tree diagnostics,
+  `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
 - Installed/live lifecycle is visible with `system status`; `system health`

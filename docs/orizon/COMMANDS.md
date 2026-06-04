@@ -373,7 +373,7 @@ layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `cyclenext`, `swapnext`,
+`workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
@@ -398,7 +398,7 @@ workspace tiling tree with client roles, rectangles, focus state, and
 layout, split mode, split ratio, and master ratio,
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
-and geometry for each workspace,
+urgent state, and geometry for each workspace,
 `movetoworkspace` follows the moved tiled client while `movetoworkspacesilent`
 keeps the current workspace active and restores workspace-local focus,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,

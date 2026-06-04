@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.48.0` with Hyprland-style focus-last and
+  urgent diagnostics: `focuscurrentorlast`, `focusurgentorlast`, and the
+  VM-only `markurgent` diagnostic dispatcher now exercise most-recent focus
+  history, urgent client selection, and `urgent` fields in `clients`,
+  `activewindow`, `focus-history`, `workspace-stack`, and `client-model`.
 - Added desktop package version `0.47.0` with a closer Hyprland-style
   `fullscreenstate internal client` dispatcher: Orizon now tracks compositor
   fullscreen state separately from the future client-visible fullscreen state,

@@ -222,7 +222,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.47.0` because it includes policy/config files, the persisted session
+`0.48.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -231,10 +231,10 @@ commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/l
 `hyprctl version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, split `fullscreenstate internal client`
-diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned client state,
+diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned/urgent client state,
 safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
-focus-cycle/focuswindow/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
@@ -310,7 +310,7 @@ protocol while keeping Wayland/wlroots/upstream Hyprland marked prepared-only
 and not implemented.
 Version `0.34.0` adds active tiling tree diagnostics with
 `desktop layout-tree` and `desktop hyprctl layouttree`. The output reports
-workspace root geometry, client roles, rectangles, fullscreen/pseudo/pinned
+workspace root geometry, client roles, rectangles, fullscreen/pseudo/pinned/urgent
 state, focus status, `focusHistoryID`, and the explicit tiling-only
 `manual-drag=no` boundary.
 Version `0.35.0` adds read-only Hyprland config tracing with
@@ -319,7 +319,7 @@ Version `0.35.0` adds read-only Hyprland config tracing with
 each parsed key.
 Version `0.36.0` adds `desktop client-model` and `desktop hyprctl clientmodel`
 as read-only diagnostics for the current Hyprland-style client/workspace/focus
-state graph, including fullscreen/pseudo/pinned state, rules runtime, stable
+state graph, including fullscreen/pseudo/pinned/urgent state, rules runtime, stable
 client addresses, backend truth, and the `manual-drag=no` boundary.
 Version `0.37.0` adds `desktop rule-matches` and `desktop hyprctl rulematches`
 as read-only diagnostics for `/system/desktop-rules.conf`, mapping

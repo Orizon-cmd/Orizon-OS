@@ -128,6 +128,9 @@ desktop dispatch cyclenext
 desktop dispatch swapnext
 desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal
+desktop dispatch focuscurrentorlast
+desktop dispatch markurgent on
+desktop dispatch focusurgentorlast
 desktop focus-window title:Terminal
 desktop dispatch swapwindow l
 desktop dispatch swapwithmaster
@@ -391,7 +394,7 @@ values without enabling floating windows or manual dragging. It is
 Hyprland-style compositor UX, not upstream Wayland/wlroots.
 `desktop layout-tree` and `desktop hyprctl layouttree` are the active tiling
 diagnostic: they print the current workspace root area, split/master ratios,
-`nmaster`, client roles, rectangles, focused client, fullscreen/pseudo/pinned flags, and
+`nmaster`, client roles, rectangles, focused client, fullscreen/pseudo/pinned/urgent flags, and
 `focusHistoryID`. The output explicitly reports `manual-drag=no` and
 `floating-tree=no`; it is not a floating scene graph and it is not a Wayland
 scene graph yet. In `monocle`, only the active tiled client is rendered; other
@@ -427,10 +430,11 @@ re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch renameworkspace <target> <name>`, `desktop dispatch
 workspace name:<name>`, `desktop dispatch movetoworkspace <target>`, `desktop dispatch movetoworkspacesilent <target>`,
 `desktop dispatch movefocus l|r|u|d|next|prev`, and
-`desktop dispatch focuswindow <id|0xaddr|class:app|title:text>`
+`desktop dispatch focuswindow <id|0xaddr|class:app|title:text>`,
+`desktop dispatch focuscurrentorlast`, and `desktop dispatch focusurgentorlast`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
-`pseudotile`, `pin`, `cyclenext`, and `swapnext`, directional
+`pseudotile`, `pin`, `markurgent`, `cyclenext`, and `swapnext`, directional
 `swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases.
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` set or toggle the active
@@ -457,7 +461,7 @@ value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
 Orizon addresses, `at/size` geometry, workspace graph, rules runtime, backend
-boundary, fullscreen/pseudo/pinned flags, `fullscreenClient`, current
+boundary, fullscreen/pseudo/pinned/urgent flags, `fullscreenClient`, current
 `rendered=yes/no` state, and
 Hyprland-style `focusHistoryID`.
 `desktop hyprctl clientmodel` mirrors this read-only state graph.
@@ -469,8 +473,11 @@ style actions are ignored and reported, not applied. This is still not the
 upstream Hyprland regex/Wayland engine. The model is intentionally no-drag: clients are placed by
 `dwindle`, `master`, or `monocle`, not by mouse-moving windows around like a
 traditional desktop. The active client can still be controlled through
-dispatcher state such as fullscreen/pseudo/pinned, which is closer to the
-Hyprland mental model than manual window dragging.
+dispatcher state such as fullscreen/pseudo/pinned. `markurgent` is provided as
+a VM-only diagnostic so `focusurgentorlast` can be tested before real
+Wayland/client urgency exists; it does not claim upstream Hyprland or wlroots
+client signaling is implemented. This is closer to the Hyprland mental model
+than manual window dragging.
 
 `desktop workspace` shows the current Hyprland-style workspace state.
 `desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>` switches the active workspace.
@@ -504,6 +511,9 @@ desktop dispatch movetoworkspace <target> moves and follows the active tiled cli
 desktop dispatch movetoworkspacesilent <target> moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
 desktop dispatch focuswindow <target> focuses by id/address/class/title
+desktop dispatch focuscurrentorlast focuses the previous focus-history client
+desktop dispatch focusurgentorlast focuses an urgent client, then falls back to last
+desktop dispatch markurgent [on|off|toggle] [target] marks VM diagnostic urgency
 desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active workspace layout
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state
