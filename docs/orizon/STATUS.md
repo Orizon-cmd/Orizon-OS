@@ -61,6 +61,8 @@ work.
   dispatcher-style
   movetoworkspace/movetoworkspacesilent with follow-vs-silent workspace focus
   restore plus optional `workspace,window` selectors, tag selectors and
+  tiled special workspace scratchpad dispatchers
+  `togglespecialworkspace [name]` plus `movetoworkspace special[:name]`,
   VM-only `tagwindow` diagnostics, movefocus directionnel/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/reset/preselect/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
@@ -74,7 +76,7 @@ work.
   with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
   runtime keyword/getoption/reload inspection, persistent render controls for
   focus ring, shadow range, animation tick budget/curve and render profile,
-  split/master ratio controls plus layout reset/preselect recovery, per-workspace layout-state diagnostics, workspace-stack master/focus/urgent diagnostics, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focushistory/workspacestack/cursorpos diagnostics, compact VM-safe `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` JSON diagnostics, pointer diagnostics, read-only config trace diagnostics for apply/prepare/ignore parser decisions, software focus ring, ticked focus/workspace/layout transition state, active tiling-tree diagnostics with client roles/rectangles/manual-drag boundary, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
+  split/master ratio controls plus layout reset/preselect recovery, per-workspace layout-state diagnostics, workspace-stack master/focus/urgent/special diagnostics, active F9/F10/F11 keyboard submaps, explicit orientation hints, version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/submap/configerrors/config-trace/rollinglog/focushistory/workspacestack/cursorpos diagnostics, compact VM-safe `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` JSON diagnostics including `special`/`specialWorkspace`, pointer diagnostics, read-only config trace diagnostics for apply/prepare/ignore parser decisions, software focus ring, ticked focus/workspace/layout transition state, active tiling-tree diagnostics with client roles/rectangles/manual-drag boundary, tiled client diagnostics with stable addresses, geometry, activewindow and focusHistoryID, and
   `dwindle`/`master`/`monocle` placement in the
   Orizon compositor. `desktop backend` and `desktop protocol` document the
   current `framebuffer-vm` backend and internal `orizon-desktop-ipc-v0`

@@ -244,10 +244,11 @@ detaille classe/module/surface, et
 premieres apps natives comme clients tiles geres par le compositor. Le launcher
 est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
 menu demarrer permanent, ni fenetres flottantes.
-`desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned/urgent, workspaces relatifs/dynamiques `next`/`empty`,
-workspaces nommes via `renameworkspace` puis `workspace name:<nom>`,
+workspaces nommes via `renameworkspace` puis `workspace name:<nom>`, scratchpad
+special via `togglespecialworkspace [nom]` et `movetoworkspace special[:nom]`,
 restauration du focus par workspace, `movetoworkspace` qui suit le client et
 deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, ciblage
 direct de client par `id`, adresse `0x...`, `class:`, `title:` ou `tag:`, layouts
@@ -257,6 +258,10 @@ Les dispatchers de deplacement acceptent aussi un selecteur de client facon
 Hyprland (`desktop dispatch movetoworkspacesilent 2,class:orizon-settings` ou
 `desktop dispatch movetoworkspace active,activewindow`) pour deplacer une
 fenetre tile ciblee sans drag manuel ni bureau flottant.
+Le scratchpad special reste tiling: `desktop dispatch movetoworkspacesilent
+special:magic,activewindow` cache le client dans l'overlay special, puis
+`desktop dispatch togglespecialworkspace magic` l'affiche/masque sur le
+workspace courant sans activer de flottant ni de deplacement manuel.
 `desktop dispatch tagwindow +settings class:orizon-settings` ajoute un tag
 diagnostic VM-safe, ensuite reutilisable avec `focuswindow tag:settings` ou
 `movetoworkspace 2,tag:settings`.

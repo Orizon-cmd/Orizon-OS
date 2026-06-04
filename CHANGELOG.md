@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.55.0` with a VM-safe Hyprland-style tiled
+  special workspace/scratchpad: `movetoworkspace special[:name]` and
+  `movetoworkspacesilent special[:name]` can move a managed client into a
+  named special overlay, while `togglespecialworkspace [name]` shows or hides
+  it over the current workspace. Client/workspace diagnostics and compact
+  `hyprctl -j` output now expose `special` and `specialWorkspace`. This keeps
+  the compositor tiling-only: no floating windows, no manual drag, no taskbar,
+  no Waybar, and no upstream Wayland/wlroots Hyprland claim.
 - Added desktop package version `0.54.0` with VM-safe Hyprland-style `source`
   resolution. `source = ~/.config/hypr/orizon-local.conf` now creates and
   loads a local override file, applies its safe `env`/`workspace` hints during

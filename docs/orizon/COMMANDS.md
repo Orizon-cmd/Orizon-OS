@@ -255,6 +255,8 @@ desktop dispatch workspace e+1
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
+desktop dispatch movetoworkspacesilent special:magic,activewindow
+desktop dispatch togglespecialworkspace magic
 desktop dispatch tagwindow +settings class:orizon-settings
 desktop dispatch focuswindow tag:settings
 desktop dispatch movetoworkspacesilent 2,tag:settings
@@ -397,7 +399,7 @@ Hyprland-style runtime keyword, and supported settings keywords are written
 back into `/home/orizon/.config/hypr/orizon-hypr.conf` so a later
 `desktop hyprctl reload` keeps the value. `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
+`workspace`, `togglespecialworkspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
@@ -427,12 +429,14 @@ diagnostic data, not real Wayland/wlroots client state.
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
 urgent state, and geometry for each workspace,
-`movetoworkspace <workspace>[,<window>]` follows the moved tiled client while
-`movetoworkspacesilent <workspace>[,<window>]` keeps the current workspace
+`movetoworkspace <workspace|special[:name]>[,<window>]` follows the moved tiled client while
+`movetoworkspacesilent <workspace|special[:name]>[,<window>]` keeps the current workspace
 active and restores workspace-local focus; window selectors accept `id`,
 `0xaddress`, `class:app`, `title:text`, `tag:name`, or `activewindow`,
 workspace targets accept Hyprland-style `r+/-n`/`r~n` including empty slots and
-single-monitor VM `m/e +/-n`/`m/e ~n` open-workspace selectors,
+single-monitor VM `m/e +/-n`/`m/e ~n` open-workspace selectors, and
+`special[:name]` for a tiled scratchpad overlay toggled by
+`togglespecialworkspace [name]`,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

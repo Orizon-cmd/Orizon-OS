@@ -670,6 +670,22 @@ def run_ssh_checks(
         ("desktop windows", "Orizon desktop windows"),
         ("desktop clients", "focusHistoryID"),
         ("desktop activewindow", "focusHistoryID"),
+        (
+            "desktop dispatch movetoworkspacesilent special:magic,activewindow",
+            "special:magic",
+        ),
+        ("desktop clients", "special=yes"),
+        ("desktop hyprctl -j clients", '"special":true'),
+        (
+            "desktop dispatch togglespecialworkspace magic",
+            'visible name="special:magic"',
+        ),
+        ("desktop activewindow", "special: true"),
+        ("desktop hyprctl -j activeworkspace", '"specialVisible":true'),
+        (
+            "desktop dispatch togglespecialworkspace magic",
+            'hidden name="special:magic"',
+        ),
         ("desktop workspace", "Orizon desktop workspaces"),
         ("desktop dispatch movetoworkspace 2", "moved active to workspace 2"),
         ("desktop hyprctl activeworkspace", "id: 2"),

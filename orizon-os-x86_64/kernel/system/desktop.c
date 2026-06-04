@@ -147,6 +147,8 @@ static const char *desktop_user_config =
     "bind = $mod SHIFT, 1, movetoworkspace, 1\n"
     "bind = $mod SHIFT, 2, movetoworkspace, 2\n"
     "bind = $mod SHIFT, 3, movetoworkspace, 3\n"
+    "bind = $mod, grave, togglespecialworkspace, magic\n"
+    "bind = $mod SHIFT, grave, movetoworkspacesilent, special:magic\n"
     "bind = F1, exec, desktop open terminal\n"
     "bind = F2, killactive\n"
     "bind = F4, fullscreen\n"
@@ -2110,6 +2112,8 @@ static int desktop_write_user_config_from_state(
            "bind = $mod SHIFT, 1, movetoworkspace, 1\n"
            "bind = $mod SHIFT, 2, movetoworkspace, 2\n"
            "bind = $mod SHIFT, 3, movetoworkspace, 3\n"
+           "bind = $mod, grave, togglespecialworkspace, magic\n"
+           "bind = $mod SHIFT, grave, movetoworkspacesilent, special:magic\n"
            "bind = F1, exec, desktop open terminal\n"
            "bind = F2, killactive\n"
            "bind = F4, fullscreen\n"
@@ -4207,7 +4211,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -4219,7 +4223,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
-                 "windows: desktop windows | desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | desktop dispatch renameworkspace <target> <name> | desktop dispatch movetoworkspace <target>[,<window>]\n");
+                 "windows: desktop windows | desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | desktop dispatch togglespecialworkspace [name] | desktop dispatch renameworkspace <target> <name> | desktop dispatch movetoworkspace <target|special[:name]>[,<window>]\n");
 }
 
 void orizon_desktop_format_session_state(char *out, size_t out_size) {
@@ -4887,6 +4891,10 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, "F6: dispatch cyclenext\n");
   desktop_append(out, out_size, &used, "F7/F8: dispatch workspace +1/-1\n");
   desktop_append(out, out_size, &used,
+                 "SUPER+grave: dispatch togglespecialworkspace magic\n");
+  desktop_append(out, out_size, &used,
+                 "SUPER+Shift+grave: dispatch movetoworkspacesilent special:magic\n");
+  desktop_append(out, out_size, &used,
                  "F9/F10/F11/F12: submap resize/move/launch/default\n");
   desktop_append(out, out_size, &used,
                  "Enter / Space on empty focus: dispatch exec terminal\n");
@@ -4903,9 +4911,9 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "SUPER+F: focus toggle placeholder; SUPER+P: profile list placeholder\n");
   desktop_append(out, out_size, &used,
-                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; dispatch supports next/empty/+/-n and optional workspace,window selectors\n");
+                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; SUPER+grave toggles special scratchpad; dispatch supports next/empty/special[:name]/+/-n and optional workspace,window selectors\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus l/r/u/d | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | togglespecialworkspace [name] | movefocus l/r/u/d | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

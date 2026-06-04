@@ -238,7 +238,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.54.0` because it includes policy/config files, the persisted session
+`0.55.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -256,6 +256,8 @@ tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`,
 focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty plus `r/m/e` prefixed targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+Hyprland-style tiled special workspace dispatchers `togglespecialworkspace
+[name]` and `movetoworkspace special[:name]` without floating/manual drag,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
@@ -363,6 +365,13 @@ without adding any bar/taskbar now.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.
+Version `0.55.0` adds a VM-safe tiled special workspace/scratchpad model:
+`desktop dispatch movetoworkspacesilent special:magic,activewindow` hides a
+managed client in the named special overlay and `desktop dispatch
+togglespecialworkspace magic` shows or hides it over the current workspace.
+Diagnostics expose `special`/`specialWorkspace` in clients, activewindow,
+workspaces, workspace-stack, client-model, and compact JSON. It does not add
+floating windows, mouse dragging, a taskbar, or upstream Hyprland/wlroots.
 Version `0.53.0` adds VM-safe Hyprland-style layout reset and preselect
 dispatchers: `desktop dispatch layoutmsg reset` restores active workspace
 layout defaults, `splitratio reset`, `masterratio reset`, and `nmaster reset`

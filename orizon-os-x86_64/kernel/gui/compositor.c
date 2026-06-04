@@ -47,6 +47,7 @@ extern void serial_puts(const char *s);
 #define DESKTOP_DEFAULT_SPLIT_RATIO 50
 #define DESKTOP_DEFAULT_MASTER_RATIO 58
 #define DESKTOP_DEFAULT_MASTER_COUNT 1
+#define DESKTOP_SPECIAL_DEFAULT_NAME "default"
 
 #define COLOR_BG_TOP MAKE_COLOR(10, 14, 24)
 #define COLOR_BG_BOTTOM MAKE_COLOR(22, 28, 42)
@@ -81,6 +82,10 @@ static int desktop_workspace_count = DESKTOP_MAX_WORKSPACES;
 static int desktop_active_workspace = 1;
 static int desktop_previous_workspace = 1;
 static int desktop_terminal_workspace = 1;
+static int desktop_special_visible = 0;
+static int desktop_special_previous_workspace = 1;
+static int desktop_special_last_focused_client_id = 0;
+static char desktop_special_name[16] = DESKTOP_SPECIAL_DEFAULT_NAME;
 static int desktop_layout_mode = 0; /* 0=dwindle, 1=master, 2=monocle */
 static int desktop_split_mode = 0; /* 0=auto, 1=vertical, 2=horizontal */
 static int desktop_split_ratio_percent = DESKTOP_DEFAULT_SPLIT_RATIO;
@@ -111,6 +116,7 @@ typedef struct {
   int fullscreen_state_client;
   int pseudo;
   int pinned;
+  int special;
   int urgent;
   int focus_history_id;
   uint64_t mapped_generation;
@@ -118,6 +124,7 @@ typedef struct {
   char title[48];
   char app_id[32];
   char tag[32];
+  char special_workspace[16];
   int rule_match_count;
   int rule_apply_count;
   char rule_actions[80];
@@ -160,6 +167,8 @@ static const char *boot_stage_hint = "Starting Orizon shell";
 
 static int desktop_submap_is_default(void);
 static void desktop_apply_spawn_rules_to_client(int idx);
+static int desktop_client_index_by_id(int id);
+static void desktop_focus_history_compact(void);
 static void desktop_load_layout_state_for_workspace(int workspace);
 static void desktop_save_active_layout_state(void);
 
@@ -420,6 +429,52 @@ static int desktop_copy_safe_tag(char *out, size_t out_size,
   return desktop_workspace_copy_safe_name(out, out_size, value);
 }
 
+static int desktop_special_copy_name(char *out, size_t out_size,
+                                     const char *value) {
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  if (!value || !value[0]) {
+    snprintf(out, out_size, "%s", DESKTOP_SPECIAL_DEFAULT_NAME);
+    return 0;
+  }
+  return desktop_workspace_copy_safe_name(out, out_size, value);
+}
+
+static void desktop_special_label(const char *name, char *out,
+                                  size_t out_size) {
+  const char *n = name && name[0] ? name : DESKTOP_SPECIAL_DEFAULT_NAME;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  if (strcmp(n, DESKTOP_SPECIAL_DEFAULT_NAME) == 0) {
+    snprintf(out, out_size, "%s", "special");
+  } else {
+    snprintf(out, out_size, "special:%s", n);
+  }
+}
+
+static int desktop_parse_special_workspace_name(const char *value, char *out,
+                                                size_t out_size) {
+  const char *v = value ? value : "";
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  while (*v == ' ' || *v == '\t') {
+    v++;
+  }
+  if (strncmp(v, "special:", 8) == 0) {
+    return desktop_special_copy_name(out, out_size, v + 8);
+  }
+  if (strcmp(v, "special") == 0 || strcmp(v, "specialworkspace") == 0 ||
+      strcmp(v, "scratchpad") == 0) {
+    return desktop_special_copy_name(out, out_size, NULL);
+  }
+  return -1;
+}
+
 static int desktop_workspace_find_named(const char *name) {
   if (!name || !name[0]) {
     return -1;
@@ -430,6 +485,77 @@ static int desktop_workspace_find_named(const char *name) {
     }
   }
   return -1;
+}
+
+static int desktop_special_name_matches(const char *a, const char *b) {
+  const char *left = a && a[0] ? a : DESKTOP_SPECIAL_DEFAULT_NAME;
+  const char *right = b && b[0] ? b : DESKTOP_SPECIAL_DEFAULT_NAME;
+
+  return strcmp(left, right) == 0;
+}
+
+static int desktop_client_special_visible(const desktop_client_t *client) {
+  return client && client->visible && client->special &&
+         desktop_special_visible &&
+         desktop_special_name_matches(client->special_workspace,
+                                      desktop_special_name);
+}
+
+static void desktop_update_special_hidden_states(void) {
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (!desktop_clients[i].visible) {
+      continue;
+    }
+    if (desktop_clients[i].special) {
+      desktop_clients[i].hidden =
+          desktop_client_special_visible(&desktop_clients[i]) ? 0 : 1;
+    } else {
+      desktop_clients[i].hidden = 0;
+    }
+  }
+}
+
+static int desktop_last_special_client_index(const char *name) {
+  int idx;
+
+  if (desktop_special_last_focused_client_id > 0) {
+    idx = desktop_client_index_by_id(desktop_special_last_focused_client_id);
+    if (idx >= 0 && desktop_clients[idx].special &&
+        desktop_special_name_matches(desktop_clients[idx].special_workspace,
+                                     name)) {
+      return idx;
+    }
+  }
+  desktop_focus_history_compact();
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    idx = desktop_client_index_by_id(desktop_focus_history[i]);
+    if (idx >= 0 && desktop_clients[idx].special &&
+        desktop_special_name_matches(desktop_clients[idx].special_workspace,
+                                     name)) {
+      return idx;
+    }
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && desktop_clients[i].special &&
+        desktop_special_name_matches(desktop_clients[i].special_workspace,
+                                     name)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static int desktop_special_client_count(const char *name) {
+  int count = 0;
+
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible && desktop_clients[i].special &&
+        desktop_special_name_matches(desktop_clients[i].special_workspace,
+                                     name)) {
+      count++;
+    }
+  }
+  return count;
 }
 
 static int desktop_workspace_rename(int workspace, const char *name,
@@ -1456,6 +1582,8 @@ static int desktop_parse_workspace_rename_arg(const char *value, int *workspace,
 }
 
 static int desktop_parse_workspace_window_arg(const char *value, int *workspace,
+                                              char *special_name,
+                                              size_t special_name_size,
                                               char *selector,
                                               size_t selector_size) {
   char target_buf[64];
@@ -1463,9 +1591,12 @@ static int desktop_parse_workspace_window_arg(const char *value, int *workspace,
   size_t selector_len = 0;
   const char *v = value ? value : "";
 
-  if (!workspace || !selector || selector_size == 0) {
+  if (!workspace || !selector || selector_size == 0 || !special_name ||
+      special_name_size == 0) {
     return -1;
   }
+  *workspace = 0;
+  special_name[0] = '\0';
   selector[0] = '\0';
   while (*v == ' ' || *v == '\t') {
     v++;
@@ -1482,7 +1613,9 @@ static int desktop_parse_workspace_window_arg(const char *value, int *workspace,
     return -1;
   }
   target_buf[target_len] = '\0';
-  if (desktop_parse_workspace_arg(target_buf, workspace) < 0) {
+  if (desktop_parse_special_workspace_name(target_buf, special_name,
+                                           special_name_size) < 0 &&
+      desktop_parse_workspace_arg(target_buf, workspace) < 0) {
     return -1;
   }
   v += target_len;
@@ -1564,12 +1697,20 @@ static int desktop_client_on_workspace(const desktop_client_t *client,
   if (!client || !client->visible) {
     return 0;
   }
+  if (client->special) {
+    return desktop_client_special_visible(client) &&
+           workspace == desktop_active_workspace;
+  }
+  if (client->hidden) {
+    return 0;
+  }
   return client->pinned || client->workspace == workspace;
 }
 
 static int desktop_client_local_to_workspace(const desktop_client_t *client,
                                              int workspace) {
-  if (!client || !client->visible || client->pinned) {
+  if (!client || !client->visible || client->pinned || client->special ||
+      client->hidden) {
     return 0;
   }
   return client->workspace == workspace;
@@ -1599,6 +1740,10 @@ static void desktop_workspace_record_focus_index(int idx) {
 
   if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS || !desktop_clients[idx].visible ||
       desktop_clients[idx].id <= 0) {
+    return;
+  }
+  if (desktop_clients[idx].special) {
+    desktop_special_last_focused_client_id = desktop_clients[idx].id;
     return;
   }
   workspace = desktop_clients[idx].pinned ? desktop_active_workspace
@@ -1851,11 +1996,13 @@ static int desktop_spawn_client(const char *title, const char *app_id,
       desktop_clients[i].fullscreen_state_client = 0;
       desktop_clients[i].pseudo = 0;
       desktop_clients[i].pinned = 0;
+      desktop_clients[i].special = 0;
       desktop_clients[i].urgent = 0;
       desktop_clients[i].focus_history_id = -1;
       desktop_clients[i].mapped_generation = desktop_client_serial++;
       desktop_clients[i].focus_generation = 0;
       desktop_clients[i].tag[0] = '\0';
+      desktop_clients[i].special_workspace[0] = '\0';
       desktop_clients[i].rule_match_count = 0;
       desktop_clients[i].rule_apply_count = 0;
       desktop_clients[i].rule_actions[0] = '\0';
@@ -2144,6 +2291,30 @@ static int desktop_focus_window_query(const char *query, char *out,
     }
     return -1;
   }
+  if (desktop_clients[idx].special) {
+    char label[32];
+    desktop_special_visible = 1;
+    desktop_special_previous_workspace = desktop_active_workspace;
+    snprintf(desktop_special_name, sizeof(desktop_special_name), "%s",
+             desktop_clients[idx].special_workspace[0]
+                 ? desktop_clients[idx].special_workspace
+                 : DESKTOP_SPECIAL_DEFAULT_NAME);
+    desktop_update_special_hidden_states();
+    desktop_launcher_visible = 0;
+    desktop_set_focused_client_index(idx);
+    desktop_sync_terminal_compat();
+    desktop_start_transition("focuswindow-special", previous_workspace,
+                             desktop_active_workspace);
+    desktop_special_label(desktop_special_name, label, sizeof(label));
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: focuswindow ok target=\"%s\" address=0x%x id=%d class=%s title=\"%s\" special=%s workspace=%d switched=no tiled=yes\n",
+               q, desktop_client_address(&desktop_clients[idx]),
+               desktop_clients[idx].id, desktop_clients[idx].app_id,
+               desktop_clients[idx].title, label, desktop_active_workspace);
+    }
+    return 0;
+  }
   if (!desktop_clients[idx].pinned &&
       desktop_clients[idx].workspace != desktop_active_workspace) {
     desktop_save_active_layout_state();
@@ -2245,6 +2416,21 @@ static int desktop_focus_client_index_follow(int idx, const char *reason,
   }
   if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS || !desktop_clients[idx].visible) {
     return -1;
+  }
+  if (desktop_clients[idx].special) {
+    desktop_special_visible = 1;
+    desktop_special_previous_workspace = desktop_active_workspace;
+    snprintf(desktop_special_name, sizeof(desktop_special_name), "%s",
+             desktop_clients[idx].special_workspace[0]
+                 ? desktop_clients[idx].special_workspace
+                 : DESKTOP_SPECIAL_DEFAULT_NAME);
+    desktop_update_special_hidden_states();
+    desktop_launcher_visible = 0;
+    desktop_set_focused_client_index(idx);
+    desktop_sync_terminal_compat();
+    desktop_start_transition(reason ? reason : "focuswindow-special",
+                             previous_workspace, desktop_active_workspace);
+    return 0;
   }
   if (!desktop_clients[idx].pinned &&
       desktop_clients[idx].workspace != desktop_active_workspace) {
@@ -3955,6 +4141,8 @@ int gui_desktop_switch_workspace(int workspace) {
   if (workspace < 1 || workspace > desktop_workspace_count) {
     return -1;
   }
+  desktop_special_visible = 0;
+  desktop_update_special_hidden_states();
   desktop_save_active_layout_state();
   desktop_workspace_mark_used(workspace);
   if (workspace != desktop_active_workspace) {
@@ -3974,6 +4162,111 @@ int gui_desktop_switch_workspace(int workspace) {
   return 0;
 }
 
+static int desktop_toggle_special_workspace(const char *name, char *out,
+                                            size_t out_size) {
+  char safe[sizeof(desktop_special_name)];
+  char label[32];
+  int idx;
+  int showing;
+
+  if (desktop_parse_special_workspace_name(name, safe, sizeof(safe)) < 0 &&
+      desktop_special_copy_name(safe, sizeof(safe), name) < 0) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: togglespecialworkspace expects a safe name\n");
+    }
+    return -1;
+  }
+  showing = desktop_special_visible &&
+            desktop_special_name_matches(desktop_special_name, safe);
+  if (showing) {
+    desktop_special_visible = 0;
+    desktop_update_special_hidden_states();
+    idx = desktop_client_index_by_id(desktop_focused_client_id);
+    if (idx >= 0 && desktop_clients[idx].special) {
+      desktop_restore_focus_for_workspace(desktop_active_workspace);
+    }
+    desktop_start_transition("special-hide", desktop_active_workspace,
+                             desktop_active_workspace);
+    desktop_special_label(safe, label, sizeof(label));
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: togglespecialworkspace hidden name=\"%s\" workspace=%d tiled=yes floating=no\n",
+               label, desktop_active_workspace);
+    }
+    return 0;
+  }
+
+  desktop_special_visible = 1;
+  desktop_special_previous_workspace = desktop_active_workspace;
+  snprintf(desktop_special_name, sizeof(desktop_special_name), "%s", safe);
+  desktop_update_special_hidden_states();
+  idx = desktop_last_special_client_index(safe);
+  if (idx >= 0) {
+    desktop_set_focused_client_index(idx);
+  }
+  desktop_start_transition("special-show", desktop_active_workspace,
+                           desktop_active_workspace);
+  desktop_special_label(safe, label, sizeof(label));
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "desktop dispatch: togglespecialworkspace visible name=\"%s\" workspace=%d clients=%d focused=0x%x tiled=yes floating=no\n",
+             label, desktop_active_workspace,
+             desktop_special_client_count(safe),
+             idx >= 0 ? desktop_client_address(&desktop_clients[idx]) : 0);
+  }
+  return 0;
+}
+
+static int desktop_move_client_to_special_index(int idx, const char *name,
+                                                int follow,
+                                                int *moved_id_out) {
+  char safe[sizeof(desktop_clients[0].special_workspace)];
+  int moved_id;
+  int was_focused;
+
+  if (idx < 0 || idx >= DESKTOP_MAX_CLIENTS || !desktop_clients[idx].visible) {
+    return -1;
+  }
+  if (desktop_special_copy_name(safe, sizeof(safe), name) < 0) {
+    return -1;
+  }
+  was_focused = desktop_clients[idx].id == desktop_focused_client_id;
+  if (!desktop_clients[idx].special) {
+    desktop_clients[idx].last_workspace =
+        desktop_clients[idx].workspace > 0 ? desktop_clients[idx].workspace
+                                           : desktop_active_workspace;
+  }
+  desktop_clients[idx].special = 1;
+  snprintf(desktop_clients[idx].special_workspace,
+           sizeof(desktop_clients[idx].special_workspace), "%s", safe);
+  moved_id = desktop_clients[idx].id;
+  desktop_special_last_focused_client_id = moved_id;
+  if (moved_id_out) {
+    *moved_id_out = moved_id;
+  }
+  if (follow) {
+    desktop_special_visible = 1;
+    desktop_special_previous_workspace = desktop_active_workspace;
+    snprintf(desktop_special_name, sizeof(desktop_special_name), "%s", safe);
+    desktop_update_special_hidden_states();
+    desktop_set_focused_client_index(idx);
+    desktop_start_transition("movetoworkspace-special",
+                             desktop_active_workspace,
+                             desktop_active_workspace);
+  } else {
+    desktop_update_special_hidden_states();
+    if (was_focused) {
+      desktop_restore_focus_for_workspace(desktop_active_workspace);
+    }
+    desktop_start_transition("movetoworkspacesilent-special",
+                             desktop_active_workspace,
+                             desktop_active_workspace);
+  }
+  desktop_sync_terminal_compat();
+  return 0;
+}
+
 static int desktop_move_client_to_workspace_index(int idx, int workspace,
                                                   int follow,
                                                   int *moved_id_out) {
@@ -3989,6 +4282,9 @@ static int desktop_move_client_to_workspace_index(int idx, int workspace,
   }
   was_focused = desktop_clients[idx].id == desktop_focused_client_id;
   desktop_clients[idx].last_workspace = desktop_clients[idx].workspace;
+  desktop_clients[idx].special = 0;
+  desktop_clients[idx].special_workspace[0] = '\0';
+  desktop_clients[idx].hidden = 0;
   desktop_clients[idx].workspace = workspace;
   moved_id = desktop_clients[idx].id;
   if (moved_id_out) {
@@ -4063,11 +4359,13 @@ int gui_desktop_close_active_client(void) {
   desktop_clients[idx].fullscreen_state_client = 0;
   desktop_clients[idx].pseudo = 0;
   desktop_clients[idx].pinned = 0;
+  desktop_clients[idx].special = 0;
   desktop_clients[idx].urgent = 0;
   desktop_clients[idx].focus_history_id = -1;
   desktop_clients[idx].mapped_generation = 0;
   desktop_clients[idx].focus_generation = 0;
   desktop_clients[idx].tag[0] = '\0';
+  desktop_clients[idx].special_workspace[0] = '\0';
   desktop_clients[idx].rule_match_count = 0;
   desktop_clients[idx].rule_apply_count = 0;
   desktop_clients[idx].rule_actions[0] = '\0';
@@ -4104,7 +4402,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
-               "workspace <n|name:name|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | renameworkspace <target> <name> | movetoworkspace <target>[,<window>] | movetoworkspacesilent <target>[,<window>] | "
+               "workspace <n|name:name|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | togglespecialworkspace [name] | renameworkspace <target> <name> | movetoworkspace <target|special[:name]>[,<window>] | movetoworkspacesilent <target|special[:name]>[,<window>] | "
                "movefocus <l|r|u|d|next|prev> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | tagwindow <tag> [target] | swapwindow <l|r|u|d|next|prev> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
@@ -4143,6 +4441,11 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     }
     return -1;
   }
+  if (strcmp(dispatcher, "togglespecialworkspace") == 0 ||
+      strcmp(dispatcher, "specialworkspace") == 0 ||
+      strcmp(dispatcher, "scratchpad") == 0) {
+    return desktop_toggle_special_workspace(a[0] ? a : NULL, out, out_size);
+  }
   if (strcmp(dispatcher, "renameworkspace") == 0) {
     char name[sizeof(desktop_workspaces[0].name)];
     char reason[96];
@@ -4174,17 +4477,20 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
   if (strcmp(dispatcher, "movetoworkspace") == 0 ||
       strcmp(dispatcher, "movetoworkspacesilent") == 0) {
     char selector[96];
+    char special_name[sizeof(desktop_special_name)];
     int silent = strcmp(dispatcher, "movetoworkspacesilent") == 0;
     int target = 0;
     int selected_idx;
     int moved_id = 0;
 
     selector[0] = '\0';
-    if (desktop_parse_workspace_window_arg(a, &target, selector,
+    special_name[0] = '\0';
+    if (desktop_parse_workspace_window_arg(a, &target, special_name,
+                                           sizeof(special_name), selector,
                                            sizeof(selector)) < 0) {
       if (out && out_size) {
         snprintf(out, out_size,
-                 "desktop dispatch: movetoworkspace expects active/selectable client and <1-%d|name:<name>|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n>[,<id|address|class:app|title:text|tag:name|activewindow>]\n",
+                 "desktop dispatch: movetoworkspace expects active/selectable client and <1-%d|name:<name>|empty|special[:name]|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n>[,<id|address|class:app|title:text|tag:name|activewindow>]\n",
                  desktop_workspace_count);
       }
       return -1;
@@ -4202,6 +4508,36 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                    "desktop dispatch: movetoworkspace expects active client and 1-%d, name:<name>, empty, +/-n, r/m/e +/-n or r/m/e ~n\n",
                    desktop_workspace_count);
         }
+      }
+      return -1;
+    }
+    if (special_name[0]) {
+      if (desktop_move_client_to_special_index(selected_idx, special_name,
+                                               silent ? 0 : 1,
+                                               &moved_id) == 0) {
+        char label[32];
+        int moved_idx = desktop_client_index_by_id(moved_id);
+        desktop_client_t *moved =
+            moved_idx >= 0 ? &desktop_clients[moved_idx] : NULL;
+
+        desktop_special_label(special_name, label, sizeof(label));
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   silent
+                       ? "desktop dispatch: silently moved %s to %s selector=\"%s\" address=0x%x id=%d class=%s follow=no active=%d tiled=yes floating=no\n"
+                       : "desktop dispatch: moved %s to %s selector=\"%s\" address=0x%x id=%d class=%s follow=yes active=%d tiled=yes floating=no\n",
+                   selector[0] ? "selected" : "active", label,
+                   selector[0] ? selector : "activewindow",
+                   moved ? desktop_client_address(moved) : 0,
+                   moved ? moved->id : 0,
+                   moved ? moved->app_id : "unknown",
+                   desktop_active_workspace);
+        }
+        return 0;
+      }
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: movetoworkspace failed for special workspace\n");
       }
       return -1;
     }
@@ -5697,6 +6033,7 @@ static void desktop_json_append_client(char *out, size_t out_size, size_t *used,
   int rw = 0;
   int rh = 0;
   const desktop_client_t *client;
+  char special_label[32];
 
   if (!out || !used || idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
       !desktop_clients[idx].visible) {
@@ -5704,6 +6041,8 @@ static void desktop_json_append_client(char *out, size_t out_size, size_t *used,
   }
   client = &desktop_clients[idx];
   desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+  desktop_special_label(client->special_workspace, special_label,
+                        sizeof(special_label));
   snprintf(line, sizeof(line),
            "{\"address\":\"0x%x\",\"id\":%d,\"mapped\":%s,\"hidden\":%s,"
            "\"at\":[%d,%d],\"size\":[%d,%d],\"workspace\":{\"id\":%d,\"name\":",
@@ -5725,6 +6064,12 @@ static void desktop_json_append_client(char *out, size_t out_size, size_t *used,
   desktop_json_append_raw(out, out_size, used, ",\"tag\":");
   desktop_json_append_string(out, out_size, used,
                              client->tag[0] ? client->tag : "");
+  desktop_json_append_raw(out, out_size, used, ",\"special\":");
+  desktop_json_append_raw(out, out_size, used,
+                          client->special ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, ",\"specialWorkspace\":");
+  desktop_json_append_string(out, out_size, used,
+                             client->special ? special_label : "");
   desktop_json_append_raw(out, out_size, used, ",\"tags\":");
   if (client->tag[0]) {
     desktop_json_append_raw(out, out_size, used, "[");
@@ -5755,6 +6100,7 @@ static void desktop_json_append_client(char *out, size_t out_size, size_t *used,
 static void desktop_json_append_workspace(char *out, size_t out_size,
                                           size_t *used, int workspace) {
   char line[512];
+  char special_label[32];
   int count = desktop_client_count_on_workspace(workspace);
   int local_count = desktop_workspace_local_client_count(workspace);
   int last_idx = desktop_last_focused_index_on_workspace(workspace);
@@ -5769,6 +6115,8 @@ static void desktop_json_append_workspace(char *out, size_t out_size,
     }
   }
 
+  desktop_special_label(desktop_special_name, special_label,
+                        sizeof(special_label));
   snprintf(line, sizeof(line), "{\"id\":%d,\"name\":", workspace);
   desktop_json_append_raw(out, out_size, used, line);
   desktop_json_append_string(out, out_size, used,
@@ -5787,8 +6135,7 @@ static void desktop_json_append_workspace(char *out, size_t out_size,
   snprintf(line, sizeof(line),
            ",\"layout\":\"%s\",\"split\":\"%s\",\"splitRatio\":%d,"
            "\"masterRatio\":%d,\"nmaster\":%d,\"active\":%s,\"previous\":%s,"
-           "\"dynamic\":true,\"pinnedAware\":true,\"focusSeq\":%llu,"
-           "\"visitSeq\":%llu,\"hyprlandStyleFacade\":true}",
+           "\"specialVisible\":%s,\"specialWorkspace\":",
            desktop_layout_engine_for_workspace(workspace),
            desktop_split_mode_name_for_value(
                desktop_split_mode_for_workspace(workspace)),
@@ -5797,6 +6144,22 @@ static void desktop_json_append_workspace(char *out, size_t out_size,
            desktop_master_count_for_workspace(workspace),
            workspace == desktop_active_workspace ? "true" : "false",
            workspace == desktop_previous_workspace ? "true" : "false",
+           (workspace == desktop_active_workspace && desktop_special_visible)
+               ? "true"
+               : "false");
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(
+      out, out_size, used,
+      (workspace == desktop_active_workspace && desktop_special_visible)
+          ? special_label
+          : "");
+  snprintf(line, sizeof(line),
+           ",\"specialWindows\":%d,"
+           "\"dynamic\":true,\"pinnedAware\":true,\"focusSeq\":%llu,"
+           "\"visitSeq\":%llu,\"hyprlandStyleFacade\":true}",
+           (workspace == desktop_active_workspace && desktop_special_visible)
+               ? desktop_special_client_count(desktop_special_name)
+               : 0,
            (unsigned long long)desktop_workspaces[state_idx].focus_generation,
            (unsigned long long)desktop_workspaces[state_idx].visit_generation);
   desktop_json_append_raw(out, out_size, used, line);
@@ -5874,21 +6237,28 @@ void gui_desktop_format_activeworkspace_json(char *out, size_t out_size) {
 
 void gui_desktop_format_workspaces(char *out, size_t out_size) {
   size_t used = 0;
+  char special_label[32];
 
   if (!out || out_size == 0) {
     return;
   }
   out[0] = '\0';
+  desktop_special_label(desktop_special_name, special_label,
+                        sizeof(special_label));
   used += snprintf(out + used, out_size - used,
                    "Orizon desktop workspaces\n"
                    "active: %d\n"
                    "previous: %d\n"
                    "count: %d\n"
                    "max: %d\n"
+                   "special: visible=%s name=\"%s\" clients=%d previous-workspace=%d\n"
                    "model: dynamic workspaces with %s tiling\n"
                    "submap: %s\n",
                    desktop_active_workspace, desktop_previous_workspace,
                    desktop_workspace_count, DESKTOP_MAX_WORKSPACES,
+                   desktop_special_visible ? "yes" : "no", special_label,
+                   desktop_special_client_count(desktop_special_name),
+                   desktop_special_previous_workspace,
                    desktop_layout_engine(), desktop_submap);
   for (int i = 1; i <= desktop_workspace_count && used < out_size; i++) {
     int count = desktop_client_count_on_workspace(i);
@@ -5909,7 +6279,7 @@ void gui_desktop_format_workspaces(char *out, size_t out_size) {
         "workspace %d: name=\"%s\" state=%s clients=%d local=%d "
         "lastwindow=0x%x lasttitle=\"%s\" rememberedFocus=0x%x focusSeq=%llu visitSeq=%llu layout=%s "
         "split=%s ratio=%d master=%d nmaster=%d layoutSeq=%llu "
-        "dynamic=%s pinned-aware=yes\n",
+        "dynamic=%s pinned-aware=yes special-visible=%s special-clients=%d\n",
         i, desktop_workspace_name(i), state, count, local_count,
         last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx]) : 0,
         last_idx >= 0 ? desktop_clients[last_idx].title : "none",
@@ -5924,13 +6294,19 @@ void gui_desktop_format_workspaces(char *out, size_t out_size) {
         desktop_split_mode_name_for_value(ws_split), ws_split_ratio,
         ws_master_ratio, ws_master_count,
         (unsigned long long)desktop_workspaces[state_idx].layout_generation,
-        ws_used ? "yes" : "available");
+        ws_used ? "yes" : "available",
+        (i == desktop_active_workspace && desktop_special_visible) ? "yes"
+                                                                   : "no",
+        (i == desktop_active_workspace && desktop_special_visible)
+            ? desktop_special_client_count(desktop_special_name)
+            : 0);
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: desktop dispatch workspace <1-%d|name:name|next|empty|+1|-1|previous> | "
+             "desktop dispatch togglespecialworkspace [name] | "
              "desktop dispatch renameworkspace <target> <name> | "
-             "desktop dispatch movetoworkspace <1-%d|name:name|empty|+1|-1>[,<window>] | "
+             "desktop dispatch movetoworkspace <1-%d|name:name|empty|special[:name]|+1|-1>[,<window>] | "
              "desktop dispatch movetoworkspacesilent <target>[,<window>] | "
              "desktop dispatch submap <name|reset>\n",
              desktop_workspace_count, desktop_workspace_count);
@@ -5979,15 +6355,18 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
     int ry;
     int rw;
     int rh;
+    char special_label[32];
     if (!desktop_clients[i].visible) {
       continue;
     }
     desktop_client_rect(i, &rx, &ry, &rw, &rh);
+    desktop_special_label(desktop_clients[i].special_workspace, special_label,
+                          sizeof(special_label));
     used += snprintf(
         out + used, out_size - used,
         "client address=0x%x id=%d mapped=%s hidden=%s at=%d,%d size=%dx%d "
         "rendered=%s workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tag=%s tiled=yes floating=no "
-        "fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s pinned=%s urgent=%s focused=%s focusHistoryID=%d "
+        "special=%s specialWorkspace=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s pinned=%s urgent=%s focused=%s focusHistoryID=%d "
         "rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" "
         "lastWorkspace=%d mappedSeq=%llu focusSeq=%llu backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
@@ -6001,6 +6380,8 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id,
         desktop_clients[i].tag[0] ? desktop_clients[i].tag : "none",
+        desktop_clients[i].special ? "yes" : "no",
+        desktop_clients[i].special ? special_label : "none",
         desktop_clients[i].fullscreen_state_internal,
         desktop_clients[i].fullscreen_state_client,
         desktop_fullscreen_state_name(
@@ -6027,8 +6408,9 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
              "fullscreen [on|off|toggle] | fullscreenstate <internal 0-3|-1> <client 0-3|-1> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
              "workspace <n|name:name|next|empty|+1|-1|previous> | "
+             "togglespecialworkspace [name] | "
              "renameworkspace <target> <name> | "
-             "movetoworkspace <n|name:name|empty|+1|-1>[,<window>] | "
+             "movetoworkspace <n|name:name|empty|special[:name]|+1|-1>[,<window>] | "
              "togglesplit | layoutmsg <msg> | resizeactive <x> <y> | "
              "submap <name>\n"
              "rules: class/title/app/tag selectors applied-on-spawn via %s\n"
@@ -6047,13 +6429,17 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
   int fullscreen = 0;
   int pseudo = 0;
   int urgent = 0;
+  int special = 0;
   int active_idx;
   int used_workspaces = 0;
+  char special_label[32];
 
   if (!out || out_size == 0) {
     return;
   }
   out[0] = '\0';
+  desktop_special_label(desktop_special_name, special_label,
+                        sizeof(special_label));
   desktop_focus_history_compact();
   active_idx = desktop_focused_client_index();
   for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
@@ -6079,6 +6465,9 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
     if (desktop_clients[i].urgent) {
       urgent++;
     }
+    if (desktop_clients[i].special) {
+      special++;
+    }
   }
   for (int ws = 1; ws <= desktop_workspace_count; ws++) {
     if (desktop_workspace_is_used(ws)) {
@@ -6094,7 +6483,8 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
       "backend: framebuffer-vm protocol=orizon-desktop-ipc-v0 wayland=no wlroots=no\n"
       "layout: engine=%s configured=%s split=%s ratio=%d master=%d nmaster=%d submap=%s\n"
       "active: workspace=%d name=\"%s\" client=0x%x focusHistoryID=%d focusSeq=%llu\n"
-      "summary: clients=%d mapped=%d hidden=%d pinned=%d fullscreen=%d pseudo=%d urgent=%d workspaces-used=%d/%d\n"
+      "special: visible=%s name=\"%s\" clients=%d previous-workspace=%d\n"
+      "summary: clients=%d mapped=%d hidden=%d pinned=%d fullscreen=%d pseudo=%d special=%d urgent=%d workspaces-used=%d/%d\n"
       "rules: runtime=%s selectors=class/title/app/tag/initialClass/initialTitle/workspace/focus/pin/fullscreen spawn-apply=tile/fullscreen/pseudo/pin/tag/workspace\n",
       desktop_layout_engine(), desktop_session.layout, desktop_split_mode_name(),
       desktop_split_ratio_percent, desktop_master_ratio_percent,
@@ -6105,7 +6495,11 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
       active_idx >= 0
           ? (unsigned long long)desktop_clients[active_idx].focus_generation
           : 0ull,
-      total, mapped, hidden, pinned, fullscreen, pseudo, urgent, used_workspaces,
+      desktop_special_visible ? "yes" : "no", special_label,
+      desktop_special_client_count(desktop_special_name),
+      desktop_special_previous_workspace,
+      total, mapped, hidden, pinned, fullscreen, pseudo, special, urgent,
+      used_workspaces,
       desktop_workspace_count, ORIZON_DESKTOP_RULES_PATH);
 
   if (used < out_size) {
@@ -6146,20 +6540,25 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
     int rw;
     int rh;
     int rank;
+    char client_special_label[32];
 
     if (!desktop_clients[i].visible) {
       continue;
     }
     desktop_client_rect(i, &rx, &ry, &rw, &rh);
+    desktop_special_label(desktop_clients[i].special_workspace,
+                          client_special_label, sizeof(client_special_label));
     rank = desktop_focus_rank_for_id(desktop_clients[i].id);
     used += snprintf(
         out + used, out_size - used,
-        "client 0x%x: id=%d title=\"%s\" class=%s app=%s tag=%s workspace=%d current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s urgent=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
+        "client 0x%x: id=%d title=\"%s\" class=%s app=%s tag=%s workspace=%d special=%s specialWorkspace=%s current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s urgent=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id,
         desktop_clients[i].tag[0] ? desktop_clients[i].tag : "none",
         desktop_clients[i].workspace,
+        desktop_clients[i].special ? "yes" : "no",
+        desktop_clients[i].special ? client_special_label : "none",
         desktop_client_on_workspace(&desktop_clients[i], desktop_active_workspace)
             ? "yes"
             : "no",
@@ -6315,6 +6714,7 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
   int ry;
   int rw;
   int rh;
+  char special_label[32];
 
   if (!out || out_size == 0) {
     return;
@@ -6329,6 +6729,8 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
     return;
   }
   desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+  desktop_special_label(desktop_clients[idx].special_workspace, special_label,
+                        sizeof(special_label));
   snprintf(out, out_size,
            "activewindow:\n"
            "  address: 0x%x\n"
@@ -6341,6 +6743,8 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            "  initialTitle: %s\n"
            "  tag: %s\n"
            "  workspace: %d\n"
+           "  special: %s\n"
+           "  specialWorkspace: %s\n"
            "  at: %d,%d\n"
            "  size: %d,%d\n"
            "  floating: false\n"
@@ -6366,7 +6770,10 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            desktop_clients[idx].title, desktop_clients[idx].app_id,
            desktop_clients[idx].app_id, desktop_clients[idx].title,
            desktop_clients[idx].tag[0] ? desktop_clients[idx].tag : "none",
-           desktop_clients[idx].workspace, rx, ry, rw, rh,
+           desktop_clients[idx].workspace,
+           desktop_clients[idx].special ? "true" : "false",
+           desktop_clients[idx].special ? special_label : "none",
+           rx, ry, rw, rh,
            desktop_clients[idx].fullscreen_state_internal,
            desktop_clients[idx].fullscreen_state_client,
            desktop_clients[idx].fullscreen_state_internal,
@@ -6392,10 +6799,13 @@ void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
   int local_clients;
   int last_idx;
   int state_idx = desktop_active_workspace - 1;
+  char special_label[32];
 
   if (!out || out_size == 0) {
     return;
   }
+  desktop_special_label(desktop_special_name, special_label,
+                        sizeof(special_label));
   clients = desktop_client_count_on_workspace(desktop_active_workspace);
   local_clients =
       desktop_workspace_local_client_count(desktop_active_workspace);
@@ -6410,6 +6820,9 @@ void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
            "  windows: %d\n"
            "  local-windows: %d\n"
            "  pinned-aware: true\n"
+           "  special-visible: %s\n"
+           "  special-workspace: %s\n"
+           "  special-windows: %d\n"
            "  layout: %s\n"
            "  split: %s ratio=%d master=%d nmaster=%d\n"
            "  submap: %s\n"
@@ -6421,6 +6834,11 @@ void gui_desktop_format_activeworkspace(char *out, size_t out_size) {
            desktop_active_workspace,
            desktop_workspace_name(desktop_active_workspace),
            desktop_previous_workspace, clients, local_clients,
+           desktop_special_visible ? "true" : "false",
+           desktop_special_visible ? special_label : "none",
+           desktop_special_visible
+               ? desktop_special_client_count(desktop_special_name)
+               : 0,
            desktop_layout_engine(), desktop_split_mode_name(),
            desktop_split_ratio_percent, desktop_master_ratio_percent,
            desktop_master_count, desktop_submap,
@@ -6490,21 +6908,27 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
 void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
   size_t used = 0;
   int active_idx;
+  char special_label[32];
 
   if (!out || out_size == 0) {
     return;
   }
   out[0] = '\0';
+  desktop_special_label(desktop_special_name, special_label,
+                        sizeof(special_label));
   desktop_focus_history_compact();
   active_idx = desktop_client_index_by_id(desktop_focused_client_id);
   used += snprintf(out + used, out_size - used,
                    "Orizon desktop workspace stack\n"
                    "model: per-workspace master/stack/focus tiled order, manual-drag=no floating=no\n"
                    "active-workspace: %d name=\"%s\"\n"
+                   "special: visible=%s name=\"%s\" clients=%d\n"
                    "active-client: 0x%x\n"
                    "focus-history: most-recent-first focusHistoryID\n",
                    desktop_active_workspace,
                    desktop_workspace_name(desktop_active_workspace),
+                   desktop_special_visible ? "yes" : "no", special_label,
+                   desktop_special_client_count(desktop_special_name),
                    active_idx >= 0
                        ? desktop_client_address(&desktop_clients[active_idx])
                        : 0);
@@ -6552,10 +6976,12 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
       }
       desktop_client_rect_for_workspace(idx, ws, &rx, &ry, &rw, &rh);
       rank = desktop_focus_rank_for_id(desktop_clients[idx].id);
-      scope = desktop_clients[idx].pinned ? "pinned"
-                                          : (desktop_clients[idx].workspace == ws
-                                                 ? "local"
-                                                 : "foreign");
+      scope = desktop_clients[idx].special
+                  ? "special"
+                  : (desktop_clients[idx].pinned
+                         ? "pinned"
+                         : (desktop_clients[idx].workspace == ws ? "local"
+                                                                 : "foreign"));
       used += snprintf(
           out + used, out_size - used,
           "  %d: role=%s address=0x%x id=%d title=\"%s\" class=%s tag=%s scope=%s "
@@ -6576,7 +7002,7 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: desktop dispatch focusmaster | desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d | desktop dispatch movetoworkspace <target>[,<window>] | desktop dispatch renameworkspace <target> <name>\n"
+             "dispatch: desktop dispatch focusmaster | desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d | desktop dispatch togglespecialworkspace [name] | desktop dispatch movetoworkspace <target|special[:name]>[,<window>] | desktop dispatch renameworkspace <target> <name>\n"
              "hyprctl: desktop hyprctl workspacestack\n"
              "limits: diagnostic stack only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
@@ -6674,12 +7100,13 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
                      "bind $mod, J, togglesplit\n"
                      "bind $mod, S, layoutmsg swapwithmaster\n"
                      "bind $mod, 1/2/3, workspace 1/2/3\n"
-                     "bind $mod SHIFT, 1/2/3, movetoworkspace 1/2/3\n");
+                     "bind $mod SHIFT, 1/2/3, movetoworkspace 1/2/3\n"
+                     "bind $mod, grave, togglespecialworkspace magic\n");
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
-             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, "
+             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, "
              "focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
@@ -6973,8 +7400,9 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow\n"
-           "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow\n"
+           "dispatchers: exec, killactive, workspace, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
+           "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
            "layoutmsg: layout <dwindle|master|monocle>, reset, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom, preselect <l|r|u|d|reset>\n"
            "layoutmsg: splitratio <10-90|+/-n|reset>, masterratio|mfact <10-90|+/-n|reset>, nmaster <1-8|+/-n|reset>, addmaster, removemaster, focusmaster, swapwithmaster\n"
            "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"

@@ -455,8 +455,9 @@ input/misc/layout hints, variables, and binds. `desktop hyprctl reload` now
 re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch exec terminal`,
 `desktop dispatch killactive`, `desktop dispatch workspace <target>`,
+`desktop dispatch togglespecialworkspace [name]`,
 `desktop dispatch renameworkspace <target> <name>`, `desktop dispatch
-workspace name:<name>`, `desktop dispatch movetoworkspace <target>[,<window>]`, `desktop dispatch movetoworkspacesilent <target>[,<window>]`,
+workspace name:<name>`, `desktop dispatch movetoworkspace <target|special[:name]>[,<window>]`, `desktop dispatch movetoworkspacesilent <target|special[:name]>[,<window>]`,
 `desktop dispatch movefocus l|r|u|d|next|prev`, and
 `desktop dispatch focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow>`,
 `desktop dispatch focuscurrentorlast`, `desktop dispatch focusurgentorlast`, and
@@ -483,6 +484,12 @@ parser: `r+1`/`r-1` and `r~3` walk or select numeric slots including empty
 ones, while `m+1`/`m-1`, `e+1`/`e-1`, `m~1`, and `e~1` walk open Orizon
 workspaces on the current framebuffer monitor. In today's VM backend `m` and
 `e` are honest single-monitor aliases, not real Wayland multi-output routing.
+Special workspaces are implemented as a VM-safe tiled scratchpad overlay:
+`movetoworkspace special[:name]` or `movetoworkspacesilent special[:name]`
+marks the selected client as special, and `togglespecialworkspace [name]`
+shows or hides matching special clients over the current workspace. This is not
+floating mode and does not enable mouse dragging; clients still use the active
+tiling layout.
 
 `desktop hyprctl
 [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
@@ -534,6 +541,9 @@ dispatcher-style workflow. Window selectors accept `id`, `0xaddress`,
 dispatcher follows the moved client to the target workspace; the silent variant
 keeps the current workspace active and restores the local workspace focus when
 another client is available.
+Use `desktop dispatch movetoworkspacesilent special:magic,activewindow` plus
+`desktop dispatch togglespecialworkspace magic` for the Hyprland-style
+scratchpad path.
 
 `desktop doctor` checks the policy file, session file, template, user config,
 optional package metadata, and reports PASS/WARN/FAIL without validating real
@@ -553,9 +563,10 @@ F9/F10/F11 enter resize/move/launch submaps
 F12 or Esc returns to the default submap
 Enter/Space on an empty focus dispatches exec terminal
 desktop workspace <1-10|name:<name>|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> switches runtime workspace
+desktop dispatch togglespecialworkspace [name] shows/hides a tiled special scratchpad
 desktop dispatch renameworkspace <target> <safe-name> names a workspace
-desktop dispatch movetoworkspace <target>[,<window>] moves and follows the active/selected tiled client
-desktop dispatch movetoworkspacesilent <target>[,<window>] moves without changing workspace
+desktop dispatch movetoworkspace <target|special[:name]>[,<window>] moves and follows the active/selected tiled client
+desktop dispatch movetoworkspacesilent <target|special[:name]>[,<window>] moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
 desktop dispatch focuswindow <target> focuses by id/address/class/title/tag/activewindow
 desktop dispatch focuscurrentorlast focuses the previous focus-history client
