@@ -3139,7 +3139,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
       pkg_append_line(out, out_size,
                       "depends orizon-core core-x86_64; orizon-packages text-payload-v5; orizon-desktop-base hyprland-style-profile-runtime");
       pkg_append_line(out, out_size,
-                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-modules.conf /system/desktop-backend.conf /system/desktop-protocol.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /system/share/orizon-desktop-hypr.conf");
+                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-modules.conf /system/desktop-backend.conf /system/desktop-protocol.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /home/orizon/.config/hypr/orizon-local.conf /system/share/orizon-desktop-hypr.conf");
       pkg_append_line(out, out_size,
                       "split-modules pkg sample orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher");
       return 0;
@@ -4146,6 +4146,13 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "dwindle:pseudotile = true\n"
       "dwindle:preserve_split = true\n"
       "content-end\n"
+      "file " ORIZON_DESKTOP_LOCAL_CONFIG_PATH "\n"
+      "# Orizon local Hyprland-style overrides\n"
+      "# Loaded by source = ~/.config/hypr/orizon-local.conf.\n"
+      "# Keep this file VM-safe: settings, hints, binds and rules only.\n"
+      "env = ORIZON_DESKTOP_SOURCE,1\n"
+      "workspace = 1, default:true\n"
+      "content-end\n"
       "file " ORIZON_DESKTOP_TEMPLATE_PATH "\n"
       "# Orizon Hyprland-style package template\n"
       "install = optional\n"
@@ -4239,6 +4246,8 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "session-state = " ORIZON_DESKTOP_STATE_PATH "\n"
       "session-log = " ORIZON_DESKTOP_SESSION_LOG_PATH "\n"
       "settings-path = " ORIZON_DESKTOP_SETTINGS_PATH "\n"
+      "local-source = " ORIZON_DESKTOP_LOCAL_CONFIG_PATH "\n"
+      "source-resolve = desktop config doctor | desktop hyprctl configtrace\n"
       "input-command = desktop input\n"
       "input-layout-command = desktop input layout <fr|us>\n"
       "input-pointer-command = desktop input pointer <flat|natural|precise|accelerated>\n"

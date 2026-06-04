@@ -181,6 +181,13 @@ static const char *desktop_user_config =
     "dwindle:pseudotile = true\n"
     "dwindle:preserve_split = true\n";
 
+static const char *desktop_local_config =
+    "# Orizon local Hyprland-style overrides\n"
+    "# Loaded by source = ~/.config/hypr/orizon-local.conf.\n"
+    "# Keep this file VM-safe: settings, hints, binds and rules only.\n"
+    "env = ORIZON_DESKTOP_SOURCE,1\n"
+    "workspace = 1, default:true\n";
+
 static const char *desktop_binds_runtime_config =
     "# Orizon generated Hyprland-style binds v1\n"
     "# Rewritten by `desktop config apply` from /home/orizon/.config/hypr/orizon-hypr.conf.\n"
@@ -549,6 +556,40 @@ static int desktop_read_text_file(const char *path, char *buf, size_t cap) {
   return (int)used;
 }
 
+static int desktop_text_config_usable(const char *buf, int n) {
+  size_t visible;
+  int has_assignment = 0;
+  int line_start = 1;
+  int comment = 0;
+
+  if (!buf || n <= 0 || buf[0] == '\0') {
+    return 0;
+  }
+  visible = strlen(buf);
+  if (visible == 0 || (size_t)n > visible + 1) {
+    return 0;
+  }
+  for (size_t i = 0; i < visible; i++) {
+    char c = buf[i];
+    if (c == '\n' || c == '\r') {
+      line_start = 1;
+      comment = 0;
+      continue;
+    }
+    if (line_start && (c == ' ' || c == '\t')) {
+      continue;
+    }
+    if (line_start && c == '#') {
+      comment = 1;
+    }
+    line_start = 0;
+    if (!comment && c == '=') {
+      has_assignment = 1;
+    }
+  }
+  return has_assignment;
+}
+
 static int desktop_token_safe(const char *value) {
   int seen = 0;
 
@@ -693,6 +734,10 @@ typedef struct {
   int layerrules;
   int workspaces;
   int sources;
+  int source_files_loaded;
+  int source_files_missing;
+  int source_files_skipped;
+  int source_depth_limited;
   int submaps;
   int animation_rules;
   int input_hints;
@@ -729,6 +774,14 @@ typedef struct {
   size_t runtime_used;
 } desktop_hypr_runtime_t;
 
+#define DESKTOP_HYPR_SOURCE_MAX_DEPTH 3
+#define DESKTOP_HYPR_SOURCE_MAX_FILES 8
+
+typedef struct {
+  char paths[DESKTOP_HYPR_SOURCE_MAX_FILES][128];
+  int count;
+} desktop_hypr_source_context_t;
+
 static void desktop_trim_copy(char *out, size_t out_size, const char *start,
                               int len) {
   int begin = 0;
@@ -737,8 +790,8 @@ static void desktop_trim_copy(char *out, size_t out_size, const char *start,
   if (!out || out_size == 0) {
     return;
   }
-  out[0] = '\0';
   if (!start || len <= 0) {
+    out[0] = '\0';
     return;
   }
   while (begin < end &&
@@ -756,9 +809,39 @@ static void desktop_trim_copy(char *out, size_t out_size, const char *start,
     len = (int)out_size - 1;
   }
   if (len > 0) {
-    memcpy(out, start + begin, (size_t)len);
+    memmove(out, start + begin, (size_t)len);
   }
   out[len] = '\0';
+}
+
+static void desktop_next_line_bounds(const char *cfg, int len, int *pos,
+                                     int *start, int *end) {
+  int p;
+  char terminator;
+
+  if (!cfg || !pos || !start || !end) {
+    return;
+  }
+  if (*pos < 0) {
+    *pos = 0;
+  }
+  if (*pos > len) {
+    *pos = len;
+  }
+  p = *pos;
+  *start = p;
+  while (p < len && cfg[p] != '\n' && cfg[p] != '\r') {
+    p++;
+  }
+  *end = p;
+  if (p < len) {
+    terminator = cfg[p++];
+    if (p < len && ((terminator == '\r' && cfg[p] == '\n') ||
+                    (terminator == '\n' && cfg[p] == '\r'))) {
+      p++;
+    }
+  }
+  *pos = p;
 }
 
 static void desktop_strip_inline_comment(char *line) {
@@ -917,6 +1000,96 @@ static int desktop_hypr_value_safe(const char *value) {
     seen = 1;
   }
   return seen;
+}
+
+static int desktop_hypr_starts_with(const char *value, const char *prefix) {
+  size_t len;
+
+  if (!value || !prefix) {
+    return 0;
+  }
+  len = strlen(prefix);
+  return strncmp(value, prefix, len) == 0;
+}
+
+static int desktop_hypr_source_token_safe(const char *path) {
+  int seen = 0;
+
+  if (!path || !path[0]) {
+    return 0;
+  }
+  if (strstr(path, "..") || strstr(path, ".ssh") || strstr(path, ".env") ||
+      strstr(path, ".key") || strstr(path, ".pem") || strstr(path, ".p12") ||
+      strstr(path, ".pfx") || strstr(path, "secret")) {
+    return 0;
+  }
+  while (*path) {
+    unsigned char c = (unsigned char)*path++;
+    if (c <= 32 || c == '\\' || c == '*' || c == '?' || c == '[' ||
+        c == ']' || c == ';' || c == '|') {
+      return 0;
+    }
+    seen = 1;
+  }
+  return seen;
+}
+
+static int desktop_hypr_source_path_from_value(const char *value, char *out,
+                                               size_t out_size) {
+  char token[128];
+  int len;
+
+  if (!value || !out || out_size == 0) {
+    return -1;
+  }
+  out[0] = '\0';
+  desktop_trim_copy(token, sizeof(token), value, (int)strlen(value));
+  len = (int)strlen(token);
+  if (len >= 2 &&
+      ((token[0] == '"' && token[len - 1] == '"') ||
+       (token[0] == '\'' && token[len - 1] == '\''))) {
+    desktop_trim_copy(token, sizeof(token), token + 1, len - 2);
+  }
+  if (!desktop_hypr_source_token_safe(token)) {
+    return -1;
+  }
+  if (desktop_hypr_starts_with(token, "~/.config/hypr/")) {
+    snprintf(out, out_size, "/home/orizon/.config/hypr/%s",
+             token + strlen("~/.config/hypr/"));
+  } else if (desktop_hypr_starts_with(token,
+                                      "/home/orizon/.config/hypr/") ||
+             desktop_hypr_starts_with(token, "/system/")) {
+    snprintf(out, out_size, "%s", token);
+  } else if (token[0] != '/') {
+    snprintf(out, out_size, "/home/orizon/.config/hypr/%s", token);
+  } else {
+    return -1;
+  }
+  return desktop_hypr_source_token_safe(out) ? 0 : -1;
+}
+
+static int desktop_hypr_source_seen(desktop_hypr_source_context_t *ctx,
+                                    const char *path) {
+  if (!ctx || !path) {
+    return 0;
+  }
+  for (int i = 0; i < ctx->count; i++) {
+    if (strcmp(ctx->paths[i], path) == 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int desktop_hypr_source_remember(desktop_hypr_source_context_t *ctx,
+                                        const char *path) {
+  if (!ctx || !path || ctx->count >= DESKTOP_HYPR_SOURCE_MAX_FILES) {
+    return -1;
+  }
+  snprintf(ctx->paths[ctx->count], sizeof(ctx->paths[ctx->count]), "%s",
+           path);
+  ctx->count++;
+  return 0;
 }
 
 static int desktop_hypr_copy_token_value(char *out, size_t out_size,
@@ -1079,19 +1252,13 @@ static int desktop_hypr_runtime_get_value(const char *path, const char *key,
     return -1;
   }
   while (pos < n) {
-    int start = pos;
+    int start;
     int end;
     char line[256];
     char line_key[96];
     char line_value[128];
 
-    while (pos < n && cfg[pos] != '\n') {
-      pos++;
-    }
-    end = pos;
-    if (pos < n && cfg[pos] == '\n') {
-      pos++;
-    }
+    desktop_next_line_bounds(cfg, n, &pos, &start, &end);
     desktop_trim_copy(line, sizeof(line), cfg + start, end - start);
     if (desktop_hypr_key_value(line, line_key, sizeof(line_key), line_value,
                                sizeof(line_value)) == 0 &&
@@ -1427,11 +1594,55 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
   return supported;
 }
 
-static int desktop_hypr_scan_config(const char *cfg, int apply,
-                                    desktop_hypr_summary_t *summary,
-                                    orizon_desktop_session_t *session,
-                                    orizon_desktop_settings_t *settings,
-                                    desktop_hypr_runtime_t *runtime) {
+static int desktop_hypr_scan_config_inner(
+    const char *cfg, int apply, desktop_hypr_summary_t *summary,
+    orizon_desktop_session_t *session, orizon_desktop_settings_t *settings,
+    desktop_hypr_runtime_t *runtime, desktop_hypr_source_context_t *sources,
+    int source_depth);
+
+static void desktop_hypr_scan_source_config(
+    const char *value, int apply, desktop_hypr_summary_t *summary,
+    orizon_desktop_session_t *session, orizon_desktop_settings_t *settings,
+    desktop_hypr_runtime_t *runtime, desktop_hypr_source_context_t *sources,
+    int source_depth) {
+  char path[128];
+  char cfg[2048];
+  int n;
+
+  if (!value || !summary || !sources) {
+    return;
+  }
+  if (source_depth >= DESKTOP_HYPR_SOURCE_MAX_DEPTH) {
+    summary->source_depth_limited++;
+    return;
+  }
+  if (desktop_hypr_source_path_from_value(value, path, sizeof(path)) < 0) {
+    summary->source_files_skipped++;
+    return;
+  }
+  if (desktop_hypr_source_seen(sources, path)) {
+    summary->source_files_skipped++;
+    return;
+  }
+  if (desktop_hypr_source_remember(sources, path) < 0) {
+    summary->source_depth_limited++;
+    return;
+  }
+  n = desktop_read_text_file(path, cfg, sizeof(cfg));
+  if (!desktop_text_config_usable(cfg, n)) {
+    summary->source_files_missing++;
+    return;
+  }
+  summary->source_files_loaded++;
+  desktop_hypr_scan_config_inner(cfg, apply, summary, session, settings,
+                                 runtime, sources, source_depth + 1);
+}
+
+static int desktop_hypr_scan_config_inner(
+    const char *cfg, int apply, desktop_hypr_summary_t *summary,
+    orizon_desktop_session_t *session, orizon_desktop_settings_t *settings,
+    desktop_hypr_runtime_t *runtime, desktop_hypr_source_context_t *sources,
+    int source_depth) {
   int pos = 0;
   int depth = 0;
   int len;
@@ -1443,20 +1654,14 @@ static int desktop_hypr_scan_config(const char *cfg, int apply,
   memset(sections, 0, sizeof(sections));
   len = (int)strlen(cfg);
   while (pos < len) {
-    int start = pos;
+    int start;
     int end;
     char line[224];
     char key[64];
     char value[128];
     char full_key[96];
 
-    while (pos < len && cfg[pos] != '\n') {
-      pos++;
-    }
-    end = pos;
-    if (pos < len && cfg[pos] == '\n') {
-      pos++;
-    }
+    desktop_next_line_bounds(cfg, len, &pos, &start, &end);
     desktop_trim_copy(line, sizeof(line), cfg + start, end - start);
     desktop_strip_inline_comment(line);
     desktop_trim_copy(line, sizeof(line), line, (int)strlen(line));
@@ -1489,8 +1694,26 @@ static int desktop_hypr_scan_config(const char *cfg, int apply,
     desktop_hypr_join_key(sections, depth, key, full_key, sizeof(full_key));
     desktop_hypr_apply_pair(full_key, value, session, settings, summary,
                             apply, runtime);
+    if (strcmp(full_key, "source") == 0) {
+      desktop_hypr_scan_source_config(value, apply, summary, session,
+                                      settings, runtime, sources,
+                                      source_depth);
+    }
   }
   return 0;
+}
+
+static int desktop_hypr_scan_config(const char *cfg, int apply,
+                                    desktop_hypr_summary_t *summary,
+                                    orizon_desktop_session_t *session,
+                                    orizon_desktop_settings_t *settings,
+                                    desktop_hypr_runtime_t *runtime) {
+  desktop_hypr_source_context_t sources;
+
+  memset(&sources, 0, sizeof(sources));
+  desktop_hypr_source_remember(&sources, ORIZON_DESKTOP_USER_CONFIG_PATH);
+  return desktop_hypr_scan_config_inner(cfg, apply, summary, session,
+                                        settings, runtime, &sources, 0);
 }
 
 static int desktop_hypr_exec_once_applies(const char *key, const char *value) {
@@ -1530,6 +1753,9 @@ void orizon_desktop_format_config_trace(char *out, size_t out_size) {
   int ignored_count = 0;
   int malformed_count = 0;
   int section_count = 0;
+  int source_loaded = 0;
+  int source_missing = 0;
+  int source_skipped = 0;
   int truncated = 0;
   char sections[4][32];
 
@@ -1546,10 +1772,10 @@ void orizon_desktop_format_config_trace(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
   n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
                              sizeof(cfg));
-  if (n <= 0) {
+  if (!desktop_text_config_usable(cfg, n)) {
     snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
     desktop_append(out, out_size, &used,
-                   "source: built-in template preview\n");
+                   "source: built-in template preview (user config missing or not text)\n");
   } else {
     desktop_append(out, out_size, &used, "source: user config\n");
   }
@@ -1557,7 +1783,7 @@ void orizon_desktop_format_config_trace(char *out, size_t out_size) {
                  "model: read-only parser trace; no Wayland/wlroots, no manual-drag\n");
   len = (int)strlen(cfg);
   while (pos < len) {
-    int start = pos;
+    int start;
     int end;
     char raw[224];
     char key[64];
@@ -1571,13 +1797,7 @@ void orizon_desktop_format_config_trace(char *out, size_t out_size) {
       truncated = 1;
       break;
     }
-    while (pos < len && cfg[pos] != '\n') {
-      pos++;
-    }
-    end = pos;
-    if (pos < len && cfg[pos] == '\n') {
-      pos++;
-    }
+    desktop_next_line_bounds(cfg, len, &pos, &start, &end);
     line_no++;
     desktop_trim_copy(raw, sizeof(raw), cfg + start, end - start);
     desktop_strip_inline_comment(raw);
@@ -1653,12 +1873,36 @@ void orizon_desktop_format_config_trace(char *out, size_t out_size) {
              "line %d: %s key=%s route=%s value=\"%s\"\n", line_no, status,
              full_key, route, value);
     desktop_append(out, out_size, &used, line);
+    if (strcmp(full_key, "source") == 0) {
+      char source_path[128];
+      const char *source_status = "SKIP";
+
+      if (desktop_hypr_source_path_from_value(value, source_path,
+                                              sizeof(source_path)) == 0) {
+        if (vfs_exists(source_path)) {
+          source_loaded++;
+          source_status = "LOADED";
+        } else {
+          source_missing++;
+          source_status = "MISSING";
+        }
+      } else {
+        snprintf(source_path, sizeof(source_path), "%s", "(unsafe-or-glob)");
+        source_skipped++;
+      }
+      snprintf(line, sizeof(line),
+               "line %d: SOURCE path=%s status=%s max-depth=%d\n",
+               line_no, source_path, source_status,
+               DESKTOP_HYPR_SOURCE_MAX_DEPTH);
+      desktop_append(out, out_size, &used, line);
+    }
     traced++;
   }
   snprintf(line, sizeof(line),
-           "summary: lines=%d traced=%d sections=%d apply=%d prepare=%d ignored=%d malformed=%d truncated=%s\n",
+           "summary: lines=%d traced=%d sections=%d apply=%d prepare=%d ignored=%d malformed=%d source-loaded=%d source-missing=%d source-skipped=%d truncated=%s\n",
            line_no, traced, section_count, apply_count, prepare_count,
-           ignored_count, malformed_count, truncated ? "yes" : "no");
+           ignored_count, malformed_count, source_loaded, source_missing,
+           source_skipped, truncated ? "yes" : "no");
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "commands: desktop config doctor | desktop config apply | desktop hyprctl configtrace\n");
@@ -2102,6 +2346,11 @@ int orizon_desktop_ensure_defaults(void) {
                               desktop_user_config) < 0) {
     rc = -1;
   }
+  if (!vfs_exists(ORIZON_DESKTOP_LOCAL_CONFIG_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_LOCAL_CONFIG_PATH,
+                              desktop_local_config) < 0) {
+    rc = -1;
+  }
   if (!vfs_exists(ORIZON_DESKTOP_SESSION_PATH) &&
       desktop_write_text_file(ORIZON_DESKTOP_SESSION_PATH,
                               desktop_session_config) < 0) {
@@ -2174,16 +2423,24 @@ int orizon_desktop_is_enabled(void) {
 
 int orizon_desktop_write_user_config(char *status, size_t status_size) {
   int rc;
+  int local_rc = 0;
 
   desktop_ensure_dirs();
   rc = desktop_write_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH,
                                desktop_user_config);
-  if (status && status_size) {
-    snprintf(status, status_size, "desktop config: %s\npath: %s\n",
-             rc == 0 ? "written" : "failed",
-             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  if (!vfs_exists(ORIZON_DESKTOP_LOCAL_CONFIG_PATH)) {
+    local_rc = desktop_write_text_file(ORIZON_DESKTOP_LOCAL_CONFIG_PATH,
+                                       desktop_local_config);
   }
-  return rc;
+  if (status && status_size) {
+    snprintf(status, status_size,
+             "desktop config: %s\npath: %s\nlocal-source: %s\n",
+             rc == 0 && local_rc == 0 ? "written" : "failed",
+             ORIZON_DESKTOP_USER_CONFIG_PATH,
+             local_rc == 0 ? ORIZON_DESKTOP_LOCAL_CONFIG_PATH
+                           : "write-failed");
+  }
+  return rc == 0 && local_rc == 0 ? 0 : -1;
 }
 
 int orizon_desktop_load_session(orizon_desktop_session_t *session) {
@@ -3048,11 +3305,17 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
     }
   }
   n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg, sizeof(cfg));
-  if (n <= 0) {
+  if (!desktop_text_config_usable(cfg, n) &&
+      orizon_desktop_write_user_config(NULL, 0) == 0) {
+    summary.generated_user_config = 1;
+    n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                               sizeof(cfg));
+  }
+  if (!desktop_text_config_usable(cfg, n)) {
     if (status && status_size) {
       snprintf(status, status_size,
                "desktop config apply: failed\n"
-               "source: %s missing or unreadable\n"
+               "source: %s missing, unreadable or not text\n"
                "fix: desktop write-config\n",
                ORIZON_DESKTOP_USER_CONFIG_PATH);
     }
@@ -3061,6 +3324,20 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
   orizon_desktop_load_session(&session);
   orizon_desktop_load_settings(&settings);
   desktop_hypr_scan_config(cfg, 1, &summary, &session, &settings, &runtime);
+  if (summary.parsed_lines == 0 &&
+      orizon_desktop_write_user_config(NULL, 0) == 0) {
+    memset(&summary, 0, sizeof(summary));
+    summary.generated_user_config = 1;
+    desktop_hypr_runtime_init(&runtime);
+    n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                               sizeof(cfg));
+    orizon_desktop_load_session(&session);
+    orizon_desktop_load_settings(&settings);
+    if (desktop_text_config_usable(cfg, n)) {
+      desktop_hypr_scan_config(cfg, 1, &summary, &session, &settings,
+                               &runtime);
+    }
+  }
   rc1 = desktop_write_session(&session);
   rc2 = desktop_write_settings(&settings);
   rc_binds = desktop_write_text_file(ORIZON_DESKTOP_BINDS_PATH,
@@ -3082,6 +3359,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
     snprintf(status, status_size,
              "desktop config apply: %s\n"
              "source: %s%s\n"
+             "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n"
              "parsed-lines: %d malformed: %d\n"
              "supported-settings: %d applied: %d prepared-keywords: %d ignored: %d runtime-lines: %d\n"
              "binds: total=%d supported-dispatchers=%d mouse=%d locked=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
@@ -3097,6 +3375,8 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
                  : "write-failed",
              ORIZON_DESKTOP_USER_CONFIG_PATH,
              summary.generated_user_config ? " generated-from-template" : "",
+             summary.source_files_loaded, summary.source_files_missing,
+             summary.source_files_skipped, summary.source_depth_limited,
              summary.parsed_lines, summary.malformed_lines,
              summary.supported_settings, summary.applied_settings,
              summary.prepared_keywords, summary.ignored_keywords,
@@ -3148,6 +3428,7 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
   int rc1;
   int rc2;
   int runtime_rc = 0;
+  int user_config_rc = 0;
   const char *runtime_path;
 
   if (status && status_size) {
@@ -3171,6 +3452,9 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
   desktop_hypr_apply_pair(key, value, &session, &settings, &summary, 1, NULL);
   rc1 = desktop_write_session(&session);
   rc2 = desktop_write_settings(&settings);
+  if (summary.applied_settings > 0) {
+    user_config_rc = desktop_write_user_config_from_state(&session, &settings);
+  }
   runtime_path = desktop_hypr_runtime_path_for_key(key);
   if (runtime_path) {
     runtime_rc = desktop_append_hypr_runtime_keyword(key, value);
@@ -3184,15 +3468,19 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
              "key: %s\n"
              "value: %s\n"
              "supported-settings: %d applied: %d runtime-hint: %s\n"
+             "user-config: %s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
              "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s keyboard=%s\n"
              "apply: desktop hyprctl reload\n",
              (rc1 == 0 && rc2 == 0 && runtime_rc == 0 &&
+              user_config_rc == 0 &&
               (summary.supported_settings > 0 || runtime_path))
                  ? "applied"
                  : "warn",
              key, value, summary.supported_settings, summary.applied_settings,
              runtime_path ? runtime_path : "none",
+             summary.applied_settings > 0 ? ORIZON_DESKTOP_USER_CONFIG_PATH
+                                          : "unchanged",
              session.layout,
              session.autostart_terminal ? "yes" : "no",
              session.focus_follows_mouse ? "yes" : "no",
@@ -3373,6 +3661,8 @@ int orizon_desktop_reset(char *status, size_t status_size) {
                                desktop_default_config);
   template_rc = desktop_write_text_file(ORIZON_DESKTOP_TEMPLATE_PATH,
                                         desktop_user_config);
+  desktop_write_text_file(ORIZON_DESKTOP_LOCAL_CONFIG_PATH,
+                          desktop_local_config);
   desktop_write_text_file(ORIZON_DESKTOP_SESSION_PATH, desktop_session_config);
   desktop_write_text_file(ORIZON_DESKTOP_SETTINGS_PATH,
                           desktop_settings_config);
@@ -3404,14 +3694,16 @@ int orizon_desktop_reset(char *status, size_t status_size) {
              "template: %s\n"
              "settings: %s\n"
              "modules: %s\n"
-             "user-config: kept-if-present %s\n",
+             "user-config: kept-if-present %s\n"
+             "local-source: %s\n",
              ORIZON_DESKTOP_PROFILE,
              rc == 0 ? ORIZON_DESKTOP_CONFIG_PATH : "write-failed",
              template_rc == 0 ? ORIZON_DESKTOP_TEMPLATE_PATH
                               : "write-failed",
              ORIZON_DESKTOP_SETTINGS_PATH,
              ORIZON_DESKTOP_MODULES_PATH,
-             ORIZON_DESKTOP_USER_CONFIG_PATH);
+             ORIZON_DESKTOP_USER_CONFIG_PATH,
+             ORIZON_DESKTOP_LOCAL_CONFIG_PATH);
   }
   return rc == 0 && template_rc == 0 ? 0 : -1;
 }
@@ -3477,6 +3769,11 @@ void orizon_desktop_format_status(char *out, size_t out_size) {
            vfs_exists(ORIZON_DESKTOP_USER_CONFIG_PATH) ? "present"
                                                        : "not-written-yet");
   desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "local-source: %s %s\n",
+           ORIZON_DESKTOP_LOCAL_CONFIG_PATH,
+           vfs_exists(ORIZON_DESKTOP_LOCAL_CONFIG_PATH) ? "present"
+                                                        : "not-written-yet");
+  desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "template: %s\n",
            ORIZON_DESKTOP_TEMPLATE_PATH);
   desktop_append(out, out_size, &used, line);
@@ -3530,6 +3827,8 @@ void orizon_desktop_format_config(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, desktop_enabled_config);
   desktop_append(out, out_size, &used, "\n== hypr-style-user-config ==\n");
   desktop_append(out, out_size, &used, desktop_user_config);
+  desktop_append(out, out_size, &used, "\n== hypr-style-local-source ==\n");
+  desktop_append(out, out_size, &used, desktop_local_config);
   desktop_append(out, out_size, &used, "\n== session-default ==\n");
   desktop_append(out, out_size, &used, desktop_session_config);
   desktop_append(out, out_size, &used, "\n== system-settings-default ==\n");
@@ -3542,7 +3841,8 @@ void orizon_desktop_format_config(char *out, size_t out_size) {
                  ORIZON_DESKTOP_MONITORS_PATH "\n"
                  ORIZON_DESKTOP_LAYERS_PATH "\n"
                  ORIZON_DESKTOP_RUNTIME_PATH "\n"
-                 ORIZON_DESKTOP_STATE_PATH "\n");
+                 ORIZON_DESKTOP_STATE_PATH "\n"
+                 ORIZON_DESKTOP_LOCAL_CONFIG_PATH "\n");
   desktop_append(out, out_size, &used, "\n== session-state-default ==\n");
   desktop_append(out, out_size, &used, desktop_state_config);
   desktop_append(out, out_size, &used,
@@ -3579,11 +3879,11 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   }
   n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
                              sizeof(cfg));
-  if (n <= 0) {
+  if (!desktop_text_config_usable(cfg, n)) {
     snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
     n = (int)strlen(cfg);
     desktop_append(out, out_size, &used,
-                   "source: built-in template preview\n");
+                   "source: built-in template preview (user config missing or not text)\n");
   } else {
     desktop_append(out, out_size, &used,
                    "source: user config\n");
@@ -3608,6 +3908,12 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.decoration_hints, summary.animation_rules,
            summary.cursor_hints, summary.render_hints, summary.debug_hints,
            summary.misc_hints);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d local=%s\n",
+           summary.source_files_loaded, summary.source_files_missing,
+           summary.source_files_skipped, summary.source_depth_limited,
+           ORIZON_DESKTOP_LOCAL_CONFIG_PATH);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "apply-support: settings=%d prepared=%d ignored=%d\n",
@@ -3645,10 +3951,10 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
   n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
                              sizeof(cfg));
-  if (n <= 0) {
+  if (!desktop_text_config_usable(cfg, n)) {
     snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
     desktop_append(out, out_size, &used,
-                   "source: built-in template preview\n");
+                   "source: built-in template preview (user config missing or not text)\n");
   } else {
     desktop_append(out, out_size, &used, "source: user config\n");
   }
@@ -3672,6 +3978,11 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
            summary.device_hints, summary.layout_hints,
            summary.decoration_hints, summary.cursor_hints,
            summary.render_hints, summary.debug_hints, summary.misc_hints);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n",
+           summary.source_files_loaded, summary.source_files_missing,
+           summary.source_files_skipped, summary.source_depth_limited);
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "notes: unsupported but safe Hyprland keywords are reported as ignored/prepared, not hard errors\n");
@@ -4113,6 +4424,8 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
                              ORIZON_DESKTOP_SESSION_LOG_PATH);
   desktop_append_path_status(out, out_size, &used, "user-config",
                              ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append_path_status(out, out_size, &used, "local-source",
+                             ORIZON_DESKTOP_LOCAL_CONFIG_PATH);
   desktop_append_path_status(out, out_size, &used, "binds-runtime",
                              ORIZON_DESKTOP_BINDS_PATH);
   desktop_append_path_status(out, out_size, &used, "runtime-state",
@@ -4148,6 +4461,8 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
                              ORIZON_DESKTOP_MODULES_PATH);
   desktop_append_path_status(out, out_size, &used, "user-config",
                              ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_append_path_status(out, out_size, &used, "local-source",
+                             ORIZON_DESKTOP_LOCAL_CONFIG_PATH);
   desktop_append_path_status(out, out_size, &used, "template",
                              ORIZON_DESKTOP_TEMPLATE_PATH);
   desktop_append_path_status(out, out_size, &used, "binds-runtime",
@@ -4312,18 +4627,12 @@ void orizon_desktop_format_settings_doctor(char *out, size_t out_size) {
     fail = 1;
   } else {
     while (pos < n) {
-      int start = pos;
+      int start;
       int end;
       int p;
       int k = 0;
 
-      while (pos < n && cfg[pos] != '\n') {
-        pos++;
-      }
-      end = pos;
-      if (pos < n && cfg[pos] == '\n') {
-        pos++;
-      }
+      desktop_next_line_bounds(cfg, n, &pos, &start, &end);
       p = start;
       while (p < end && (cfg[p] == ' ' || cfg[p] == '\t' || cfg[p] == '\r')) {
         p++;

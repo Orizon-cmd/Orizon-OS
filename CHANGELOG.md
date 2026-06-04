@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added desktop package version `0.54.0` with VM-safe Hyprland-style `source`
+  resolution. `source = ~/.config/hypr/orizon-local.conf` now creates and
+  loads a local override file, applies its safe `env`/`workspace` hints during
+  `desktop config apply`, exposes them through `desktop hyprctl getoption`,
+  and reports `source-resolve` plus `SOURCE ... status=LOADED|MISSING|SKIP`
+  diagnostics in `doctor/configerrors/configtrace`. The parser now handles
+  in-place line trimming correctly, and supported `desktop keyword` settings
+  are synced back into `/home/orizon/.config/hypr/orizon-hypr.conf` so
+  `desktop hyprctl reload` keeps the updated values. This does not enable
+  Wayland, floating windows, manual drag, a taskbar, or Waybar.
 - Added desktop package version `0.53.0` with VM-safe Hyprland-style layout
   reset/preselect dispatchers: `layoutmsg reset`, `splitratio reset`,
   `masterratio reset`, `nmaster reset`, and `preselect <l|r|u|d|reset>` now

@@ -271,9 +271,13 @@ persisted as runtime hints, ignored, or malformed. It now keeps additional
 Hyprland-style families such as `device`, `decoration`, `cursor`, `render`,
 `debug`, `group`, `plugin`, `permission`, `gestures`, `xwayland`, and
 `ecosystem` as inspectable runtime hints when Orizon does not have the real
-Wayland implementation yet. `desktop config trace` is read-only and explains
-each line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR`, including the route to
-session/settings or generated runtime files. `desktop config apply`
+Wayland implementation yet. `source = ~/.config/hypr/orizon-local.conf` is now
+resolved in a VM-safe way, creates `/home/orizon/.config/hypr/orizon-local.conf`
+when defaults are installed, and reports loaded/missing/skipped source state.
+`desktop config trace` is read-only and explains each line as `APPLY`,
+`PREPARE`, `IGNORE`, or `ERROR`, including the route to session/settings,
+generated runtime files, and `SOURCE ... status=LOADED|MISSING|SKIP`.
+`desktop config apply`
 imports the supported subset into Orizon's runtime files: layout, gaps, border
 size, rounding, shadows, animations, keyboard layout, focus-follows-mouse, and
 terminal autostart. It also rewrites the generated Hyprland-style runtime files
@@ -283,6 +287,10 @@ device, decoration, cursor, render, debug, misc, dwindle, and master hints as
 inspectable runtime state without pretending they are already real
 Wayland/wlroots features. Mouse binds are parsed for
 compatibility, but Orizon does not enable free-drag window moving by default.
+Supported `desktop keyword` settings such as `general:gaps_in` and
+`decoration:rounding` are synced back into
+`/home/orizon/.config/hypr/orizon-hypr.conf`, so `desktop hyprctl reload`
+keeps the new value instead of reverting to the previous generated template.
 Those files make the config inspectable over SSH while the compositor grows the
 corresponding real Wayland features.
 
@@ -300,6 +308,7 @@ The package writes:
 /system/desktop-runtime.conf
 /system/desktop-state.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
+/home/orizon/.config/hypr/orizon-local.conf
 /system/share/orizon-desktop-hypr.conf
 /logs/desktop.log
 /logs/desktop-session.log

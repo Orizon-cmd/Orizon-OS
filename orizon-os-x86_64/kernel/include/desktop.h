@@ -9,6 +9,7 @@
 
 #define ORIZON_DESKTOP_CONFIG_PATH "/system/desktop.conf"
 #define ORIZON_DESKTOP_USER_CONFIG_PATH "/home/orizon/.config/hypr/orizon-hypr.conf"
+#define ORIZON_DESKTOP_LOCAL_CONFIG_PATH "/home/orizon/.config/hypr/orizon-local.conf"
 #define ORIZON_DESKTOP_TEMPLATE_PATH "/system/share/orizon-desktop-hypr.conf"
 #define ORIZON_DESKTOP_SESSION_PATH "/system/desktop-session.conf"
 #define ORIZON_DESKTOP_SETTINGS_PATH "/system/desktop-settings.conf"
@@ -27,7 +28,7 @@
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.53.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.54.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"

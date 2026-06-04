@@ -353,13 +353,15 @@ compositor desktop session; `desktop enable` remains a compatibility alias.
 desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
 and recovery commands. `desktop rescue` is read-only and prints the safe
 checklist before `desktop recover` repairs/reapplies anything. `desktop config doctor` validates the Hyprland-style
-user config, `desktop config apply` imports the supported subset into the
+user config and reports VM-safe `source-resolve` status for
+`/home/orizon/.config/hypr/orizon-local.conf`; `desktop config apply` imports the supported subset into the
 session/settings files plus generated runtime hint files such as
 `/system/desktop-binds.conf`, `/system/desktop-autostart.conf`,
 `/system/desktop-rules.conf`, `/system/desktop-monitors.conf`, and
 `/system/desktop-layers.conf`, `/system/desktop-runtime.conf`, and
 `/system/desktop-state.conf`, and `desktop config trace` explains each config
-line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR` without changing runtime
+line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR`, including `SOURCE
+... status=LOADED|MISSING|SKIP`, without changing runtime
 state.
 `layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and
 input/device/decoration/cursor/render/debug/misc/layout hints are preserved
@@ -391,7 +393,9 @@ layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations
 `desktop config trace`, `desktop rollinglog`, `desktop focus-history`,
 `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
-Hyprland-style runtime keyword, `desktop dispatch
+Hyprland-style runtime keyword, and supported settings keywords are written
+back into `/home/orizon/.config/hypr/orizon-hypr.conf` so a later
+`desktop hyprctl reload` keeps the value. `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,

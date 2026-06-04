@@ -74,6 +74,8 @@ $commands = @(
   "desktop config doctor",
   "desktop config apply",
   "desktop config trace",
+  "desktop hyprctl getoption env",
+  "desktop hyprctl getoption workspace",
   "desktop session",
   "desktop settings",
   "desktop settings presets",
@@ -151,6 +153,8 @@ $commands = @(
   "desktop hyprctl configerrors",
   "desktop hyprctl configtrace",
   "desktop hyprctl rollinglog",
+  "desktop hyprctl getoption env",
+  "desktop hyprctl getoption workspace",
   "desktop hyprctl getoption general:gaps_in",
   "desktop hyprctl keyword decoration:rounding 11",
   "desktop hyprctl getoption decoration:rounding",
@@ -532,13 +536,13 @@ run_cmd() {
       grep -q "Hyprland-style" "`$OUT" || { echo "missing desktop config"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop config doctor")
-      grep -q "Hyprland config doctor" "`$OUT" && grep -q "apply-support:" "`$OUT" || { echo "missing desktop config doctor"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Hyprland config doctor" "`$OUT" && grep -q "apply-support:" "`$OUT" && grep -q "source-resolve: loaded=1" "`$OUT" || { echo "missing desktop config doctor"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop config apply")
-      grep -q "desktop config apply: applied" "`$OUT" && grep -q "runtime-files:" "`$OUT" || { echo "missing desktop config apply"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "desktop config apply: applied" "`$OUT" && grep -q "runtime-files:" "`$OUT" && grep -q "source-resolve: loaded=1" "`$OUT" || { echo "missing desktop config apply"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop config trace"|"desktop hyprctl configtrace")
-      grep -q "Orizon desktop Hyprland config trace" "`$OUT" && grep -q "APPLY" "`$OUT" && grep -q "PREPARE" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop config trace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop Hyprland config trace" "`$OUT" && grep -q "APPLY" "`$OUT" && grep -q "PREPARE" "`$OUT" && grep -q "SOURCE path=/home/orizon/.config/hypr/orizon-local.conf status=LOADED" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop config trace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop session")
       grep -q "Orizon desktop session" "`$OUT" && grep -q "theme:" "`$OUT" || { echo "missing desktop session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -713,6 +717,12 @@ run_cmd() {
       ;;
     "desktop hyprctl getoption animations:tick_budget")
       grep -q "option animations:tick_budget" "`$OUT" && grep -q "value: 24" "`$OUT" || { echo "missing hyprctl getoption animation budget"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption env")
+      grep -q "option env" "`$OUT" && grep -q "value: ORIZON_DESKTOP_SOURCE,1" "`$OUT" || { echo "missing hyprctl getoption env"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl getoption workspace")
+      grep -q "option workspace" "`$OUT" && grep -q "value: 1, default:true" "`$OUT" || { echo "missing hyprctl getoption workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl binds")
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

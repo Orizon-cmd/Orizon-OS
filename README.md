@@ -140,15 +140,19 @@ pour ce fichier. `desktop settings paths` montre le hub de settings, `desktop
 settings export` regenere `/home/orizon/.config/hypr/orizon-hypr.conf` depuis
 `/system`, et `desktop settings sync` exporte puis rafraichit les hints runtime.
 `desktop config doctor` analyse la config Hyprland-style dans
-`/home/orizon/.config/hypr/orizon-hypr.conf`, et `desktop config apply`
-importe le sous-ensemble supporte vers la session, les settings, et les fichiers
+`/home/orizon/.config/hypr/orizon-hypr.conf`; `source =
+~/.config/hypr/orizon-local.conf` cree/charge maintenant un fichier local
+d'overrides VM-safe sous `/home/orizon/.config/hypr/orizon-local.conf`, avec
+diagnostics `source-resolve`. `desktop config apply` importe le sous-ensemble
+supporte vers la session, les settings, et les fichiers
 runtime inspectables `/system/desktop-binds.conf`,
 `/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
 `/system/desktop-monitors.conf`, `/system/desktop-layers.conf`,
 `/system/desktop-runtime.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf` et `/system/desktop-state.conf`.
 `desktop config trace` explique ligne par ligne ce qui est applique, prepare
-comme hint, ignore ou malforme, sans modifier la session.
+comme hint, ignore ou malforme, et indique aussi si chaque `source` est charge,
+manquant ou ignore, sans modifier la session.
 `desktop start|stop|restart|reload|recover|rescue` gere la session Hyprland-style avec etat
 persistant et log `/logs/desktop-session.log`; `desktop state`, `desktop
 session`, `desktop theme`, `desktop wallpaper`, `desktop preset`, `desktop
