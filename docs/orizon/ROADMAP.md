@@ -60,7 +60,7 @@
   client state, per-workspace layout state with `nmaster` and monocle deck
   rendered diagnostics, directional `movefocus`/`swapwindow`, direct
   `focuswindow` targeting, `focuscurrentorlast`/`focusurgentorlast` with
-  VM-only `markurgent`, VM-only `tagwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
+  VM-only `markurgent`, VM-only `tagwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout/reset/preselect`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
@@ -68,7 +68,7 @@
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`,
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, read-only config trace
-  diagnostics, split/master ratio controls, active F9/F10/F11 keyboard submaps,
+  diagnostics, split/master ratio controls plus layout reset/preselect recovery, active F9/F10/F11 keyboard submaps,
   explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
   compact VM-safe `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow` JSON for future tooling,
   software focus ring, persistent shadow range/render profile/animation

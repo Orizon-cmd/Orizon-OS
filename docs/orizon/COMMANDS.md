@@ -224,8 +224,15 @@ desktop dispatch layoutmsg mfact -5
 desktop dispatch layoutmsg nmaster 2
 desktop dispatch layoutmsg addmaster
 desktop dispatch layoutmsg removemaster
+desktop dispatch layoutmsg splitratio reset
+desktop dispatch layoutmsg masterratio reset
+desktop dispatch layoutmsg nmaster reset
+desktop dispatch layoutmsg reset
 desktop dispatch layoutmsg orientationleft
 desktop dispatch layoutmsg orientationtop
+desktop dispatch layoutmsg preselect r
+desktop dispatch layoutmsg preselect up
+desktop dispatch layoutmsg preselect reset
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset
@@ -391,8 +398,9 @@ Hyprland-style runtime keyword, `desktop dispatch
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg layout <dwindle|master|monocle>`,
-`layoutmsg splitratio <10-90|+/-n>`, `masterratio`/`mfact`, and
-`nmaster <1-8|+/-n>`/`addmaster`/`removemaster`, plus explicit
+`layoutmsg reset`, `layoutmsg preselect <l|r|u|d|reset>`,
+`layoutmsg splitratio <10-90|+/-n|reset>`, `masterratio`/`mfact`, and
+`nmaster <1-8|+/-n|reset>`/`addmaster`/`removemaster`, plus explicit
 `orientationleft/right/top/bottom` tiling hints,
 idempotent client-state dispatchers
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and

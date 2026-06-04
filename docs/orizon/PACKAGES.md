@@ -199,6 +199,13 @@ desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg nmaster 2
 desktop dispatch layoutmsg addmaster
 desktop dispatch layoutmsg removemaster
+desktop dispatch layoutmsg splitratio reset
+desktop dispatch layoutmsg masterratio reset
+desktop dispatch layoutmsg nmaster reset
+desktop dispatch layoutmsg reset
+desktop dispatch layoutmsg preselect r
+desktop dispatch layoutmsg preselect up
+desktop dispatch layoutmsg preselect reset
 desktop dispatch focusmaster
 desktop dispatch swapwithmaster
 desktop dispatch movefocus r
@@ -231,7 +238,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.52.0` because it includes policy/config files, the persisted session
+`0.53.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -352,7 +359,13 @@ Version `0.51.0` adds compact `desktop hyprctl -j` JSON for `clients`,
 `workspaces`, `activeworkspace`, and `activewindow`, so future status tooling
 and the later separate Waybar-style package can consume stable VM-safe state
 without adding any bar/taskbar now.
-Version `0.52.0` adds Hyprland-style workspace target prefixes to the same
+Version `0.53.0` adds VM-safe Hyprland-style layout reset and preselect
+dispatchers: `desktop dispatch layoutmsg reset` restores active workspace
+layout defaults, `splitratio reset`, `masterratio reset`, and `nmaster reset`
+reset ratios/master count individually, and `preselect <l|r|u|d|reset>` maps
+directional split hints onto the current framebuffer tiling state without
+creating floating windows or manual drag. Version `0.52.0` adds
+Hyprland-style workspace target prefixes to the same
 single-monitor VM facade: `r+/-n` and `r~n` select relative or absolute
 workspace slots including empty slots, while `m+/-n`, `e+/-n`, `m~n`, and
 `e~n` walk open Orizon workspaces on the current framebuffer monitor. The

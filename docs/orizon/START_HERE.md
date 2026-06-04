@@ -50,7 +50,7 @@ design note.
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
   `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`,
   `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
-  plus split/master ratio, `nmaster`, monocle deck rendered diagnostics, and per-workspace layout messages, directional movefocus/swapwindow,
+  plus split/master ratio, `nmaster`, layout reset/preselect recovery, monocle deck rendered diagnostics, and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
   workspace next/empty plus Hyprland-style `r/m/e +/-n` and `r/m/e ~n` targets, and
   silent move-to-workspace dispatch with optional `workspace,window` selectors,

@@ -209,6 +209,10 @@ ratio et `nmaster`. `desktop dispatch layoutmsg layout
 fenetres flottantes ni de drag manuel; en monocle, seul le client focus est
 rendu et les autres restent visibles dans les diagnostics comme
 `monocle-deck`/`rendered=no`.
+`desktop dispatch layoutmsg reset`, `splitratio reset`, `masterratio reset`,
+`nmaster reset`, et `preselect <l|r|u|d|reset>` ajoutent des controles de
+recuperation/script VM-safe pour retrouver rapidement un tiling propre sans
+floating, drag manuel, barre Windows ni Waybar.
 `desktop workspace-stack` et `desktop hyprctl workspacestack` exposent le stack
 par workspace: client master, clients stack/dwindle, scope local/pinned,
 rang de focus et geometrie, toujours avec `manual-drag=no`.
@@ -243,7 +247,7 @@ workspaces nommes via `renameworkspace` puis `workspace name:<nom>`,
 restauration du focus par workspace, `movetoworkspace` qui suit le client et
 deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, ciblage
 direct de client par `id`, adresse `0x...`, `class:`, `title:` ou `tag:`, layouts
-`dwindle/master/monocle`, split/master ratios, `nmaster`, orientations explicites
+`dwindle/master/monocle`, reset/preselect de layout, split/master ratios, `nmaster`, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 Les dispatchers de deplacement acceptent aussi un selecteur de client facon
 Hyprland (`desktop dispatch movetoworkspacesilent 2,class:orizon-settings` ou

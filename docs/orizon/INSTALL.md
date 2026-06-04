@@ -281,7 +281,14 @@ desktop dispatch layoutmsg masterratio 65
 desktop dispatch layoutmsg nmaster 2
 desktop dispatch layoutmsg addmaster
 desktop dispatch layoutmsg removemaster
+desktop dispatch layoutmsg splitratio reset
+desktop dispatch layoutmsg masterratio reset
+desktop dispatch layoutmsg nmaster reset
+desktop dispatch layoutmsg reset
 desktop dispatch layoutmsg orientationleft
+desktop dispatch layoutmsg preselect r
+desktop dispatch layoutmsg preselect up
+desktop dispatch layoutmsg preselect reset
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset

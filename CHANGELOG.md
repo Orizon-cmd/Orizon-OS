@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.53.0` with VM-safe Hyprland-style layout
+  reset/preselect dispatchers: `layoutmsg reset`, `splitratio reset`,
+  `masterratio reset`, `nmaster reset`, and `preselect <l|r|u|d|reset>` now
+  make active workspace tiling state easier to recover and script without
+  adding floating windows, manual drag, a taskbar, or Waybar.
 - Added desktop package version `0.52.0` with Hyprland-style workspace target
   prefixes for the VM compositor facade: `r+/-n` and `r~n` select relative or
   absolute workspace slots including empty ones, while `m+/-n`, `e+/-n`,

@@ -183,9 +183,16 @@ $commands = @(
   "desktop dispatch layoutmsg nmaster 2",
   "desktop dispatch layoutmsg addmaster",
   "desktop dispatch layoutmsg removemaster",
+  "desktop dispatch layoutmsg splitratio reset",
+  "desktop dispatch layoutmsg masterratio reset",
+  "desktop dispatch layoutmsg nmaster reset",
   "desktop dispatch layoutmsg layout monocle",
   "desktop layout-tree",
+  "desktop dispatch layoutmsg reset",
   "desktop dispatch layoutmsg layout master",
+  "desktop dispatch layoutmsg preselect r",
+  "desktop dispatch layoutmsg preselect up",
+  "desktop dispatch layoutmsg preselect reset",
   "desktop dispatch submap resize",
   "desktop hyprctl submap",
   "desktop hyprctl submap reset",
@@ -772,6 +779,27 @@ run_cmd() {
       ;;
     "desktop dispatch layoutmsg removemaster")
       grep -q "desktop dispatch: layoutmsg removemaster nmaster=2" "`$OUT" || { echo "missing desktop dispatch layoutmsg removemaster"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg splitratio reset")
+      grep -q "desktop dispatch: layoutmsg splitratio 50" "`$OUT" && grep -q "reset=yes" "`$OUT" || { echo "missing desktop dispatch layoutmsg splitratio reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg masterratio reset")
+      grep -q "desktop dispatch: layoutmsg masterratio 58" "`$OUT" && grep -q "reset=yes" "`$OUT" || { echo "missing desktop dispatch layoutmsg masterratio reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg nmaster reset")
+      grep -q "desktop dispatch: layoutmsg nmaster 1" "`$OUT" && grep -q "reset=yes" "`$OUT" || { echo "missing desktop dispatch layoutmsg nmaster reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg reset")
+      grep -q "desktop dispatch: layoutmsg layout reset" "`$OUT" && grep -q "default-layout=" "`$OUT" || { echo "missing desktop dispatch layoutmsg reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg preselect r")
+      grep -q "desktop dispatch: layoutmsg preselect r" "`$OUT" && grep -q "split=vertical" "`$OUT" || { echo "missing desktop dispatch layoutmsg preselect r"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg preselect up")
+      grep -q "desktop dispatch: layoutmsg preselect up" "`$OUT" && grep -q "split=horizontal" "`$OUT" || { echo "missing desktop dispatch layoutmsg preselect up"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch layoutmsg preselect reset")
+      grep -q "desktop dispatch: layoutmsg preselect reset" "`$OUT" && grep -q "split=auto" "`$OUT" || { echo "missing desktop dispatch layoutmsg preselect reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch submap resize")
       grep -q "desktop dispatch: submap resize" "`$OUT" || { echo "missing desktop dispatch submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

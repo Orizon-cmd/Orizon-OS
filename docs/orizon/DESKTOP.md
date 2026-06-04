@@ -148,8 +148,15 @@ desktop dispatch layoutmsg mfact -5
 desktop dispatch layoutmsg nmaster 2
 desktop dispatch layoutmsg addmaster
 desktop dispatch layoutmsg removemaster
+desktop dispatch layoutmsg splitratio reset
+desktop dispatch layoutmsg masterratio reset
+desktop dispatch layoutmsg nmaster reset
+desktop dispatch layoutmsg reset
 desktop dispatch layoutmsg orientationleft
 desktop dispatch layoutmsg orientationtop
+desktop dispatch layoutmsg preselect r
+desktop dispatch layoutmsg preselect up
+desktop dispatch layoutmsg preselect reset
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop hyprctl submap reset
@@ -458,7 +465,7 @@ compositor state and the state sent to the client. In Orizon today the
 `client` side is diagnostic/prepared only because the backend is still the VM
 framebuffer facade, not Wayland/wlroots. Layout/submap
 dispatchers now include `togglesplit`,
-`layoutmsg layout <dwindle|master|monocle>|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|splitratio <10-90|+/-n>|masterratio <10-90|+/-n>|mfact <10-90|+/-n>|nmaster <1-8|+/-n>|addmaster|removemaster|focusmaster|swapwithmaster`,
+`layoutmsg layout <dwindle|master|monocle>|reset|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|preselect <l|r|u|d|reset>|splitratio <10-90|+/-n|reset>|masterratio <10-90|+/-n|reset>|mfact <10-90|+/-n|reset>|nmaster <1-8|+/-n|reset>|addmaster|removemaster|focusmaster|swapwithmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
@@ -547,6 +554,8 @@ desktop dispatch focusurgentorlast focuses an urgent client, then falls back to 
 desktop dispatch markurgent [on|off|toggle] [target] marks VM diagnostic urgency
 desktop dispatch tagwindow <+tag|-tag|clear|tag> [target] sets/clears VM diagnostic tags
 desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active workspace layout
+desktop dispatch layoutmsg reset resets active workspace layout ratios to defaults
+desktop dispatch layoutmsg preselect <l|r|u|d|reset> sets a VM-safe directional split hint
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state
 desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1> sets split fullscreen state

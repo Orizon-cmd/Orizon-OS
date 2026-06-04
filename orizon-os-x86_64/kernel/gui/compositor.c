@@ -44,6 +44,9 @@ extern void serial_puts(const char *s);
 #define DESKTOP_MAX_CLIENTS 8
 #define DESKTOP_MAX_WORKSPACES 10
 #define DESKTOP_CLIENT_ADDRESS_BASE 0x100000u
+#define DESKTOP_DEFAULT_SPLIT_RATIO 50
+#define DESKTOP_DEFAULT_MASTER_RATIO 58
+#define DESKTOP_DEFAULT_MASTER_COUNT 1
 
 #define COLOR_BG_TOP MAKE_COLOR(10, 14, 24)
 #define COLOR_BG_BOTTOM MAKE_COLOR(22, 28, 42)
@@ -80,9 +83,9 @@ static int desktop_previous_workspace = 1;
 static int desktop_terminal_workspace = 1;
 static int desktop_layout_mode = 0; /* 0=dwindle, 1=master, 2=monocle */
 static int desktop_split_mode = 0; /* 0=auto, 1=vertical, 2=horizontal */
-static int desktop_split_ratio_percent = 50;
-static int desktop_master_ratio_percent = 58;
-static int desktop_master_count = 1;
+static int desktop_split_ratio_percent = DESKTOP_DEFAULT_SPLIT_RATIO;
+static int desktop_master_ratio_percent = DESKTOP_DEFAULT_MASTER_RATIO;
+static int desktop_master_count = DESKTOP_DEFAULT_MASTER_COUNT;
 static char desktop_loaded_layout_default[32] = "";
 static char desktop_submap[32] = "default";
 static int desktop_last_key = 0;
@@ -515,9 +518,9 @@ static void desktop_workspace_init_layout_state(int workspace) {
   desktop_workspaces[idx].layout_mode =
       desktop_layout_mode_from_name(desktop_session.layout);
   desktop_workspaces[idx].split_mode = 0;
-  desktop_workspaces[idx].split_ratio_percent = 50;
-  desktop_workspaces[idx].master_ratio_percent = 58;
-  desktop_workspaces[idx].master_count = 1;
+  desktop_workspaces[idx].split_ratio_percent = DESKTOP_DEFAULT_SPLIT_RATIO;
+  desktop_workspaces[idx].master_ratio_percent = DESKTOP_DEFAULT_MASTER_RATIO;
+  desktop_workspaces[idx].master_count = DESKTOP_DEFAULT_MASTER_COUNT;
   desktop_workspaces[idx].layout_generation = desktop_layout_serial++;
 }
 
@@ -574,7 +577,7 @@ static int desktop_split_ratio_for_workspace(int workspace) {
   int idx = desktop_workspace_state_index(workspace);
 
   if (idx < 0) {
-    return 50;
+    return DESKTOP_DEFAULT_SPLIT_RATIO;
   }
   desktop_workspace_init_layout_state(workspace);
   return desktop_workspaces[idx].split_ratio_percent;
@@ -584,7 +587,7 @@ static int desktop_master_ratio_for_workspace(int workspace) {
   int idx = desktop_workspace_state_index(workspace);
 
   if (idx < 0) {
-    return 58;
+    return DESKTOP_DEFAULT_MASTER_RATIO;
   }
   desktop_workspace_init_layout_state(workspace);
   return desktop_workspaces[idx].master_ratio_percent;
@@ -594,7 +597,7 @@ static int desktop_master_count_for_workspace(int workspace) {
   int idx = desktop_workspace_state_index(workspace);
 
   if (idx < 0) {
-    return 1;
+    return DESKTOP_DEFAULT_MASTER_COUNT;
   }
   desktop_workspace_init_layout_state(workspace);
   return desktop_workspaces[idx].master_count;
@@ -1137,6 +1140,20 @@ static int desktop_set_master_count(int count) {
   desktop_master_count = count;
   desktop_save_active_layout_state();
   desktop_start_transition("layout", desktop_active_workspace,
+                           desktop_active_workspace);
+  return 0;
+}
+
+static int desktop_reset_active_layout_state(int reset_layout) {
+  if (reset_layout) {
+    desktop_layout_mode = desktop_layout_mode_from_name(desktop_session.layout);
+  }
+  desktop_split_mode = 0;
+  desktop_split_ratio_percent = DESKTOP_DEFAULT_SPLIT_RATIO;
+  desktop_master_ratio_percent = DESKTOP_DEFAULT_MASTER_RATIO;
+  desktop_master_count = DESKTOP_DEFAULT_MASTER_COUNT;
+  desktop_save_active_layout_state();
+  desktop_start_transition("layout-reset", desktop_active_workspace,
                            desktop_active_workspace);
   return 0;
 }
@@ -3585,8 +3602,7 @@ static int desktop_handle_submap_key(int key) {
       return 1;
     }
     if (key == 'r' || key == 'R') {
-      desktop_set_split_ratio(50);
-      desktop_set_master_ratio(58);
+      desktop_reset_active_layout_state(0);
       return 1;
     }
     if (key == 's' || key == 'S') {
@@ -4409,6 +4425,19 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       }
       return -1;
     }
+    if (strcmp(a, "reset") == 0 || strcmp(a, "default") == 0 ||
+        strcmp(a, "resetlayout") == 0) {
+      desktop_reset_active_layout_state(1);
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: layoutmsg layout reset workspace=%d layout=%s split=%s ratio=%d master=%d nmaster=%d default-layout=%s\n",
+                 desktop_active_workspace, desktop_layout_engine(),
+                 desktop_split_mode_name(), desktop_split_ratio_percent,
+                 desktop_master_ratio_percent, desktop_master_count,
+                 desktop_session.layout);
+      }
+      return 0;
+    }
     if (strcmp(a, "togglesplit") == 0 ||
         strcmp(a, "orientationnext") == 0 ||
         strcmp(a, "orientationcycle") == 0) {
@@ -4466,10 +4495,62 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       }
       return 0;
     }
+    if (strncmp(a, "preselect", 9) == 0) {
+      const char *dir = a + 9;
+      int dx = 0;
+      int dy = 0;
+      int delta = 0;
+
+      while (*dir == ' ' || *dir == '\t') {
+        dir++;
+      }
+      if (!dir[0]) {
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: layoutmsg preselect expects l/r/u/d or reset\n");
+        }
+        return -1;
+      }
+      if (strcmp(dir, "reset") == 0 || strcmp(dir, "default") == 0 ||
+          strcmp(dir, "none") == 0 || strcmp(dir, "auto") == 0 ||
+          strcmp(dir, "center") == 0) {
+        desktop_set_split_mode(0);
+      } else if (desktop_parse_direction_arg(dir, &dx, &dy, &delta) == 0 &&
+                 dx != 0) {
+        desktop_set_split_mode(1);
+      } else if (desktop_parse_direction_arg(dir, &dx, &dy, &delta) == 0 &&
+                 dy != 0) {
+        desktop_set_split_mode(2);
+      } else {
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: layoutmsg preselect expects l/r/u/d or reset\n");
+        }
+        return -1;
+      }
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: layoutmsg preselect %s split=%s ratio=%d master=%d nmaster=%d note=directional-split-hint-only\n",
+                 dir, desktop_split_mode_name(), desktop_split_ratio_percent,
+                 desktop_master_ratio_percent, desktop_master_count);
+      }
+      return 0;
+    }
     if (strncmp(a, "splitratio", 10) == 0) {
       const char *ratio_arg = a + 10;
       while (*ratio_arg == ' ') {
         ratio_arg++;
+      }
+      if (strcmp(ratio_arg, "reset") == 0 ||
+          strcmp(ratio_arg, "default") == 0) {
+        desktop_set_split_ratio(DESKTOP_DEFAULT_SPLIT_RATIO);
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: layoutmsg splitratio %d split=%s master=%d nmaster=%d reset=yes\n",
+                   desktop_split_ratio_percent, desktop_split_mode_name(),
+                   desktop_master_ratio_percent, desktop_master_count);
+        }
+        return 0;
       }
       if (desktop_parse_ratio_arg(ratio_arg, desktop_split_ratio_percent,
                                   &value) == 0 &&
@@ -4493,6 +4574,17 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
           strncmp(a, "masterratio", 11) == 0 ? a + 11 : a + 5;
       while (*ratio_arg == ' ') {
         ratio_arg++;
+      }
+      if (strcmp(ratio_arg, "reset") == 0 ||
+          strcmp(ratio_arg, "default") == 0) {
+        desktop_set_master_ratio(DESKTOP_DEFAULT_MASTER_RATIO);
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: layoutmsg masterratio %d split=%s ratio=%d reset=yes\n",
+                   desktop_master_ratio_percent, desktop_split_mode_name(),
+                   desktop_split_ratio_percent);
+        }
+        return 0;
       }
       if (desktop_parse_ratio_arg(ratio_arg, desktop_master_ratio_percent,
                                   &value) == 0 &&
@@ -4519,6 +4611,17 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                                   : a + 7;
       while (*count_arg == ' ') {
         count_arg++;
+      }
+      if (strcmp(count_arg, "reset") == 0 ||
+          strcmp(count_arg, "default") == 0) {
+        desktop_set_master_count(DESKTOP_DEFAULT_MASTER_COUNT);
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: layoutmsg nmaster %d master=%d split=%s ratio=%d reset=yes\n",
+                   desktop_master_count, desktop_master_ratio_percent,
+                   desktop_split_mode_name(), desktop_split_ratio_percent);
+        }
+        return 0;
       }
       if ((count_arg[0] == '+' || count_arg[0] == '-') &&
           desktop_parse_int_arg(count_arg, &value) == 0 &&
@@ -4608,10 +4711,10 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: layoutmsg supports togglesplit, "
-               "orientationnext, orientationprev, orientationleft/right/top/bottom, "
+               "orientationnext, orientationprev, orientationleft/right/top/bottom, preselect <l|r|u|d|reset>, "
                "layout <dwindle|master|monocle>, "
-               "splitratio <10-90|+/-n>, masterratio <10-90|+/-n>, "
-               "nmaster <1-8|+/-n>, addmaster, removemaster, "
+               "reset, splitratio <10-90|+/-n|reset>, masterratio <10-90|+/-n|reset>, "
+               "nmaster <1-8|+/-n|reset>, addmaster, removemaster, "
                "focusmaster, swapwithmaster\n");
     }
     return -1;
@@ -6611,7 +6714,8 @@ void gui_desktop_format_layouts(char *out, size_t out_size) {
            "set: desktop layout <dwindle|master|monocle>\n"
            "workspace-state: per-workspace layout/split/master ratios and nmaster\n"
            "dispatch: desktop dispatch layoutmsg layout <dwindle|master|monocle> | desktop dispatch togglesplit | desktop dispatch focusmaster | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d\n"
-           "dispatch: desktop dispatch layoutmsg splitratio <10-90|+/-n> | desktop dispatch layoutmsg masterratio <10-90|+/-n> | desktop dispatch layoutmsg nmaster <1-8|+/-n>\n"
+           "dispatch: desktop dispatch layoutmsg reset | desktop dispatch layoutmsg preselect <l|r|u|d|reset>\n"
+           "dispatch: desktop dispatch layoutmsg splitratio <10-90|+/-n|reset> | desktop dispatch layoutmsg masterratio <10-90|+/-n|reset> | desktop dispatch layoutmsg nmaster <1-8|+/-n|reset>\n"
            "state: desktop layout-state | desktop hyprctl layoutstate\n"
            "tree: desktop layout-tree | desktop hyprctl layouttree\n"
            "hyprctl: desktop hyprctl layouts\n"
@@ -6670,9 +6774,10 @@ void gui_desktop_format_layout_state(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: desktop dispatch layoutmsg layout <dwindle|master|monocle> | "
-             "desktop dispatch layoutmsg splitratio <10-90|+/-n> | "
-             "desktop dispatch layoutmsg masterratio <10-90|+/-n> | "
-             "desktop dispatch layoutmsg nmaster <1-8|+/-n>\n"
+             "desktop dispatch layoutmsg reset | desktop dispatch layoutmsg preselect <l|r|u|d|reset> | "
+             "desktop dispatch layoutmsg splitratio <10-90|+/-n|reset> | "
+             "desktop dispatch layoutmsg masterratio <10-90|+/-n|reset> | "
+             "desktop dispatch layoutmsg nmaster <1-8|+/-n|reset>\n"
              "hyprctl: desktop hyprctl layoutstate\n"
              "limits: per-workspace state is VM framebuffer compositor state, not upstream Hyprland/wlroots yet\n");
   }
@@ -6758,7 +6863,7 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: layoutmsg splitratio/masterratio/nmaster/togglesplit | focusmaster | swapwithmaster | movefocus l|r|u|d | focuswindow <target>\n"
+             "dispatch: layoutmsg reset/preselect/splitratio/masterratio/nmaster/togglesplit | focusmaster | swapwithmaster | movefocus l|r|u|d | focuswindow <target>\n"
              "hyprctl: desktop hyprctl layouttree\n"
              "limits: diagnostic tree only; no mouse free-drag, no floating scene graph, no Wayland scene graph yet\n");
   }
@@ -6870,8 +6975,8 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow\n"
            "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
-           "layoutmsg: layout <dwindle|master|monocle>, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
-           "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, nmaster <1-8|+/-n>, addmaster, removemaster, focusmaster, swapwithmaster\n"
+           "layoutmsg: layout <dwindle|master|monocle>, reset, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom, preselect <l|r|u|d|reset>\n"
+           "layoutmsg: splitratio <10-90|+/-n|reset>, masterratio|mfact <10-90|+/-n|reset>, nmaster <1-8|+/-n|reset>, addmaster, removemaster, focusmaster, swapwithmaster\n"
            "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"
            "fullscreenstate: internal controls compositor layout; fullscreenClient records state exposed to future clients\n"
            "urgent: markurgent is a VM diagnostic to exercise focusurgentorlast before real client urgency exists\n"
