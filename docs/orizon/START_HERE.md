@@ -53,7 +53,7 @@ design note.
   plus split/master ratio, `nmaster`, monocle deck rendered diagnostics, and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
   workspace next/empty targets, and
-  silent move-to-workspace dispatch,
+  silent move-to-workspace dispatch with optional `workspace,window` selectors,
   persistent render tuning for focus ring, shadow range, render profile and
   animation tick budget,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default

@@ -203,6 +203,8 @@ desktop dispatch swapwindow l
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop dispatch movetoworkspacesilent empty
+desktop dispatch movetoworkspacesilent 2,class:orizon-settings
+desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop focus-window title:Terminal
@@ -222,7 +224,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.48.0` because it includes policy/config files, the persisted session
+`0.49.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -232,6 +234,8 @@ commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/l
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, split `fullscreenstate internal client`
 diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned/urgent client state,
+move-to-workspace window selectors (`id`, `0xaddress`, `class:app`,
+`title:text`, `activewindow`) for dispatcher-only tiling moves,
 safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,

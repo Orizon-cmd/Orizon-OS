@@ -227,6 +227,9 @@ $commands = @(
   "desktop apply",
   "desktop launcher show",
   "desktop launch terminal",
+  "desktop dispatch exec settings",
+  "desktop dispatch movetoworkspacesilent 2,class:orizon-settings",
+  "desktop dispatch movetoworkspace active,activewindow",
   "desktop launch launcher",
   "pkg info orizon-desktop-hypr",
   "desktop package",
@@ -810,6 +813,12 @@ run_cmd() {
     "desktop dispatch movetoworkspacesilent empty")
       grep -q "desktop dispatch: silently moved active to workspace" "`$OUT" && grep -q "follow=no active=2" "`$OUT" || { echo "missing desktop dispatch movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop dispatch movetoworkspacesilent 2,class:orizon-settings")
+      grep -q "desktop dispatch: silently moved selected to workspace 2" "`$OUT" && grep -q 'selector="class:orizon-settings"' "`$OUT" && grep -q "follow=no" "`$OUT" || { echo "missing desktop selected movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch movetoworkspace active,activewindow")
+      grep -q "desktop dispatch: moved selected to workspace" "`$OUT" && grep -q 'selector="activewindow"' "`$OUT" && grep -q "follow=yes" "`$OUT" || { echo "missing desktop activewindow movetoworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop dispatch workspace next")
       grep -q "desktop dispatch: workspace 3" "`$OUT" || { echo "missing desktop dispatch workspace next"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -857,6 +866,9 @@ run_cmd() {
       ;;
     "desktop apply")
       grep -q "desktop: session reloaded" "`$OUT" || { echo "missing desktop apply output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch exec settings")
+      grep -q "desktop dispatch: exec orizon-settings client spawned" "`$OUT" || { echo "missing desktop dispatch exec settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop launcher show")
       grep -q "desktop: launcher open" "`$OUT" || { echo "missing desktop launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

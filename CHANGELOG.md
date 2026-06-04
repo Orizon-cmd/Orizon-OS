@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.49.0` with closer Hyprland-style
+  `movetoworkspace <workspace>,<window>` and
+  `movetoworkspacesilent <workspace>,<window>` support: window selectors can
+  target `id`, `0xaddress`, `class:app`, `title:text`, or `activewindow`, while
+  the default path still moves the active tiled client and no manual drag or
+  floating desktop behavior is enabled.
 - Added desktop package version `0.48.0` with Hyprland-style focus-last and
   urgent diagnostics: `focuscurrentorlast`, `focusurgentorlast`, and the
   VM-only `markurgent` diagnostic dispatcher now exercise most-recent focus

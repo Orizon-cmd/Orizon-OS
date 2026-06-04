@@ -240,6 +240,8 @@ desktop dispatch workspace +1
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
+desktop dispatch movetoworkspacesilent 2,class:orizon-settings
+desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace next
 desktop dispatch workspace empty
 desktop workspace empty
@@ -399,8 +401,10 @@ layout, split mode, split ratio, and master ratio,
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
 urgent state, and geometry for each workspace,
-`movetoworkspace` follows the moved tiled client while `movetoworkspacesilent`
-keeps the current workspace active and restores workspace-local focus,
+`movetoworkspace <workspace>[,<window>]` follows the moved tiled client while
+`movetoworkspacesilent <workspace>[,<window>]` keeps the current workspace
+active and restores workspace-local focus; window selectors accept `id`,
+`0xaddress`, `class:app`, `title:text`, or `activewindow`,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch

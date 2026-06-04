@@ -684,6 +684,14 @@ def run_ssh_checks(
         ("desktop apps launcher", "surface: overlay"),
         ("desktop launch terminal", "exec orizon-terminal client spawned"),
         ("desktop launch settings", "exec orizon-settings client spawned"),
+        (
+            "desktop dispatch movetoworkspacesilent 2,class:orizon-settings",
+            "silently moved selected to workspace 2",
+        ),
+        (
+            "desktop dispatch movetoworkspace active,activewindow",
+            'selector="activewindow"',
+        ),
         ("desktop launch logs", "exec orizon-logs client spawned"),
         ("desktop launch launcher", "orizon-launcher overlay toggled"),
         ("desktop dispatch exec orizon-packages", "exec orizon-packages client spawned"),

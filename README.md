@@ -236,6 +236,10 @@ deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, 
 direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
 `dwindle/master/monocle`, split/master ratios, `nmaster`, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
+Les dispatchers de deplacement acceptent aussi un selecteur de client facon
+Hyprland (`desktop dispatch movetoworkspacesilent 2,class:orizon-settings` ou
+`desktop dispatch movetoworkspace active,activewindow`) pour deplacer une
+fenetre tile ciblee sans drag manuel ni bureau flottant.
 Les etats du client actif acceptent aussi des valeurs idempotentes:
 `desktop dispatch fullscreen|pseudo|pseudotile|pin on|off|toggle|1|0` et
 `desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1>`, avec
