@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.50.0` with VM-safe Hyprland-style client
+  tags: `desktop dispatch tagwindow <+tag|-tag|clear|tag> [target]`, `tag:`
+  selectors for `focuswindow` and move-to-workspace dispatchers, tag fields in
+  `clients`, `activewindow`, `focus-history`, `workspace-stack`, and
+  `client-model`, and broader simplified `windowrulev2` matching for
+  `tag`, `initialClass`, `initialTitle`, `workspace`, `focus`, `pin`, and
+  `fullscreen`. No floating, free-drag, or taskbar behavior is enabled.
 - Added desktop package version `0.49.0` with closer Hyprland-style
   `movetoworkspace <workspace>,<window>` and
   `movetoworkspacesilent <workspace>,<window>` support: window selectors can

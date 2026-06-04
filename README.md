@@ -216,8 +216,9 @@ clients, focus history, etats fullscreen/pseudo/pinned/urgent, regles et backend
 un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 `desktop rule-matches` et `desktop hyprctl rulematches` lisent
 `/system/desktop-rules.conf` et indiquent quelles regles `windowrulev2`
-correspondent aux clients actuels par class/title/app avec un matching
-simplifie. Les actions sures `tile`, `fullscreen`, `pseudo`, `pin` et
+correspondent aux clients actuels par class/title/app/tag, initialClass,
+initialTitle, workspace, focus, pin et fullscreen avec un matching simplifie.
+Les actions sures `tile`, `fullscreen`, `pseudo`, `pin`, `tag` et
 `workspace N` sont appliquees au spawn des clients tiles; les actions
 floating/free-drag restent ignorees et visibles dans le diagnostic. Ce n'est
 pas encore le moteur regex/Wayland d'Hyprland upstream.
@@ -227,19 +228,22 @@ detaille classe/module/surface, et
 premieres apps natives comme clients tiles geres par le compositor. Le launcher
 est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
 menu demarrer permanent, ni fenetres flottantes.
-`desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned/urgent, workspaces relatifs/dynamiques `next`/`empty`,
 workspaces nommes via `renameworkspace` puis `workspace name:<nom>`,
 restauration du focus par workspace, `movetoworkspace` qui suit le client et
 deplacement silencieux qui reste sur place, focus/swap directionnels `l/r/u/d`, ciblage
-direct de client par `id`, adresse `0x...`, `class:` ou `title:`, layouts
+direct de client par `id`, adresse `0x...`, `class:`, `title:` ou `tag:`, layouts
 `dwindle/master/monocle`, split/master ratios, `nmaster`, orientations explicites
 `orientationleft/right/top/bottom`, sans deplacement manuel de fenetres a la souris.
 Les dispatchers de deplacement acceptent aussi un selecteur de client facon
 Hyprland (`desktop dispatch movetoworkspacesilent 2,class:orizon-settings` ou
 `desktop dispatch movetoworkspace active,activewindow`) pour deplacer une
 fenetre tile ciblee sans drag manuel ni bureau flottant.
+`desktop dispatch tagwindow +settings class:orizon-settings` ajoute un tag
+diagnostic VM-safe, ensuite reutilisable avec `focuswindow tag:settings` ou
+`movetoworkspace 2,tag:settings`.
 Les etats du client actif acceptent aussi des valeurs idempotentes:
 `desktop dispatch fullscreen|pseudo|pseudotile|pin on|off|toggle|1|0` et
 `desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1>`, avec
@@ -250,7 +254,7 @@ de futurs vrais clients, mais le backend reste framebuffer VM.
 pas encore un signal d'urgence Wayland/wlroots venant d'une application reelle.
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model` et `desktop rule-matches` exposent les clients tiles, adresses
-stables, geometries, graphe workspaces/focus, etats fullscreen/pseudo/pinned/urgent,
+stables, geometries, tags, graphe workspaces/focus, etats fullscreen/pseudo/pinned/urgent,
 regles appliquees au spawn, backend et workspace courant/precedent avec
 `focusHistoryID`. `desktop
 profiles` liste les profils symboliques, `desktop preset <name>` applique une

@@ -685,6 +685,15 @@ def run_ssh_checks(
         ("desktop launch terminal", "exec orizon-terminal client spawned"),
         ("desktop launch settings", "exec orizon-settings client spawned"),
         (
+            "desktop dispatch tagwindow +settings class:orizon-settings",
+            'tagwindow set tag="settings"',
+        ),
+        ("desktop dispatch focuswindow tag:settings", "focuswindow ok"),
+        (
+            "desktop dispatch movetoworkspacesilent 2,tag:settings",
+            'selector="tag:settings"',
+        ),
+        (
             "desktop dispatch movetoworkspacesilent 2,class:orizon-settings",
             "silently moved selected to workspace 2",
         ),

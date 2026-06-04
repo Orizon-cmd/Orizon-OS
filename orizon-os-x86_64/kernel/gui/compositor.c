@@ -114,6 +114,7 @@ typedef struct {
   uint64_t focus_generation;
   char title[48];
   char app_id[32];
+  char tag[32];
   int rule_match_count;
   int rule_apply_count;
   char rule_actions[80];
@@ -409,6 +410,11 @@ static int desktop_workspace_copy_safe_name(char *out, size_t out_size,
   }
   out[token_len] = '\0';
   return 0;
+}
+
+static int desktop_copy_safe_tag(char *out, size_t out_size,
+                                 const char *value) {
+  return desktop_workspace_copy_safe_name(out, out_size, value);
 }
 
 static int desktop_workspace_find_named(const char *name) {
@@ -1747,6 +1753,7 @@ static int desktop_spawn_client(const char *title, const char *app_id,
       desktop_clients[i].focus_history_id = -1;
       desktop_clients[i].mapped_generation = desktop_client_serial++;
       desktop_clients[i].focus_generation = 0;
+      desktop_clients[i].tag[0] = '\0';
       desktop_clients[i].rule_match_count = 0;
       desktop_clients[i].rule_apply_count = 0;
       desktop_clients[i].rule_actions[0] = '\0';
@@ -1978,6 +1985,9 @@ static int desktop_client_matches_focus_query(const desktop_client_t *client,
   if (desktop_starts_with_icase(q, "title:")) {
     return desktop_contains_icase(client->title, q + 6);
   }
+  if (desktop_starts_with_icase(q, "tag:")) {
+    return desktop_contains_icase(client->tag, q + 4);
+  }
   if (desktop_equals_icase(q, "active") ||
       desktop_equals_icase(q, "activewindow") ||
       desktop_equals_icase(q, "current")) {
@@ -2020,7 +2030,7 @@ static int desktop_focus_window_query(const char *query, char *out,
   if (!q[0]) {
     if (out && out_size) {
       snprintf(out, out_size,
-               "desktop dispatch: focuswindow expects <id|0xaddress|class:app|app:id|title:text>\n");
+               "desktop dispatch: focuswindow expects <id|0xaddress|class:app|app:id|title:text|tag:name|activewindow>\n");
     }
     return -1;
   }
@@ -2259,6 +2269,97 @@ static int desktop_mark_urgent_dispatch(const char *args, char *out,
     snprintf(out, out_size,
              "desktop dispatch: markurgent %s address=0x%x id=%d class=%s title=\"%s\" workspace=%d diagnostic=vm-only\n",
              desktop_clients[idx].urgent ? "on" : "off",
+             desktop_client_address(&desktop_clients[idx]),
+             desktop_clients[idx].id, desktop_clients[idx].app_id,
+             desktop_clients[idx].title, desktop_clients[idx].workspace);
+  }
+  return 0;
+}
+
+static int desktop_tag_window_dispatch(const char *args, char *out,
+                                       size_t out_size) {
+  const char *a = args ? args : "";
+  const char *target = NULL;
+  char tag_token[48];
+  char tag[32];
+  int clear = 0;
+  int idx;
+  size_t len = 0;
+
+  while (*a == ' ') {
+    a++;
+  }
+  if (!a[0]) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: tagwindow expects <+tag|-tag|clear|tag> [target]\n");
+    }
+    return -1;
+  }
+  while (a[len] && a[len] != ' ' && len + 1 < sizeof(tag_token)) {
+    tag_token[len] = a[len];
+    len++;
+  }
+  tag_token[len] = '\0';
+  target = a + len;
+  while (*target == ' ') {
+    target++;
+  }
+  if (!target[0]) {
+    target = NULL;
+  }
+
+  if (strcmp(tag_token, "clear") == 0 || strcmp(tag_token, "unset") == 0 ||
+      strcmp(tag_token, "none") == 0) {
+    clear = 1;
+    tag[0] = '\0';
+  } else {
+    const char *tag_value = tag_token;
+    if (tag_token[0] == '+') {
+      tag_value = tag_token + 1;
+    } else if (tag_token[0] == '-') {
+      clear = 1;
+      tag_value = tag_token + 1;
+    }
+    if (!clear || tag_value[0]) {
+      if (desktop_copy_safe_tag(tag, sizeof(tag), tag_value) < 0) {
+        if (out && out_size) {
+          snprintf(out, out_size,
+                   "desktop dispatch: tagwindow tag must be 1-%u chars using A-Z, 0-9, '.', '-' or '_'\n",
+                   (unsigned)(sizeof(tag) - 1));
+        }
+        return -1;
+      }
+    } else {
+      tag[0] = '\0';
+    }
+  }
+
+  idx = target ? desktop_find_client_by_focus_query(target)
+               : desktop_focused_client_index();
+  if (idx < 0) {
+    if (out && out_size) {
+      snprintf(out, out_size,
+               target
+                   ? "desktop dispatch: tagwindow no-match selector=\"%s\"\n"
+                   : "desktop dispatch: tagwindow expects an active client or target selector\n",
+               target ? target : "");
+    }
+    return -1;
+  }
+  if (clear) {
+    desktop_clients[idx].tag[0] = '\0';
+  } else {
+    snprintf(desktop_clients[idx].tag, sizeof(desktop_clients[idx].tag), "%s",
+             tag);
+  }
+  needs_redraw = 1;
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "desktop dispatch: tagwindow %s tag=\"%s\" selector=\"%s\" address=0x%x id=%d class=%s title=\"%s\" workspace=%d diagnostic=vm-only\n",
+             clear ? "clear" : "set",
+             desktop_clients[idx].tag[0] ? desktop_clients[idx].tag : "none",
+             target ? target : "activewindow",
              desktop_client_address(&desktop_clients[idx]),
              desktop_clients[idx].id, desktop_clients[idx].app_id,
              desktop_clients[idx].title, desktop_clients[idx].workspace);
@@ -3865,6 +3966,7 @@ int gui_desktop_close_active_client(void) {
   desktop_clients[idx].focus_history_id = -1;
   desktop_clients[idx].mapped_generation = 0;
   desktop_clients[idx].focus_generation = 0;
+  desktop_clients[idx].tag[0] = '\0';
   desktop_clients[idx].rule_match_count = 0;
   desktop_clients[idx].rule_apply_count = 0;
   desktop_clients[idx].rule_actions[0] = '\0';
@@ -3902,7 +4004,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|name:name|next|empty|+1|-1|previous> | renameworkspace <target> <name> | movetoworkspace <target>[,<window>] | movetoworkspacesilent <target>[,<window>] | "
-               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | swapwindow <l|r|u|d|next|prev> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
+               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | tagwindow <tag> [target] | swapwindow <l|r|u|d|next|prev> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
     }
@@ -3981,7 +4083,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                                            sizeof(selector)) < 0) {
       if (out && out_size) {
         snprintf(out, out_size,
-                 "desktop dispatch: movetoworkspace expects active/selectable client and <1-%d|name:<name>|empty|+/-n>[,<id|address|class:app|title:text|activewindow>]\n",
+                 "desktop dispatch: movetoworkspace expects active/selectable client and <1-%d|name:<name>|empty|+/-n>[,<id|address|class:app|title:text|tag:name|activewindow>]\n",
                  desktop_workspace_count);
       }
       return -1;
@@ -4073,6 +4175,10 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
   if (strcmp(dispatcher, "markurgent") == 0 ||
       strcmp(dispatcher, "urgent") == 0) {
     return desktop_mark_urgent_dispatch(a, out, out_size);
+  }
+  if (strcmp(dispatcher, "tagwindow") == 0 ||
+      strcmp(dispatcher, "tag") == 0) {
+    return desktop_tag_window_dispatch(a, out, out_size);
   }
   if (strcmp(dispatcher, "cyclenext") == 0) {
     int rc = (strcmp(a, "prev") == 0 || strcmp(a, "previous") == 0 ||
@@ -4826,6 +4932,84 @@ static int desktop_rule_key_is_app(const char *key) {
   return key && (strstr(key, "app") || strstr(key, "App"));
 }
 
+static int desktop_rule_key_is_tag(const char *key) {
+  return key && (strstr(key, "tag") || strstr(key, "Tag"));
+}
+
+static int desktop_rule_pattern_bool_value(const char *pattern, int *value) {
+  char clean[24];
+
+  if (!pattern || !value) {
+    return -1;
+  }
+  desktop_rule_simplify_pattern(clean, sizeof(clean), pattern);
+  for (size_t i = 0; clean[i]; i++) {
+    clean[i] = (char)desktop_ascii_lower((unsigned char)clean[i]);
+  }
+  if (strcmp(clean, "1") == 0 || strcmp(clean, "true") == 0 ||
+      strcmp(clean, "yes") == 0 || strcmp(clean, "on") == 0) {
+    *value = 1;
+    return 0;
+  }
+  if (strcmp(clean, "0") == 0 || strcmp(clean, "false") == 0 ||
+      strcmp(clean, "no") == 0 || strcmp(clean, "off") == 0) {
+    *value = 0;
+    return 0;
+  }
+  return -1;
+}
+
+static int desktop_rule_pattern_matches_bool(const char *pattern, int actual,
+                                             char *style, size_t style_size) {
+  int desired = 0;
+
+  if (style && style_size) {
+    snprintf(style, style_size, "%s", "bool-miss");
+  }
+  if (desktop_rule_pattern_bool_value(pattern, &desired) < 0) {
+    return 0;
+  }
+  if ((actual ? 1 : 0) == desired) {
+    if (style && style_size) {
+      snprintf(style, style_size, "%s", desired ? "true" : "false");
+    }
+    return 1;
+  }
+  return 0;
+}
+
+static int desktop_rule_pattern_matches_workspace(const char *pattern,
+                                                  int workspace, char *style,
+                                                  size_t style_size) {
+  char clean[48];
+  int parsed = 0;
+
+  if (style && style_size) {
+    snprintf(style, style_size, "%s", "workspace-miss");
+  }
+  if (!pattern || workspace < 1) {
+    return 0;
+  }
+  desktop_rule_simplify_pattern(clean, sizeof(clean), pattern);
+  if (strncmp(clean, "name:", 5) == 0) {
+    int named = desktop_workspace_find_named(clean + 5);
+    if (named == workspace) {
+      if (style && style_size) {
+        snprintf(style, style_size, "%s", "workspace-name");
+      }
+      return 1;
+    }
+    return 0;
+  }
+  if (desktop_parse_int_arg(clean, &parsed) == 0 && parsed == workspace) {
+    if (style && style_size) {
+      snprintf(style, style_size, "%s", "workspace-id");
+    }
+    return 1;
+  }
+  return 0;
+}
+
 static int desktop_rule_match_token(const char *token,
                                     const desktop_client_t *client,
                                     char *reason, size_t reason_size) {
@@ -4850,15 +5034,90 @@ static int desktop_rule_match_token(const char *token,
   }
   desktop_rule_copy_trim(key, sizeof(key), local, (size_t)(sep - local));
   desktop_rule_copy_trim(pattern, sizeof(pattern), sep + 1, strlen(sep + 1));
+  if (desktop_equals_icase(key, "match")) {
+    const char *nested_sep = desktop_rule_find_char(pattern, ':');
+    if (!nested_sep) {
+      nested_sep = desktop_rule_find_char(pattern, '=');
+    }
+    if (nested_sep) {
+      char nested[96];
+      snprintf(nested, sizeof(nested), "%s", pattern);
+      nested_sep = desktop_rule_find_char(nested, ':');
+      if (!nested_sep) {
+        nested_sep = desktop_rule_find_char(nested, '=');
+      }
+      desktop_rule_copy_trim(key, sizeof(key), nested,
+                             (size_t)(nested_sep - nested));
+      desktop_rule_copy_trim(pattern, sizeof(pattern), nested_sep + 1,
+                             strlen(nested_sep + 1));
+    }
+  }
   if (desktop_rule_key_is_class(key)) {
     target = client->app_id;
-    target_name = "class";
+    target_name = strstr(key, "initial") || strstr(key, "Initial")
+                      ? "initialClass"
+                      : "class";
   } else if (desktop_rule_key_is_title(key)) {
     target = client->title;
-    target_name = "title";
+    target_name = strstr(key, "initial") || strstr(key, "Initial")
+                      ? "initialTitle"
+                      : "title";
   } else if (desktop_rule_key_is_app(key)) {
     target = client->app_id;
     target_name = "app";
+  } else if (desktop_rule_key_is_tag(key)) {
+    target = client->tag;
+    target_name = "tag";
+  } else if (desktop_contains_icase(key, "focus")) {
+    if (desktop_rule_pattern_matches_bool(pattern,
+                                          client->id == desktop_focused_client_id,
+                                          style, sizeof(style))) {
+      if (reason && reason_size) {
+        snprintf(reason, reason_size, "focus-%s", style);
+      }
+      return 1;
+    }
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "focus-miss");
+    }
+    return 0;
+  } else if (desktop_contains_icase(key, "pin")) {
+    if (desktop_rule_pattern_matches_bool(pattern, client->pinned, style,
+                                          sizeof(style))) {
+      if (reason && reason_size) {
+        snprintf(reason, reason_size, "pin-%s", style);
+      }
+      return 1;
+    }
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "pin-miss");
+    }
+    return 0;
+  } else if (desktop_contains_icase(key, "fullscreen")) {
+    if (desktop_rule_pattern_matches_bool(pattern,
+                                          client->fullscreen_state_internal > 0,
+                                          style, sizeof(style))) {
+      if (reason && reason_size) {
+        snprintf(reason, reason_size, "fullscreen-%s", style);
+      }
+      return 1;
+    }
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "fullscreen-miss");
+    }
+    return 0;
+  } else if (desktop_contains_icase(key, "workspace")) {
+    if (desktop_rule_pattern_matches_workspace(pattern, client->workspace,
+                                               style, sizeof(style))) {
+      if (reason && reason_size) {
+        snprintf(reason, reason_size, "workspace-%s", style);
+      }
+      return 1;
+    }
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "workspace-miss");
+    }
+    return 0;
   } else {
     return -1;
   }
@@ -4879,6 +5138,7 @@ static int desktop_rule_matches_client(const desktop_rule_match_t *rule,
                                        char *reason, size_t reason_size) {
   const char *p;
   int selector_count = 0;
+  int unsupported_count = 0;
 
   if (reason && reason_size) {
     snprintf(reason, reason_size, "%s", "selector-miss");
@@ -4903,14 +5163,28 @@ static int desktop_rule_matches_client(const desktop_rule_match_t *rule,
     rc = desktop_rule_match_token(token, client, reason, reason_size);
     if (rc >= 0) {
       selector_count++;
+    } else if (token[0]) {
+      unsupported_count++;
     }
-    if (rc > 0) {
-      return 1;
+    if (rc == 0) {
+      return 0;
     }
     if (!comma) {
       break;
     }
     p = comma + 1;
+  }
+  if (selector_count > 0 && unsupported_count == 0) {
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "all-selectors-match");
+    }
+    return 1;
+  }
+  if (selector_count > 0 && unsupported_count > 0) {
+    if (reason && reason_size) {
+      snprintf(reason, reason_size, "%s", "unsupported-selector");
+    }
+    return 0;
   }
   if (selector_count == 0) {
     if (strstr(rule->selectors, client->app_id) ||
@@ -4987,6 +5261,41 @@ static int desktop_rule_parse_workspace_target(const char *action) {
   return workspace;
 }
 
+static int desktop_rule_parse_tag_action(const char *action, char *tag,
+                                         size_t tag_size, int *clear) {
+  const char *p;
+
+  if (!action || !tag || tag_size == 0 || !clear ||
+      !desktop_rule_action_is(action, "tag")) {
+    return -1;
+  }
+  tag[0] = '\0';
+  *clear = 0;
+  p = action + 3;
+  while (*p && (desktop_rule_is_space(*p) || *p == ':' || *p == '=')) {
+    p++;
+  }
+  if (strncmp(p, "clear", 5) == 0 || strncmp(p, "unset", 5) == 0 ||
+      strncmp(p, "none", 4) == 0) {
+    *clear = 1;
+    return 0;
+  }
+  if (*p == '+') {
+    p++;
+  } else if (*p == '-') {
+    *clear = 1;
+    p++;
+  }
+  if (!p[0]) {
+    *clear = 1;
+    return 0;
+  }
+  if (desktop_copy_safe_tag(tag, tag_size, p) < 0) {
+    return -1;
+  }
+  return 0;
+}
+
 static void desktop_rule_record_client_action(desktop_client_t *client,
                                               const char *action,
                                               int applied) {
@@ -5022,6 +5331,8 @@ static void desktop_rule_record_client_action(desktop_client_t *client,
 static int desktop_rule_apply_action_to_client(
     const desktop_rule_match_t *rule, desktop_client_t *client) {
   int workspace;
+  int clear_tag = 0;
+  char tag[sizeof(client->tag)];
 
   if (!rule || !client || !rule->action[0]) {
     return 0;
@@ -5046,6 +5357,16 @@ static int desktop_rule_apply_action_to_client(
     desktop_rule_record_client_action(client, "pin", 1);
     return 1;
   }
+  if (desktop_rule_parse_tag_action(rule->action, tag, sizeof(tag),
+                                    &clear_tag) == 0) {
+    if (clear_tag) {
+      client->tag[0] = '\0';
+    } else {
+      snprintf(client->tag, sizeof(client->tag), "%s", tag);
+    }
+    desktop_rule_record_client_action(client, rule->action, 1);
+    return 1;
+  }
   workspace = desktop_rule_parse_workspace_target(rule->action);
   if (workspace > 0) {
     if (client->workspace != workspace) {
@@ -5068,6 +5389,9 @@ static int desktop_rule_apply_action_to_client(
 }
 
 static int desktop_rule_action_is_safe(const char *action) {
+  char tag[32];
+  int clear_tag = 0;
+
   if (!action || !action[0]) {
     return 0;
   }
@@ -5076,6 +5400,8 @@ static int desktop_rule_action_is_safe(const char *action) {
          desktop_rule_action_is(action, "pseudo") ||
          desktop_rule_action_is(action, "pseudotile") ||
          desktop_rule_action_is(action, "pin") ||
+         desktop_rule_parse_tag_action(action, tag, sizeof(tag), &clear_tag) ==
+             0 ||
          desktop_rule_parse_workspace_target(action) > 0;
 }
 
@@ -5246,7 +5572,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
     used += snprintf(
         out + used, out_size - used,
         "client address=0x%x id=%d mapped=%s hidden=%s at=%d,%d size=%dx%d "
-        "rendered=%s workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tiled=yes floating=no "
+        "rendered=%s workspace=%d workspaceName=\"%s\" title=\"%s\" class=%s app=%s tag=%s tiled=yes floating=no "
         "fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s pinned=%s urgent=%s focused=%s focusHistoryID=%d "
         "rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" "
         "lastWorkspace=%d mappedSeq=%llu focusSeq=%llu backend=%s\n",
@@ -5260,6 +5586,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
         desktop_workspace_name(desktop_clients[i].workspace),
         desktop_clients[i].title, desktop_clients[i].app_id,
         desktop_clients[i].app_id,
+        desktop_clients[i].tag[0] ? desktop_clients[i].tag : "none",
         desktop_clients[i].fullscreen_state_internal,
         desktop_clients[i].fullscreen_state_client,
         desktop_fullscreen_state_name(
@@ -5282,7 +5609,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: exec terminal|settings|logs|packages|update | "
              "killactive | movefocus l|r|u|d|next|prev | "
-             "focuswindow <id|0xaddr|class:app|title:text> | focuscurrentorlast | focusurgentorlast | markurgent [on|off|toggle] [target] | "
+             "focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow> | focuscurrentorlast | focusurgentorlast | markurgent [on|off|toggle] [target] | tagwindow <tag> [target] | "
              "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
              "fullscreen [on|off|toggle] | fullscreenstate <internal 0-3|-1> <client 0-3|-1> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
              "workspace <n|name:name|next|empty|+1|-1|previous> | "
@@ -5290,7 +5617,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "movetoworkspace <n|name:name|empty|+1|-1>[,<window>] | "
              "togglesplit | layoutmsg <msg> | resizeactive <x> <y> | "
              "submap <name>\n"
-             "rules: class/title/app selectors applied-on-spawn via %s\n"
+             "rules: class/title/app/tag selectors applied-on-spawn via %s\n"
              "focus-history: desktop focus-history | desktop hyprctl focushistory\n"
              "limits: no mouse-drag window moving; true Wayland clients are future work\n",
              ORIZON_DESKTOP_RULES_PATH);
@@ -5354,7 +5681,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
       "layout: engine=%s configured=%s split=%s ratio=%d master=%d nmaster=%d submap=%s\n"
       "active: workspace=%d name=\"%s\" client=0x%x focusHistoryID=%d focusSeq=%llu\n"
       "summary: clients=%d mapped=%d hidden=%d pinned=%d fullscreen=%d pseudo=%d urgent=%d workspaces-used=%d/%d\n"
-      "rules: runtime=%s selectors=class/title/app spawn-apply=tile/fullscreen/pseudo/pin/workspace\n",
+      "rules: runtime=%s selectors=class/title/app/tag/initialClass/initialTitle/workspace/focus/pin/fullscreen spawn-apply=tile/fullscreen/pseudo/pin/tag/workspace\n",
       desktop_layout_engine(), desktop_session.layout, desktop_split_mode_name(),
       desktop_split_ratio_percent, desktop_master_ratio_percent,
       desktop_master_count, desktop_submap,
@@ -5413,10 +5740,12 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
     rank = desktop_focus_rank_for_id(desktop_clients[i].id);
     used += snprintf(
         out + used, out_size - used,
-        "client 0x%x: id=%d title=\"%s\" class=%s app=%s workspace=%d current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s urgent=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
+        "client 0x%x: id=%d title=\"%s\" class=%s app=%s tag=%s workspace=%d current=%s mapped=%s hidden=%s rendered=%s pinned=%s fullscreen=%d fullscreenClient=%d fullscreenMode=%s fullscreenClientMode=%s pseudo=%s urgent=%s focused=%s focusHistoryID=%d focusRank=%d rulesMatched=%d rulesApplied=%d ruleActions=\"%s\" geom=%d,%d %dx%d backend=%s\n",
         desktop_client_address(&desktop_clients[i]), desktop_clients[i].id,
         desktop_clients[i].title, desktop_clients[i].app_id,
-        desktop_clients[i].app_id, desktop_clients[i].workspace,
+        desktop_clients[i].app_id,
+        desktop_clients[i].tag[0] ? desktop_clients[i].tag : "none",
+        desktop_clients[i].workspace,
         desktop_client_on_workspace(&desktop_clients[i], desktop_active_workspace)
             ? "yes"
             : "no",
@@ -5454,7 +5783,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
 void gui_desktop_format_rule_matches(char *out, size_t out_size) {
   char cfg[1024];
   char line[192];
-  char rendered[320];
+  char rendered[640];
   const char *p;
   size_t used = 0;
   int line_number = 1;
@@ -5480,8 +5809,8 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size) {
            "version: " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
            "runtime: %s bytes=%d\n"
            "model: Hyprland-style windowrule diagnostics; manual-drag=no floating=no taskbar=no\n"
-           "selectors: class/title/app simplified-regex=yes diagnostic=yes\n"
-           "spawn-apply: safe-actions=tile/fullscreen/pseudo/pin/workspace ignored=floating/move/center\n",
+           "selectors: class/title/app/tag/initialClass/initialTitle/workspace/focus/pin/fullscreen simplified-regex=yes diagnostic=yes\n"
+           "spawn-apply: safe-actions=tile/fullscreen/pseudo/pin/tag/workspace ignored=floating/move/center\n",
            ORIZON_DESKTOP_RULES_PATH, runtime_bytes);
   desktop_rule_append_text(out, out_size, &used, rendered);
 
@@ -5530,10 +5859,12 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size) {
           matched_for_rule++;
         }
         snprintf(rendered, sizeof(rendered),
-                 "  client 0x%x: class=%s app=%s title=\"%s\" workspace=%d match=%s reason=%s spawnRulesMatched=%d spawnRulesApplied=%d spawnActions=\"%s\"\n",
+                 "  client 0x%x: class=%s app=%s title=\"%s\" tag=%s workspace=%d match=%s reason=%s spawnRulesMatched=%d spawnRulesApplied=%d spawnActions=\"%s\"\n",
                  desktop_client_address(&desktop_clients[i]),
                  desktop_clients[i].app_id, desktop_clients[i].app_id,
-                 desktop_clients[i].title, desktop_clients[i].workspace,
+                 desktop_clients[i].title,
+                 desktop_clients[i].tag[0] ? desktop_clients[i].tag : "none",
+                 desktop_clients[i].workspace,
                  matched ? "yes" : "no", reason,
                  desktop_clients[i].rule_match_count,
                  desktop_clients[i].rule_apply_count,
@@ -5559,7 +5890,7 @@ void gui_desktop_format_rule_matches(char *out, size_t out_size) {
   snprintf(rendered, sizeof(rendered),
            "\nsummary: rules=%d clients=%d comparisons=%d matches=%d\n"
            "commands: desktop rules | desktop clients | desktop client-model | desktop hyprctl rulematches\n"
-           "limits: simplified class/title/app matching only; no upstream Hyprland regex engine, no wlroots/Wayland scene graph, no free-drag/floating behavior\n",
+           "limits: simplified selectors only; no upstream Hyprland regex engine, no wlroots/Wayland scene graph, no free-drag/floating behavior\n",
            rules, clients, comparisons, matches);
   desktop_rule_append_text(out, out_size, &used, rendered);
 }
@@ -5594,6 +5925,7 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
            "  class: %s\n"
            "  initialClass: %s\n"
            "  initialTitle: %s\n"
+           "  tag: %s\n"
            "  workspace: %d\n"
            "  at: %d,%d\n"
            "  size: %d,%d\n"
@@ -5619,6 +5951,7 @@ void gui_desktop_format_activewindow(char *out, size_t out_size) {
                : "false",
            desktop_clients[idx].title, desktop_clients[idx].app_id,
            desktop_clients[idx].app_id, desktop_clients[idx].title,
+           desktop_clients[idx].tag[0] ? desktop_clients[idx].tag : "none",
            desktop_clients[idx].workspace, rx, ry, rw, rh,
            desktop_clients[idx].fullscreen_state_internal,
            desktop_clients[idx].fullscreen_state_client,
@@ -5717,10 +6050,11 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
     used += snprintf(
         out + used, out_size - used,
         "%d: address=0x%x id=%d workspace=%d title=\"%s\" class=%s "
-        "mapped=%s hidden=%s pinned=%s fullscreen=%s urgent=%s focusSeq=%llu\n",
+        "tag=%s mapped=%s hidden=%s pinned=%s fullscreen=%s urgent=%s focusSeq=%llu\n",
         i, desktop_client_address(&desktop_clients[idx]),
         desktop_clients[idx].id, desktop_clients[idx].workspace,
         desktop_clients[idx].title, desktop_clients[idx].app_id,
+        desktop_clients[idx].tag[0] ? desktop_clients[idx].tag : "none",
         desktop_clients[idx].mapped ? "true" : "false",
         desktop_clients[idx].hidden ? "true" : "false",
         desktop_clients[idx].pinned ? "true" : "false",
@@ -5731,7 +6065,7 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: desktop dispatch movefocus l|r|u|d|next|prev | "
-             "desktop dispatch focuswindow <id|0xaddr|class:app|title:text> | "
+             "desktop dispatch focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow> | "
              "desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | "
              "desktop dispatch cyclenext [prev] | "
              "desktop dispatch swapwindow l|r|u|d | "
@@ -5810,12 +6144,14 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
                                                  : "foreign");
       used += snprintf(
           out + used, out_size - used,
-          "  %d: role=%s address=0x%x id=%d title=\"%s\" class=%s scope=%s "
+          "  %d: role=%s address=0x%x id=%d title=\"%s\" class=%s tag=%s scope=%s "
           "focused=%s focusRank=%d focusHistoryID=%d rect=%d,%d %dx%d "
           "fullscreen=%s pseudo=%s pinned=%s urgent=%s\n",
           pos, desktop_client_role_on_workspace(ws, idx, pos, count),
           desktop_client_address(&desktop_clients[idx]), desktop_clients[idx].id,
-          desktop_clients[idx].title, desktop_clients[idx].app_id, scope,
+          desktop_clients[idx].title, desktop_clients[idx].app_id,
+          desktop_clients[idx].tag[0] ? desktop_clients[idx].tag : "none",
+          scope,
           idx == focus_idx ? "yes" : "no", rank,
           desktop_clients[idx].focus_history_id, rx, ry, rw, rh,
           desktop_clients[idx].fullscreen ? "yes" : "no",
@@ -5930,7 +6266,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
              "supported: exec terminal/settings/logs/packages/update, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, "
-             "focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
+             "focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
@@ -6220,7 +6556,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, cyclenext, swapnext, swapwindow\n"
+           "dispatchers: exec, killactive, workspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "layoutmsg: layout <dwindle|master|monocle>, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom\n"
            "layoutmsg: splitratio <10-90|+/-n>, masterratio|mfact <10-90|+/-n>, nmaster <1-8|+/-n>, addmaster, removemaster, focusmaster, swapwithmaster\n"

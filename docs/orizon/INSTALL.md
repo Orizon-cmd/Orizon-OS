@@ -286,6 +286,9 @@ desktop dispatch movetoworkspacesilent empty
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
+desktop dispatch tagwindow +settings class:orizon-settings
+desktop dispatch focuswindow tag:settings
+desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace +1

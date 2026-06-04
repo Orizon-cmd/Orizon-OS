@@ -203,6 +203,9 @@ desktop dispatch swapwindow l
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop dispatch movetoworkspacesilent empty
+desktop dispatch tagwindow +settings class:orizon-settings
+desktop dispatch focuswindow tag:settings
+desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace next
@@ -224,7 +227,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.49.0` because it includes policy/config files, the persisted session
+`0.50.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, generated
@@ -235,8 +238,9 @@ facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, split `fullscreenstate internal client`
 diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned/urgent client state,
 move-to-workspace window selectors (`id`, `0xaddress`, `class:app`,
-`title:text`, `activewindow`) for dispatcher-only tiling moves,
-safe spawn-time `windowrulev2` actions for tile/fullscreen/pseudo/pin/workspace,
+`title:text`, `tag:name`, `activewindow`) for dispatcher-only tiling moves,
+VM-safe `tagwindow` diagnostics and safe spawn-time `windowrulev2` actions for
+tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
@@ -327,12 +331,18 @@ state graph, including fullscreen/pseudo/pinned/urgent state, rules runtime, sta
 client addresses, backend truth, and the `manual-drag=no` boundary.
 Version `0.37.0` adds `desktop rule-matches` and `desktop hyprctl rulematches`
 as read-only diagnostics for `/system/desktop-rules.conf`, mapping
-`windowrulev2` class/title/app selectors to current tiled clients with a
-simplified matcher and the same no-drag/no-floating boundary.
+`windowrulev2` selectors to current tiled clients with a simplified matcher
+and the same no-drag/no-floating boundary.
 Version `0.38.0` applies a safe subset of matching `windowrulev2` actions when
 clients spawn: `tile`, `fullscreen`, `pseudo`, `pin`, and `workspace N`. The
 client diagnostics now show `rulesMatched`, `rulesApplied`, and `ruleActions`,
 while floating/free-drag style actions remain ignored and visible.
+Version `0.50.0` extends the same VM-safe model with client tags:
+`desktop dispatch tagwindow <+tag|-tag|clear|tag> [target]`, `tag:name`
+selectors for focus/move dispatchers, tag-aware `clients`/`activewindow`
+diagnostics, and safe spawn-time `windowrulev2` `tag` actions. This remains a
+Hyprland-style facade on Orizon's framebuffer VM backend, not upstream
+Wayland/wlroots Hyprland.
 
 ## Package Format
 

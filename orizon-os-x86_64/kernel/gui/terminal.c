@@ -3818,10 +3818,10 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop dispatch movetoworkspace <target>[,<window>] - Move focused/selected client and follow\n");
     term_puts_t(term, "  desktop dispatch movetoworkspacesilent <target>[,<window>] - Move focused/selected client without switching\n");
     term_puts_t(term, "  desktop dispatch fullscreen|fullscreenstate|pseudo|pseudotile|pin [state] - Hyprland-like client state\n");
-    term_puts_t(term, "  desktop dispatch focuscurrentorlast|focusurgentorlast|markurgent - Focus history and urgent diagnostics\n");
+    term_puts_t(term, "  desktop dispatch focuscurrentorlast|focusurgentorlast|markurgent|tagwindow - Focus history, urgent and tag diagnostics\n");
     term_puts_t(term, "  desktop dispatch cyclenext|swapnext|swapwindow|focusmaster|swapwithmaster - Hyprland-like actions\n");
     term_puts_t(term, "  desktop dispatch movefocus <l|r|u|d|next|prev> - Directional tiled focus\n");
-    term_puts_t(term, "  desktop dispatch focuswindow <id|0xaddr|class:app|title:text> - Focus a matching client\n");
+    term_puts_t(term, "  desktop dispatch focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow> - Focus a matching client\n");
     term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/masterratio/nmaster actions\n");
     term_puts_t(term, "  desktop dispatch resizeactive <x> <y> - Keyboard tiling ratio resize\n");
     term_puts_t(term, "  desktop dispatch submap <name|reset> - Set active submap\n");

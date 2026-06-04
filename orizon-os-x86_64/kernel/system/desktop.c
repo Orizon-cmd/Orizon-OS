@@ -349,7 +349,7 @@ static const char *desktop_state_config =
     "client-model-command desktop client-model\n"
     "workspace-stack-command desktop workspace-stack\n"
     "rule-matches-command desktop rule-matches\n"
-    "rule-spawn-apply tile/fullscreen/pseudo/pin/workspace\n"
+    "rule-spawn-apply tile/fullscreen/pseudo/pin/tag/workspace\n"
     "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
     "hyprctl-workspacestack-command desktop hyprctl workspacestack\n"
     "hyprctl-rulematches-command desktop hyprctl rulematches\n"
@@ -2066,7 +2066,7 @@ static int desktop_write_session_state(const char *desired,
            "client-model-command desktop client-model\n"
            "workspace-stack-command desktop workspace-stack\n"
            "rule-matches-command desktop rule-matches\n"
-           "rule-spawn-apply tile/fullscreen/pseudo/pin/workspace\n"
+           "rule-spawn-apply tile/fullscreen/pseudo/pin/tag/workspace\n"
            "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
            "hyprctl-workspacestack-command desktop hyprctl workspacestack\n"
            "hyprctl-rulematches-command desktop hyprctl rulematches\n"
@@ -3896,7 +3896,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -4594,7 +4594,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; dispatch supports next/empty/+/-n and optional workspace,window selectors\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus l/r/u/d | focuswindow <target> | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | movefocus l/r/u/d | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

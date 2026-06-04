@@ -164,6 +164,9 @@ desktop dispatch workspace +1
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
+desktop dispatch tagwindow +settings class:orizon-settings
+desktop dispatch focuswindow tag:settings
+desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace next
@@ -432,8 +435,9 @@ re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch renameworkspace <target> <name>`, `desktop dispatch
 workspace name:<name>`, `desktop dispatch movetoworkspace <target>[,<window>]`, `desktop dispatch movetoworkspacesilent <target>[,<window>]`,
 `desktop dispatch movefocus l|r|u|d|next|prev`, and
-`desktop dispatch focuswindow <id|0xaddr|class:app|title:text>`,
-`desktop dispatch focuscurrentorlast`, and `desktop dispatch focusurgentorlast`
+`desktop dispatch focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow>`,
+`desktop dispatch focuscurrentorlast`, `desktop dispatch focusurgentorlast`, and
+`desktop dispatch tagwindow <+tag|-tag|clear|tag> [target]`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
 `pseudotile`, `pin`, `markurgent`, `cyclenext`, and `swapnext`, directional
@@ -468,20 +472,23 @@ boundary, fullscreen/pseudo/pinned/urgent flags, `fullscreenClient`, current
 Hyprland-style `focusHistoryID`.
 `desktop hyprctl clientmodel` mirrors this read-only state graph.
 `desktop hyprctl rulematches` reads `/system/desktop-rules.conf` and explains
-which `windowrulev2` selectors match current clients by class/title/app with a
+which `windowrulev2` selectors match current clients by class/title/app/tag,
+initialClass, initialTitle, workspace, focus, pin, and fullscreen with a
 simplified matcher. Safe spawn-time actions `tile`, `fullscreen`, `pseudo`,
-`pin`, and `workspace N` can set initial tiled client state; floating/free-drag
+`pin`, `tag`, and `workspace N` can set initial tiled client state; floating/free-drag
 style actions are ignored and reported, not applied. This is still not the
 upstream Hyprland regex/Wayland engine. The model is intentionally no-drag: clients are placed by
 `dwindle`, `master`, or `monocle`, not by mouse-moving windows around like a
 traditional desktop. The active client can still be controlled through
 dispatcher state such as fullscreen/pseudo/pinned. Move-to-workspace selectors
-can target `id`, `0xaddress`, `class:app`, `title:text`, or `activewindow`.
+can target `id`, `0xaddress`, `class:app`, `title:text`, `tag:name`, or
+`activewindow`.
 `markurgent` is provided as
 a VM-only diagnostic so `focusurgentorlast` can be tested before real
 Wayland/client urgency exists; it does not claim upstream Hyprland or wlroots
-client signaling is implemented. This is closer to the Hyprland mental model
-than manual window dragging.
+client signaling is implemented. `tagwindow` is similarly VM-safe diagnostic
+state for exercising Hyprland-style tags before real XDG tags exist. This is
+closer to the Hyprland mental model than manual window dragging.
 
 `desktop workspace` shows the current Hyprland-style workspace state.
 `desktop workspace <1-10|name:<name>|next|empty|+/-n|previous>` switches the active workspace.
@@ -489,10 +496,10 @@ Prefer `desktop dispatch movetoworkspace <target>[,<window>]` or
 `desktop dispatch movetoworkspacesilent <target>[,<window>]` to move the active
 or selected tiled client between workspaces, matching Hyprland's
 dispatcher-style workflow. Window selectors accept `id`, `0xaddress`,
-`class:app`, `title:text`, or `activewindow`. The non-silent dispatcher follows
-the moved client to the target workspace; the silent variant keeps the current
-workspace active and restores the local workspace focus when another client is
-available.
+`class:app`, `title:text`, `tag:name`, or `activewindow`. The non-silent
+dispatcher follows the moved client to the target workspace; the silent variant
+keeps the current workspace active and restores the local workspace focus when
+another client is available.
 
 `desktop doctor` checks the policy file, session file, template, user config,
 optional package metadata, and reports PASS/WARN/FAIL without validating real
@@ -516,10 +523,11 @@ desktop dispatch renameworkspace <target> <safe-name> names a workspace
 desktop dispatch movetoworkspace <target>[,<window>] moves and follows the active/selected tiled client
 desktop dispatch movetoworkspacesilent <target>[,<window>] moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
-desktop dispatch focuswindow <target> focuses by id/address/class/title/activewindow
+desktop dispatch focuswindow <target> focuses by id/address/class/title/tag/activewindow
 desktop dispatch focuscurrentorlast focuses the previous focus-history client
 desktop dispatch focusurgentorlast focuses an urgent client, then falls back to last
 desktop dispatch markurgent [on|off|toggle] [target] marks VM diagnostic urgency
+desktop dispatch tagwindow <+tag|-tag|clear|tag> [target] sets/clears VM diagnostic tags
 desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active workspace layout
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
 desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state

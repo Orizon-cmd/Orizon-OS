@@ -53,7 +53,13 @@
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, named and
   relative/dynamic workspaces with next/empty targets, focus restore per
-  workspace, follow-vs-silent `movetoworkspace` with optional `workspace,window` selectors, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/urgent client state, per-workspace layout state with `nmaster` and monocle deck rendered diagnostics, directional `movefocus`/`swapwindow`, direct `focuswindow` targeting, `focuscurrentorlast`/`focusurgentorlast` with VM-only `markurgent`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
+  workspace, follow-vs-silent `movetoworkspace` with optional `workspace,window`
+  selectors including `tag:name`, split fullscreenstate internal/client
+  diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent
+  client state, per-workspace layout state with `nmaster` and monocle deck
+  rendered diagnostics, directional `movefocus`/`swapwindow`, direct
+  `focuswindow` targeting, `focuscurrentorlast`/`focusurgentorlast` with
+  VM-only `markurgent`, VM-only `tagwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default

@@ -59,7 +59,8 @@ work.
   workspace switch, relative/dynamic workspace dispatch with next/empty targets,
   dispatcher-style
   movetoworkspace/movetoworkspacesilent with follow-vs-silent workspace focus
-  restore plus optional `workspace,window` selectors, movefocus directionnel/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/urgent client
+  restore plus optional `workspace,window` selectors, tag selectors and
+  VM-only `tagwindow` diagnostics, movefocus directionnel/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
   class/module/surface diagnostics, launcher overlay dispatch,

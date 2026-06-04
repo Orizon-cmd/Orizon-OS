@@ -228,6 +228,9 @@ $commands = @(
   "desktop launcher show",
   "desktop launch terminal",
   "desktop dispatch exec settings",
+  "desktop dispatch tagwindow +settings class:orizon-settings",
+  "desktop dispatch focuswindow tag:settings",
+  "desktop dispatch movetoworkspacesilent 2,tag:settings",
   "desktop dispatch movetoworkspacesilent 2,class:orizon-settings",
   "desktop dispatch movetoworkspace active,activewindow",
   "desktop launch launcher",
@@ -812,6 +815,15 @@ run_cmd() {
       ;;
     "desktop dispatch movetoworkspacesilent empty")
       grep -q "desktop dispatch: silently moved active to workspace" "`$OUT" && grep -q "follow=no active=2" "`$OUT" || { echo "missing desktop dispatch movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch tagwindow +settings class:orizon-settings")
+      grep -q "desktop dispatch: tagwindow set" "`$OUT" && grep -q 'tag="settings"' "`$OUT" && grep -q 'selector="class:orizon-settings"' "`$OUT" || { echo "missing desktop tagwindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch focuswindow tag:settings")
+      grep -q "desktop dispatch: focuswindow ok" "`$OUT" && grep -q 'target="tag:settings"' "`$OUT" || { echo "missing desktop tag focuswindow"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop dispatch movetoworkspacesilent 2,tag:settings")
+      grep -q "desktop dispatch: silently moved selected to workspace 2" "`$OUT" && grep -q 'selector="tag:settings"' "`$OUT" && grep -q "follow=no" "`$OUT" || { echo "missing desktop tag movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop dispatch movetoworkspacesilent 2,class:orizon-settings")
       grep -q "desktop dispatch: silently moved selected to workspace 2" "`$OUT" && grep -q 'selector="class:orizon-settings"' "`$OUT" && grep -q "follow=no" "`$OUT" || { echo "missing desktop selected movetoworkspacesilent"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -240,6 +240,9 @@ desktop dispatch workspace +1
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
+desktop dispatch tagwindow +settings class:orizon-settings
+desktop dispatch focuswindow tag:settings
+desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace next
@@ -375,7 +378,7 @@ layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `cyclenext`, `swapnext`,
+`workspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
 `swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
@@ -404,7 +407,7 @@ urgent state, and geometry for each workspace,
 `movetoworkspace <workspace>[,<window>]` follows the moved tiled client while
 `movetoworkspacesilent <workspace>[,<window>]` keeps the current workspace
 active and restores workspace-local focus; window selectors accept `id`,
-`0xaddress`, `class:app`, `title:text`, or `activewindow`,
+`0xaddress`, `class:app`, `title:text`, `tag:name`, or `activewindow`,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
 class/module/surface details, and `desktop launch
@@ -412,9 +415,9 @@ terminal|settings|logs|packages|update|launcher` opens the first native apps as
 tiled clients or toggles the launcher overlay. `desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`;
 `desktop rule-matches`/`desktop hyprctl rulematches` explain which
-`windowrulev2` class/title/app selectors match those clients,
+`windowrulev2` class/title/app/tag/initialClass/initialTitle/workspace/focus/pin/fullscreen selectors match those clients,
 which safe spawn-time actions are applied (`tile`, `fullscreen`, `pseudo`,
-`pin`, `workspace N`), and which floating/free-drag style actions are ignored,
+`pin`, `tag`, `workspace N`), and which floating/free-drag style actions are ignored,
 `desktop activewindow` mirrors the focused client state, and F1/F2/F3/F4/F5/F6/F7/F8 map to exec
 terminal/killactive/launcher/fullscreen/pseudo/focus/workspace navigation.
 F9/F10/F11 enter resize/move/launch submaps and F12/Esc returns to default,
