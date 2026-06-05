@@ -245,7 +245,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.58.0` because it includes policy/config files, the persisted session
+`0.59.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -271,7 +271,12 @@ commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.58.0` adds rank-based Hyprland-style tiled dispatch:
+the launcher. Version `0.59.0` wires the rank-based Hyprland-style dispatchers
+into the generated user config, `/system/desktop-binds.conf`, the active move
+submap, supported-bind diagnostics, and VM matrix. The default shortcuts expose
+`focusmwindow`/`swapmwindow` while keeping Orizon tiling-only: no free mouse
+dragging, floating desktop, taskbar, Waybar, or upstream Wayland/wlroots claim
+is enabled. Version `0.58.0` adds rank-based Hyprland-style tiled dispatch:
 `focusmwindow` and `swapmwindow` accept `next`, `prev`, `master`, `last`,
 relative `+n`/`-n`, `rank:n`, `index:n`, or a bare rank over the active
 workspace. It also exposes `focusworkspaceoncurrentmonitor` as an honest

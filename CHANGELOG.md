@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.59.0` with Hyprland-style rank dispatcher
+  binds wired into the default user config, generated `/system/desktop-binds.conf`,
+  move submap, shortcuts help, supported-bind diagnostics, and VM matrix. The
+  exposed shortcuts cover `focusmwindow` and `swapmwindow` without introducing
+  free mouse dragging, floating windows, a taskbar, Waybar, or upstream
+  Wayland/wlroots Hyprland behavior.
 - Added desktop package version `0.58.0` with VM-safe Hyprland-style
   rank-based tiled dispatchers: `focusmwindow` and `swapmwindow` now accept
   `next`, `prev`, `master`, `last`, relative `+n`/`-n`, `rank:n`,

@@ -124,6 +124,11 @@ static const char *desktop_user_config =
     "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
     "bind = $mod, S, layoutmsg, swapwithmaster\n"
     "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+    "bind = $mod, period, focusmwindow, next\n"
+    "bind = $mod, comma, focusmwindow, prev\n"
+    "bind = $mod SHIFT, period, swapmwindow, next\n"
+    "bind = $mod SHIFT, comma, swapmwindow, prev\n"
+    "bind = $mod CTRL, M, swapmwindow, master\n"
     "bind = $mod, bracketleft, layoutmsg, removemaster\n"
     "bind = $mod, bracketright, layoutmsg, addmaster\n"
     "bindl = , XF86AudioMute, exec, desktop logs\n"
@@ -176,6 +181,8 @@ static const char *desktop_user_config =
     "bind = , n, movewindow, next\n"
     "bind = , b, movewindow, prev\n"
     "bind = , m, movewindow, master\n"
+    "bind = , f, focusmwindow, next\n"
+    "bind = , s, swapmwindow, next\n"
     "bind = , 1, movetoworkspace, 1\n"
     "bind = , 2, movetoworkspace, 2\n"
     "bind = , 3, movetoworkspace, 3\n"
@@ -211,6 +218,11 @@ static const char *desktop_binds_runtime_config =
     "bind = $mod, P, pseudo\n"
     "bind = $mod, J, togglesplit\n"
     "bind = $mod, S, layoutmsg, swapwithmaster\n"
+    "bind = $mod, period, focusmwindow, next\n"
+    "bind = $mod, comma, focusmwindow, prev\n"
+    "bind = $mod SHIFT, period, swapmwindow, next\n"
+    "bind = $mod SHIFT, comma, swapmwindow, prev\n"
+    "bind = $mod CTRL, M, swapmwindow, master\n"
     "bind = $mod, bracketleft, layoutmsg, removemaster\n"
     "bind = $mod, bracketright, layoutmsg, addmaster\n"
     "bind = $mod, H, movefocus, l\n"
@@ -244,6 +256,8 @@ static const char *desktop_binds_runtime_config =
     "bind = , n, movewindow, next\n"
     "bind = , b, movewindow, prev\n"
     "bind = , m, movewindow, master\n"
+    "bind = , f, focusmwindow, next\n"
+    "bind = , s, swapmwindow, next\n"
     "bind = , 1, movetoworkspace, 1\n"
     "bind = , 2, movetoworkspace, 2\n"
     "bind = , 3, movetoworkspace, 3\n"
@@ -1029,12 +1043,14 @@ static int desktop_hypr_dispatch_supported(const char *value) {
   return value &&
          (strstr(value, "exec") || strstr(value, "killactive") ||
           strstr(value, "workspace") || strstr(value, "movetoworkspace") ||
-          strstr(value, "movefocus") || strstr(value, "focuswindow") ||
+          strstr(value, "movefocus") || strstr(value, "focusmwindow") ||
+          strstr(value, "focuswindow") ||
           strstr(value, "fullscreen") ||
           strstr(value, "pseudo") || strstr(value, "pin") ||
           strstr(value, "focusmaster") || strstr(value, "swapwithmaster") ||
           strstr(value, "cyclenext") || strstr(value, "swapnext") ||
-          strstr(value, "swapwindow") || strstr(value, "movewindow") ||
+          strstr(value, "swapwindow") || strstr(value, "swapmwindow") ||
+          strstr(value, "movewindow") ||
           strstr(value, "togglesplit") || strstr(value, "layoutmsg") ||
           strstr(value, "resizeactive") || strstr(value, "submap"));
 }
@@ -2165,6 +2181,11 @@ static int desktop_write_user_config_from_state(
            "bind = $mod SHIFT, J, layoutmsg, orientationnext\n"
            "bind = $mod, S, layoutmsg, swapwithmaster\n"
            "bind = $mod SHIFT, S, layoutmsg, focusmaster\n"
+           "bind = $mod, period, focusmwindow, next\n"
+           "bind = $mod, comma, focusmwindow, prev\n"
+           "bind = $mod SHIFT, period, swapmwindow, next\n"
+           "bind = $mod SHIFT, comma, swapmwindow, prev\n"
+           "bind = $mod CTRL, M, swapmwindow, master\n"
            "bind = $mod, bracketleft, layoutmsg, removemaster\n"
            "bind = $mod, bracketright, layoutmsg, addmaster\n"
            "bind = $mod, R, submap, resize\n"
@@ -2212,6 +2233,11 @@ static int desktop_write_user_config_from_state(
            "submap = move\n"
            "bind = , right, movefocus, r\n"
            "bind = , left, movefocus, l\n"
+           "bind = , n, movewindow, next\n"
+           "bind = , b, movewindow, prev\n"
+           "bind = , m, movewindow, master\n"
+           "bind = , f, focusmwindow, next\n"
+           "bind = , s, swapmwindow, next\n"
            "bind = , 1, movetoworkspace, 1\n"
            "bind = , 2, movetoworkspace, 2\n"
            "bind = , 3, movetoworkspace, 3\n"
@@ -4300,7 +4326,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|movewindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|focusworkspaceoncurrentmonitor|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focusmwindow|movewindow|swapmwindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|cyclenext|swapnext|focusmaster|swapwithmaster|layoutmsg|resizeactive|submap|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -4990,7 +5016,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "resize submap: arrows or HJKL adjust tiling ratios; R resets; S toggles split\n");
   desktop_append(out, out_size, &used,
-                 "move submap: arrows or HJKL focus; N/B reorder tiled client; M moves it to master; 1/2/3 move focused client to workspace; P pins\n");
+                 "move submap: arrows or HJKL focus; N/B reorder tiled client; M moves it to master; F focusmwindow next; S swapmwindow next; 1/2/3 move focused client to workspace; P pins\n");
   desktop_append(out, out_size, &used,
                  "launch submap: T terminal; S settings; L logs; P packages; U update; D launcher; Q killactive; Esc/F12 default\n");
   desktop_append(out, out_size, &used,
@@ -5000,9 +5026,9 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "SUPER+F: focus toggle placeholder; SUPER+P: profile list placeholder\n");
   desktop_append(out, out_size, &used,
-                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; SUPER+grave toggles special scratchpad; dispatch supports next/empty/special[:name]/+/-n and optional workspace,window selectors\n");
+                 "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; SUPER+grave toggles special scratchpad; dispatch supports next/empty/special[:name]/+/-n/r+/-n/m+/-n/e+/-n and optional workspace,window selectors\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | togglespecialworkspace [name] | movefocus l/r/u/d | movewindow l/r/u/d/master | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | workspace/focusworkspaceoncurrentmonitor | togglespecialworkspace [name] | movefocus l/r/u/d | focusmwindow next/prev/master/rank:n | movewindow l/r/u/d/master | swapmwindow next/prev/master/rank:n | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

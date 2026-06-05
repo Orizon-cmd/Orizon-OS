@@ -598,6 +598,8 @@ def run_ssh_checks(
         ("desktop hyprctl keyword decoration:rounding 11", "desktop keyword: applied"),
         ("desktop hyprctl getoption decoration:rounding", "value: 11"),
         ("desktop hyprctl binds", "/system/desktop-binds.conf"),
+        ("desktop hyprctl binds", "focusmwindow"),
+        ("desktop hyprctl binds", "swapmwindow"),
         ("desktop hyprctl layers", "Orizon desktop layers"),
         ("desktop autostart", "Orizon desktop autostart"),
         ("desktop autostart terminal off", "desktop session: updated"),
