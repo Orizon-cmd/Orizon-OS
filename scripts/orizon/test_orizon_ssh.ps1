@@ -131,7 +131,9 @@ $commands = @(
   "desktop hyprctl backend",
   "desktop hyprctl protocol",
   "desktop hyprctl clientmodel",
+  "desktop hyprctl -j clientmodel",
   "desktop hyprctl rulematches",
+  "desktop hyprctl -j rulematches",
   "desktop hyprctl activeworkspace",
   "desktop hyprctl -j clients",
   "desktop hyprctl -j activewindow",
@@ -672,11 +674,17 @@ run_cmd() {
     "desktop client-model"|"desktop hyprctl clientmodel")
       grep -q "Orizon desktop client model" "`$OUT" && grep -q "manual-drag=no" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop client model"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop hyprctl -j clientmodel")
+      grep -q '"manualDrag":false' "`$OUT" && grep -Fq '"workspaces":[' "`$OUT" && grep -Fq '"clients":[' "`$OUT" || { echo "missing desktop json client model"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop workspace-stack"|"desktop hyprctl workspacestack")
       grep -q "Orizon desktop workspace stack" "`$OUT" && grep -q "master/stack/focus" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop workspace stack"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop rule-matches"|"desktop hyprctl rulematches")
       grep -q "Orizon desktop rule matches" "`$OUT" && grep -q "windowrulev2" "`$OUT" && grep -q "safe-actions=tile" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop rule matches"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j rulematches")
+      grep -Fq '"rules":[' "`$OUT" && grep -q '"safeAction":' "`$OUT" && grep -Fq '"summary":{' "`$OUT" || { echo "missing desktop json rule matches"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop keyword general:gaps_in 9"|"desktop hyprctl keyword decoration:rounding 11"|"desktop hyprctl keyword decoration:shadow:range 22"|"desktop hyprctl keyword animations:tick_budget 24")
       grep -q "desktop keyword: applied" "`$OUT" || { echo "missing desktop keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

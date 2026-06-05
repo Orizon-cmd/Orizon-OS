@@ -223,6 +223,8 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j clientmodel
+desktop hyprctl -j rulematches
 desktop hyprctl focushistory
 desktop hyprctl workspacestack
 desktop hyprctl version

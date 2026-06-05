@@ -3313,7 +3313,7 @@ static void ssh_shell_print_pkg(const char *args) {
 }
 
 static void ssh_shell_print_desktop(const char *args) {
-  static char out[8192];
+  static char out[16384];
   const char *sub = ssh_shell_skip_spaces(args);
 
   out[0] = '\0';
@@ -3728,12 +3728,20 @@ static void ssh_shell_print_desktop(const char *args) {
                ssh_shell_command_is(hypr, "client-model") ||
                ssh_shell_command_is(hypr, "clientmap") ||
                ssh_shell_command_is(hypr, "client-map")) {
-      gui_desktop_format_client_model(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_client_model_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_client_model(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "rulematches") ||
                ssh_shell_command_is(hypr, "rule-matches") ||
                ssh_shell_command_is(hypr, "windowrules") ||
                ssh_shell_command_is(hypr, "window-rules")) {
-      gui_desktop_format_rule_matches(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_rule_matches_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_rule_matches(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "workspaces")) {
       if (json) {
         gui_desktop_format_workspaces_json(out, sizeof(out));

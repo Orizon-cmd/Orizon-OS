@@ -193,6 +193,8 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j clientmodel
+desktop hyprctl -j rulematches
 desktop dispatch togglesplit
 desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
@@ -247,7 +249,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.64.0` because it includes policy/config files, the persisted session
+`0.65.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -264,7 +266,7 @@ VM-safe `tagwindow` diagnostics and safe spawn-time `windowrulev2` actions for
 tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`/
-`focushistory`/`workspacestack`,
+`focushistory`/`workspacestack`/`clientmodel`/`rulematches`,
 focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 VM-safe monitor dispatch aliases `focusmonitor`,
 `movecurrentworkspacetomonitor`, and `moveworkspacetomonitor`,
@@ -277,7 +279,12 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.64.0` extends the JSON diagnostics layer with
+the launcher. Version `0.65.0` extends the JSON diagnostics layer with
+`desktop hyprctl -j clientmodel` and `desktop hyprctl -j rulematches`,
+including summary, workspace/client graph, selectors, `safeAction`, and
+spawn-rule diagnostics for VM-safe tooling without enabling a taskbar,
+Waybar, floating windows, free mouse drag, or upstream Wayland/wlroots
+Hyprland behavior. Version `0.64.0` extends the JSON diagnostics layer with
 `desktop hyprctl -j focushistory` and `desktop hyprctl -j workspacestack`,
 including `focusHistoryID`, `scope`, `role`, `pinnedAware`, and
 `manualDrag=false` fields for VM-safe tooling without enabling a taskbar,
@@ -417,7 +424,8 @@ Version `0.51.0` adds compact `desktop hyprctl -j` JSON for `clients`,
 `workspaces`, `activeworkspace`, and `activewindow`, so future status tooling
 and the later separate Waybar-style package can consume stable VM-safe state
 without adding any bar/taskbar now. Version `0.64.0` extends that JSON surface
-to `focushistory` and `workspacestack`.
+to `focushistory` and `workspacestack`; version `0.65.0` adds `clientmodel`
+and `rulematches`.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.

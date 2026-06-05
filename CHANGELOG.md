@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.65.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j clientmodel` and
+  `desktop hyprctl -j rulematches`. The VM-safe output now exposes client and
+  workspace summaries, rule selectors, `safeAction`, spawn-rule counters, and
+  explicit `manualDrag=false`/`hyprlandStyleFacade=true` boundaries without
+  enabling Waybar, a taskbar/start menu, floating windows, free mouse drag, or
+  upstream Wayland/wlroots Hyprland behavior.
 - Added desktop package version `0.64.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j focushistory` and
   `desktop hyprctl -j workspacestack`. The VM-safe output now exposes

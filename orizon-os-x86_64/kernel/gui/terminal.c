@@ -3733,7 +3733,7 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 }
 
 static void term_run_desktop(terminal_t *term, const char *cmd) {
-  static char report[8192];
+  static char report[16384];
   const char *args = term_skip_spaces(cmd + 7);
 
   if (*args == '\0' || term_command_is(args, "status")) {
@@ -4280,12 +4280,20 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
                term_command_is(hypr, "client-model") ||
                term_command_is(hypr, "clientmap") ||
                term_command_is(hypr, "client-map")) {
-      gui_desktop_format_client_model(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_client_model_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_client_model(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "rulematches") ||
                term_command_is(hypr, "rule-matches") ||
                term_command_is(hypr, "windowrules") ||
                term_command_is(hypr, "window-rules")) {
-      gui_desktop_format_rule_matches(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_rule_matches_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_rule_matches(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "workspaces")) {
       if (json) {
         gui_desktop_format_workspaces_json(report, sizeof(report));

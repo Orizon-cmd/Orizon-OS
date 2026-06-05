@@ -82,6 +82,8 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j clientmodel
+desktop hyprctl -j rulematches
 desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl clientmodel
@@ -528,11 +530,11 @@ from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
-`role`, and `pinnedAware`, but every object also carries
+`role`, `pinnedAware`, `summary`, and `safeAction`, but every object also carries
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
 not upstream Wayland/wlroots Hyprland.
 
