@@ -4256,8 +4256,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j currently supports clients, workspaces, activeworkspace and activewindow as VM-safe Hyprland-style diagnostics\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate and layouttree as VM-safe Hyprland-style diagnostics\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4341,11 +4341,19 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     } else if (term_command_is(hypr, "layoutstate") ||
                term_command_is(hypr, "layout-state") ||
                term_command_is(hypr, "workspacelayouts")) {
-      gui_desktop_format_layout_state(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_layout_state_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_layout_state(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "layouttree") ||
                term_command_is(hypr, "layout-tree") ||
                term_command_is(hypr, "tree")) {
-      gui_desktop_format_layout_tree(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_layout_tree_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_layout_tree(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "animations")) {
       gui_desktop_format_animations(report, sizeof(report));
     } else if (term_command_is(hypr, "decorations")) {

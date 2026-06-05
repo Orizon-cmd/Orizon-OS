@@ -6772,6 +6772,84 @@ static void desktop_json_append_workspace(char *out, size_t out_size,
   desktop_json_append_raw(out, out_size, used, line);
 }
 
+static void desktop_json_append_layout_workspace(char *out, size_t out_size,
+                                                 size_t *used, int workspace) {
+  char line[512];
+  int idx = workspace - 1;
+  int count = desktop_client_count_on_workspace(workspace);
+  int local_count = desktop_workspace_local_client_count(workspace);
+  int rendered = desktop_rendered_client_count_on_workspace(workspace);
+  int last_idx = desktop_last_focused_index_on_workspace(workspace);
+  int fullscreen_deck = 0;
+  int monocle_deck = 0;
+  const char *state;
+  const char *layout;
+
+  if (!out || !used || workspace < 1 || workspace > desktop_workspace_count) {
+    return;
+  }
+  desktop_workspace_init_layout_state(workspace);
+  layout = desktop_layout_engine_for_workspace(workspace);
+  if (workspace == desktop_active_workspace) {
+    state = "active";
+  } else if (workspace == desktop_previous_workspace) {
+    state = "previous";
+  } else if (desktop_workspace_is_used(workspace)) {
+    state = "used";
+  } else {
+    state = "empty";
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    int pos;
+    const char *role;
+
+    if (!desktop_client_on_workspace(&desktop_clients[i], workspace)) {
+      continue;
+    }
+    pos = desktop_client_position_on_workspace(i, workspace);
+    role = desktop_client_role_on_workspace(workspace, i, pos, count);
+    if (strcmp(role, "fullscreen-deck") == 0) {
+      fullscreen_deck++;
+    } else if (strcmp(role, "monocle-deck") == 0) {
+      monocle_deck++;
+    }
+  }
+
+  snprintf(line, sizeof(line), "{\"id\":%d,\"name\":", workspace);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             desktop_workspace_name(workspace));
+  snprintf(line, sizeof(line),
+           ",\"state\":\"%s\",\"active\":%s,\"previous\":%s,"
+           "\"layout\":\"%s\",\"split\":\"%s\",\"splitRatio\":%d,"
+           "\"masterRatio\":%d,\"nmaster\":%d,\"clients\":%d,"
+           "\"localWindows\":%d,\"rendered\":%d,\"fullscreenDeck\":%d,"
+           "\"monocleDeck\":%d,\"lastwindow\":\"0x%x\",\"lastwindowtitle\":",
+           state, workspace == desktop_active_workspace ? "true" : "false",
+           workspace == desktop_previous_workspace ? "true" : "false",
+           layout,
+           desktop_split_mode_name_for_value(
+               desktop_workspaces[idx].split_mode),
+           desktop_workspaces[idx].split_ratio_percent,
+           desktop_workspaces[idx].master_ratio_percent,
+           desktop_workspaces[idx].master_count, count, local_count, rendered,
+           fullscreen_deck, monocle_deck,
+           last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx])
+                         : 0);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             last_idx >= 0 ? desktop_clients[last_idx].title
+                                           : "");
+  snprintf(line, sizeof(line),
+           ",\"layoutSeq\":%llu,\"focusSeq\":%llu,\"visitSeq\":%llu,"
+           "\"pinnedAware\":true,\"manualDrag\":false,"
+           "\"floatingSceneGraph\":false,\"hyprlandStyleFacade\":true}",
+           (unsigned long long)desktop_workspaces[idx].layout_generation,
+           (unsigned long long)desktop_workspaces[idx].focus_generation,
+           (unsigned long long)desktop_workspaces[idx].visit_generation);
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
 void gui_desktop_format_clients_json(char *out, size_t out_size) {
   size_t used = 0;
   int first = 1;
@@ -7830,6 +7908,167 @@ void gui_desktop_format_rule_matches_json(char *out, size_t out_size) {
   desktop_json_append_raw(out, out_size, &used, json_line);
 }
 
+void gui_desktop_format_layout_state_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  snprintf(line, sizeof(line),
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"model\":\"per-workspace tiling layout state\","
+           "\"manualDrag\":false,\"floatingSceneGraph\":false,"
+           "\"taskbar\":false,\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"activeWorkspace\":%d,"
+           "\"activeLayout\":\"%s\",\"defaultLayout\":\"%s\","
+           "\"split\":\"%s\",\"splitRatio\":%d,\"masterRatio\":%d,"
+           "\"nmaster\":%d,\"submap\":",
+           desktop_active_workspace, desktop_layout_engine(),
+           desktop_session.layout, desktop_split_mode_name(),
+           desktop_split_ratio_percent, desktop_master_ratio_percent,
+           desktop_master_count);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"dispatchers\":[\"layoutmsg layout\",\"layoutmsg reset\","
+      "\"layoutmsg preselect\",\"layoutmsg splitratio\","
+      "\"layoutmsg masterratio\",\"layoutmsg nmaster\","
+      "\"focusmaster\",\"swapwithmaster\",\"focusmwindow\","
+      "\"swapmwindow\",\"movewindow\",\"resizeactive\"],\"workspaces\":[");
+  for (int ws = 1; ws <= desktop_workspace_count; ws++) {
+    if (ws > 1) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_json_append_layout_workspace(out, out_size, &used, ws);
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "],\"limits\":[\"VM framebuffer compositor state\","
+      "\"no free-drag\",\"no floating scene graph\","
+      "\"no upstream Hyprland/wlroots scene graph yet\"]}\n");
+}
+
+void gui_desktop_format_layout_tree_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[512];
+  int count;
+  int local_count;
+  int rendered;
+  int active_idx;
+  int outer_gap = desktop_settings.gaps_out;
+  int inner_gap = desktop_settings.gaps_in;
+  int area_x = 44 + outer_gap;
+  int area_y = TOP_BAR_HEIGHT + 92;
+  int area_w = (int)screen_width - 88 - outer_gap * 2;
+  int area_h = (int)screen_height - area_y - FOOTER_HEIGHT - 18 - outer_gap;
+  int first = 1;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  if (area_w < 120) {
+    area_w = 120;
+  }
+  if (area_h < 80) {
+    area_h = 80;
+  }
+  count = desktop_client_count_on_workspace(desktop_active_workspace);
+  local_count = desktop_workspace_local_client_count(desktop_active_workspace);
+  rendered = desktop_rendered_client_count_on_workspace(desktop_active_workspace);
+  active_idx = desktop_focused_client_index();
+
+  snprintf(line, sizeof(line),
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"model\":\"active workspace tiling tree\","
+           "\"manualDrag\":false,\"floatingSceneGraph\":false,"
+           "\"taskbar\":false,\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"workspace\":{\"id\":%d,\"name\":",
+           desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_workspace_name(desktop_active_workspace));
+  snprintf(line, sizeof(line),
+           "},\"root\":{\"at\":[%d,%d],\"size\":[%d,%d],"
+           "\"gaps\":{\"in\":%d,\"out\":%d},\"layout\":\"%s\","
+           "\"split\":\"%s\",\"splitRatio\":%d,\"masterRatio\":%d,"
+           "\"nmaster\":%d},\"summary\":{\"clients\":%d,\"rendered\":%d,"
+           "\"localWindows\":%d,\"focused\":\"0x%x\",\"pinnedAware\":true},"
+           "\"nodes\":[",
+           area_x, area_y, area_w, area_h, inner_gap, outer_gap,
+           desktop_layout_engine(), desktop_split_mode_name(),
+           desktop_split_ratio_percent, desktop_master_ratio_percent,
+           desktop_master_count, count, rendered, local_count,
+           active_idx >= 0 ? desktop_client_address(&desktop_clients[active_idx])
+                           : 0);
+  desktop_json_append_raw(out, out_size, &used, line);
+  for (int pos = 0; pos < count && used < out_size; pos++) {
+    int idx = desktop_nth_client_on_workspace(desktop_active_workspace, pos);
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    const desktop_client_t *client;
+    const char *role;
+
+    if (idx < 0) {
+      continue;
+    }
+    client = &desktop_clients[idx];
+    role = desktop_client_role_on_workspace(desktop_active_workspace, idx, pos,
+                                            count);
+    desktop_client_rect_for_workspace(idx, desktop_active_workspace, &rx, &ry,
+                                      &rw, &rh);
+    if (!first) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    snprintf(line, sizeof(line),
+             "{\"rank\":%d,\"address\":\"0x%x\",\"id\":%d,"
+             "\"workspace\":%d,\"role\":",
+             pos, desktop_client_address(client), client->id,
+             desktop_active_workspace);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used, role);
+    snprintf(line, sizeof(line),
+             ",\"rendered\":%s,\"rect\":{\"x\":%d,\"y\":%d,"
+             "\"w\":%d,\"h\":%d},\"focused\":%s,\"floating\":false,"
+             "\"manualDrag\":false,\"fullscreen\":%d,"
+             "\"fullscreenClient\":%d,\"fullscreenState\":{\"internal\":%d,"
+             "\"client\":%d},\"pseudo\":%s,\"pinned\":%s,"
+             "\"urgent\":%s,\"focusHistoryID\":%d,\"title\":",
+             desktop_client_rendered_on_workspace(idx,
+                                                  desktop_active_workspace)
+                 ? "true"
+                 : "false",
+             rx, ry, rw, rh, idx == active_idx ? "true" : "false",
+             client->fullscreen_state_internal,
+             client->fullscreen_state_client,
+             client->fullscreen_state_internal,
+             client->fullscreen_state_client,
+             client->pseudo ? "true" : "false",
+             client->pinned ? "true" : "false",
+             client->urgent ? "true" : "false", client->focus_history_id);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used, client->title);
+    desktop_json_append_raw(out, out_size, &used, ",\"class\":");
+    desktop_json_append_string(out, out_size, &used, client->app_id);
+    desktop_json_append_raw(out, out_size, &used, "}");
+    first = 0;
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "],\"dispatchers\":[\"layoutmsg reset\",\"layoutmsg preselect\","
+      "\"layoutmsg splitratio\",\"layoutmsg masterratio\","
+      "\"layoutmsg nmaster\",\"focusmaster\",\"swapwithmaster\","
+      "\"focusmwindow\",\"swapmwindow\",\"movewindow\",\"movefocus\","
+      "\"focuswindow\"],\"limits\":[\"diagnostic tree only\","
+      "\"no mouse free-drag\",\"no floating scene graph\","
+      "\"no Wayland/wlroots scene graph yet\"]}\n");
+}
+
 void gui_desktop_format_activewindow(char *out, size_t out_size) {
   int idx;
   int rx;
@@ -8525,7 +8764,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches\n"
+           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"

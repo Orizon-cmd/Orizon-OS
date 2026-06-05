@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.66.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j layoutstate` and
+  `desktop hyprctl -j layouttree`. The VM-safe output now exposes per-workspace
+  layout state, split/master ratios, `nmaster`, active tiling-tree nodes, roles,
+  rectangles, and explicit `manualDrag=false`/`floatingSceneGraph=false`
+  boundaries without enabling Waybar, a taskbar/start menu, floating windows,
+  free mouse drag, or upstream Wayland/wlroots Hyprland behavior.
 - Added desktop package version `0.65.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j clientmodel` and
   `desktop hyprctl -j rulematches`. The VM-safe output now exposes client and

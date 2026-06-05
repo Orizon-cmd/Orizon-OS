@@ -3706,8 +3706,8 @@ static void ssh_shell_print_desktop(const char *args) {
     }
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j currently supports clients, workspaces, activeworkspace and activewindow as VM-safe Hyprland-style diagnostics\r\n");
+               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
+               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate and layouttree as VM-safe Hyprland-style diagnostics\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3789,11 +3789,19 @@ static void ssh_shell_print_desktop(const char *args) {
     } else if (ssh_shell_command_is(hypr, "layoutstate") ||
                ssh_shell_command_is(hypr, "layout-state") ||
                ssh_shell_command_is(hypr, "workspacelayouts")) {
-      gui_desktop_format_layout_state(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_layout_state_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_layout_state(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "layouttree") ||
                ssh_shell_command_is(hypr, "layout-tree") ||
                ssh_shell_command_is(hypr, "tree")) {
-      gui_desktop_format_layout_tree(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_layout_tree_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_layout_tree(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "animations")) {
       gui_desktop_format_animations(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "decorations")) {
