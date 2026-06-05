@@ -208,9 +208,13 @@ desktop dispatch layoutmsg preselect up
 desktop dispatch layoutmsg preselect reset
 desktop dispatch focusmaster
 desktop dispatch swapwithmaster
+desktop dispatch focusmwindow rank:2
+desktop dispatch focusmwindow master
 desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal
 desktop dispatch swapwindow l
+desktop dispatch swapmwindow next
+desktop dispatch swapmwindow rank:2
 desktop dispatch movewindow r
 desktop dispatch movewindow master
 desktop dispatch resizeactive 5 0
@@ -222,6 +226,7 @@ desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
 desktop dispatch workspace next
+desktop dispatch focusworkspaceoncurrentmonitor active
 desktop dispatch workspace empty
 desktop focus-window title:Terminal
 desktop hyprctl submap reset
@@ -240,7 +245,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.57.0` because it includes policy/config files, the persisted session
+`0.58.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -257,7 +262,7 @@ VM-safe `tagwindow` diagnostics and safe spawn-time `windowrulev2` actions for
 tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`,
-focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, dynamic workspace next/empty plus `r/m/e` prefixed targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 Hyprland-style tiled special workspace dispatchers `togglespecialworkspace
 [name]` and `movetoworkspace special[:name]` without floating/manual drag,
 VM-safe tiled-order `movewindow <l|r|u|d|next|prev|master>` dispatchers,
@@ -266,7 +271,13 @@ commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.57.0` adds stricter Hyprland-style bind diagnostics:
+the launcher. Version `0.58.0` adds rank-based Hyprland-style tiled dispatch:
+`focusmwindow` and `swapmwindow` accept `next`, `prev`, `master`, `last`,
+relative `+n`/`-n`, `rank:n`, `index:n`, or a bare rank over the active
+workspace. It also exposes `focusworkspaceoncurrentmonitor` as an honest
+single-framebuffer VM alias for workspace focus. No floating windows, free
+mouse drag, taskbar, Waybar, or upstream Wayland/wlroots routing is enabled.
+Version `0.57.0` adds stricter Hyprland-style bind diagnostics:
 `bind`, `bindl`, `bindr`, `binde`, and `bindm` are classified separately,
 `binds:*` stays a runtime hint instead of a key binding, and the generated move
 submap records `N/B/M` tiled-order `movewindow` actions. `bindm` remains a

@@ -63,7 +63,7 @@ work.
   restore plus optional `workspace,window` selectors, tag selectors and
   tiled special workspace scratchpad dispatchers
   `togglespecialworkspace [name]` plus `movetoworkspace special[:name]`,
-  VM-only `tagwindow` diagnostics, movefocus directionnel/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/movewindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/reset/preselect/split/master/nmaster/monocle-deck/resizeactive/submap, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent client
+  VM-only `tagwindow` diagnostics, movefocus directionnel/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/swapmwindow/movewindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/reset/preselect/split/master/nmaster/monocle-deck/resizeactive/submap, `focusworkspaceoncurrentmonitor` single-framebuffer VM alias, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
   class/module/surface diagnostics, launcher overlay dispatch,

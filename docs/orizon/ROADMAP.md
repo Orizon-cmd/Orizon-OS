@@ -58,9 +58,11 @@
   selectors including `tag:name`, split fullscreenstate internal/client
   diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent
   client state, per-workspace layout state with `nmaster` and monocle deck
-  rendered diagnostics, directional `movefocus`/`swapwindow`, direct
+  rendered diagnostics, directional `movefocus`/`swapwindow`,
+  rank-based `focusmwindow`/`swapmwindow`, direct
   `focuswindow` targeting, `focuscurrentorlast`/`focusurgentorlast` with
-  VM-only `markurgent`, VM-only `tagwindow`, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout/reset/preselect`/`resizeactive`/`submap`,
+  VM-only `markurgent`, VM-only `tagwindow`, `focusworkspaceoncurrentmonitor`
+  as a single-framebuffer alias, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout/reset/preselect`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default

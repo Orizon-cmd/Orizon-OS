@@ -211,8 +211,12 @@ desktop dispatch cyclenext
 desktop dispatch swapnext
 desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal
+desktop dispatch focusmwindow rank:2
+desktop dispatch focusmwindow master
 desktop focus-window title:Terminal
 desktop dispatch swapwindow l
+desktop dispatch swapmwindow next
+desktop dispatch swapmwindow rank:2
 desktop dispatch movewindow r
 desktop dispatch movewindow master
 desktop dispatch swapwithmaster
@@ -254,6 +258,7 @@ desktop dispatch workspace r+1
 desktop dispatch workspace r~2
 desktop dispatch workspace m~1
 desktop dispatch workspace e+1
+desktop dispatch focusworkspaceoncurrentmonitor active
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
@@ -402,8 +407,8 @@ Hyprland-style runtime keyword, and supported settings keywords are written
 back into `/home/orizon/.config/hypr/orizon-hypr.conf` so a later
 `desktop hyprctl reload` keeps the value. `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `togglespecialworkspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
-`swapwindow`, `movewindow`, `movewindoworgroup`, `focusmaster`, `swapwithmaster`, `fullscreen`,
+`workspace`, `focusworkspaceoncurrentmonitor`, `togglespecialworkspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focusmwindow`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
+`swapwindow`, `swapmwindow`, `movewindow`, `movewindoworgroup`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg layout <dwindle|master|monocle>`,
@@ -411,7 +416,9 @@ including `layoutmsg layout <dwindle|master|monocle>`,
 `layoutmsg splitratio <10-90|+/-n|reset>`, `masterratio`/`mfact`, and
 `nmaster <1-8|+/-n|reset>`/`addmaster`/`removemaster`, plus explicit
 `orientationleft/right/top/bottom` tiling hints and
-`movewindow <l|r|u|d|next|prev|master>` tiled-order movement without
+`focusmwindow`/`swapmwindow <next|prev|master|last|+n|-n|rank:n|index:n>`
+for active workspace rank-based focus/swap, `movewindow
+<l|r|u|d|next|prev|master>` tiled-order movement without
 floating/manual drag,
 idempotent client-state dispatchers
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and

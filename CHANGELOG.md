@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.58.0` with VM-safe Hyprland-style
+  rank-based tiled dispatchers: `focusmwindow` and `swapmwindow` now accept
+  `next`, `prev`, `master`, `last`, relative `+n`/`-n`, `rank:n`,
+  `index:n`, or a bare rank over the active workspace. The dispatcher facade
+  also accepts `focusworkspaceoncurrentmonitor` as an honest single-framebuffer
+  VM alias. This remains tiling-only: no floating windows, no manual mouse
+  drag, no taskbar, no Waybar, and no upstream Wayland/wlroots routing.
 - Added desktop package version `0.57.0` with stricter Hyprland-style bind
   parsing and diagnostics. `bind`, `bindl`, `bindr`, `binde`, and `bindm`
   are classified separately, `binds:*` options are no longer mistaken for key

@@ -137,6 +137,10 @@ desktop dispatch markurgent on
 desktop dispatch focusurgentorlast
 desktop focus-window title:Terminal
 desktop dispatch swapwindow l
+desktop dispatch focusmwindow rank:2
+desktop dispatch focusmwindow master
+desktop dispatch swapmwindow next
+desktop dispatch swapmwindow rank:2
 desktop dispatch movewindow r
 desktop dispatch movewindow master
 desktop dispatch swapwithmaster
@@ -177,6 +181,7 @@ desktop dispatch workspace +1
 desktop dispatch workspace r+1
 desktop dispatch workspace m~1
 desktop dispatch workspace e+1
+desktop dispatch focusworkspaceoncurrentmonitor active
 desktop dispatch renameworkspace 2 dev
 desktop dispatch workspace name:dev
 desktop dispatch movetoworkspace name:dev
@@ -463,14 +468,16 @@ re-imports the Hyprland-style config before refreshing the compositor session.
 `desktop dispatch togglespecialworkspace [name]`,
 `desktop dispatch renameworkspace <target> <name>`, `desktop dispatch
 workspace name:<name>`, `desktop dispatch movetoworkspace <target|special[:name]>[,<window>]`, `desktop dispatch movetoworkspacesilent <target|special[:name]>[,<window>]`,
-`desktop dispatch movefocus l|r|u|d|next|prev`, and
+`desktop dispatch movefocus l|r|u|d|next|prev`,
+`desktop dispatch focusmwindow <next|prev|master|last|+n|-n|rank:n|index:n>`, and
 `desktop dispatch focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow>`,
 `desktop dispatch focuscurrentorlast`, `desktop dispatch focusurgentorlast`, and
 `desktop dispatch tagwindow <+tag|-tag|clear|tag> [target]`
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
 `pseudotile`, `pin`, `markurgent`, `cyclenext`, and `swapnext`, directional
-`swapwindow l|r|u|d`, directional
+`swapwindow l|r|u|d`, rank-based `swapmwindow
+<next|prev|master|last|+n|-n|rank:n|index:n>`, directional
 `movewindow l|r|u|d|next|prev|master`/`movewindoworgroup`, plus direct
 `focusmaster` and `swapwithmaster` aliases. `movewindow` is a tiled-order
 operation: it pushes the active client through the compositor stack or to the
@@ -490,6 +497,9 @@ dispatchers now include `togglesplit`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
+`focusworkspaceoncurrentmonitor <target>` is also accepted as the
+single-framebuffer VM equivalent of Hyprland's current-monitor workspace
+focus dispatcher; it does not claim real multi-monitor Wayland routing.
 Hyprland-style prefixed targets are also accepted by the shared workspace
 parser: `r+1`/`r-1` and `r~3` walk or select numeric slots including empty
 ones, while `m+1`/`m-1`, `e+1`/`e-1`, `m~1`, and `e~1` walk open Orizon
@@ -579,6 +589,7 @@ desktop dispatch renameworkspace <target> <safe-name> names a workspace
 desktop dispatch movetoworkspace <target|special[:name]>[,<window>] moves and follows the active/selected tiled client
 desktop dispatch movetoworkspacesilent <target|special[:name]>[,<window>] moves without changing workspace
 desktop dispatch movefocus l|r|u|d|next|prev changes focus
+desktop dispatch focusmwindow next|prev|master|rank:n|index:n focuses by tiled rank
 desktop dispatch focuswindow <target> focuses by id/address/class/title/tag/activewindow
 desktop dispatch focuscurrentorlast focuses the previous focus-history client
 desktop dispatch focusurgentorlast focuses an urgent client, then falls back to last
@@ -588,6 +599,7 @@ desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active worksp
 desktop dispatch layoutmsg reset resets active workspace layout ratios to defaults
 desktop dispatch layoutmsg preselect <l|r|u|d|reset> sets a VM-safe directional split hint
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
+desktop dispatch swapmwindow next|prev|master|rank:n|index:n swaps by tiled rank
 desktop dispatch movewindow l|r|u|d|next|prev|master reorders tiled clients without free-drag
 desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state
 desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1> sets split fullscreen state

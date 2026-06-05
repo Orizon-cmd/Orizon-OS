@@ -49,10 +49,11 @@ design note.
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
   `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`,
-  `desktop keyword`, `desktop dispatch` including focusmaster/swapwithmaster
+  `desktop keyword`, `desktop dispatch` including focusmwindow/swapmwindow/focusmaster/swapwithmaster
   plus split/master ratio, `nmaster`, layout reset/preselect recovery, monocle deck rendered diagnostics, and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
-  workspace next/empty plus Hyprland-style `r/m/e +/-n` and `r/m/e ~n` targets, and
+  workspace next/empty plus Hyprland-style `r/m/e +/-n`, `r/m/e ~n`, and
+  `focusworkspaceoncurrentmonitor` VM targets, and
   silent move-to-workspace dispatch with optional `workspace,window` selectors,
   persistent render tuning for focus ring, shadow range, render profile and
   animation tick budget,

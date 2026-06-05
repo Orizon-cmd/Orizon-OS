@@ -272,6 +272,9 @@ desktop dispatch focuscurrentorlast
 desktop dispatch markurgent on
 desktop dispatch focusurgentorlast
 desktop dispatch swapwindow l
+desktop dispatch focusmwindow rank:2
+desktop dispatch focusmwindow master
+desktop dispatch swapmwindow next
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
@@ -302,6 +305,7 @@ desktop dispatch focuswindow tag:settings
 desktop dispatch movetoworkspacesilent 2,tag:settings
 desktop dispatch movetoworkspacesilent 2,class:orizon-settings
 desktop dispatch movetoworkspace active,activewindow
+desktop dispatch focusworkspaceoncurrentmonitor active
 desktop dispatch workspace +1
 desktop dispatch workspace r+1
 desktop dispatch workspace m~1
