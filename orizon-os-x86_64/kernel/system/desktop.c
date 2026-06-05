@@ -1043,6 +1043,9 @@ static int desktop_hypr_dispatch_supported(const char *value) {
   return value &&
          (strstr(value, "exec") || strstr(value, "killactive") ||
           strstr(value, "workspace") || strstr(value, "movetoworkspace") ||
+          strstr(value, "focusmonitor") ||
+          strstr(value, "movecurrentworkspacetomonitor") ||
+          strstr(value, "moveworkspacetomonitor") ||
           strstr(value, "movefocus") || strstr(value, "focusmwindow") ||
           strstr(value, "focuswindow") ||
           strstr(value, "fullscreen") ||
@@ -4326,7 +4329,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|focusworkspaceoncurrentmonitor|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focusmwindow|movewindow|swapmwindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|cyclenext|swapnext|focusmaster|swapwithmaster|layoutmsg|resizeactive|submap|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|focusworkspaceoncurrentmonitor|focusmonitor|movecurrentworkspacetomonitor|moveworkspacetomonitor|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focusmwindow|movewindow|swapmwindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|cyclenext|swapnext|focusmaster|swapwithmaster|layoutmsg|resizeactive|submap|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -5028,7 +5031,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; SUPER+grave toggles special scratchpad; dispatch supports next/empty/special[:name]/+/-n/r+/-n/m+/-n/e+/-n and optional workspace,window selectors\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | workspace/focusworkspaceoncurrentmonitor | togglespecialworkspace [name] | movefocus l/r/u/d | focusmwindow next/prev/master/rank:n | movewindow l/r/u/d/master | swapmwindow next/prev/master/rank:n | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | workspace/focusworkspaceoncurrentmonitor | focusmonitor <monitor> | movecurrentworkspacetomonitor <monitor> | moveworkspacetomonitor <workspace> <monitor> | togglespecialworkspace [name] | movefocus l/r/u/d | focusmwindow next/prev/master/rank:n | movewindow l/r/u/d/master | swapmwindow next/prev/master/rank:n | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

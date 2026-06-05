@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.61.0` with VM-safe Hyprland-style monitor
+  dispatcher aliases: `focusmonitor`, `movecurrentworkspacetomonitor`, and
+  `moveworkspacetomonitor`. They validate and report requested monitor
+  targets with `single-framebuffer=yes` while keeping Orizon on its current
+  framebuffer VM backend; no real multi-output Wayland/wlroots routing,
+  floating desktop, free mouse drag, taskbar, or Waybar behavior is enabled.
 - Added desktop package version `0.60.0` with the generated
   `orizon-desktop-hypr` package payload aligned to the live Hyprland-style
   config: package-installed `/system/desktop-binds.conf` and

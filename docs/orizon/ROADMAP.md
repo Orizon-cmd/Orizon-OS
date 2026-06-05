@@ -61,7 +61,8 @@
   rendered diagnostics, directional `movefocus`/`swapwindow`,
   rank-based `focusmwindow`/`swapmwindow`, direct
   `focuswindow` targeting, `focuscurrentorlast`/`focusurgentorlast` with
-  VM-only `markurgent`, VM-only `tagwindow`, `focusworkspaceoncurrentmonitor`
+  VM-only `markurgent`, VM-only `tagwindow`, `focusworkspaceoncurrentmonitor`,
+  VM-only monitor dispatch aliases
   as a single-framebuffer alias, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout/reset/preselect`/`resizeactive`/`submap`,
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,

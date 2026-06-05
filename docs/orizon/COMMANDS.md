@@ -407,7 +407,12 @@ Hyprland-style runtime keyword, and supported settings keywords are written
 back into `/home/orizon/.config/hypr/orizon-hypr.conf` so a later
 `desktop hyprctl reload` keeps the value. `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
-`workspace`, `focusworkspaceoncurrentmonitor`, `togglespecialworkspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focusmwindow`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
+`workspace`, `focusworkspaceoncurrentmonitor`, `focusmonitor`,
+`movecurrentworkspacetomonitor`, `moveworkspacetomonitor`,
+`togglespecialworkspace`, `renameworkspace`, `movetoworkspace`,
+`movetoworkspacesilent`, `movefocus`, `focusmwindow`, `focuswindow`,
+`focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`,
+`cyclenext`, `swapnext`,
 `swapwindow`, `swapmwindow`, `movewindow`, `movewindoworgroup`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
@@ -420,6 +425,8 @@ including `layoutmsg layout <dwindle|master|monocle>`,
 for active workspace rank-based focus/swap, `movewindow
 <l|r|u|d|next|prev|master>` tiled-order movement without
 floating/manual drag,
+monitor dispatch aliases that report `single-framebuffer=yes` instead of
+pretending to route real Wayland outputs,
 idempotent client-state dispatchers
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy

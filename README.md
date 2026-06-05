@@ -247,11 +247,13 @@ detaille classe/module/surface, et
 premieres apps natives comme clients tiles geres par le compositor. Le launcher
 est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
 menu demarrer permanent, ni fenetres flottantes.
-`desktop dispatch exec|killactive|workspace|focusworkspaceoncurrentmonitor|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focusmwindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|swapmwindow|movewindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
+`desktop dispatch exec|killactive|workspace|focusworkspaceoncurrentmonitor|focusmonitor|movecurrentworkspacetomonitor|moveworkspacetomonitor|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focusmwindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|swapmwindow|movewindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned/urgent, workspaces relatifs/dynamiques `next`/`empty`,
 workspaces nommes via `renameworkspace` puis `workspace name:<nom>`, scratchpad
 special via `togglespecialworkspace [nom]` et `movetoworkspace special[:nom]`,
+dispatchers monitor VM-safe qui rapportent `single-framebuffer=yes` sans
+pretendre a un routage multi-ecran Wayland,
 restauration du focus par workspace, `movetoworkspace` qui suit le client et
 deplacement silencieux qui reste sur place, focus/swap/movewindow directionnels `l/r/u/d`,
 focus/swap par rang `focusmwindow`/`swapmwindow <next|prev|master|rank:n|index:n>`,

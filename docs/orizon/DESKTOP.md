@@ -500,6 +500,12 @@ are understood for VM-safe desktop flow across ten dynamic workspace slots.
 `focusworkspaceoncurrentmonitor <target>` is also accepted as the
 single-framebuffer VM equivalent of Hyprland's current-monitor workspace
 focus dispatcher; it does not claim real multi-monitor Wayland routing.
+`focusmonitor <monitor|direction>`,
+`movecurrentworkspacetomonitor <monitor>`, and
+`moveworkspacetomonitor <workspace> <monitor>` are exposed for Hyprland-style
+config compatibility, but today they are honest Orizon-framebuffer aliases:
+they validate and report the requested monitor while keeping the VM on its
+single framebuffer and do not claim real Wayland output routing.
 Hyprland-style prefixed targets are also accepted by the shared workspace
 parser: `r+1`/`r-1` and `r~3` walk or select numeric slots including empty
 ones, while `m+1`/`m-1`, `e+1`/`e-1`, `m~1`, and `e~1` walk open Orizon

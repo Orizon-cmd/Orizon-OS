@@ -245,7 +245,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.60.0` because it includes policy/config files, the persisted session
+`0.61.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -263,6 +263,8 @@ tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`,
 focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+VM-safe monitor dispatch aliases `focusmonitor`,
+`movecurrentworkspacetomonitor`, and `moveworkspacetomonitor`,
 Hyprland-style tiled special workspace dispatchers `togglespecialworkspace
 [name]` and `movetoworkspace special[:name]` without floating/manual drag,
 VM-safe tiled-order `movewindow <l|r|u|d|next|prev|master>` dispatchers,
@@ -271,7 +273,12 @@ commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.60.0` aligns the generated `orizon-desktop-hypr`
+the launcher. Version `0.61.0` adds Hyprland-style monitor dispatch aliases:
+`focusmonitor`, `movecurrentworkspacetomonitor`, and
+`moveworkspacetomonitor` validate/report requested monitors with
+`single-framebuffer=yes` while the VM backend remains the single
+Orizon-framebuffer and does not claim Wayland/wlroots output routing. Version
+`0.60.0` aligns the generated `orizon-desktop-hypr`
 package payload with the live profile: package-installed
 `/system/desktop-binds.conf` and `/home/orizon/.config/hypr/orizon-hypr.conf`
 include the same `focusmwindow`/`swapmwindow` binds and move-submap actions.

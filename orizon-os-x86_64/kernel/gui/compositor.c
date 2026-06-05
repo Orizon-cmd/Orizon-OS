@@ -1544,6 +1544,94 @@ static int desktop_parse_workspace_arg(const char *value, int *workspace) {
   return 0;
 }
 
+static int desktop_monitor_token_char_safe(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+         (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' ||
+         c == ':' || c == '+' || c == '@';
+}
+
+static int desktop_parse_monitor_token(const char *value, char *monitor,
+                                       size_t monitor_size,
+                                       const char **rest) {
+  const char *v = value ? value : "";
+  size_t len = 0;
+
+  if (!monitor || monitor_size == 0) {
+    return -1;
+  }
+  monitor[0] = '\0';
+  while (*v == ' ' || *v == '\t' || *v == ',') {
+    v++;
+  }
+  while (v[len] && v[len] != ' ' && v[len] != '\t' && v[len] != ',') {
+    if (len + 1 >= monitor_size ||
+        !desktop_monitor_token_char_safe(v[len])) {
+      return -1;
+    }
+    monitor[len] = v[len];
+    len++;
+  }
+  if (len == 0) {
+    snprintf(monitor, monitor_size, "current");
+  } else {
+    monitor[len] = '\0';
+  }
+  if (rest) {
+    *rest = v + len;
+  }
+  return 0;
+}
+
+static int desktop_parse_single_monitor_arg(const char *value, char *monitor,
+                                            size_t monitor_size) {
+  const char *rest = NULL;
+
+  if (desktop_parse_monitor_token(value, monitor, monitor_size, &rest) < 0) {
+    return -1;
+  }
+  while (rest && (*rest == ' ' || *rest == '\t' || *rest == ',')) {
+    rest++;
+  }
+  return rest && *rest ? -1 : 0;
+}
+
+static int desktop_parse_workspace_monitor_arg(const char *value,
+                                               int *workspace, char *monitor,
+                                               size_t monitor_size) {
+  char workspace_arg[64];
+  const char *v = value ? value : "";
+  size_t len = 0;
+
+  if (!workspace || !monitor || monitor_size == 0) {
+    return -1;
+  }
+  while (*v == ' ' || *v == '\t') {
+    v++;
+  }
+  while (v[len] && v[len] != ' ' && v[len] != '\t' && v[len] != ',') {
+    if (len + 1 >= sizeof(workspace_arg)) {
+      return -1;
+    }
+    workspace_arg[len] = v[len];
+    len++;
+  }
+  if (len == 0) {
+    return -1;
+  }
+  workspace_arg[len] = '\0';
+  if (desktop_parse_workspace_arg(workspace_arg, workspace) < 0) {
+    return -1;
+  }
+  v += len;
+  while (*v == ' ' || *v == '\t') {
+    v++;
+  }
+  if (*v == ',') {
+    v++;
+  }
+  return desktop_parse_single_monitor_arg(v, monitor, monitor_size);
+}
+
 static int desktop_parse_workspace_rename_arg(const char *value, int *workspace,
                                               char *name, size_t name_size) {
   char target_buf[32];
@@ -4766,7 +4854,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
-               "workspace/focusworkspaceoncurrentmonitor <n|name:name|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | togglespecialworkspace [name] | renameworkspace <target> <name> | movetoworkspace <target|special[:name]>[,<window>] | movetoworkspacesilent <target|special[:name]>[,<window>] | "
+               "workspace/focusworkspaceoncurrentmonitor <n|name:name|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | focusmonitor <monitor|direction> | movecurrentworkspacetomonitor <monitor> | moveworkspacetomonitor <workspace> <monitor> | togglespecialworkspace [name] | renameworkspace <target> <name> | movetoworkspace <target|special[:name]>[,<window>] | movetoworkspacesilent <target|special[:name]>[,<window>] | "
                "movefocus <l|r|u|d|next|prev> | focusmwindow <target> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | tagwindow <tag> [target] | swapwindow <l|r|u|d|next|prev> | swapmwindow <target> | movewindow <l|r|u|d|next|prev|master> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
@@ -4809,6 +4897,64 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                dispatcher, desktop_workspace_count);
     }
     return -1;
+  }
+  if (strcmp(dispatcher, "focusmonitor") == 0 ||
+      strcmp(dispatcher, "focusmon") == 0) {
+    char requested[64];
+
+    if (desktop_parse_single_monitor_arg(a, requested, sizeof(requested)) <
+        0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: focusmonitor expects current|0|Orizon-framebuffer|<safe-monitor-or-direction>\n");
+      }
+      return -1;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: focusmonitor monitor=Orizon-framebuffer requested=\"%s\" current=yes single-framebuffer=yes workspace=%d note=vm-alias-no-wayland-output-routing\n",
+               requested, desktop_active_workspace);
+    }
+    return 0;
+  }
+  if (strcmp(dispatcher, "movecurrentworkspacetomonitor") == 0) {
+    char requested[64];
+
+    if (desktop_parse_single_monitor_arg(a, requested, sizeof(requested)) <
+        0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: movecurrentworkspacetomonitor expects current|0|Orizon-framebuffer|<safe-monitor>\n");
+      }
+      return -1;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: movecurrentworkspacetomonitor workspace=%d name=\"%s\" monitor=Orizon-framebuffer requested=\"%s\" moved=no single-framebuffer=yes note=vm-alias-no-wayland-output-routing\n",
+               desktop_active_workspace,
+               desktop_workspace_name(desktop_active_workspace), requested);
+    }
+    return 0;
+  }
+  if (strcmp(dispatcher, "moveworkspacetomonitor") == 0) {
+    char requested[64];
+    int target = 0;
+
+    if (desktop_parse_workspace_monitor_arg(a, &target, requested,
+                                            sizeof(requested)) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: moveworkspacetomonitor expects <workspace> <monitor> or <workspace>,<monitor> (VM single framebuffer alias)\n");
+      }
+      return -1;
+    }
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: moveworkspacetomonitor workspace=%d name=\"%s\" monitor=Orizon-framebuffer requested=\"%s\" moved=no active=%d single-framebuffer=yes note=vm-alias-no-wayland-output-routing\n",
+               target, desktop_workspace_name(target), requested,
+               desktop_active_workspace);
+    }
+    return 0;
   }
   if (strcmp(dispatcher, "togglespecialworkspace") == 0 ||
       strcmp(dispatcher, "specialworkspace") == 0 ||
@@ -6824,7 +6970,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "focusmwindow <next|prev|master|rank|index> | focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow> | focuscurrentorlast | focusurgentorlast | markurgent [on|off|toggle] [target] | tagwindow <tag> [target] | "
              "cyclenext | swapnext | swapwindow l|r|u|d | swapmwindow <next|prev|master|rank|index> | movewindow l|r|u|d|master | focusmaster | swapwithmaster | "
              "fullscreen [on|off|toggle] | fullscreenstate <internal 0-3|-1> <client 0-3|-1> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
-             "workspace/focusworkspaceoncurrentmonitor <n|name:name|next|empty|+1|-1|previous> | "
+             "workspace/focusworkspaceoncurrentmonitor <n|name:name|next|empty|+1|-1|previous> | focusmonitor <monitor> | movecurrentworkspacetomonitor <monitor> | moveworkspacetomonitor <workspace> <monitor> | "
              "togglespecialworkspace [name] | "
              "renameworkspace <target> <name> | "
              "movetoworkspace <n|name:name|empty|special[:name]|+1|-1>[,<window>] | "
@@ -7526,7 +7672,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
-             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, focusworkspaceoncurrentmonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, "
+             "supported: exec terminal/settings/logs/packages/update, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, "
              "focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
@@ -7821,10 +7967,11 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow\n"
-           "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
+           "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
            "mwindow: focusmwindow/swapmwindow accept next, prev, master, last, +n, -n, rank:n, index:n over the active tiled workspace\n"
+           "monitor: focusmonitor/movecurrentworkspacetomonitor/moveworkspacetomonitor are VM single-framebuffer aliases; no Wayland output routing yet\n"
            "movewindow: l/r/u/d/next/prev/master reorders tiled clients only; no pixel drag or floating state is enabled\n"
            "layoutmsg: layout <dwindle|master|monocle>, reset, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom, preselect <l|r|u|d|reset>\n"
            "layoutmsg: splitratio <10-90|+/-n|reset>, masterratio|mfact <10-90|+/-n|reset>, nmaster <1-8|+/-n|reset>, addmaster, removemaster, focusmaster, swapwithmaster, movewindowmaster\n"

@@ -53,7 +53,7 @@ design note.
   plus split/master ratio, `nmaster`, layout reset/preselect recovery, monocle deck rendered diagnostics, and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
   workspace next/empty plus Hyprland-style `r/m/e +/-n`, `r/m/e ~n`, and
-  `focusworkspaceoncurrentmonitor` VM targets, and
+  `focusworkspaceoncurrentmonitor` plus monitor dispatch VM targets, and
   silent move-to-workspace dispatch with optional `workspace,window` selectors,
   persistent render tuning for focus ring, shadow range, render profile and
   animation tick budget,
