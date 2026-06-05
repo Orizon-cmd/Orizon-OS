@@ -533,6 +533,15 @@ Hyprland-style fields such as `address`, `workspace`, `fullscreenClient`,
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
 not upstream Wayland/wlroots Hyprland.
 
+`desktop apps` and `desktop app <id>` now form the first native-app control
+surface for the desktop. The terminal/settings/logs/packages/update entries
+declare their compositor class, module, data source, runbook, and remaining
+limits; settings/logs/packages/update also render practical source/command
+hints inside their framebuffer tiles. They are VM-ready tiling clients, not
+floating windows, not a Windows-style shell, and not Wayland/wlroots native
+applications yet. The launcher remains a transient overlay only; Waybar remains
+a future separate package.
+
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable
 Orizon addresses, `at/size` geometry, workspace graph, rules runtime, backend

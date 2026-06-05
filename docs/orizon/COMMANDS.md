@@ -301,6 +301,11 @@ desktop launch logs
 desktop launch packages
 desktop launch update
 desktop launch launcher
+desktop apps
+desktop app settings
+desktop app logs
+desktop app packages
+desktop app update
 desktop killactive
 desktop open terminal
 desktop close terminal
@@ -464,9 +469,11 @@ single-monitor VM `m/e +/-n`/`m/e ~n` open-workspace selectors, and
 `togglespecialworkspace [name]`,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
-class/module/surface details, and `desktop launch
+class/module/surface plus data-source/runbook/limit details, and `desktop launch
 terminal|settings|logs|packages|update|launcher` opens the first native apps as
-tiled clients or toggles the launcher overlay. `desktop windows`/`desktop clients`
+tiled clients or toggles the launcher overlay. The settings/logs/packages/update
+tiles render practical source and command hints in the framebuffer compositor.
+`desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`;
 `desktop rule-matches`/`desktop hyprctl rulematches` explain which
 `windowrulev2` class/title/app/tag/initialClass/initialTitle/workspace/focus/pin/fullscreen selectors match those clients,

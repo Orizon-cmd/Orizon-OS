@@ -460,6 +460,9 @@ typedef struct {
   const char *shortcut;
   const char *aliases;
   const char *description;
+  const char *data_source;
+  const char *runbook;
+  const char *limits;
 } desktop_app_entry_t;
 
 static const desktop_app_entry_t desktop_app_catalog[] = {
@@ -473,7 +476,10 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "desktop launch terminal",
      "SUPER+Return/F1/F11+t",
      "orizon-terminal,kitty",
-     "shell client backed by the Orizon terminal surface"},
+     "shell client backed by the Orizon terminal surface",
+     "/workspace,/home,/system admin shell",
+     "desktop launch terminal | desktop dispatch exec terminal | F1",
+     "single shared terminal backend today; no Wayland pty protocol yet"},
     {"settings",
      "Settings",
      ORIZON_DESKTOP_PACKAGE_SETTINGS,
@@ -484,7 +490,10 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "desktop launch settings",
      "F11+s",
      "desktop-settings,orizon-settings",
-     "settings client for theme, gaps, input, binds, and autostart"},
+     "settings client for theme, gaps, input, binds, and autostart",
+     ORIZON_DESKTOP_SETTINGS_PATH "," ORIZON_DESKTOP_SESSION_PATH "," ORIZON_DESKTOP_USER_CONFIG_PATH,
+     "desktop settings | desktop settings paths | desktop keyword <key> <value>",
+     "command/UI facade only; no graphical settings form widgets yet"},
     {"logs",
      "Logs",
      "orizon-logs",
@@ -495,7 +504,10 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "desktop launch logs",
      "F11+l",
      "log-viewer,logs-viewer,orizon-logs",
-     "logs viewer for persistent desktop and session diagnostics"},
+     "logs viewer for persistent desktop and session diagnostics",
+     ORIZON_DESKTOP_LOG_PATH "," ORIZON_DESKTOP_SESSION_LOG_PATH ",/logs/security.log",
+     "desktop logs | desktop rollinglog | report save",
+     "viewer summarizes logs; full scrollback still uses shell cat/head/tail"},
     {"packages",
      "Packages",
      "orizon-packages",
@@ -506,7 +518,10 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "desktop launch packages",
      "F11+p",
      "pkg,package-viewer,orizon-packages",
-     "package viewer for desktop modules and package-manager state"},
+     "package viewer for desktop modules and package-manager state",
+     "/workspace/packages,/packages," ORIZON_DESKTOP_MODULES_PATH,
+     "desktop modules | pkg search desktop | pkg info orizon-desktop-hypr",
+     "package install is command-driven; no graphical transaction queue yet"},
     {"update",
      "Update",
      "orizon-update-viewer",
@@ -517,7 +532,10 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "desktop launch update",
      "F11+u",
      "updater,update-viewer,orizon-update-viewer",
-     "update viewer for manifest, signature, bootguard, and rollback state"},
+     "update viewer for manifest, signature, bootguard, and rollback state",
+     "/workspace/.orizon/update-manifest," ORIZON_DESKTOP_BACKEND_PATH "," ORIZON_DESKTOP_PROTOCOL_PATH,
+     "update status | bootguard | rollback-status",
+     "live ISO can inspect only; installed VM is required for real update flow"},
     {"launcher",
      "Launcher",
      ORIZON_DESKTOP_PACKAGE_LAUNCHER,
@@ -528,7 +546,10 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "desktop launch launcher",
      "SUPER+D/F3/F11+d",
      "orizon-launcher",
-     "dispatch overlay only; no taskbar, start menu, or free-drag desktop"},
+     "dispatch overlay only; no taskbar, start menu, or free-drag desktop",
+     "built-in compositor overlay",
+     "desktop launcher show | desktop dispatch exec orizon-launcher | F3",
+     "overlay launcher only; no persistent bar, start menu, or app dock"},
 };
 
 static const desktop_app_entry_t *desktop_find_app_entry(const char *app) {
@@ -4933,6 +4954,9 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
   size_t used = 0;
   size_t count = sizeof(desktop_app_catalog) / sizeof(desktop_app_catalog[0]);
   char line[256];
+  int native_count = 0;
+  int overlay_count = 0;
+  int terminal_count = 0;
 
   if (!out || out_size == 0) {
     return;
@@ -4943,14 +4967,28 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
                  "model: compositor-managed Hyprland-style clients; tiling only, floating=no, manual-drag=no\n");
   desktop_append(out, out_size, &used,
                  "launcher-policy: overlay only; no Windows taskbar, no start menu, Waybar is future package\n");
+  desktop_append(out, out_size, &used,
+                 "sources: each native app exposes a command runbook and system/log/package data source\n");
   for (size_t i = 0; i < count; i++) {
     const desktop_app_entry_t *app = &desktop_app_catalog[i];
+    if (strcmp(app->backend, "native-app") == 0) {
+      native_count++;
+    } else if (strcmp(app->backend, "overlay") == 0) {
+      overlay_count++;
+    } else if (strcmp(app->backend, "terminal") == 0) {
+      terminal_count++;
+    }
     snprintf(line, sizeof(line),
              "%-9s status=%s class=%s module=%s surface=%s backend=%s command='%s' shortcut=%s\n",
              app->id, app->status, app->class_name, app->module,
              app->surface, app->backend, app->command, app->shortcut);
     desktop_append(out, out_size, &used, line);
   }
+  snprintf(line, sizeof(line),
+           "summary: total=%u native=%d terminal=%d overlay=%d tiling-clients=%u\n",
+           (unsigned)count, native_count, terminal_count, overlay_count,
+           (unsigned)(count - (size_t)overlay_count));
+  desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "detail: desktop app <terminal|settings|logs|packages|update|launcher>\n");
   desktop_append(out, out_size, &used,
@@ -5004,8 +5042,16 @@ void orizon_desktop_format_app_detail(const char *app, char *out,
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "description: %s\n", entry->description);
   desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "data-source: %s\n", entry->data_source);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "runbook: %s\n", entry->runbook);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line), "limits: %s\n", entry->limits);
+  desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
-                 "inspect: desktop clients | desktop activewindow | desktop apps\n");
+                 "vm-ready: yes\nimplemented: compositor-client catalog/detail\n");
+  desktop_append(out, out_size, &used,
+                 "inspect: desktop clients | desktop activewindow | desktop apps | desktop hyprctl clients\n");
 }
 
 void orizon_desktop_format_profiles(char *out, size_t out_size) {

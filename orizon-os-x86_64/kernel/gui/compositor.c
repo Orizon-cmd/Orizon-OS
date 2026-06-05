@@ -3885,69 +3885,113 @@ static void draw_desktop_transition_overlay(void) {
   font_draw_string(x + 12, y + 9, line, COLOR_TEXT_SECONDARY);
 }
 
+static void draw_desktop_app_line(int x, int *line, const char *text,
+                                  color_t color) {
+  if (!line || !text) {
+    return;
+  }
+  font_draw_string(x, *line, text, color);
+  *line += 20;
+}
+
+static void draw_desktop_app_chip(int x, int y, const char *label,
+                                  color_t accent) {
+  int width = 120;
+
+  if (label && label[0]) {
+    int text_width = font_string_width(label);
+    width = text_width + 24;
+    if (width < 88) {
+      width = 88;
+    }
+  }
+  fb_fill_rect_alpha(x, y, width, 24, MAKE_ARGB(120, 14, 22, 34));
+  fb_draw_rect(x, y, width, 24, accent);
+  font_draw_string(x + 10, y + 7, label ? label : "ready",
+                   COLOR_TEXT_SECONDARY);
+}
+
 static void draw_desktop_native_app(const desktop_client_t *client, int x,
                                     int y, int width, int height) {
   int line = y + 8;
-  int step = 20;
+  color_t accent = desktop_theme_accent();
+  char info[160];
 
   if (!client || width < 48 || height < 48) {
     return;
   }
-  font_draw_string(x, line, "native Orizon tiling client",
-                   COLOR_TEXT_PRIMARY);
-  line += step;
-  font_draw_string(x, line, "surface=tiled-client floating=no manual-drag=no",
-                   COLOR_TEXT_MUTED);
-  line += step;
+  draw_desktop_app_chip(x, line, "tiled native client", accent);
+  line += 34;
+  draw_desktop_app_line(
+      x, &line, "surface=tiled-client floating=no manual-drag=no",
+      COLOR_TEXT_MUTED);
   if (strcmp(client->app_id, "orizon-settings") == 0) {
-    font_draw_string(x, line, "Settings", COLOR_TEXT_PRIMARY);
-    line += step;
-    font_draw_string(x, line, "theme, gaps, borders, input, autostart",
-                     COLOR_TEXT_SECONDARY);
-    line += step;
-    font_draw_string(x, line, "commands: desktop settings | desktop keymap",
-                     COLOR_TEXT_MUTED);
-    line += step;
-    font_draw_string(x, line, "edit policy: desktop keyword <key> <value>",
-                     COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line, "Settings", COLOR_TEXT_PRIMARY);
+    snprintf(info, sizeof(info),
+             "theme=%s wallpaper=%s layout=%s gaps=%d/%d border=%d",
+             desktop_session.theme, desktop_session.wallpaper,
+             desktop_layout_engine(), desktop_settings.gaps_in,
+             desktop_settings.gaps_out, desktop_settings.border_size);
+    draw_desktop_app_line(x, &line, info, COLOR_TEXT_SECONDARY);
+    snprintf(info, sizeof(info), "input=%s pointer=%s focus-follows-mouse=%s",
+             desktop_settings.keyboard_layout, desktop_settings.pointer_profile,
+             desktop_session.focus_follows_mouse ? "yes" : "no");
+    draw_desktop_app_line(x, &line, info, COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(x, &line,
+                          "source: /system/desktop-settings.conf + hypr config",
+                          COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line,
+                          "runbook: desktop settings | desktop keyword <key> <value>",
+                          COLOR_TEXT_MUTED);
   } else if (strcmp(client->app_id, "orizon-logs") == 0) {
-    font_draw_string(x, line, "Logs Viewer", COLOR_TEXT_PRIMARY);
-    line += step;
-    font_draw_string(x, line, "/logs/desktop.log and session rollinglog",
-                     COLOR_TEXT_SECONDARY);
-    line += step;
-    font_draw_string(x, line, "commands: desktop logs | desktop rollinglog",
-                     COLOR_TEXT_MUTED);
-    line += step;
-    font_draw_string(x, line, "SSH-safe: cat/head/tail still expose files",
-                     COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line, "Logs Viewer", COLOR_TEXT_PRIMARY);
+    snprintf(info, sizeof(info), "session=%s ws=%d clients=%d",
+             desktop_mode_enabled ? "active" : "inactive",
+             desktop_active_workspace,
+             desktop_client_count_on_workspace(desktop_active_workspace));
+    draw_desktop_app_line(x, &line, info, COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(
+        x, &line, "source: /logs/desktop.log + /logs/desktop-session.log",
+        COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(x, &line,
+                          "runbook: desktop logs | desktop rollinglog | report save",
+                          COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line,
+                          "full scrollback stays available through shell cat/head/tail",
+                          COLOR_TEXT_MUTED);
   } else if (strcmp(client->app_id, "orizon-packages") == 0) {
-    font_draw_string(x, line, "Package Viewer", COLOR_TEXT_PRIMARY);
-    line += step;
-    font_draw_string(x, line, "orizon-desktop-hypr and optional modules",
-                     COLOR_TEXT_SECONDARY);
-    line += step;
-    font_draw_string(x, line, "commands: pkg search desktop | pkg info",
-                     COLOR_TEXT_MUTED);
-    line += step;
-    font_draw_string(x, line, "next split: terminal/settings/launcher pkgs",
-                     COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line, "Package Viewer", COLOR_TEXT_PRIMARY);
+    draw_desktop_app_line(
+        x, &line,
+        "modules: core hypr terminal settings launcher; waybar future",
+        COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(
+        x, &line, "source: /workspace/packages + /system/desktop-modules.conf",
+        COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(x, &line,
+                          "runbook: desktop modules | pkg search desktop | pkg info",
+                          COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line,
+                          "transactions remain command-driven and signed-manifest aware",
+                          COLOR_TEXT_MUTED);
   } else if (strcmp(client->app_id, "orizon-update-viewer") == 0) {
-    font_draw_string(x, line, "Update Viewer", COLOR_TEXT_PRIMARY);
-    line += step;
-    font_draw_string(x, line, "manifest, signature, bootguard, rollback",
-                     COLOR_TEXT_SECONDARY);
-    line += step;
-    font_draw_string(x, line, "commands: update status | rollback-status",
-                     COLOR_TEXT_MUTED);
-    line += step;
-    font_draw_string(x, line, "VM facade only; no hardware validation here",
-                     COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line, "Update Viewer", COLOR_TEXT_PRIMARY);
+    draw_desktop_app_line(
+        x, &line, "checks: manifest.sig required, bootguard prepared",
+        COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(x, &line,
+                          "source: /workspace/.orizon/update-* + release bundle",
+                          COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(x, &line,
+                          "runbook: update status | bootguard | rollback-status",
+                          COLOR_TEXT_MUTED);
+    draw_desktop_app_line(x, &line,
+                          "VM/ZimaOS only here; installed VM required for update flow",
+                          COLOR_TEXT_MUTED);
   } else {
-    font_draw_string(x, line, "prepared surface", COLOR_TEXT_PRIMARY);
-    line += step;
-    font_draw_string(x, line, "future native Orizon desktop app",
-                     COLOR_TEXT_SECONDARY);
+    draw_desktop_app_line(x, &line, "prepared surface", COLOR_TEXT_PRIMARY);
+    draw_desktop_app_line(x, &line, "future native Orizon desktop app",
+                          COLOR_TEXT_SECONDARY);
   }
 }
 

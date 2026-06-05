@@ -66,7 +66,8 @@ work.
   VM-only `tagwindow` diagnostics, movefocus directionnel/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swapwindow/swapmwindow/movewindow/cyclenext/swapnext/focusmaster/swapwithmaster/togglesplit/layoutmsg layout/reset/preselect/split/master/nmaster/monocle-deck/resizeactive/submap, `focusworkspaceoncurrentmonitor` and monitor dispatch single-framebuffer VM aliases, split fullscreenstate internal/client diagnostics, idempotent fullscreen/pseudo/pseudotile/pinned/tagged/urgent client
   state, autostart terminal policy, profile discovery, presets,
   native tiling apps for settings/logs/packages/update, app catalog/details with
-  class/module/surface diagnostics, launcher overlay dispatch,
+  class/module/surface/source/runbook/limit diagnostics, VM-ready framebuffer
+  panels showing practical data-source and command hints, launcher overlay dispatch,
   `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   VM-safe `source` resolution for `/home/orizon/.config/hypr/orizon-local.conf`,

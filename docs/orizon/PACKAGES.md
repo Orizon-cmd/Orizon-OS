@@ -245,7 +245,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.62.0` because it includes policy/config files, the persisted session
+`0.63.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -269,11 +269,18 @@ Hyprland-style tiled special workspace dispatchers `togglespecialworkspace
 [name]` and `movetoworkspace special[:name]` without floating/manual drag,
 VM-safe tiled-order `movewindow <l|r|u|d|next|prev|master>` dispatchers,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
-commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
+commands `desktop apps` and `desktop app <id>` with native app data-source,
+runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.62.0` expands the config bridge with generated
+the launcher. Version `0.63.0` expands the native app layer: the terminal,
+settings, logs, packages, update, and launcher catalog entries now expose
+data sources/runbooks/limits, and the generated package records app catalog,
+detail, launch, source, and surface-policy metadata. The rendered
+settings/logs/packages/update panels remain framebuffer tiling clients and do
+not enable floating windows, free mouse drag, a Windows taskbar/start menu,
+Waybar, or upstream Wayland/wlroots behavior. Version `0.62.0` expands the config bridge with generated
 defaults and runtime `getoption` support for `dwindle:*`, `master:*`,
 `binds:*`, `gestures:*`, `xwayland:*`, `misc:*`, `debug:*`, and `unbind`
 preservation in `/system/desktop-binds.conf`. These remain VM-safe runtime

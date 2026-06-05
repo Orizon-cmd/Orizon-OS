@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.63.0` with stronger native desktop app
+  diagnostics: `desktop apps` now reports a summary of terminal/native/overlay
+  clients, `desktop app <id>` exposes data sources, runbooks, VM-ready status,
+  and limits for terminal/settings/logs/packages/update/launcher, and the
+  framebuffer-native settings/logs/packages/update panels show practical
+  command/source hints inside tiled compositor clients. This remains tiling-only:
+  no Windows taskbar, no start menu, no floating/free-drag desktop, no Waybar,
+  and no upstream Wayland/wlroots Hyprland behavior is enabled.
 - Added desktop package version `0.62.0` with a broader Hyprland-style config
   bridge: generated defaults and `desktop hyprctl getoption` now cover
   `dwindle:*`, `master:*`, `binds:*`, `gestures:*`, `xwayland:*`,

@@ -242,11 +242,13 @@ Les actions sures `tile`, `fullscreen`, `pseudo`, `pin`, `tag` et
 floating/free-drag restent ignorees et visibles dans le diagnostic. Ce n'est
 pas encore le moteur regex/Wayland d'Hyprland upstream.
 `desktop apps` expose le catalogue des clients desktop, `desktop app <id>`
-detaille classe/module/surface, et
+detaille classe/module/surface, source de donnees, runbook et limites, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les
-premieres apps natives comme clients tiles geres par le compositor. Le launcher
-est seulement un overlay de dispatch: il n'ajoute ni barre type Windows, ni
-menu demarrer permanent, ni fenetres flottantes.
+premieres apps natives comme clients tiles geres par le compositor. Les panels
+framebuffer settings/logs/packages/update affichent maintenant leurs sources et
+commandes utiles dans le tile actif; le launcher est seulement un overlay de
+dispatch: il n'ajoute ni barre type Windows, ni menu demarrer permanent, ni
+fenetres flottantes.
 `desktop dispatch exec|killactive|workspace|focusworkspaceoncurrentmonitor|focusmonitor|movecurrentworkspacetomonitor|moveworkspacetomonitor|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focusmwindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|swapwindow|swapmwindow|movewindow|fullscreen|fullscreenstate|pseudo|pseudotile|pin|cyclenext|swapnext|focusmaster|swapwithmaster|togglesplit|layoutmsg|resizeactive|submap`
 installent un modele facon Hyprland: workspaces, clients tiles, focus, etats
 client fullscreen/pseudo/pinned/urgent, workspaces relatifs/dynamiques `next`/`empty`,
