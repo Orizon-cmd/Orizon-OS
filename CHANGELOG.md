@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.60.0` with the generated
+  `orizon-desktop-hypr` package payload aligned to the live Hyprland-style
+  config: package-installed `/system/desktop-binds.conf` and
+  `/home/orizon/.config/hypr/orizon-hypr.conf` now include the same
+  `focusmwindow`/`swapmwindow` rank binds and move-submap actions as the
+  built-in profile. Package metadata also documents the rank dispatchers.
 - Added desktop package version `0.59.0` with Hyprland-style rank dispatcher
   binds wired into the default user config, generated `/system/desktop-binds.conf`,
   move submap, shortcuts help, supported-bind diagnostics, and VM matrix. The
