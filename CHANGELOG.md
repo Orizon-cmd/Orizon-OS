@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.57.0` with stricter Hyprland-style bind
+  parsing and diagnostics. `bind`, `bindl`, `bindr`, `binde`, and `bindm`
+  are classified separately, `binds:*` options are no longer mistaken for key
+  bindings, and the generated move submap now records `N/B/M` tiled-order
+  `movewindow` actions. `bindm` remains a prepared compatibility hint only:
+  no manual mouse drag, floating desktop, taskbar, Waybar, or upstream
+  Wayland/wlroots Hyprland behavior is enabled.
 - Added desktop package version `0.56.0` with VM-safe Hyprland-style
   `movewindow <l|r|u|d|next|prev|master>` and `movewindoworgroup` dispatcher
   aliases. They reorder tiled clients in the compositor stack and expose

@@ -71,8 +71,9 @@ le developpement noyau:
   dispatchers Hyprland-like, focus directionnel HJKL,
   fullscreen/fullscreenstate/pseudo/pseudotile/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
-  `bindm/bindl`, `bezier/animation` et hints input/misc/layout, diagnostics
-  (les binds souris sont parses pour compatibilite, sans free-drag par defaut),
+  variantes `bind`/`bindl`/`bindr`/`binde`/`bindm`, `binds:*`,
+  `bezier/animation` et hints input/misc/layout, diagnostics
+  (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
   `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
   `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, diagnostics JSON compacts
   `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow`, mutation
@@ -183,8 +184,10 @@ instances`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
-`plugin` et `permission` comme hints runtime inspectables quand Orizon ne sait
-pas encore les appliquer comme un vrai backend Wayland.
+`binds:*`, `plugin` et `permission` comme hints runtime inspectables quand
+Orizon ne sait pas encore les appliquer comme un vrai backend Wayland. Les
+variantes `bindl`/`bindr`/`binde`/`bindm` sont classees dans les diagnostics;
+`bindm` reste un hint prepare et n'active pas de drag souris.
 `desktop render` detaille le focus ring, les shadows, le `render-profile`, la
 courbe/budget d'animation, les transitions workspace/layout/focus et le backend
 framebuffer logiciel sans pretendre fournir Wayland/wlroots. Les reglages

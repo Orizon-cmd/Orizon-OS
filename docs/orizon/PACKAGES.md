@@ -240,7 +240,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.56.0` because it includes policy/config files, the persisted session
+`0.57.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -266,7 +266,12 @@ commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.19.0` specifically added the desktop session manager:
+the launcher. Version `0.57.0` adds stricter Hyprland-style bind diagnostics:
+`bind`, `bindl`, `bindr`, `binde`, and `bindm` are classified separately,
+`binds:*` stays a runtime hint instead of a key binding, and the generated move
+submap records `N/B/M` tiled-order `movewindow` actions. `bindm` remains a
+prepared compatibility hint only and does not enable free-drag window moving.
+Version `0.19.0` specifically added the desktop session manager:
 `desktop start/stop/restart/reload/recover/state`, persisted
 `/system/desktop-state.conf`, `/logs/desktop-session.log`, and package
 metadata for session lifecycle. Version `0.20.0` adds keyboard ergonomics:

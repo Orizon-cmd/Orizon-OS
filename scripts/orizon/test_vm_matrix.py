@@ -184,12 +184,9 @@ def configure_ssh_console(
 
 def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) -> None:
     # Do not send text while Limine is still active: a blind "keyboard us" can
-    # become an edit command in the bootloader. On this ZimaOS/OVMF path,
-    # ENTER reliably selects Limine's highlighted "Boot" action, while F10 can
-    # leave the menu stuck. After that, wait for Orizon's framebuffer shell
-    # before replaying the idempotent DHCP/SSH setup.
-    time.sleep(12)
-    send_console_key(client, sudo_password, vm_name, "KEY_ENTER")
+    # become an edit command in the bootloader and leave the entry INVALID.
+    # Use the editor-level F10 boot path because it is deterministic on the
+    # ZimaOS/OVMF/Limine console path used by the VM smoke tests.
     configure_ssh_console(
         client,
         sudo_password,
@@ -197,7 +194,7 @@ def boot_and_start_ssh(client, sudo_password: str, vm_name: str, password: str) 
         password,
         rounds=2,
         initial_wait=100,
-        boot_confirm=False,
+        boot_confirm=True,
     )
 
 
@@ -546,6 +543,7 @@ def run_ssh_checks(
         ("desktop instances", "Orizon desktop instances"),
         ("desktop submap", "submap:"),
         ("desktop configerrors", "Hyprland config errors"),
+        ("desktop configerrors", "bind-detail:"),
         ("desktop rollinglog", "Hyprland rolling log"),
         ("desktop focus-history", "focusHistoryID"),
         ("desktop client-model", "Orizon desktop client model"),
@@ -555,6 +553,8 @@ def run_ssh_checks(
         ("desktop hyprctl getoption layerrule", "value: blur, launcher"),
         ("desktop hyprctl keyword input:repeat_rate 40", "/system/desktop-runtime.conf"),
         ("desktop hyprctl getoption input:repeat_rate", "value: 40"),
+        ("desktop keyword binds:workspace_center_on 1", "/system/desktop-runtime.conf"),
+        ("desktop hyprctl getoption binds:workspace_center_on", "value: 1"),
         ("desktop hyprctl getoption env", "value: ORIZON_DESKTOP_SOURCE,1"),
         ("desktop hyprctl getoption workspace", "value: 1, default:true"),
         ("desktop hyprctl getoption cursor:no_hardware_cursors", "value: true"),
@@ -1057,13 +1057,16 @@ def main() -> int:
                     args.boot_timeout,
                 )
                 if not ip:
+                    ok, size = capture_framebuffer_smoke(client, sudo_password, cfg["name"])
                     if cfg["network_name"]:
-                        detail = "guest IP unavailable from libvirt lease/arp/neighbor probes"
+                        detail = (
+                            "guest IP unavailable from libvirt lease/arp/neighbor probes; "
+                            f"framebuffer={'ok' if ok else 'missing'} bytes={size}"
+                        )
                         results.append(matrix_result(case_name, STATUS_FAIL, detail, cfg))
                         case_log.append(f"{STATUS_FAIL}: {detail}")
                         print(f"{STATUS_FAIL}: {detail}")
                         continue
-                    ok, size = capture_framebuffer_smoke(client, sudo_password, cfg["name"])
                     status = STATUS_WARN if ok else STATUS_FAIL
                     detail = (
                         f"framebuffer={'ok' if ok else 'missing'} bytes={size}; "

@@ -367,10 +367,11 @@ session/settings files plus generated runtime hint files such as
 line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR`, including `SOURCE
 ... status=LOADED|MISSING|SKIP`, without changing runtime
 state.
-`layerrule`, `bindm`/`bindl`, `bezier`, `animation`, and
-input/device/decoration/cursor/render/debug/misc/layout hints are preserved
-there until the real Wayland backend exists; mouse binds are parsed for
-compatibility without enabling free-drag window moving by default.
+`layerrule`, `bind`/`bindl`/`bindr`/`binde`/`bindm`, `binds:*`,
+`bezier`, `animation`, and input/device/decoration/cursor/render/debug/misc/layout
+hints are preserved there until the real Wayland backend exists; bind variants
+are counted in diagnostics, and mouse binds are parsed for compatibility
+without enabling free-drag window moving by default.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,

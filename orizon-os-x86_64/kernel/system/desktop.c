@@ -116,6 +116,7 @@ static const char *desktop_user_config =
     "bind = $mod, A, exec, desktop autostart\n"
     "bind = $mod, B, exec, desktop bar toggle\n"
     "bind = $mod, F, exec, desktop focus toggle\n"
+    "bindr = $mod SHIFT, F, exec, desktop focus toggle\n"
     "bind = $mod, M, fullscreen\n"
     "bind = $mod, P, pseudo\n"
     "bind = $mod SHIFT, P, pin\n"
@@ -144,6 +145,7 @@ static const char *desktop_user_config =
     "bind = $mod CTRL, down, movewindow, d\n"
     "bind = $mod CTRL, S, movewindow, master\n"
     "bind = $mod, Tab, cyclenext\n"
+    "binde = $mod CTRL, Tab, cyclenext\n"
     "bind = $mod SHIFT, Tab, swapnext\n"
     "bind = $mod, C, exec, desktop session\n"
     "bind = $mod, 1, workspace, 1\n"
@@ -171,6 +173,9 @@ static const char *desktop_user_config =
     "submap = move\n"
     "bind = , right, movefocus, r\n"
     "bind = , left, movefocus, l\n"
+    "bind = , n, movewindow, next\n"
+    "bind = , b, movewindow, prev\n"
+    "bind = , m, movewindow, master\n"
     "bind = , 1, movetoworkspace, 1\n"
     "bind = , 2, movetoworkspace, 2\n"
     "bind = , 3, movetoworkspace, 3\n"
@@ -227,6 +232,22 @@ static const char *desktop_binds_runtime_config =
     "bind = F10, submap, move\n"
     "bind = F11, submap, launch\n"
     "bind = F12, submap, reset\n"
+    "submap = resize\n"
+    "bind = , right, resizeactive, 5 0\n"
+    "bind = , left, resizeactive, -5 0\n"
+    "bind = , up, resizeactive, 0 5\n"
+    "bind = , down, resizeactive, 0 -5\n"
+    "bind = , escape, submap, reset\n"
+    "submap = move\n"
+    "bind = , right, movefocus, r\n"
+    "bind = , left, movefocus, l\n"
+    "bind = , n, movewindow, next\n"
+    "bind = , b, movewindow, prev\n"
+    "bind = , m, movewindow, master\n"
+    "bind = , 1, movetoworkspace, 1\n"
+    "bind = , 2, movetoworkspace, 2\n"
+    "bind = , 3, movetoworkspace, 3\n"
+    "bind = , escape, submap, reset\n"
     "submap = launch\n"
     "bind = , t, exec, terminal\n"
     "bind = , s, exec, orizon-settings\n"
@@ -235,6 +256,7 @@ static const char *desktop_binds_runtime_config =
     "bind = , u, exec, orizon-update-viewer\n"
     "bind = , d, exec, orizon-launcher\n"
     "bind = , q, killactive\n"
+    "bind = , escape, submap, reset\n"
     "submap = default\n"
     "bind = $mod, 1, workspace, 1\n"
     "bind = $mod SHIFT, 1, movetoworkspace, 1\n";
@@ -762,6 +784,8 @@ typedef struct {
   int misc_hints;
   int mouse_binds;
   int locked_binds;
+  int release_binds;
+  int repeat_binds;
   int supported_settings;
   int prepared_keywords;
   int ignored_keywords;
@@ -911,8 +935,44 @@ static int desktop_hypr_key_value(const char *line, char *key,
   return key[0] && value[0] ? 0 : -1;
 }
 
+static int desktop_hypr_is_bind_key(const char *key) {
+  const char *p;
+
+  if (!key || strncmp(key, "bind", 4) != 0) {
+    return 0;
+  }
+  p = key + 4;
+  if (*p == '\0') {
+    return 1;
+  }
+  if (*p == ':') {
+    return 0;
+  }
+  while (*p) {
+    if (*p != 'e' && *p != 'l' && *p != 'r' && *p != 'm') {
+      return 0;
+    }
+    p++;
+  }
+  return 1;
+}
+
+static int desktop_hypr_bind_has_flag(const char *key, char flag) {
+  const char *p;
+
+  if (!desktop_hypr_is_bind_key(key)) {
+    return 0;
+  }
+  for (p = key + 4; *p; p++) {
+    if (*p == flag) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
 static int desktop_hypr_key_global(const char *key) {
-  return strncmp(key, "bind", 4) == 0 || strcmp(key, "monitor") == 0 ||
+  return desktop_hypr_is_bind_key(key) || strcmp(key, "monitor") == 0 ||
          strcmp(key, "env") == 0 || strcmp(key, "exec") == 0 ||
          strcmp(key, "exec-once") == 0 ||
          strcmp(key, "exec-shutdown") == 0 ||
@@ -1214,7 +1274,7 @@ static const char *desktop_hypr_runtime_path_for_key(const char *key) {
   if (strcmp(key, "monitor") == 0) {
     return ORIZON_DESKTOP_MONITORS_PATH;
   }
-  if (strncmp(key, "bind", 4) == 0) {
+  if (desktop_hypr_is_bind_key(key)) {
     return ORIZON_DESKTOP_BINDS_PATH;
   }
   if (strcmp(key, "exec-once") == 0 || strcmp(key, "exec") == 0 ||
@@ -1330,13 +1390,19 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
     }
     return 0;
   }
-  if (strncmp(key, "bind", 4) == 0) {
+  if (desktop_hypr_is_bind_key(key)) {
     summary->binds++;
-    if (strcmp(key, "bindm") == 0) {
+    if (desktop_hypr_bind_has_flag(key, 'm')) {
       summary->mouse_binds++;
     }
-    if (strcmp(key, "bindl") == 0 || strcmp(key, "bindle") == 0) {
+    if (desktop_hypr_bind_has_flag(key, 'l')) {
       summary->locked_binds++;
+    }
+    if (desktop_hypr_bind_has_flag(key, 'r')) {
+      summary->release_binds++;
+    }
+    if (desktop_hypr_bind_has_flag(key, 'e')) {
+      summary->repeat_binds++;
     }
     if (desktop_hypr_dispatch_supported(value)) {
       summary->supported_binds++;
@@ -3381,7 +3447,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n"
              "parsed-lines: %d malformed: %d\n"
              "supported-settings: %d applied: %d prepared-keywords: %d ignored: %d runtime-lines: %d\n"
-             "binds: total=%d supported-dispatchers=%d mouse=%d locked=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
+             "binds: total=%d supported-dispatchers=%d mouse=%d locked=%d release=%d repeat=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
              "hints: input=%d layout=%d animations=%d misc=%d submaps=%d\n"
              "runtime-files: binds=%s autostart=%s rules=%s monitors=%s layers=%s state=%s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
@@ -3401,7 +3467,8 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              summary.prepared_keywords, summary.ignored_keywords,
              summary.runtime_lines,
              summary.binds, summary.supported_binds, summary.mouse_binds,
-             summary.locked_binds, summary.monitors, summary.exec_once,
+             summary.locked_binds, summary.release_binds,
+             summary.repeat_binds, summary.monitors, summary.exec_once,
              summary.envs, summary.windowrules, summary.layerrules,
              summary.workspaces, summary.sources, summary.variables,
              summary.input_hints, summary.layout_hints,
@@ -3914,10 +3981,11 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.malformed_lines);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d mouse-binds=%d locked-binds=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d submaps=%d\n",
+           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d mouse-binds=%d locked-binds=%d release-binds=%d repeat-binds=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d submaps=%d\n",
            summary.variables, summary.monitors, summary.binds,
            summary.supported_binds, summary.mouse_binds,
-           summary.locked_binds, summary.exec_once, summary.envs,
+           summary.locked_binds, summary.release_binds,
+           summary.repeat_binds, summary.exec_once, summary.envs,
            summary.windowrules, summary.layerrules, summary.workspaces,
            summary.sources, summary.submaps);
   desktop_append(out, out_size, &used, line);
@@ -3942,7 +4010,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled,shadow:range; render:focus_ring,profile; animations:enabled,tick_budget,curve; input:kb_layout,follow_mouse; exec-once terminal\n");
   desktop_append(out, out_size, &used,
-                 "runtime-hints: monitor, bind/bindm/bindl/bindr, exec/exec-once, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/device/decoration/cursor/render/debug/misc/dwindle/master/group hints -> /system/desktop-*.conf\n");
+                 "runtime-hints: monitor, bind/bindm/bindl/bindr/binde, binds:*, exec/exec-once, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/device/decoration/cursor/render/debug/misc/dwindle/master/group hints -> /system/desktop-*.conf\n");
   desktop_append(out, out_size, &used,
                  "apply: desktop config apply  # writes supported values into session/settings\n");
   snprintf(line, sizeof(line), "summary: %s\n",
@@ -3997,6 +4065,12 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
            summary.device_hints, summary.layout_hints,
            summary.decoration_hints, summary.cursor_hints,
            summary.render_hints, summary.debug_hints, summary.misc_hints);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "bind-detail: total=%d supported=%d locked=%d release=%d repeat=%d mouse=%d note=bindm-prepared-only-no-manual-drag\n",
+           summary.binds, summary.supported_binds, summary.locked_binds,
+           summary.release_binds, summary.repeat_binds,
+           summary.mouse_binds);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n",
