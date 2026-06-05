@@ -137,6 +137,8 @@ desktop dispatch markurgent on
 desktop dispatch focusurgentorlast
 desktop focus-window title:Terminal
 desktop dispatch swapwindow l
+desktop dispatch movewindow r
+desktop dispatch movewindow master
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
@@ -378,7 +380,8 @@ shortcuts, the last key seen by the compositor, the active submap, and the
 focus-follows-mouse transition counter. F9 enters the `resize` submap, F10
 enters `move`, F11 enters `launch`, and F12/Esc returns to `default`. In
 `resize`, arrows/HJKL adjust split/master tiling ratios and `R` resets them.
-In `move`, arrows/HJKL move focus, `1/2/3` move the active tiled client to a
+In `move`, arrows/HJKL move focus, `N/B` reorder the active tiled client,
+`M` moves it to the master slot, `1/2/3` move the active tiled client to a
 workspace, and `P` toggles pin. In `launch`, `T` opens a terminal, `S` opens
 Settings, `L` opens Logs, `P` opens Packages, `U` opens Update, `D` toggles the
 launcher, and `Q` kills the active client. This is keyboard dispatcher control,
@@ -465,7 +468,12 @@ workspace name:<name>`, `desktop dispatch movetoworkspace <target|special[:name]
 exercise the same mental model as Hyprland dispatchers. The current client
 dispatchers also include `fullscreen`, `fullscreenstate`, `pseudo`,
 `pseudotile`, `pin`, `markurgent`, `cyclenext`, and `swapnext`, directional
-`swapwindow l|r|u|d`, plus direct `focusmaster` and `swapwithmaster` aliases.
+`swapwindow l|r|u|d`, directional
+`movewindow l|r|u|d|next|prev|master`/`movewindoworgroup`, plus direct
+`focusmaster` and `swapwithmaster` aliases. `movewindow` is a tiled-order
+operation: it pushes the active client through the compositor stack or to the
+master slot without enabling floating geometry, pixel dragging, or free manual
+movement.
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` set or toggle the active
 client state without ambiguous script-side guessing. The old
@@ -476,6 +484,7 @@ compositor state and the state sent to the client. In Orizon today the
 framebuffer facade, not Wayland/wlroots. Layout/submap
 dispatchers now include `togglesplit`,
 `layoutmsg layout <dwindle|master|monocle>|reset|orientationnext|orientationprev|orientationleft|orientationright|orientationtop|orientationbottom|preselect <l|r|u|d|reset>|splitratio <10-90|+/-n|reset>|masterratio <10-90|+/-n|reset>|mfact <10-90|+/-n|reset>|nmaster <1-8|+/-n|reset>|addmaster|removemaster|focusmaster|swapwithmaster`,
+`layoutmsg movewindowmaster`,
 `resizeactive <x> <y>`, and `submap <name|reset>`. Relative workspace targets such as `workspace +1`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
@@ -577,6 +586,7 @@ desktop dispatch layoutmsg layout <dwindle|master|monocle> changes active worksp
 desktop dispatch layoutmsg reset resets active workspace layout ratios to defaults
 desktop dispatch layoutmsg preselect <l|r|u|d|reset> sets a VM-safe directional split hint
 desktop dispatch swapwindow l|r|u|d swaps tiled clients by direction
+desktop dispatch movewindow l|r|u|d|next|prev|master reorders tiled clients without free-drag
 desktop dispatch fullscreen|pseudo|pseudotile|pin [on|off|toggle] controls active client state
 desktop dispatch fullscreenstate <internal 0-3|-1> <client 0-3|-1> sets split fullscreen state
 desktop dispatch resizeactive <x> <y> adjusts tiling ratios

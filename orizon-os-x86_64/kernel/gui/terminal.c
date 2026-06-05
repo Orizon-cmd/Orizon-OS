@@ -3800,7 +3800,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop layers          - Show compositor layer model\n");
     term_puts_t(term, "  desktop layout-state    - Show per-workspace tiling layout state\n");
     term_puts_t(term, "  desktop keyword <k> <v> - Apply one Hyprland-style runtime keyword\n");
-    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/master/swapwindow/submap\n");
+    term_puts_t(term, "  desktop dispatch <d>    - Run exec/workspace/layoutmsg/master/swapwindow/movewindow/submap\n");
     term_puts_t(term, "  desktop hyprctl <cmd>   - Hyprland-like status/keyword/dispatch facade\n");
     term_puts_t(term, "  desktop autostart       - Show or configure startup apps\n");
     term_puts_t(term, "  desktop windows         - List compositor windows/layers\n");
@@ -3820,7 +3820,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop dispatch movetoworkspacesilent <target|special[:name]>[,<window>] - Move focused/selected client without switching\n");
     term_puts_t(term, "  desktop dispatch fullscreen|fullscreenstate|pseudo|pseudotile|pin [state] - Hyprland-like client state\n");
     term_puts_t(term, "  desktop dispatch focuscurrentorlast|focusurgentorlast|markurgent|tagwindow - Focus history, urgent and tag diagnostics\n");
-    term_puts_t(term, "  desktop dispatch cyclenext|swapnext|swapwindow|focusmaster|swapwithmaster - Hyprland-like actions\n");
+    term_puts_t(term, "  desktop dispatch cyclenext|swapnext|swapwindow|movewindow|focusmaster|swapwithmaster - Hyprland-like actions\n");
+    term_puts_t(term, "  desktop dispatch movewindow <l|r|u|d|next|prev|master> - Reorder tiled client without drag\n");
     term_puts_t(term, "  desktop dispatch movefocus <l|r|u|d|next|prev> - Directional tiled focus\n");
     term_puts_t(term, "  desktop dispatch focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow> - Focus a matching client\n");
     term_puts_t(term, "  desktop dispatch layoutmsg <msg> - orientation/splitratio/masterratio/nmaster actions\n");

@@ -138,6 +138,11 @@ static const char *desktop_user_config =
     "bind = $mod SHIFT, right, swapwindow, r\n"
     "bind = $mod SHIFT, up, swapwindow, u\n"
     "bind = $mod SHIFT, down, swapwindow, d\n"
+    "bind = $mod CTRL, left, movewindow, l\n"
+    "bind = $mod CTRL, right, movewindow, r\n"
+    "bind = $mod CTRL, up, movewindow, u\n"
+    "bind = $mod CTRL, down, movewindow, d\n"
+    "bind = $mod CTRL, S, movewindow, master\n"
     "bind = $mod, Tab, cyclenext\n"
     "bind = $mod SHIFT, Tab, swapnext\n"
     "bind = $mod, C, exec, desktop session\n"
@@ -213,6 +218,11 @@ static const char *desktop_binds_runtime_config =
     "bind = $mod SHIFT, right, swapwindow, r\n"
     "bind = $mod SHIFT, up, swapwindow, u\n"
     "bind = $mod SHIFT, down, swapwindow, d\n"
+    "bind = $mod CTRL, left, movewindow, l\n"
+    "bind = $mod CTRL, right, movewindow, r\n"
+    "bind = $mod CTRL, up, movewindow, u\n"
+    "bind = $mod CTRL, down, movewindow, d\n"
+    "bind = $mod CTRL, S, movewindow, master\n"
     "bind = F9, submap, resize\n"
     "bind = F10, submap, move\n"
     "bind = F11, submap, launch\n"
@@ -964,7 +974,7 @@ static int desktop_hypr_dispatch_supported(const char *value) {
           strstr(value, "pseudo") || strstr(value, "pin") ||
           strstr(value, "focusmaster") || strstr(value, "swapwithmaster") ||
           strstr(value, "cyclenext") || strstr(value, "swapnext") ||
-          strstr(value, "swapwindow") ||
+          strstr(value, "swapwindow") || strstr(value, "movewindow") ||
           strstr(value, "togglesplit") || strstr(value, "layoutmsg") ||
           strstr(value, "resizeactive") || strstr(value, "submap"));
 }
@@ -2103,6 +2113,11 @@ static int desktop_write_user_config_from_state(
            "bind = $mod SHIFT, right, swapwindow, r\n"
            "bind = $mod SHIFT, up, swapwindow, u\n"
            "bind = $mod SHIFT, down, swapwindow, d\n"
+           "bind = $mod CTRL, left, movewindow, l\n"
+           "bind = $mod CTRL, right, movewindow, r\n"
+           "bind = $mod CTRL, up, movewindow, u\n"
+           "bind = $mod CTRL, down, movewindow, d\n"
+           "bind = $mod CTRL, S, movewindow, master\n"
            "bind = $mod, Tab, cyclenext\n"
            "bind = $mod SHIFT, Tab, swapnext\n"
            "bind = $mod, C, exec, desktop session\n"
@@ -4211,7 +4226,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "focus: desktop focus on|off|toggle\n");
   desktop_append(out, out_size, &used,
-                 "dispatch: desktop dispatch exec|killactive|workspace|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
+                 "dispatch: desktop dispatch exec|killactive|workspace|togglespecialworkspace|renameworkspace|movetoworkspace|movetoworkspacesilent|movefocus|movewindow|focuswindow|focuscurrentorlast|focusurgentorlast|markurgent|tagwindow|layoutmsg|fullscreen/fullscreenstate|pseudo/pseudotile|pin\n");
   desktop_append(out, out_size, &used,
                  "runtime: desktop binds|rules|monitors|runtime|layers|keyword\n");
   desktop_append(out, out_size, &used,
@@ -4901,7 +4916,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "resize submap: arrows or HJKL adjust tiling ratios; R resets; S toggles split\n");
   desktop_append(out, out_size, &used,
-                 "move submap: arrows or HJKL focus; 1/2/3 move focused client to workspace; P pins\n");
+                 "move submap: arrows or HJKL focus; N/B reorder tiled client; M moves it to master; 1/2/3 move focused client to workspace; P pins\n");
   desktop_append(out, out_size, &used,
                  "launch submap: T terminal; S settings; L logs; P packages; U update; D launcher; Q killactive; Esc/F12 default\n");
   desktop_append(out, out_size, &used,
@@ -4913,7 +4928,7 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "workspaces: SUPER+1/2/3 workspace; SUPER+Shift+1/2/3 movetoworkspace; SUPER+grave toggles special scratchpad; dispatch supports next/empty/special[:name]/+/-n and optional workspace,window selectors\n");
   desktop_append(out, out_size, &used,
-                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | togglespecialworkspace [name] | movefocus l/r/u/d | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
+                 "dispatchers: exec terminal/settings/logs/packages/update | killactive | togglespecialworkspace [name] | movefocus l/r/u/d | movewindow l/r/u/d/master | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
 }

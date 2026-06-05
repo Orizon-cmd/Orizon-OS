@@ -2395,6 +2395,92 @@ static int desktop_swap_client_indices(int focused_idx, int other_idx) {
   return 0;
 }
 
+static int desktop_move_client_index_in_scope(int from, int to) {
+  int slots[DESKTOP_MAX_CLIENTS];
+  desktop_client_t ordered[DESKTOP_MAX_CLIENTS];
+  int count = 0;
+  int from_pos = -1;
+  int to_pos = -1;
+  desktop_client_t moving;
+
+  if (from < 0 || from >= DESKTOP_MAX_CLIENTS || to < 0 ||
+      to >= DESKTOP_MAX_CLIENTS || from == to ||
+      !desktop_client_on_workspace(&desktop_clients[from],
+                                   desktop_active_workspace) ||
+      !desktop_client_on_workspace(&desktop_clients[to],
+                                   desktop_active_workspace)) {
+    return -1;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (!desktop_client_on_workspace(&desktop_clients[i],
+                                     desktop_active_workspace)) {
+      continue;
+    }
+    if (count >= DESKTOP_MAX_CLIENTS) {
+      return -1;
+    }
+    if (i == from) {
+      from_pos = count;
+    }
+    if (i == to) {
+      to_pos = count;
+    }
+    slots[count] = i;
+    ordered[count] = desktop_clients[i];
+    count++;
+  }
+  if (from_pos < 0 || to_pos < 0 || from_pos == to_pos) {
+    return -1;
+  }
+  moving = ordered[from_pos];
+  if (from_pos < to_pos) {
+    for (int i = from_pos; i < to_pos; i++) {
+      ordered[i] = ordered[i + 1];
+    }
+  } else {
+    for (int i = from_pos; i > to_pos; i--) {
+      ordered[i] = ordered[i - 1];
+    }
+  }
+  ordered[to_pos] = moving;
+  for (int i = 0; i < count; i++) {
+    desktop_clients[slots[i]] = ordered[i];
+  }
+  desktop_set_focused_client_index(slots[to_pos]);
+  desktop_sync_terminal_compat();
+  needs_redraw = 1;
+  return 0;
+}
+
+static int desktop_move_window_relative(int delta) {
+  int count = desktop_client_count_on_workspace(desktop_active_workspace);
+  int focused_idx = desktop_focused_client_index();
+  int focused_pos = -1;
+  int target_pos;
+  int target_idx;
+
+  if (count <= 1 || focused_idx < 0) {
+    return -1;
+  }
+  for (int pos = 0; pos < count; pos++) {
+    if (desktop_nth_client_on_workspace(desktop_active_workspace, pos) ==
+        focused_idx) {
+      focused_pos = pos;
+      break;
+    }
+  }
+  if (focused_pos < 0) {
+    return -1;
+  }
+  target_pos = (focused_pos + delta + count) % count;
+  target_idx =
+      desktop_nth_client_on_workspace(desktop_active_workspace, target_pos);
+  if (target_idx < 0 || target_idx == focused_idx) {
+    return -1;
+  }
+  return desktop_move_client_index_in_scope(focused_idx, target_idx);
+}
+
 static int desktop_focus_master_client(void) {
   int idx = desktop_nth_client_on_workspace(desktop_active_workspace, 0);
 
@@ -2719,6 +2805,16 @@ static int desktop_swap_with_master(void) {
     return -1;
   }
   return desktop_swap_client_indices(focused_idx, master_idx);
+}
+
+static int desktop_move_window_to_master(void) {
+  int focused_idx = desktop_focused_client_index();
+  int master_idx = desktop_nth_client_on_workspace(desktop_active_workspace, 0);
+
+  if (focused_idx < 0 || master_idx < 0 || focused_idx == master_idx) {
+    return -1;
+  }
+  return desktop_move_client_index_in_scope(focused_idx, master_idx);
 }
 
 static int desktop_toggle_active_fullscreen(void) {
@@ -3812,6 +3908,18 @@ static int desktop_handle_submap_key(int key) {
       gui_desktop_move_terminal_to_workspace(key - '0');
       return 1;
     }
+    if (key == 'n' || key == 'N') {
+      desktop_move_window_relative(1);
+      return 1;
+    }
+    if (key == 'b' || key == 'B') {
+      desktop_move_window_relative(-1);
+      return 1;
+    }
+    if (key == 'm' || key == 'M') {
+      desktop_move_window_to_master();
+      return 1;
+    }
     if (key == 'p' || key == 'P') {
       desktop_toggle_active_pin();
       return 1;
@@ -4403,7 +4511,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
                "workspace <n|name:name|next|empty|+/-n|r+/-n|m+/-n|e+/-n|r~n|m~n|e~n|previous> | togglespecialworkspace [name] | renameworkspace <target> <name> | movetoworkspace <target|special[:name]>[,<window>] | movetoworkspacesilent <target|special[:name]>[,<window>] | "
-               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | tagwindow <tag> [target] | swapwindow <l|r|u|d|next|prev> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
+               "movefocus <l|r|u|d|next|prev> | focuswindow <target> | focuscurrentorlast | focusurgentorlast | markurgent [state] [target] | tagwindow <tag> [target] | swapwindow <l|r|u|d|next|prev> | movewindow <l|r|u|d|next|prev|master> | fullscreen | fullscreenstate <internal> <client> | pseudo/pseudotile | pin | swapnext | "
                "focusmaster | swapwithmaster | togglesplit | layoutmsg <msg> | "
                "resizeactive <x> <y> | submap <name>\n");
     }
@@ -4657,6 +4765,36 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       snprintf(out, out_size, "desktop dispatch: swapwindow %s%s\n",
                rc == 0 ? "ok" : "needs-two-clients",
                fallback && rc == 0 ? " fallback=cycle" : "");
+    }
+    return rc;
+  }
+  if (strcmp(dispatcher, "movewindow") == 0 ||
+      strcmp(dispatcher, "movewindoworgroup") == 0) {
+    int dx = 0;
+    int dy = 0;
+    int delta = 1;
+    int rc;
+    if (strcmp(a, "master") == 0 || strcmp(a, "first") == 0) {
+      rc = desktop_move_window_to_master();
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: movewindow %s target=master note=tiling-order-only floating=no manual-drag=no\n",
+                 rc == 0 ? "ok" : "needs-two-clients");
+      }
+      return rc;
+    }
+    if (desktop_parse_direction_arg(a, &dx, &dy, &delta) < 0) {
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: movewindow expects l/r/u/d/next/prev/master\n");
+      }
+      return -1;
+    }
+    rc = desktop_move_window_relative(delta);
+    if (out && out_size) {
+      snprintf(out, out_size,
+               "desktop dispatch: movewindow %s direction=%s note=tiling-order-only floating=no manual-drag=no\n",
+               rc == 0 ? "ok" : "needs-two-clients", a[0] ? a : "next");
     }
     return rc;
   }
@@ -5044,6 +5182,16 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       }
       return rc;
     }
+    if (strcmp(a, "movewindowmaster") == 0 ||
+        strcmp(a, "movetomaster") == 0) {
+      int rc = desktop_move_window_to_master();
+      if (out && out_size) {
+        snprintf(out, out_size,
+                 "desktop dispatch: layoutmsg movewindowmaster %s note=tiling-order-only floating=no manual-drag=no\n",
+                 rc == 0 ? "ok" : "needs-two-clients");
+      }
+      return rc;
+    }
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: layoutmsg supports togglesplit, "
@@ -5051,7 +5199,7 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                "layout <dwindle|master|monocle>, "
                "reset, splitratio <10-90|+/-n|reset>, masterratio <10-90|+/-n|reset>, "
                "nmaster <1-8|+/-n|reset>, addmaster, removemaster, "
-               "focusmaster, swapwithmaster\n");
+               "focusmaster, swapwithmaster, movewindowmaster\n");
     }
     return -1;
   }
@@ -6405,7 +6553,7 @@ void gui_desktop_format_windows(char *out, size_t out_size) {
              "dispatch: exec terminal|settings|logs|packages|update | "
              "killactive | movefocus l|r|u|d|next|prev | "
              "focuswindow <id|0xaddr|class:app|title:text|tag:name|activewindow> | focuscurrentorlast | focusurgentorlast | markurgent [on|off|toggle] [target] | tagwindow <tag> [target] | "
-             "cyclenext | swapnext | swapwindow l|r|u|d | focusmaster | swapwithmaster | "
+             "cyclenext | swapnext | swapwindow l|r|u|d | movewindow l|r|u|d|master | focusmaster | swapwithmaster | "
              "fullscreen [on|off|toggle] | fullscreenstate <internal 0-3|-1> <client 0-3|-1> | pseudo|pseudotile [on|off|toggle] | pin [on|off|toggle] | "
              "workspace <n|name:name|next|empty|+1|-1|previous> | "
              "togglespecialworkspace [name] | "
@@ -6901,6 +7049,7 @@ void gui_desktop_format_focus_history(char *out, size_t out_size) {
              "desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | "
              "desktop dispatch cyclenext [prev] | "
              "desktop dispatch swapwindow l|r|u|d | "
+             "desktop dispatch movewindow l|r|u|d|master | "
              "desktop dispatch focusmaster\n");
   }
 }
@@ -7002,7 +7151,7 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: desktop dispatch focusmaster | desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d | desktop dispatch togglespecialworkspace [name] | desktop dispatch movetoworkspace <target|special[:name]>[,<window>] | desktop dispatch renameworkspace <target> <name>\n"
+             "dispatch: desktop dispatch focusmaster | desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d | desktop dispatch movewindow l|r|u|d|master | desktop dispatch togglespecialworkspace [name] | desktop dispatch movetoworkspace <target|special[:name]>[,<window>] | desktop dispatch renameworkspace <target> <name>\n"
              "hyprctl: desktop hyprctl workspacestack\n"
              "limits: diagnostic stack only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
@@ -7107,7 +7256,7 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
     snprintf(out + used, out_size - used,
              "\ndispatch: desktop dispatch <dispatcher> [args]\n"
              "supported: exec terminal/settings/logs/packages/update, killactive, workspace, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, "
-             "focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
+             "focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, movewindow, focusmaster, swapwithmaster, fullscreen/fullscreenstate, pseudo/pseudotile, pin, togglesplit, "
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
@@ -7140,7 +7289,7 @@ void gui_desktop_format_layouts(char *out, size_t out_size) {
            "clients: total=%d workspace=%d focused=0x%x focus-history=%s\n"
            "set: desktop layout <dwindle|master|monocle>\n"
            "workspace-state: per-workspace layout/split/master ratios and nmaster\n"
-           "dispatch: desktop dispatch layoutmsg layout <dwindle|master|monocle> | desktop dispatch togglesplit | desktop dispatch focusmaster | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d\n"
+           "dispatch: desktop dispatch layoutmsg layout <dwindle|master|monocle> | desktop dispatch togglesplit | desktop dispatch focusmaster | desktop dispatch swapwithmaster | desktop dispatch swapwindow l|r|u|d | desktop dispatch movewindow l|r|u|d|master\n"
            "dispatch: desktop dispatch layoutmsg reset | desktop dispatch layoutmsg preselect <l|r|u|d|reset>\n"
            "dispatch: desktop dispatch layoutmsg splitratio <10-90|+/-n|reset> | desktop dispatch layoutmsg masterratio <10-90|+/-n|reset> | desktop dispatch layoutmsg nmaster <1-8|+/-n|reset>\n"
            "state: desktop layout-state | desktop hyprctl layoutstate\n"
@@ -7290,7 +7439,7 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
   }
   if (used < out_size) {
     snprintf(out + used, out_size - used,
-             "dispatch: layoutmsg reset/preselect/splitratio/masterratio/nmaster/togglesplit | focusmaster | swapwithmaster | movefocus l|r|u|d | focuswindow <target>\n"
+             "dispatch: layoutmsg reset/preselect/splitratio/masterratio/nmaster/togglesplit | focusmaster | swapwithmaster | movewindow l|r|u|d|master | movefocus l|r|u|d | focuswindow <target>\n"
              "hyprctl: desktop hyprctl layouttree\n"
              "limits: diagnostic tree only; no mouse free-drag, no floating scene graph, no Wayland scene graph yet\n");
   }
@@ -7400,11 +7549,12 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
            "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow\n"
-           "dispatchers: exec, killactive, workspace, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow\n"
+           "dispatchers: exec, killactive, workspace, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
+           "movewindow: l/r/u/d/next/prev/master reorders tiled clients only; no pixel drag or floating state is enabled\n"
            "layoutmsg: layout <dwindle|master|monocle>, reset, togglesplit, orientationnext, orientationprev, orientationleft/right/top/bottom, preselect <l|r|u|d|reset>\n"
-           "layoutmsg: splitratio <10-90|+/-n|reset>, masterratio|mfact <10-90|+/-n|reset>, nmaster <1-8|+/-n|reset>, addmaster, removemaster, focusmaster, swapwithmaster\n"
+           "layoutmsg: splitratio <10-90|+/-n|reset>, masterratio|mfact <10-90|+/-n|reset>, nmaster <1-8|+/-n|reset>, addmaster, removemaster, focusmaster, swapwithmaster, movewindowmaster\n"
            "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"
            "fullscreenstate: internal controls compositor layout; fullscreenClient records state exposed to future clients\n"
            "urgent: markurgent is a VM diagnostic to exercise focusurgentorlast before real client urgency exists\n"
@@ -7637,7 +7787,7 @@ void gui_desktop_format_keymap(char *out, size_t out_size) {
            "  F4 fullscreen | F5 pseudo | F6 cyclenext | F7/F8 workspace +/-1\n"
            "submaps:\n"
            "  F9 resize: Left/H split -5, Right/L split +5, Up/K master +5, Down/J master -5, R reset, S togglesplit, Esc/F12 default\n"
-           "  F10 move: arrows/HJKL focus, 1/2/3 movetoworkspace, P pin, Esc/F12 default\n"
+           "  F10 move: arrows/HJKL focus, N/B movewindow, M master, 1/2/3 movetoworkspace, P pin, Esc/F12 default\n"
            "  F11 launch: T/Enter terminal, D/Space launcher, Q killactive, Esc/F12 default\n"
            "config-binds: %s\n"
            "mouse-policy: focus follows mouse is optional; manual-window-drag=no\n"

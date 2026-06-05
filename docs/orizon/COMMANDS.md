@@ -213,6 +213,8 @@ desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal
 desktop focus-window title:Terminal
 desktop dispatch swapwindow l
+desktop dispatch movewindow r
+desktop dispatch movewindow master
 desktop dispatch swapwithmaster
 desktop dispatch focusmaster
 desktop dispatch togglesplit
@@ -400,14 +402,16 @@ back into `/home/orizon/.config/hypr/orizon-hypr.conf` so a later
 `desktop hyprctl reload` keeps the value. `desktop dispatch
 <dispatcher> [args]` runs `exec`, `killactive`,
 `workspace`, `togglespecialworkspace`, `renameworkspace`, `movetoworkspace`, `movetoworkspacesilent`, `movefocus`, `focuswindow`, `focuscurrentorlast`, `focusurgentorlast`, `markurgent`, `tagwindow`, `cyclenext`, `swapnext`,
-`swapwindow`, `focusmaster`, `swapwithmaster`, `fullscreen`,
+`swapwindow`, `movewindow`, `movewindoworgroup`, `focusmaster`, `swapwithmaster`, `fullscreen`,
 `fullscreenstate`, `pseudo`, `pseudotile`, `pin`,
 `togglesplit`, `layoutmsg`, `resizeactive`, and `submap`,
 including `layoutmsg layout <dwindle|master|monocle>`,
 `layoutmsg reset`, `layoutmsg preselect <l|r|u|d|reset>`,
 `layoutmsg splitratio <10-90|+/-n|reset>`, `masterratio`/`mfact`, and
 `nmaster <1-8|+/-n|reset>`/`addmaster`/`removemaster`, plus explicit
-`orientationleft/right/top/bottom` tiling hints,
+`orientationleft/right/top/bottom` tiling hints and
+`movewindow <l|r|u|d|next|prev|master>` tiled-order movement without
+floating/manual drag,
 idempotent client-state dispatchers
 `fullscreen|pseudo|pseudotile|pin <on|off|toggle|1|0>` and
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy

@@ -211,6 +211,8 @@ desktop dispatch swapwithmaster
 desktop dispatch movefocus r
 desktop dispatch focuswindow class:orizon-terminal
 desktop dispatch swapwindow l
+desktop dispatch movewindow r
+desktop dispatch movewindow master
 desktop dispatch resizeactive 5 0
 desktop dispatch submap resize
 desktop dispatch movetoworkspacesilent empty
@@ -238,7 +240,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.55.0` because it includes policy/config files, the persisted session
+`0.56.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -255,9 +257,10 @@ VM-safe `tagwindow` diagnostics and safe spawn-time `windowrulev2` actions for
 tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`,
-focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow, dynamic workspace next/empty plus `r/m/e` prefixed targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
+focus-cycle/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, dynamic workspace next/empty plus `r/m/e` prefixed targets, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 Hyprland-style tiled special workspace dispatchers `togglespecialworkspace
 [name]` and `movetoworkspace special[:name]` without floating/manual drag,
+VM-safe tiled-order `movewindow <l|r|u|d|next|prev|master>` dispatchers,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
@@ -372,6 +375,11 @@ togglespecialworkspace magic` shows or hides it over the current workspace.
 Diagnostics expose `special`/`specialWorkspace` in clients, activewindow,
 workspaces, workspace-stack, client-model, and compact JSON. It does not add
 floating windows, mouse dragging, a taskbar, or upstream Hyprland/wlroots.
+Version `0.56.0` adds VM-safe Hyprland-style
+`desktop dispatch movewindow <l|r|u|d|next|prev|master>` and
+`movewindoworgroup` aliases. They move the active tiled client through the
+compositor order or into the master slot only; no floating, pixel drag, taskbar,
+Waybar, or upstream Wayland/wlroots compositor behavior is enabled.
 Version `0.53.0` adds VM-safe Hyprland-style layout reset and preselect
 dispatchers: `desktop dispatch layoutmsg reset` restores active workspace
 layout defaults, `splitratio reset`, `masterratio reset`, and `nmaster reset`

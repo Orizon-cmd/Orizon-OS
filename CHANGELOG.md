@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Added desktop package version `0.56.0` with VM-safe Hyprland-style
+  `movewindow <l|r|u|d|next|prev|master>` and `movewindoworgroup` dispatcher
+  aliases. They reorder tiled clients in the compositor stack and expose
+  matching generated binds/package metadata without enabling floating windows,
+  pixel dragging, a taskbar, Waybar, or upstream Wayland/wlroots Hyprland.
 - Added desktop package version `0.55.0` with a VM-safe Hyprland-style tiled
   special workspace/scratchpad: `movetoworkspace special[:name]` and
   `movetoworkspacesilent special[:name]` can move a managed client into a
