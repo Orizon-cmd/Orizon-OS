@@ -245,7 +245,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.61.0` because it includes policy/config files, the persisted session
+`0.62.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -273,7 +273,12 @@ commands `desktop apps` and `desktop app <id>`, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.61.0` adds Hyprland-style monitor dispatch aliases:
+the launcher. Version `0.62.0` expands the config bridge with generated
+defaults and runtime `getoption` support for `dwindle:*`, `master:*`,
+`binds:*`, `gestures:*`, `xwayland:*`, `misc:*`, `debug:*`, and `unbind`
+preservation in `/system/desktop-binds.conf`. These remain VM-safe runtime
+hints and do not enable real Wayland keygrab removal, floating windows, free
+mouse drag, taskbar, or Waybar. Version `0.61.0` adds Hyprland-style monitor dispatch aliases:
 `focusmonitor`, `movecurrentworkspacetomonitor`, and
 `moveworkspacetomonitor` validate/report requested monitors with
 `single-framebuffer=yes` while the VM backend remains the single

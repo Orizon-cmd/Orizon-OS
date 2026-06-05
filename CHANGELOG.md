@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.62.0` with a broader Hyprland-style config
+  bridge: generated defaults and `desktop hyprctl getoption` now cover
+  `dwindle:*`, `master:*`, `binds:*`, `gestures:*`, `xwayland:*`,
+  `misc:*`, and `debug:*` runtime hints, and `unbind` is preserved in the
+  VM-safe bind runtime file. This is still config/runtime intent only: no real
+  Wayland keygrab removal, floating desktop, free mouse drag, taskbar, or
+  Waybar behavior is enabled.
 - Added desktop package version `0.61.0` with VM-safe Hyprland-style monitor
   dispatcher aliases: `focusmonitor`, `movecurrentworkspacetomonitor`, and
   `moveworkspacetomonitor`. They validate and report requested monitor

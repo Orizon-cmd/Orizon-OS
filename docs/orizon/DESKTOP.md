@@ -289,10 +289,11 @@ imports the supported subset into Orizon's runtime files: layout, gaps, border
 size, rounding, shadows, animations, keyboard layout, focus-follows-mouse, and
 terminal autostart. It also rewrites the generated Hyprland-style runtime files
 for binds, autostart, window rules, monitor hints, env/workspace/source intent.
-It also keeps `layerrule`, `bind`/`bindl`/`bindr`/`binde`/`bindm`,
+It also keeps `layerrule`, `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`,
 `binds:*`, `bezier`, `animation`, input, device, decoration, cursor, render,
-debug, misc, dwindle, and master hints as inspectable runtime state without
-pretending they are already real Wayland/wlroots features. Bind variants are
+debug, misc, dwindle, master, gestures, and xwayland hints as inspectable
+runtime state without pretending they are already real Wayland/wlroots
+features. Bind variants are
 classified in `desktop config doctor` and `desktop configerrors`; mouse binds
 are parsed for compatibility, but `bindm` remains a prepared hint and Orizon
 does not enable free-drag window moving by default.

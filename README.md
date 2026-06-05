@@ -71,8 +71,8 @@ le developpement noyau:
   dispatchers Hyprland-like, focus directionnel HJKL,
   fullscreen/fullscreenstate/pseudo/pseudotile/pin,
   runtime `desktop binds/rules/monitors/runtime/layers`, `layerrule`,
-  variantes `bind`/`bindl`/`bindr`/`binde`/`bindm`, `binds:*`,
-  `bezier/animation` et hints input/misc/layout, diagnostics
+  variantes `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`, `binds:*`,
+  `bezier/animation` et hints input/misc/layout/dwindle/master/gestures/xwayland, diagnostics
   (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
   `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
   `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, diagnostics JSON compacts

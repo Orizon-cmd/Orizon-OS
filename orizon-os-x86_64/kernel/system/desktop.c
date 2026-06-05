@@ -85,6 +85,9 @@ static const char *desktop_user_config =
     "input:repeat_rate = 40\n"
     "input:repeat_delay = 300\n"
     "input:touchpad:natural_scroll = false\n"
+    "binds:workspace_back_and_forth = true\n"
+    "binds:allow_workspace_cycles = true\n"
+    "binds:workspace_center_on = 1\n"
     "general:layout = dwindle\n"
     "general:gaps_in = 6\n"
     "general:gaps_out = 12\n"
@@ -105,8 +108,12 @@ static const char *desktop_user_config =
     "cursor:no_hardware_cursors = true\n"
     "render:direct_scanout = false\n"
     "debug:disable_logs = false\n"
+    "debug:disable_time = true\n"
     "misc:disable_hyprland_logo = false\n"
     "misc:force_default_wallpaper = 0\n"
+    "misc:disable_splash_rendering = true\n"
+    "gestures:workspace_swipe = false\n"
+    "xwayland:force_zero_scaling = false\n"
     "windowrulev2 = tile,class:^(orizon-.*)$\n"
     "layerrule = blur, launcher\n"
     "source = ~/.config/hypr/orizon-local.conf\n"
@@ -198,7 +205,9 @@ static const char *desktop_user_config =
     "bind = , escape, submap, reset\n"
     "submap = default\n"
     "dwindle:pseudotile = true\n"
-    "dwindle:preserve_split = true\n";
+    "dwindle:preserve_split = true\n"
+    "master:mfact = 0.58\n"
+    "master:new_status = master\n";
 
 static const char *desktop_local_config =
     "# Orizon local Hyprland-style overrides\n"
@@ -316,6 +325,17 @@ static const char *desktop_runtime_config =
     "cursor:no_hardware_cursors = true\n"
     "render:direct_scanout = false\n"
     "decoration:blur:enabled = false\n"
+    "binds:workspace_back_and_forth = true\n"
+    "binds:allow_workspace_cycles = true\n"
+    "binds:workspace_center_on = 1\n"
+    "dwindle:pseudotile = true\n"
+    "dwindle:preserve_split = true\n"
+    "master:mfact = 0.58\n"
+    "master:new_status = master\n"
+    "gestures:workspace_swipe = false\n"
+    "xwayland:force_zero_scaling = false\n"
+    "misc:disable_splash_rendering = true\n"
+    "debug:disable_time = true\n"
     "settings-hub yes\n"
     "settings-path " ORIZON_DESKTOP_SETTINGS_PATH "\n"
     "session-path " ORIZON_DESKTOP_SESSION_PATH "\n"
@@ -810,7 +830,7 @@ typedef struct {
 } desktop_hypr_summary_t;
 
 typedef struct {
-  char binds[2048];
+  char binds[8192];
   char autostart[768];
   char rules[1024];
   char monitors[768];
@@ -993,6 +1013,7 @@ static int desktop_hypr_key_global(const char *key) {
          strcmp(key, "windowrule") == 0 ||
          strcmp(key, "windowrulev2") == 0 || strcmp(key, "layerrule") == 0 ||
          strcmp(key, "workspace") == 0 || strcmp(key, "source") == 0 ||
+         strcmp(key, "unbind") == 0 ||
          strcmp(key, "submap") == 0 || strcmp(key, "bezier") == 0 ||
          strcmp(key, "animation") == 0 || strcmp(key, "plugin") == 0 ||
          strcmp(key, "permission") == 0 || strcmp(key, "blurls") == 0 ||
@@ -1296,6 +1317,9 @@ static const char *desktop_hypr_runtime_path_for_key(const char *key) {
   if (desktop_hypr_is_bind_key(key)) {
     return ORIZON_DESKTOP_BINDS_PATH;
   }
+  if (strcmp(key, "unbind") == 0) {
+    return ORIZON_DESKTOP_BINDS_PATH;
+  }
   if (strcmp(key, "exec-once") == 0 || strcmp(key, "exec") == 0 ||
       strcmp(key, "exec-shutdown") == 0) {
     return ORIZON_DESKTOP_AUTOSTART_PATH;
@@ -1329,7 +1353,7 @@ static int desktop_append_hypr_runtime_keyword(const char *key,
 
 static int desktop_hypr_runtime_get_value(const char *path, const char *key,
                                           char *out, size_t out_size) {
-  char cfg[2048];
+  char cfg[8192];
   int n;
   int pos = 0;
   int found = 0;
@@ -1371,6 +1395,37 @@ static const char *desktop_hypr_runtime_default_value(const char *key) {
   if (strcmp(key, "render:direct_scanout") == 0 ||
       strcmp(key, "decoration:blur:enabled") == 0) {
     return "false";
+  }
+  if (strcmp(key, "input:repeat_rate") == 0) {
+    return "40";
+  }
+  if (strcmp(key, "input:repeat_delay") == 0) {
+    return "300";
+  }
+  if (strcmp(key, "binds:workspace_back_and_forth") == 0 ||
+      strcmp(key, "binds:allow_workspace_cycles") == 0 ||
+      strcmp(key, "dwindle:pseudotile") == 0 ||
+      strcmp(key, "dwindle:preserve_split") == 0 ||
+      strcmp(key, "debug:disable_time") == 0 ||
+      strcmp(key, "misc:disable_splash_rendering") == 0) {
+    return "true";
+  }
+  if (strcmp(key, "binds:workspace_center_on") == 0) {
+    return "1";
+  }
+  if (strcmp(key, "master:mfact") == 0) {
+    return "0.58";
+  }
+  if (strcmp(key, "master:new_status") == 0) {
+    return "master";
+  }
+  if (strcmp(key, "gestures:workspace_swipe") == 0 ||
+      strcmp(key, "xwayland:force_zero_scaling") == 0 ||
+      strcmp(key, "misc:disable_hyprland_logo") == 0) {
+    return "false";
+  }
+  if (strcmp(key, "misc:force_default_wallpaper") == 0) {
+    return "0";
   }
   return NULL;
 }
@@ -1426,6 +1481,16 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
     if (desktop_hypr_dispatch_supported(value)) {
       summary->supported_binds++;
     }
+    summary->prepared_keywords++;
+    if (apply && runtime) {
+      desktop_hypr_runtime_append(runtime->binds, sizeof(runtime->binds),
+                                  &runtime->binds_used, key, value);
+      summary->runtime_lines++;
+    }
+    return 0;
+  }
+  if (strcmp(key, "unbind") == 0) {
+    summary->binds++;
     summary->prepared_keywords++;
     if (apply && runtime) {
       desktop_hypr_runtime_append(runtime->binds, sizeof(runtime->binds),
@@ -2146,6 +2211,9 @@ static int desktop_write_user_config_from_state(
            "input:repeat_rate = 40\n"
            "input:repeat_delay = 300\n"
            "input:touchpad:natural_scroll = false\n"
+           "binds:workspace_back_and_forth = true\n"
+           "binds:allow_workspace_cycles = true\n"
+           "binds:workspace_center_on = 1\n"
            "general:layout = %s\n"
            "general:gaps_in = %d\n"
            "general:gaps_out = %d\n"
@@ -2166,8 +2234,12 @@ static int desktop_write_user_config_from_state(
            "cursor:no_hardware_cursors = true\n"
            "render:direct_scanout = false\n"
            "debug:disable_logs = false\n"
+           "debug:disable_time = true\n"
            "misc:disable_hyprland_logo = false\n"
            "misc:force_default_wallpaper = 0\n"
+           "misc:disable_splash_rendering = true\n"
+           "gestures:workspace_swipe = false\n"
+           "xwayland:force_zero_scaling = false\n"
            "windowrulev2 = tile,class:^(orizon-.*)$\n"
            "layerrule = blur, launcher\n"
            "source = ~/.config/hypr/orizon-local.conf\n"
@@ -2256,7 +2328,9 @@ static int desktop_write_user_config_from_state(
            "bind = , escape, submap, reset\n"
            "submap = default\n"
            "dwindle:pseudotile = true\n"
-           "dwindle:preserve_split = true\n",
+           "dwindle:preserve_split = true\n"
+           "master:mfact = 0.58\n"
+           "master:new_status = master\n",
            terminal, desktop_clamp_int(settings->scale, 1, 3),
            session->autostart_terminal ? "exec-once = terminal\n"
                                        : "# exec-once disabled by /system session\n",
@@ -3481,7 +3555,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              "runtime-files: binds=%s autostart=%s rules=%s monitors=%s layers=%s state=%s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
              "settings: gaps=%d/%d border=%d rounding=%d animations=%s ticks=%d curve=%s shadows=%s shadow-range=%d focus-ring=%s render=%s keyboard=%s\n"
-             "note: monitor/env/windowrule/source are now persisted as Orizon runtime hints; real Wayland outputs remain future work.\n",
+             "note: monitor/env/windowrule/source/dwindle/master/binds/gestures/xwayland are persisted as Orizon runtime hints; real Wayland outputs remain future work.\n",
              (rc1 == 0 && rc2 == 0 && rc_binds == 0 && rc_autostart == 0 &&
               rc_rules == 0 && rc_monitors == 0 && rc_layers == 0 &&
               rc_runtime == 0)
@@ -4039,7 +4113,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "supported-apply: general:layout,gaps_in,gaps_out,border_size; decoration:rounding,shadow:enabled,shadow:range; render:focus_ring,profile; animations:enabled,tick_budget,curve; input:kb_layout,follow_mouse; exec-once terminal\n");
   desktop_append(out, out_size, &used,
-                 "runtime-hints: monitor, bind/bindm/bindl/bindr/binde, binds:*, exec/exec-once, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/device/decoration/cursor/render/debug/misc/dwindle/master/group hints -> /system/desktop-*.conf\n");
+                 "runtime-hints: monitor, bind/bindm/bindl/bindr/binde, unbind, binds:*, exec/exec-once, env, windowrule/windowrulev2, layerrule, workspace, source, submap, animation/bezier, input/device/decoration/cursor/render/debug/misc/dwindle/master/group/gestures/xwayland hints -> /system/desktop-*.conf\n");
   desktop_append(out, out_size, &used,
                  "apply: desktop config apply  # writes supported values into session/settings\n");
   snprintf(line, sizeof(line), "summary: %s\n",

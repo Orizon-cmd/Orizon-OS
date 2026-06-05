@@ -184,6 +184,12 @@ desktop keyword layerrule blur, launcher
 desktop hyprctl getoption layerrule
 desktop hyprctl keyword input:repeat_rate 40
 desktop hyprctl getoption input:repeat_rate
+desktop hyprctl keyword dwindle:pseudotile false
+desktop hyprctl getoption dwindle:pseudotile
+desktop hyprctl keyword master:mfact 0.60
+desktop hyprctl getoption master:mfact
+desktop hyprctl keyword unbind SUPER,Q
+desktop hyprctl getoption unbind
 desktop hyprctl reload
 desktop hyprctl binds
 desktop hyprctl layers
@@ -372,8 +378,8 @@ session/settings files plus generated runtime hint files such as
 line as `APPLY`, `PREPARE`, `IGNORE`, or `ERROR`, including `SOURCE
 ... status=LOADED|MISSING|SKIP`, without changing runtime
 state.
-`layerrule`, `bind`/`bindl`/`bindr`/`binde`/`bindm`, `binds:*`,
-`bezier`, `animation`, and input/device/decoration/cursor/render/debug/misc/layout
+`layerrule`, `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`, `binds:*`,
+`bezier`, `animation`, and input/device/decoration/cursor/render/debug/misc/layout/dwindle/master/gestures/xwayland
 hints are preserved there until the real Wayland backend exists; bind variants
 are counted in diagnostics, and mouse binds are parsed for compatibility
 without enabling free-drag window moving by default.

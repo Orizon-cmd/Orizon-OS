@@ -70,7 +70,7 @@ work.
   `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   VM-safe `source` resolution for `/home/orizon/.config/hypr/orizon-local.conf`,
-  preserved `layerrule`/`bind`/`bindl`/`bindr`/`binde`/`bindm`/`binds:*`/animation/input/device/decoration/cursor/render/debug hints
+  preserved `layerrule`/`bind`/`bindl`/`bindr`/`binde`/`bindm`/`unbind`/`binds:*`/animation/input/device/decoration/cursor/render/debug/dwindle/master/gestures/xwayland hints
   without default free-drag window moving,
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`
   with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
