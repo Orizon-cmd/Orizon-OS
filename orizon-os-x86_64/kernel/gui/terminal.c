@@ -3733,7 +3733,7 @@ static void term_run_pkg(terminal_t *term, const char *cmd) {
 }
 
 static void term_run_desktop(terminal_t *term, const char *cmd) {
-  static char report[4096];
+  static char report[8192];
   const char *args = term_skip_spaces(cmd + 7);
 
   if (*args == '\0' || term_command_is(args, "status")) {
@@ -4306,11 +4306,19 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       }
     } else if (term_command_is(hypr, "focushistory") ||
                term_command_is(hypr, "focus-history")) {
-      gui_desktop_format_focus_history(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_focus_history_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_focus_history(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "workspacestack") ||
                term_command_is(hypr, "workspace-stack") ||
                term_command_is(hypr, "stack")) {
-      gui_desktop_format_workspace_stack(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_workspace_stack_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_workspace_stack(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(report, sizeof(report));
     } else if (term_command_is(hypr, "binds")) {

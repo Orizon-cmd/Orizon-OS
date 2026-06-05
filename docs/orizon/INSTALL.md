@@ -221,6 +221,8 @@ desktop hyprctl activewindow
 desktop hyprctl -j activewindow
 desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
+desktop hyprctl -j focushistory
+desktop hyprctl -j workspacestack
 desktop hyprctl focushistory
 desktop hyprctl workspacestack
 desktop hyprctl version

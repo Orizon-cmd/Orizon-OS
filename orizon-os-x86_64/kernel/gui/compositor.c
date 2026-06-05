@@ -6842,6 +6842,248 @@ void gui_desktop_format_activeworkspace_json(char *out, size_t out_size) {
   desktop_json_append_raw(out, out_size, &used, "\n");
 }
 
+static const char *desktop_json_scope_for_workspace(
+    const desktop_client_t *client, int workspace) {
+  if (!client) {
+    return "unknown";
+  }
+  if (client->special) {
+    return "special";
+  }
+  if (client->pinned) {
+    return "pinned";
+  }
+  if (client->workspace == workspace) {
+    return "local";
+  }
+  return "foreign";
+}
+
+static void desktop_json_append_focus_entry(char *out, size_t out_size,
+                                            size_t *used, int rank, int idx) {
+  char line[512];
+  char special_label[32];
+  const desktop_client_t *client;
+  int rx = 0;
+  int ry = 0;
+  int rw = 0;
+  int rh = 0;
+
+  if (!out || !used || idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
+      !desktop_clients[idx].visible) {
+    return;
+  }
+  client = &desktop_clients[idx];
+  desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+  desktop_special_label(client->special_workspace, special_label,
+                        sizeof(special_label));
+  snprintf(line, sizeof(line),
+           "{\"rank\":%d,\"address\":\"0x%x\",\"id\":%d,"
+           "\"workspace\":{\"id\":%d,\"name\":",
+           rank, desktop_client_address(client), client->id,
+           client->workspace);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             desktop_workspace_name(client->workspace));
+  desktop_json_append_raw(out, out_size, used, "},\"title\":");
+  desktop_json_append_string(out, out_size, used, client->title);
+  desktop_json_append_raw(out, out_size, used, ",\"class\":");
+  desktop_json_append_string(out, out_size, used, client->app_id);
+  desktop_json_append_raw(out, out_size, used, ",\"tag\":");
+  desktop_json_append_string(out, out_size, used,
+                             client->tag[0] ? client->tag : "");
+  desktop_json_append_raw(out, out_size, used, ",\"specialWorkspace\":");
+  desktop_json_append_string(out, out_size, used,
+                             client->special ? special_label : "");
+  snprintf(line, sizeof(line),
+           ",\"scope\":\"%s\",\"mapped\":%s,\"hidden\":%s,"
+           "\"pinned\":%s,\"pseudo\":%s,\"fullscreen\":%d,"
+           "\"fullscreenClient\":%d,\"urgent\":%s,\"focused\":%s,"
+           "\"focusHistoryID\":%d,\"focusSeq\":%llu,\"rect\":[%d,%d,%d,%d],"
+           "\"rendered\":%s,\"hyprlandStyleFacade\":true}",
+           desktop_json_scope_for_workspace(client, desktop_active_workspace),
+           client->mapped ? "true" : "false",
+           client->hidden ? "true" : "false",
+           client->pinned ? "true" : "false",
+           client->pseudo ? "true" : "false",
+           client->fullscreen_state_internal, client->fullscreen_state_client,
+           client->urgent ? "true" : "false",
+           client->id == desktop_focused_client_id ? "true" : "false",
+           client->focus_history_id,
+           (unsigned long long)client->focus_generation, rx, ry, rw, rh,
+           desktop_client_rendered_on_workspace(idx, desktop_active_workspace)
+               ? "true"
+               : "false");
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
+void gui_desktop_format_focus_history_json(char *out, size_t out_size) {
+  size_t used = 0;
+  int active_idx;
+  int first = 1;
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_focus_history_compact();
+  active_idx = desktop_client_index_by_id(desktop_focused_client_id);
+  snprintf(line, sizeof(line),
+           "{\"model\":\"most-recent-first\",\"activeClient\":\"0x%x\","
+           "\"activeWorkspace\":%d,\"manualDrag\":false,"
+           "\"floatingSceneGraph\":false,\"hyprlandStyleFacade\":true,"
+           "\"history\":[",
+           active_idx >= 0 ? desktop_client_address(&desktop_clients[active_idx])
+                           : 0,
+           desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    int idx = desktop_client_index_by_id(desktop_focus_history[i]);
+    if (idx < 0) {
+      continue;
+    }
+    if (!first) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_json_append_focus_entry(out, out_size, &used, i, idx);
+    first = 0;
+  }
+  desktop_json_append_raw(out, out_size, &used, "]}\n");
+}
+
+static void desktop_json_append_stack_client(char *out, size_t out_size,
+                                             size_t *used, int workspace,
+                                             int pos, int idx, int count,
+                                             int focus_idx) {
+  char line[512];
+  const desktop_client_t *client;
+  int rx = 0;
+  int ry = 0;
+  int rw = 0;
+  int rh = 0;
+  int rank;
+
+  if (!out || !used || idx < 0 || idx >= DESKTOP_MAX_CLIENTS ||
+      !desktop_clients[idx].visible) {
+    return;
+  }
+  client = &desktop_clients[idx];
+  desktop_client_rect_for_workspace(idx, workspace, &rx, &ry, &rw, &rh);
+  rank = desktop_focus_rank_for_id(client->id);
+  snprintf(line, sizeof(line),
+           "{\"position\":%d,\"role\":\"%s\",\"address\":\"0x%x\","
+           "\"id\":%d,\"workspace\":{\"id\":%d,\"name\":",
+           pos, desktop_client_role_on_workspace(workspace, idx, pos, count),
+           desktop_client_address(client), client->id, client->workspace);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             desktop_workspace_name(client->workspace));
+  desktop_json_append_raw(out, out_size, used, "},\"title\":");
+  desktop_json_append_string(out, out_size, used, client->title);
+  desktop_json_append_raw(out, out_size, used, ",\"class\":");
+  desktop_json_append_string(out, out_size, used, client->app_id);
+  desktop_json_append_raw(out, out_size, used, ",\"tag\":");
+  desktop_json_append_string(out, out_size, used,
+                             client->tag[0] ? client->tag : "");
+  snprintf(line, sizeof(line),
+           ",\"scope\":\"%s\",\"focused\":%s,\"focusRank\":%d,"
+           "\"focusHistoryID\":%d,\"rect\":[%d,%d,%d,%d],"
+           "\"fullscreen\":%d,\"fullscreenClient\":%d,\"pseudo\":%s,"
+           "\"pinned\":%s,\"urgent\":%s,\"hyprlandStyleFacade\":true}",
+           desktop_json_scope_for_workspace(client, workspace),
+           idx == focus_idx ? "true" : "false", rank,
+           client->focus_history_id, rx, ry, rw, rh,
+           client->fullscreen_state_internal, client->fullscreen_state_client,
+           client->pseudo ? "true" : "false",
+           client->pinned ? "true" : "false",
+           client->urgent ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
+void gui_desktop_format_workspace_stack_json(char *out, size_t out_size) {
+  size_t used = 0;
+  int active_idx;
+  char special_label[32];
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_special_label(desktop_special_name, special_label,
+                        sizeof(special_label));
+  desktop_focus_history_compact();
+  active_idx = desktop_client_index_by_id(desktop_focused_client_id);
+  snprintf(line, sizeof(line),
+           "{\"model\":\"per-workspace master/stack/focus tiled order\","
+           "\"manualDrag\":false,\"floatingSceneGraph\":false,"
+           "\"pinnedAware\":true,\"hyprlandStyleFacade\":true,"
+           "\"activeWorkspace\":%d,\"activeClient\":\"0x%x\","
+           "\"special\":{\"visible\":%s,\"name\":",
+           desktop_active_workspace,
+           active_idx >= 0 ? desktop_client_address(&desktop_clients[active_idx])
+                           : 0,
+           desktop_special_visible ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, special_label);
+  snprintf(line, sizeof(line), ",\"clients\":%d},\"workspaces\":[",
+           desktop_special_client_count(desktop_special_name));
+  desktop_json_append_raw(out, out_size, &used, line);
+  for (int ws = 1; ws <= desktop_workspace_count; ws++) {
+    int count = desktop_client_count_on_workspace(ws);
+    int local_count = desktop_workspace_local_client_count(ws);
+    int master_idx = desktop_nth_client_on_workspace(ws, 0);
+    int focus_idx = desktop_last_focused_index_on_workspace(ws);
+    const char *state = ws == desktop_active_workspace
+                            ? "active"
+                            : (ws == desktop_previous_workspace
+                                   ? "previous"
+                                   : (desktop_workspace_is_used(ws) ? "used"
+                                                                    : "empty"));
+
+    if (ws > 1) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    snprintf(line, sizeof(line),
+             "{\"workspace\":{\"id\":%d,\"name\":", ws);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used, desktop_workspace_name(ws));
+    snprintf(line, sizeof(line),
+             "},\"state\":\"%s\",\"active\":%s,\"layout\":\"%s\","
+             "\"clients\":%d,\"localWindows\":%d,\"master\":\"0x%x\","
+             "\"focus\":\"0x%x\",\"remembered\":\"0x%x\","
+             "\"focusSeq\":%llu,\"pinnedAware\":true,\"stack\":[",
+             state, ws == desktop_active_workspace ? "true" : "false",
+             desktop_layout_engine_for_workspace(ws), count, local_count,
+             master_idx >= 0 ? desktop_client_address(&desktop_clients[master_idx])
+                             : 0,
+             focus_idx >= 0 ? desktop_client_address(&desktop_clients[focus_idx])
+                            : 0,
+             desktop_workspaces[ws - 1].last_focused_client_id > 0
+                 ? DESKTOP_CLIENT_ADDRESS_BASE +
+                       ((uint32_t)desktop_workspaces[ws - 1]
+                            .last_focused_client_id *
+                        0x100u)
+                 : 0,
+             (unsigned long long)desktop_workspaces[ws - 1].focus_generation);
+    desktop_json_append_raw(out, out_size, &used, line);
+    for (int pos = 0; pos < count; pos++) {
+      int idx = desktop_nth_client_on_workspace(ws, pos);
+      if (idx < 0) {
+        continue;
+      }
+      if (pos > 0) {
+        desktop_json_append_raw(out, out_size, &used, ",");
+      }
+      desktop_json_append_stack_client(out, out_size, &used, ws, pos, idx,
+                                       count, focus_idx);
+    }
+    desktop_json_append_raw(out, out_size, &used, "]}");
+  }
+  desktop_json_append_raw(out, out_size, &used, "]}\n");
+}
+
 void gui_desktop_format_workspaces(char *out, size_t out_size) {
   size_t used = 0;
   char special_label[32];
@@ -8010,7 +8252,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow\n"
+           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"

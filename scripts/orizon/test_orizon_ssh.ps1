@@ -137,6 +137,8 @@ $commands = @(
   "desktop hyprctl -j activewindow",
   "desktop hyprctl -j workspaces",
   "desktop hyprctl -j activeworkspace",
+  "desktop hyprctl -j focushistory",
+  "desktop hyprctl -j workspacestack",
   "desktop hyprctl workspacestack",
   "desktop hyprctl layouts",
   "desktop hyprctl layoutstate",
@@ -693,6 +695,12 @@ run_cmd() {
       ;;
     "desktop hyprctl -j activeworkspace")
       grep -q '"active":true' "`$OUT" && grep -q '"hyprlandStyleFacade":true' "`$OUT" || { echo "missing hyprctl json activeworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j focushistory")
+      grep -Fq '"history":[' "`$OUT" && grep -q '"focusHistoryID":' "`$OUT" && grep -q '"scope":' "`$OUT" || { echo "missing hyprctl json focushistory"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j workspacestack")
+      grep -Fq '"workspaces":[' "`$OUT" && grep -Fq '"stack":[' "`$OUT" && grep -q '"pinnedAware":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json workspacestack"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl cursorpos")
       grep -q "cursorpos:" "`$OUT" && grep -q "profile:" "`$OUT" || { echo "missing hyprctl cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

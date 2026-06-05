@@ -98,6 +98,8 @@ void gui_desktop_format_clients_json(char *out, size_t out_size);
 void gui_desktop_format_workspaces_json(char *out, size_t out_size);
 void gui_desktop_format_activewindow_json(char *out, size_t out_size);
 void gui_desktop_format_activeworkspace_json(char *out, size_t out_size);
+void gui_desktop_format_focus_history_json(char *out, size_t out_size);
+void gui_desktop_format_workspace_stack_json(char *out, size_t out_size);
 void gui_desktop_format_client_model(char *out, size_t out_size);
 void gui_desktop_format_rule_matches(char *out, size_t out_size);
 void gui_desktop_format_activewindow(char *out, size_t out_size);

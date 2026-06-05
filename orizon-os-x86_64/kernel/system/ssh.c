@@ -3313,7 +3313,7 @@ static void ssh_shell_print_pkg(const char *args) {
 }
 
 static void ssh_shell_print_desktop(const char *args) {
-  static char out[4096];
+  static char out[8192];
   const char *sub = ssh_shell_skip_spaces(args);
 
   out[0] = '\0';
@@ -3754,11 +3754,19 @@ static void ssh_shell_print_desktop(const char *args) {
       }
     } else if (ssh_shell_command_is(hypr, "focushistory") ||
                ssh_shell_command_is(hypr, "focus-history")) {
-      gui_desktop_format_focus_history(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_focus_history_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_focus_history(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "workspacestack") ||
                ssh_shell_command_is(hypr, "workspace-stack") ||
                ssh_shell_command_is(hypr, "stack")) {
-      gui_desktop_format_workspace_stack(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_workspace_stack_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_workspace_stack(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "binds")) {

@@ -587,6 +587,11 @@ def run_ssh_checks(
         ("desktop hyprctl -j activewindow", '"fullscreenClient":'),
         ("desktop hyprctl -j workspaces", '"windows":'),
         ("desktop hyprctl -j activeworkspace", '"active":true'),
+        ("desktop hyprctl -j focushistory", '"history":['),
+        ("desktop hyprctl -j focushistory", '"scope":'),
+        ("desktop hyprctl -j workspacestack", '"pinnedAware":true'),
+        ("desktop hyprctl -j workspacestack", '"stack":['),
+        ("desktop hyprctl -j workspacestack", '"manualDrag":false'),
         ("desktop hyprctl focushistory", "focusHistoryID"),
         ("desktop hyprctl workspacestack", "master/stack/focus"),
         ("desktop hyprctl layouts", "Orizon desktop layouts"),
@@ -799,7 +804,7 @@ def run_ssh_checks(
         ("pkg search orizon-terminal", "pkg install orizon-terminal"),
         ("pkg search waybar", "orizon-waybar"),
         ("pkg info orizon-desktop-hypr", "state available optional"),
-        ("pkg info orizon-desktop-hypr", "version 0.63.0"),
+        ("pkg info orizon-desktop-hypr", "version 0.64.0"),
         ("desktop package", "orizon-desktop-hypr.opkg"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "focusmwindow"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "dispatch-focusmwindow-command"),
@@ -808,6 +813,8 @@ def run_ssh_checks(
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "config-unbind-runtime"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "app-catalog-command"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "app-surface-policy"),
+        ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-focushistory-command"),
+        ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-workspacestack-command"),
         ("pkg simulate /workspace/packages/orizon-desktop-hypr.opkg", "dry-run"),
         ("pkg verify /workspace/packages/orizon-desktop-hypr.opkg", "package verify: OK"),
         ("pkg install orizon-desktop-hypr", "pkg"),
@@ -878,7 +885,7 @@ while IFS=$'\\t' read -r cmd needle; do
         break
       fi
     fi
-    if [ "$rc" -eq 0 ] && grep -qi "$needle" "$OUT"; then
+    if [ "$rc" -eq 0 ] && grep -Fqi "$needle" "$OUT"; then
       if [ "$cmd" = "disk read-test last" ] && grep -q "lba=0 " "$OUT"; then
         echo "last-sector read-test used LBA 0"
         rm -f "$ASKPASS" "$PASSFILE" "$OUT"
@@ -888,7 +895,7 @@ while IFS=$'\\t' read -r cmd needle; do
     fi
     if [ "$attempt" -ge 6 ]; then
       [ "$rc" -eq 0 ] || echo "ssh command failed after $attempt attempts"
-      grep -qi "$needle" "$OUT" || echo "missing expected output: $needle"
+      grep -Fqi "$needle" "$OUT" || echo "missing expected output: $needle"
       rm -f "$ASKPASS" "$PASSFILE" "$OUT"
       exit 1
     fi
@@ -934,7 +941,7 @@ DISPLAY=none SSH_ASKPASS="$ASKPASS" SSH_ASKPASS_REQUIRE=force timeout {timeout}s
   orizon@{ip} "{command}" > "$OUT" 2>&1
 rc=$?
 cat "$OUT"
-if [ "$rc" -ne 0 ] || ! grep -qi "{needle}" "$OUT"; then
+if [ "$rc" -ne 0 ] || ! grep -Fqi "{needle}" "$OUT"; then
   echo "single ssh command failed rc=$rc expected={needle}" >&2
   rm -f "$ASKPASS" "$PASSFILE" "$OUT"
   exit 1

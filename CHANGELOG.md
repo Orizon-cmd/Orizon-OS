@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.64.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j focushistory` and
+  `desktop hyprctl -j workspacestack`. The VM-safe output now exposes
+  focus-history entries, workspace stack roles, `scope`, `pinnedAware`,
+  `manualDrag=false`, and `hyprlandStyleFacade=true` so future tooling can read
+  the tiling model without adding Waybar, a taskbar/start menu, floating
+  windows, free mouse drag, or upstream Wayland/wlroots Hyprland behavior.
 - Added desktop package version `0.63.0` with stronger native desktop app
   diagnostics: `desktop apps` now reports a summary of terminal/native/overlay
   clients, `desktop app <id>` exposes data sources, runbooks, VM-ready status,
