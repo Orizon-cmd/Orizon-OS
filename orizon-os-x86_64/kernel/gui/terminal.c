@@ -4256,8 +4256,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4420,6 +4420,35 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_instances_json(report, sizeof(report));
       } else {
         gui_desktop_format_instances(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "autostart")) {
+      const char *auto_args = term_skip_spaces(hypr + 9);
+      if (json) {
+        char target[32];
+        size_t target_len = 0;
+        const char *value = auto_args;
+        while (value[target_len] && value[target_len] != ' ' &&
+               target_len + 1 < sizeof(target)) {
+          target[target_len] = value[target_len];
+          target_len++;
+        }
+        target[target_len] = '\0';
+        value = term_skip_spaces(value + target_len);
+        orizon_desktop_autostart_manager_json(target, value, report,
+                                              sizeof(report));
+        if (strcmp(target, "terminal") == 0 && *value &&
+            !term_command_is(value, "status") && !term_command_is(value, "show") &&
+            !term_command_is(value, "state")) {
+          gui_desktop_reload_session();
+        }
+      } else if (*auto_args == '\0' || term_command_is(auto_args, "status") ||
+                 term_command_is(auto_args, "show") ||
+                 term_command_is(auto_args, "state")) {
+        orizon_desktop_format_autostart(report, sizeof(report));
+      } else {
+        snprintf(report, sizeof(report),
+                 "usage: desktop hyprctl autostart [status]\n"
+                 "json action: desktop hyprctl -j autostart terminal on|off|toggle\n");
       }
     } else if (term_command_is(hypr, "apps") ||
                term_command_is(hypr, "applist")) {

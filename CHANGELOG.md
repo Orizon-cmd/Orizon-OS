@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.78.0` with structured Hyprland-style JSON
+  autostart diagnostics/actions for `desktop hyprctl -j autostart` and
+  `desktop hyprctl -j autostart terminal on|off|toggle`. The VM-safe response
+  exposes persisted terminal autostart state, runtime `exec-once` hints,
+  session/runtime paths, live-vs-installed policy, and explicit
+  `manualDrag=false`, `taskbar=false`, `startMenu=false`, `waybarActive=false`,
+  `wayland=false`, and `wlroots=false` limits without adding Waybar, a
+  Windows-like bar/start menu, floating windows, free mouse drag, upstream
+  Hyprland IPC compatibility, or physical hardware validation.
 - Added desktop package version `0.77.0` with structured Hyprland-style JSON
   native app diagnostics/actions for `desktop hyprctl -j apps`, `desktop
   hyprctl -j app <id>`, and `desktop hyprctl -j launch <app>`. The VM-safe

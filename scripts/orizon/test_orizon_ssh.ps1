@@ -157,6 +157,9 @@ $commands = @(
   "desktop hyprctl -j layouts",
   "desktop hyprctl -j descriptions",
   "desktop hyprctl -j instances",
+  "desktop hyprctl -j autostart",
+  "desktop hyprctl -j autostart terminal off",
+  "desktop hyprctl -j autostart terminal on",
   "desktop hyprctl -j apps",
   "desktop hyprctl -j app settings",
   "desktop hyprctl -j app launcher",
@@ -793,6 +796,15 @@ run_cmd() {
       ;;
     "desktop hyprctl -j instances")
       grep -q '"command":"instances"' "`$OUT" && grep -q '"signature":"orizon-framebuffer-main"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j autostart")
+      grep -q '"command":"autostart"' "`$OUT" && grep -q '"terminal":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json autostart"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j autostart terminal off")
+      grep -q '"command":"autostart"' "`$OUT" && grep -q '"requestedValue":"off"' "`$OUT" && grep -q '"terminal":false' "`$OUT" || { echo "missing hyprctl json autostart off"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j autostart terminal on")
+      grep -q '"command":"autostart"' "`$OUT" && grep -q '"requestedValue":"on"' "`$OUT" && grep -q '"terminal":true' "`$OUT" || { echo "missing hyprctl json autostart on"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j apps")
       grep -q '"command":"apps"' "`$OUT" && grep -q '"tilingClients":5' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

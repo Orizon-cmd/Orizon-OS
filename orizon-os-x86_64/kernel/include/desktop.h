@@ -28,7 +28,7 @@
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.77.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.78.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"
@@ -142,6 +142,10 @@ void orizon_desktop_format_app_launch_json(const char *app,
                                            char *out, size_t out_size);
 void orizon_desktop_format_profiles(char *out, size_t out_size);
 void orizon_desktop_format_autostart(char *out, size_t out_size);
+void orizon_desktop_format_autostart_json(char *out, size_t out_size);
+int orizon_desktop_autostart_manager_json(const char *target,
+                                          const char *value, char *status,
+                                          size_t status_size);
 void orizon_desktop_format_shortcuts(char *out, size_t out_size);
 void orizon_desktop_format_doctor(char *out, size_t out_size);
 void orizon_desktop_format_log(char *out, size_t out_size);

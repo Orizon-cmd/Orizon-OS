@@ -241,6 +241,8 @@ desktop hyprctl -j render
 desktop hyprctl -j layouts
 desktop hyprctl -j descriptions
 desktop hyprctl -j instances
+desktop hyprctl -j autostart
+desktop hyprctl -j autostart terminal on
 desktop hyprctl -j apps
 desktop hyprctl -j app settings
 desktop hyprctl -j launch settings

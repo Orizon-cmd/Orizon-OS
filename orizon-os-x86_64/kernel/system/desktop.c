@@ -5212,9 +5212,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -6143,6 +6143,193 @@ void orizon_desktop_format_autostart(char *out, size_t out_size) {
   }
   desktop_append(out, out_size, &used,
                  "limits: terminal autostart is executable; other exec-once entries are recorded as prepared runtime hints\n");
+}
+
+static int desktop_autostart_exec_once_count(const char *cfg) {
+  int count = 0;
+  const char *p = cfg;
+
+  if (!cfg) {
+    return 0;
+  }
+  while ((p = strstr(p, "exec-once")) != NULL) {
+    count++;
+    p += strlen("exec-once");
+  }
+  return count;
+}
+
+static int desktop_autostart_bool_token(const char *value) {
+  if (!value || !value[0]) {
+    return 0;
+  }
+  return strcmp(value, "yes") == 0 || strcmp(value, "true") == 0 ||
+         strcmp(value, "on") == 0 || strcmp(value, "1") == 0 ||
+         strcmp(value, "no") == 0 || strcmp(value, "false") == 0 ||
+         strcmp(value, "off") == 0 || strcmp(value, "0") == 0;
+}
+
+static void desktop_format_autostart_json_state(const char *action,
+                                                const char *target,
+                                                const char *requested,
+                                                const char *result, int rc,
+                                                char *out, size_t out_size) {
+  orizon_desktop_session_t session;
+  char cfg[768];
+  char line[256];
+  size_t session_size = 0;
+  size_t runtime_size = 0;
+  size_t used = 0;
+  int session_present;
+  int runtime_present;
+  int cfg_len;
+  int exec_once_count;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  orizon_desktop_load_session(&session);
+  cfg_len = desktop_read_text_file(ORIZON_DESKTOP_AUTOSTART_PATH, cfg,
+                                   sizeof(cfg));
+  if (cfg_len <= 0) {
+    snprintf(cfg, sizeof(cfg), "%s", desktop_autostart_runtime_config);
+  }
+  exec_once_count = desktop_autostart_exec_once_count(cfg);
+  session_present =
+      vfs_stat(ORIZON_DESKTOP_SESSION_PATH, &session_size, NULL) == 0 &&
+      session_size > 0;
+  runtime_present =
+      vfs_stat(ORIZON_DESKTOP_AUTOSTART_PATH, &runtime_size, NULL) == 0 &&
+      runtime_size > 0;
+
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"autostart\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"hardwareValidation\":false,"
+      "\"manualDrag\":false,\"floatingDesktop\":false,"
+      "\"taskbar\":false,\"startMenu\":false,\"waybarActive\":false,"
+      "\"action\":");
+  desktop_json_append_string(out, out_size, &used,
+                             action && action[0] ? action : "status");
+  desktop_json_append_raw(out, out_size, &used, ",\"target\":");
+  desktop_json_append_string(out, out_size, &used,
+                             target && target[0] ? target : "all");
+  desktop_json_append_raw(out, out_size, &used, ",\"requestedValue\":");
+  desktop_json_append_string(out, out_size, &used,
+                             requested && requested[0] ? requested : "");
+  snprintf(line, sizeof(line), ",\"ok\":%s,\"result\":",
+           rc == 0 ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, result ? result : "");
+
+  snprintf(line, sizeof(line),
+           ",\"state\":{\"terminal\":%s,\"launcherAvailable\":%s,"
+           "\"execOnceCount\":%d,\"runtimeGenerated\":%s,"
+           "\"installed\":%s,\"policyEnabled\":%s,",
+           session.autostart_terminal ? "true" : "false",
+           session.launcher_enabled ? "true" : "false", exec_once_count,
+           runtime_present ? "true" : "false",
+           orizon_system_is_installed() ? "true" : "false",
+           orizon_desktop_is_enabled() ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_raw(out, out_size, &used, "\"theme\":");
+  desktop_json_append_string(out, out_size, &used, session.theme);
+  desktop_json_append_raw(out, out_size, &used, ",\"wallpaper\":");
+  desktop_json_append_string(out, out_size, &used, session.wallpaper);
+  desktop_json_append_raw(out, out_size, &used, ",\"layout\":");
+  desktop_json_append_string(out, out_size, &used, session.layout);
+  snprintf(line, sizeof(line),
+           ",\"focusFollowsMouse\":%s,\"barEnabled\":%s},",
+           session.focus_follows_mouse ? "true" : "false",
+           session.bar_enabled ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+
+  desktop_json_append_raw(out, out_size, &used, "\"paths\":{\"session\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_SESSION_PATH);
+  snprintf(line, sizeof(line), ",\"sessionPresent\":%s,\"sessionBytes\":%lu,"
+                              "\"runtime\":",
+           session_present ? "true" : "false",
+           (unsigned long)(session_present ? session_size : 0));
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_AUTOSTART_PATH);
+  snprintf(line, sizeof(line), ",\"runtimePresent\":%s,\"runtimeBytes\":%lu},",
+           runtime_present ? "true" : "false",
+           (unsigned long)(runtime_present ? runtime_size : 0));
+  desktop_json_append_raw(out, out_size, &used, line);
+
+  desktop_json_append_raw(out, out_size, &used, "\"commands\":{"
+      "\"status\":\"desktop hyprctl -j autostart\","
+      "\"terminalOn\":\"desktop hyprctl -j autostart terminal on\","
+      "\"terminalOff\":\"desktop hyprctl -j autostart terminal off\","
+      "\"terminalToggle\":\"desktop hyprctl -j autostart terminal toggle\","
+      "\"text\":\"desktop autostart\"},\"runtime\":");
+  desktop_json_append_string(out, out_size, &used, cfg);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"VM/ZimaOS autostart diagnostics only\","
+      "\"terminal autostart is executable; additional exec-once lines are prepared runtime hints\","
+      "\"not validated on physical hardware\","
+      "\"not upstream Wayland/wlroots Hyprland\","
+      "\"no taskbar, start menu, floating desktop or manual window drag\"]}\n");
+}
+
+void orizon_desktop_format_autostart_json(char *out, size_t out_size) {
+  desktop_format_autostart_json_state("status", "all", "",
+                                      "autostart-state-read", 0, out,
+                                      out_size);
+}
+
+int orizon_desktop_autostart_manager_json(const char *target,
+                                          const char *value, char *status,
+                                          size_t status_size) {
+  orizon_desktop_session_t session;
+  char result[512];
+  const char *safe_target = target ? target : "";
+  const char *safe_value = value ? value : "";
+  const char *requested = safe_value;
+  int rc;
+
+  if (!safe_target[0] || strcmp(safe_target, "status") == 0 ||
+      strcmp(safe_target, "show") == 0 || strcmp(safe_target, "state") == 0) {
+    orizon_desktop_format_autostart_json(status, status_size);
+    return 0;
+  }
+  if (strcmp(safe_target, "terminal") != 0) {
+    desktop_format_autostart_json_state(
+        "error", safe_target, safe_value,
+        "usage: desktop hyprctl -j autostart terminal on|off|toggle", -1,
+        status, status_size);
+    return -1;
+  }
+  if (!safe_value[0] || strcmp(safe_value, "status") == 0 ||
+      strcmp(safe_value, "show") == 0 || strcmp(safe_value, "state") == 0) {
+    desktop_format_autostart_json_state("status", "terminal", "",
+                                        "terminal-autostart-state-read", 0,
+                                        status, status_size);
+    return 0;
+  }
+  if (strcmp(safe_value, "toggle") == 0) {
+    orizon_desktop_load_session(&session);
+    requested = session.autostart_terminal ? "off" : "on";
+  } else if (!desktop_autostart_bool_token(safe_value)) {
+    desktop_format_autostart_json_state(
+        "error", "terminal", safe_value,
+        "usage: desktop hyprctl -j autostart terminal on|off|toggle", -1,
+        status, status_size);
+    return -1;
+  }
+
+  result[0] = '\0';
+  rc = orizon_desktop_set_session_option("autostart-terminal", requested,
+                                         result, sizeof(result));
+  desktop_format_autostart_json_state("set", "terminal", requested, result,
+                                      rc, status, status_size);
+  return rc;
 }
 
 void orizon_desktop_format_shortcuts(char *out, size_t out_size) {

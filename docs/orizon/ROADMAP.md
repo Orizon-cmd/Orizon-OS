@@ -40,7 +40,7 @@
   events, and local `pkg rollback <name>` for the last removed package
   snapshot.
 - Optional desktop profile foundation: `desktop status/config/config doctor/config apply/doctor/logs/keymap`,
-  `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
+  `desktop session/settings/settings paths/settings export/settings sync/modules/settings preset/settings doctor/input/pointer/devices/keymap/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/client-model/rule-matches/profiles/preset/focus/autostart/theme/wallpaper/layout/bar/launcher/binds/rules/monitors/runtime/layers/keyword/dispatch/hyprctl`,
   `desktop enable/disable/reset`, installer prompt wiring, `pkg sample desktop`,
   `pkg install orizon-desktop-hypr`, and split module samples for
   `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
@@ -72,8 +72,8 @@
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, read-only config trace
   diagnostics, split/master ratio controls plus layout reset/preselect recovery, active F9/F10/F11 keyboard submaps,
-  explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/apps/app/launch/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
-  compact VM-safe `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers` JSON for future tooling,
+  explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/autostart/apps/app/launch/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
+  compact VM-safe `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers` JSON for future tooling,
   software focus ring, persistent shadow range/render profile/animation
   tick budget controls, backend/protocol architecture truth maps, active
   layout-tree and workspace-stack diagnostics with client roles/rectangles/master/focus/urgent order/manual-drag boundary,
