@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.70.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j monitors`. The VM-safe output now exposes
+  the single Orizon framebuffer monitor, active workspace, reserved edges,
+  scaling, and explicit `singleFramebuffer=true`/`manualDrag=false`/
+  `wayland=false` boundaries without enabling Waybar, a Windows-like bar/start
+  menu, floating windows, free mouse drag, multi-output Wayland routing, or any
+  physical hardware monitor validation.
 - Added desktop package version `0.69.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j binds` and
   `desktop hyprctl -j layers`. The VM-safe output now exposes bind variant

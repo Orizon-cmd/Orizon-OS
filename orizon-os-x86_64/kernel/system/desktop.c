@@ -4932,7 +4932,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "hyprctl: desktop hyprctl [-j] version|systeminfo|clients|clientmodel|rulematches|workspacestack|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|layoutstate|layouttree|animations|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/configerrors/configtrace/getoption/keyword/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/configerrors/configtrace/getoption/keyword/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,

@@ -84,6 +84,7 @@ desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
 desktop hyprctl -j clientmodel
 desktop hyprctl -j rulematches
+desktop hyprctl -j monitors
 desktop hyprctl -j binds
 desktop hyprctl -j layers
 desktop hyprctl backend
@@ -534,13 +535,13 @@ from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|configerrors|configtrace|getoption|keyword|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
 `role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
-`parserSummary`, `trace`, `result`, `runtimeFile`, `mouseBindsPreparedOnly`,
-and `waybarActive`, but every object also carries
+`parserSummary`, `trace`, `result`, `runtimeFile`, `singleFramebuffer`,
+`mouseBindsPreparedOnly`, and `waybarActive`, but every object also carries
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
 not upstream Wayland/wlroots Hyprland. The config JSON diagnostics are
 read-only: they explain parser errors and apply/prepare/ignore decisions
@@ -657,6 +658,7 @@ desktop hyprctl layouttree mirrors desktop layout-tree
 desktop hyprctl configtrace mirrors desktop config trace
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 desktop hyprctl -j reload reapplies the config and emits VM-safe JSON status
+desktop hyprctl -j monitors emits the single framebuffer monitor map
 desktop hyprctl -j binds emits bind counts and prepared-only bindm status
 desktop hyprctl -j layers emits the framebuffer layer graph without Waybar
 ```

@@ -8389,6 +8389,46 @@ void gui_desktop_format_monitors(char *out, size_t out_size) {
            desktop_active_workspace, ui_scale, TOP_BAR_HEIGHT, FOOTER_HEIGHT);
 }
 
+void gui_desktop_format_monitors_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"monitors\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,\"wlroots\":false,"
+      "\"manualDrag\":false,\"floatingSceneGraph\":false,\"taskbar\":false,"
+      "\"monitors\":[{\"id\":0,\"name\":");
+  desktop_json_append_string(out, out_size, &used, "Orizon-0");
+  desktop_json_append_raw(out, out_size, &used, ",\"description\":");
+  desktop_json_append_string(out, out_size, &used, "Orizon VM framebuffer");
+  desktop_json_append_raw(out, out_size, &used,
+                          ",\"make\":\"Orizon\",\"model\":\"framebuffer\"");
+  snprintf(line, sizeof(line),
+           ",\"width\":%lu,\"height\":%lu,\"refreshRate\":60.0,"
+           "\"x\":0,\"y\":0,\"scale\":%d,"
+           "\"activeWorkspace\":{\"id\":%d,\"name\":",
+           (unsigned long)screen_width, (unsigned long)screen_height, ui_scale,
+           desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_workspace_name(desktop_active_workspace));
+  snprintf(line, sizeof(line),
+           "},\"reserved\":[0,%d,0,%d],\"focused\":true,"
+           "\"enabled\":true,\"singleFramebuffer\":true}],"
+           "\"limits\":[\"single framebuffer VM monitor\","
+           "\"no Wayland output routing yet\","
+           "\"no wlroots/upstream Hyprland output backend yet\","
+           "\"no physical monitor validation\"]}\n",
+           TOP_BAR_HEIGHT, FOOTER_HEIGHT);
+  desktop_json_append_raw(out, out_size, &used, line);
+}
+
 void gui_desktop_format_layers(char *out, size_t out_size) {
   int total_clients = 0;
 
@@ -8937,7 +8977,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree\n"
+           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
