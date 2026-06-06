@@ -548,13 +548,13 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
+[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
@@ -579,6 +579,11 @@ hints inside their framebuffer tiles. They are VM-ready tiling clients, not
 floating windows, not a Windows-style shell, and not Wayland/wlroots native
 applications yet. The launcher remains a transient overlay only; Waybar remains
 a future separate package.
+`desktop hyprctl -j apps`, `desktop hyprctl -j app <id>`, and
+`desktop hyprctl -j launch <app>` expose the same VM-ready app catalog,
+detail, and launch result as structured diagnostics without enabling a bar,
+start menu, floating windows, manual drag, Wayland, wlroots, or hardware
+validation.
 
 `desktop windows`, `desktop clients`, `desktop activewindow`, `desktop
 focus-history`, `desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` list the tiled clients with stable

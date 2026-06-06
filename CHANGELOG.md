@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.77.0` with structured Hyprland-style JSON
+  native app diagnostics/actions for `desktop hyprctl -j apps`, `desktop
+  hyprctl -j app <id>`, and `desktop hyprctl -j launch <app>`. The VM-safe
+  responses expose the terminal/settings/logs/packages/update tiled clients,
+  launcher overlay boundary, command runbooks, data sources, launch result,
+  and explicit `manualDrag=false`, `taskbar=false`, `startMenu=false`,
+  `waybarActive=false`, `wayland=false`, and `wlroots=false` limits without
+  adding Waybar, a Windows-like bar/start menu, floating windows, free mouse
+  drag, upstream Hyprland IPC compatibility, or physical hardware validation.
 - Added desktop package version `0.76.0` with structured Hyprland-style JSON
   session diagnostics/actions for `desktop hyprctl -j session
   [status|start|stop|restart|reload|recover|rescue]`. The VM-safe response

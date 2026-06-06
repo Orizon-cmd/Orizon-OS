@@ -620,6 +620,90 @@ static const desktop_app_entry_t *desktop_find_app_entry(const char *app) {
   return NULL;
 }
 
+static int desktop_app_is_native(const desktop_app_entry_t *app) {
+  return app && strcmp(app->backend, "native-app") == 0;
+}
+
+static int desktop_app_is_overlay(const desktop_app_entry_t *app) {
+  return app && strcmp(app->backend, "overlay") == 0;
+}
+
+static int desktop_app_is_terminal(const desktop_app_entry_t *app) {
+  return app && strcmp(app->backend, "terminal") == 0;
+}
+
+static int desktop_app_is_tiling_client(const desktop_app_entry_t *app) {
+  return app && strcmp(app->surface, "tiled-client") == 0;
+}
+
+static void desktop_append_app_known_json(char *out, size_t out_size,
+                                          size_t *used) {
+  size_t count = sizeof(desktop_app_catalog) / sizeof(desktop_app_catalog[0]);
+
+  desktop_json_append_raw(out, out_size, used, "[");
+  for (size_t i = 0; i < count; i++) {
+    if (i > 0) {
+      desktop_json_append_raw(out, out_size, used, ",");
+    }
+    desktop_json_append_string(out, out_size, used, desktop_app_catalog[i].id);
+  }
+  desktop_json_append_raw(out, out_size, used, "]");
+}
+
+static void desktop_append_app_entry_json(char *out, size_t out_size,
+                                          size_t *used,
+                                          const desktop_app_entry_t *app) {
+  if (!app) {
+    desktop_json_append_raw(out, out_size, used, "null");
+    return;
+  }
+  desktop_json_append_raw(out, out_size, used, "{\"id\":");
+  desktop_json_append_string(out, out_size, used, app->id);
+  desktop_json_append_raw(out, out_size, used, ",\"title\":");
+  desktop_json_append_string(out, out_size, used, app->title);
+  desktop_json_append_raw(out, out_size, used, ",\"class\":");
+  desktop_json_append_string(out, out_size, used, app->class_name);
+  desktop_json_append_raw(out, out_size, used, ",\"module\":");
+  desktop_json_append_string(out, out_size, used, app->module);
+  desktop_json_append_raw(out, out_size, used, ",\"backend\":");
+  desktop_json_append_string(out, out_size, used, app->backend);
+  desktop_json_append_raw(out, out_size, used, ",\"surface\":");
+  desktop_json_append_string(out, out_size, used, app->surface);
+  desktop_json_append_raw(out, out_size, used, ",\"status\":");
+  desktop_json_append_string(out, out_size, used, app->status);
+  desktop_json_append_raw(out, out_size, used, ",\"command\":");
+  desktop_json_append_string(out, out_size, used, app->command);
+  desktop_json_append_raw(out, out_size, used, ",\"shortcut\":");
+  desktop_json_append_string(out, out_size, used, app->shortcut);
+  desktop_json_append_raw(out, out_size, used, ",\"aliases\":");
+  desktop_json_append_string(out, out_size, used, app->aliases);
+  desktop_json_append_raw(out, out_size, used, ",\"description\":");
+  desktop_json_append_string(out, out_size, used, app->description);
+  desktop_json_append_raw(out, out_size, used, ",\"dataSource\":");
+  desktop_json_append_string(out, out_size, used, app->data_source);
+  desktop_json_append_raw(out, out_size, used, ",\"runbook\":");
+  desktop_json_append_string(out, out_size, used, app->runbook);
+  desktop_json_append_raw(out, out_size, used, ",\"limits\":");
+  desktop_json_append_string(out, out_size, used, app->limits);
+  desktop_json_append_raw(out, out_size, used, ",\"native\":");
+  desktop_json_append_raw(out, out_size, used,
+                          desktop_app_is_native(app) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, ",\"terminal\":");
+  desktop_json_append_raw(out, out_size, used,
+                          desktop_app_is_terminal(app) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, ",\"overlay\":");
+  desktop_json_append_raw(out, out_size, used,
+                          desktop_app_is_overlay(app) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, ",\"tiledClient\":");
+  desktop_json_append_raw(
+      out, out_size, used,
+      desktop_app_is_tiling_client(app) ? "true" : "false");
+  desktop_json_append_raw(
+      out, out_size, used,
+      ",\"floating\":false,\"manualDrag\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarActive\":false}");
+}
+
 static int desktop_write_text_file(const char *path, const char *text) {
   file_t *f;
 
@@ -5128,9 +5212,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -5786,6 +5870,69 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
                  "next-apps file-manager,wallpaper-daemon are not implemented yet; waybar-style bar is future package\n");
 }
 
+void orizon_desktop_format_apps_json(char *out, size_t out_size) {
+  size_t used = 0;
+  size_t count = sizeof(desktop_app_catalog) / sizeof(desktop_app_catalog[0]);
+  int native_count = 0;
+  int overlay_count = 0;
+  int terminal_count = 0;
+  int tiling_count = 0;
+  char line[192];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  for (size_t i = 0; i < count; i++) {
+    const desktop_app_entry_t *app = &desktop_app_catalog[i];
+    if (desktop_app_is_native(app)) {
+      native_count++;
+    }
+    if (desktop_app_is_overlay(app)) {
+      overlay_count++;
+    }
+    if (desktop_app_is_terminal(app)) {
+      terminal_count++;
+    }
+    if (desktop_app_is_tiling_client(app)) {
+      tiling_count++;
+    }
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"apps\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,"
+      "\"floatingDesktop\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarActive\":false,");
+  snprintf(line, sizeof(line),
+           "\"summary\":{\"total\":%u,\"native\":%d,\"terminal\":%d,"
+           "\"overlay\":%d,\"tilingClients\":%d},\"apps\":[",
+           (unsigned)count, native_count, terminal_count, overlay_count,
+           tiling_count);
+  desktop_json_append_raw(out, out_size, &used, line);
+  for (size_t i = 0; i < count; i++) {
+    if (i > 0) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_append_app_entry_json(out, out_size, &used,
+                                  &desktop_app_catalog[i]);
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "],\"commands\":{\"detail\":\"desktop hyprctl -j app <id>\","
+      "\"launch\":\"desktop hyprctl -j launch <app>\","
+      "\"textCatalog\":\"desktop apps\"},"
+      "\"policies\":{\"tilingOnly\":true,\"launcherOverlayOnly\":true,"
+      "\"floatingDesktop\":false,\"manualWindowDrag\":false,"
+      "\"windowsTaskbar\":false,\"startMenu\":false,"
+      "\"waybarSeparateFuturePackage\":true},"
+      "\"limits\":[\"VM/ZimaOS framebuffer compositor facade\","
+      "\"not upstream Wayland/wlroots Hyprland yet\","
+      "\"launcher is overlay only; no persistent bar/menu/dock\"]}\n");
+}
+
 void orizon_desktop_format_app_detail(const char *app, char *out,
                                       size_t out_size) {
   const desktop_app_entry_t *entry;
@@ -5843,6 +5990,100 @@ void orizon_desktop_format_app_detail(const char *app, char *out,
                  "vm-ready: yes\nimplemented: compositor-client catalog/detail\n");
   desktop_append(out, out_size, &used,
                  "inspect: desktop clients | desktop activewindow | desktop apps | desktop hyprctl clients\n");
+}
+
+void orizon_desktop_format_app_detail_json(const char *app, char *out,
+                                           size_t out_size) {
+  const desktop_app_entry_t *entry;
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  entry = desktop_find_app_entry(app);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"app\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,"
+      "\"floatingDesktop\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarActive\":false,\"query\":");
+  desktop_json_append_string(out, out_size, &used, app ? app : "");
+  desktop_json_append_raw(out, out_size, &used, ",\"ok\":");
+  desktop_json_append_raw(out, out_size, &used, entry ? "true" : "false");
+  if (entry) {
+    desktop_json_append_raw(out, out_size, &used, ",\"app\":");
+    desktop_append_app_entry_json(out, out_size, &used, entry);
+    desktop_json_append_raw(
+        out, out_size, &used,
+        ",\"actions\":[\"desktop launch ");
+    desktop_json_append_raw(out, out_size, &used, entry->id);
+    desktop_json_append_raw(out, out_size, &used,
+                            "\",\"desktop hyprctl -j launch ");
+    desktop_json_append_raw(out, out_size, &used, entry->id);
+    desktop_json_append_raw(out, out_size, &used, "\"]");
+  } else {
+    desktop_json_append_raw(out, out_size, &used,
+                            ",\"error\":\"unknown app\",\"known\":");
+    desktop_append_app_known_json(out, out_size, &used);
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"policies\":{\"tilingOnly\":true,\"launcherOverlayOnly\":true,"
+      "\"manualWindowDrag\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarSeparateFuturePackage\":true},"
+      "\"limits\":[\"VM-ready compositor app catalog\","
+      "\"not a real Wayland client protocol yet\","
+      "\"no physical hardware validation claimed\"]}\n");
+}
+
+void orizon_desktop_format_app_launch_json(const char *app,
+                                           const char *result, int rc,
+                                           char *out, size_t out_size) {
+  const desktop_app_entry_t *entry;
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  entry = desktop_find_app_entry(app);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"launch\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,"
+      "\"floatingDesktop\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarActive\":false,\"query\":");
+  desktop_json_append_string(out, out_size, &used, app ? app : "");
+  desktop_json_append_raw(out, out_size, &used, ",\"ok\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          (rc == 0 && entry) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"rc\":");
+  {
+    char line[32];
+    snprintf(line, sizeof(line), "%d", rc);
+    desktop_json_append_raw(out, out_size, &used, line);
+  }
+  desktop_json_append_raw(out, out_size, &used, ",\"result\":");
+  desktop_json_append_string(out, out_size, &used, result ? result : "");
+  desktop_json_append_raw(out, out_size, &used, ",\"app\":");
+  desktop_append_app_entry_json(out, out_size, &used, entry);
+  if (!entry) {
+    desktop_json_append_raw(out, out_size, &used, ",\"known\":");
+    desktop_append_app_known_json(out, out_size, &used);
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"policies\":{\"tilingOnly\":true,\"launcherOverlayOnly\":true,"
+      "\"manualWindowDrag\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarSeparateFuturePackage\":true},"
+      "\"limits\":[\"launch delegates to compositor dispatch exec\","
+      "\"terminal/settings/logs/packages/update spawn tiled clients\","
+      "\"launcher toggles overlay only; no taskbar/start menu/dock\"]}\n");
 }
 
 void orizon_desktop_format_profiles(char *out, size_t out_size) {

@@ -473,7 +473,7 @@ idempotent client-state dispatchers
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy
 `fullscreenstate <on|off|toggle|1|0>`,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/apps/app/launch/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
@@ -483,7 +483,7 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
 rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,
@@ -512,6 +512,10 @@ class/module/surface plus data-source/runbook/limit details, and `desktop launch
 terminal|settings|logs|packages|update|launcher` opens the first native apps as
 tiled clients or toggles the launcher overlay. The settings/logs/packages/update
 tiles render practical source and command hints in the framebuffer compositor.
+`desktop hyprctl -j apps`, `desktop hyprctl -j app <id>`, and `desktop hyprctl
+-j launch <app>` expose the same VM-ready app model and launch result as JSON,
+with launcher overlay boundaries and no taskbar, start menu, floating desktop,
+manual drag, Wayland/wlroots, or hardware validation claim.
 `desktop windows`/`desktop clients`
 list tiled clients with stable addresses, geometry and `focusHistoryID`;
 `desktop rule-matches`/`desktop hyprctl rulematches` explain which

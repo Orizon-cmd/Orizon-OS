@@ -157,6 +157,10 @@ $commands = @(
   "desktop hyprctl -j layouts",
   "desktop hyprctl -j descriptions",
   "desktop hyprctl -j instances",
+  "desktop hyprctl -j apps",
+  "desktop hyprctl -j app settings",
+  "desktop hyprctl -j app launcher",
+  "desktop hyprctl -j launch settings",
   "desktop hyprctl -j submap",
   "desktop hyprctl -j splash",
   "desktop hyprctl -j session",
@@ -789,6 +793,18 @@ run_cmd() {
       ;;
     "desktop hyprctl -j instances")
       grep -q '"command":"instances"' "`$OUT" && grep -q '"signature":"orizon-framebuffer-main"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j apps")
+      grep -q '"command":"apps"' "`$OUT" && grep -q '"tilingClients":5' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j app settings")
+      grep -q '"command":"app"' "`$OUT" && grep -q '"class":"orizon-settings"' "`$OUT" && grep -q '"tiledClient":true' "`$OUT" || { echo "missing hyprctl json app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j app launcher")
+      grep -q '"command":"app"' "`$OUT" && grep -q '"overlay":true' "`$OUT" && grep -q '"taskbar":false' "`$OUT" || { echo "missing hyprctl json app launcher"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j launch settings")
+      grep -q '"command":"launch"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json launch settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j submap")
       grep -q '"command":"submap"' "`$OUT" && grep -q '"activeSubmap":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -4256,8 +4256,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4420,6 +4420,60 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_instances_json(report, sizeof(report));
       } else {
         gui_desktop_format_instances(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "apps") ||
+               term_command_is(hypr, "applist")) {
+      const char *app =
+          term_skip_spaces(hypr + (term_command_is(hypr, "apps") ? 4 : 7));
+      if (*app) {
+        if (json) {
+          orizon_desktop_format_app_detail_json(app, report, sizeof(report));
+        } else {
+          orizon_desktop_format_app_detail(app, report, sizeof(report));
+        }
+      } else if (json) {
+        orizon_desktop_format_apps_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_apps(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "app")) {
+      const char *app = term_skip_spaces(hypr + 3);
+      if (*app == '\0') {
+        if (json) {
+          orizon_desktop_format_app_detail_json("", report, sizeof(report));
+        } else {
+          snprintf(report, sizeof(report),
+                   "usage: desktop hyprctl app <terminal|settings|logs|packages|update|launcher>\n");
+        }
+      } else if (json) {
+        orizon_desktop_format_app_detail_json(app, report, sizeof(report));
+      } else {
+        orizon_desktop_format_app_detail(app, report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "launch") ||
+               term_command_is(hypr, "exec")) {
+      const char *app = term_skip_spaces(
+          hypr + (term_command_is(hypr, "launch") ? 6 : 4));
+      char launch_result[256];
+      int rc;
+      if (*app == '\0') {
+        if (json) {
+          orizon_desktop_format_app_launch_json(
+              "", "usage: desktop hyprctl launch <app>", -1, report,
+              sizeof(report));
+        } else {
+          snprintf(report, sizeof(report),
+                   "usage: desktop hyprctl launch <terminal|settings|logs|packages|update|launcher>\n");
+        }
+      } else {
+        rc = gui_desktop_spawn_app_client(app, launch_result,
+                                          sizeof(launch_result));
+        if (json) {
+          orizon_desktop_format_app_launch_json(app, launch_result, rc, report,
+                                                sizeof(report));
+        } else {
+          snprintf(report, sizeof(report), "%s", launch_result);
+        }
       }
     } else if (term_command_is(hypr, "submap")) {
       const char *value = term_skip_spaces(hypr + 6);

@@ -241,6 +241,9 @@ desktop hyprctl -j render
 desktop hyprctl -j layouts
 desktop hyprctl -j descriptions
 desktop hyprctl -j instances
+desktop hyprctl -j apps
+desktop hyprctl -j app settings
+desktop hyprctl -j launch settings
 desktop hyprctl -j submap
 desktop hyprctl -j splash
 desktop hyprctl -j session
