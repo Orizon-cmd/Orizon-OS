@@ -190,6 +190,10 @@ $commands = @(
   "desktop hyprctl keyword animations:tick_budget 24",
   "desktop hyprctl getoption animations:tick_budget",
   "desktop hyprctl -j reload",
+  "desktop hyprctl -j dispatch workspace active",
+  "desktop hyprctl -j dispatch layoutmsg splitratio reset",
+  "desktop hyprctl -j dispatch submap move",
+  "desktop hyprctl -j dispatch submap reset",
   "desktop hyprctl binds",
   "desktop hyprctl -j binds",
   "desktop hyprctl layers",
@@ -837,6 +841,18 @@ run_cmd() {
       ;;
     "desktop hyprctl -j reload")
       grep -q '"command":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j dispatch workspace active")
+      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"workspace"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j dispatch layoutmsg splitratio reset")
+      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"layoutmsg"' "`$OUT" && grep -q '"args":"splitratio reset"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j dispatch submap move")
+      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"submap"' "`$OUT" && grep -q '"submap":"move"' "`$OUT" || { echo "missing hyprctl json dispatch submap move"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j dispatch submap reset")
+      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"submap"' "`$OUT" && grep -q '"submap":"default"' "`$OUT" || { echo "missing hyprctl json dispatch submap reset"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl binds")
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.75.0` with structured Hyprland-style JSON
+  action output for `desktop hyprctl -j dispatch <dispatcher> [args]`. The
+  VM-safe response wraps the existing tiled dispatcher engine with
+  dispatcher/argument/result fields, active workspace/layout/submap state,
+  focused client metadata when present, and explicit `manualDrag=false`,
+  `wayland=false`, and `wlroots=false` limits without adding Waybar, a
+  Windows-like bar/start menu, floating windows, free mouse drag, upstream
+  Hyprland IPC compatibility, or physical hardware validation.
 - Added desktop package version `0.74.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j layouts`,
   `desktop hyprctl -j descriptions`, `desktop hyprctl -j instances`,

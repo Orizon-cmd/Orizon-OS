@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       if (json) {
         gui_desktop_format_hyprctl_version_json(out, sizeof(out));
@@ -3980,9 +3980,17 @@ static void ssh_shell_print_desktop(const char *args) {
         memcpy(name, dispatch, dispatch_len);
         name[dispatch_len] = '\0';
         dispatch_args = ssh_shell_skip_spaces(dispatch_args);
-        gui_desktop_dispatch(name, dispatch_args, out, sizeof(out));
+        if (json) {
+          gui_desktop_dispatch_json(name, dispatch_args, out, sizeof(out));
+        } else {
+          gui_desktop_dispatch(name, dispatch_args, out, sizeof(out));
+        }
       } else {
-        gui_desktop_dispatch(dispatch, "", out, sizeof(out));
+        if (json) {
+          gui_desktop_dispatch_json(dispatch, "", out, sizeof(out));
+        } else {
+          gui_desktop_dispatch(dispatch, "", out, sizeof(out));
+        }
       }
     } else {
       snprintf(out, sizeof(out), "hyprctl: unknown command\r\n");

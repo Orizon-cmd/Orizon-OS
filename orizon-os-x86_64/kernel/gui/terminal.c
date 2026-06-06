@@ -4257,7 +4257,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4534,9 +4534,18 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         memcpy(name, dispatch, dispatch_len);
         name[dispatch_len] = '\0';
         dispatch_args = term_skip_spaces(dispatch_args);
-        gui_desktop_dispatch(name, dispatch_args, report, sizeof(report));
+        if (json) {
+          gui_desktop_dispatch_json(name, dispatch_args, report,
+                                    sizeof(report));
+        } else {
+          gui_desktop_dispatch(name, dispatch_args, report, sizeof(report));
+        }
       } else {
-        gui_desktop_dispatch(dispatch, "", report, sizeof(report));
+        if (json) {
+          gui_desktop_dispatch_json(dispatch, "", report, sizeof(report));
+        } else {
+          gui_desktop_dispatch(dispatch, "", report, sizeof(report));
+        }
       }
     } else {
       snprintf(report, sizeof(report), "hyprctl: unknown command\n");

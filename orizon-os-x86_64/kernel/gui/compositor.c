@@ -6632,6 +6632,80 @@ static void desktop_json_append_string(char *out, size_t out_size, size_t *used,
   desktop_json_append_raw(out, out_size, used, "\"");
 }
 
+int gui_desktop_dispatch_json(const char *dispatcher, const char *args,
+                              char *out, size_t out_size) {
+  char result[1024];
+  char line[512];
+  size_t used = 0;
+  const char *safe_dispatcher = dispatcher ? dispatcher : "";
+  const char *safe_args = args ? args : "";
+  int rc;
+  int focused_idx;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  while (*safe_args == ' ') {
+    safe_args++;
+  }
+  result[0] = '\0';
+  rc = gui_desktop_dispatch(safe_dispatcher, safe_args, result,
+                            sizeof(result));
+  focused_idx = desktop_focused_client_index();
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"dispatch\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"upstreamHyprland\":false,"
+      "\"manualDrag\":false,\"floatingDesktop\":false,\"dispatcher\":");
+  desktop_json_append_string(out, out_size, &used, safe_dispatcher);
+  desktop_json_append_raw(out, out_size, &used, ",\"args\":");
+  desktop_json_append_string(out, out_size, &used, safe_args);
+  snprintf(line, sizeof(line),
+           ",\"ok\":%s,\"status\":%d,\"activeWorkspace\":%d,"
+           "\"activeWorkspaceName\":",
+           rc == 0 ? "true" : "false", rc, desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_workspace_name(desktop_active_workspace));
+  desktop_json_append_raw(out, out_size, &used, ",\"activeLayout\":");
+  desktop_json_append_string(out, out_size, &used, desktop_layout_engine());
+  desktop_json_append_raw(out, out_size, &used, ",\"splitMode\":");
+  desktop_json_append_string(out, out_size, &used, desktop_split_mode_name());
+  desktop_json_append_raw(out, out_size, &used, ",\"submap\":");
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  if (focused_idx >= 0 && focused_idx < DESKTOP_MAX_CLIENTS &&
+      desktop_clients[focused_idx].visible) {
+    snprintf(line, sizeof(line),
+             ",\"focused\":{\"address\":\"0x%08x\",\"id\":%d,\"workspace\":%d,"
+             "\"class\":",
+             desktop_client_address(&desktop_clients[focused_idx]),
+             desktop_clients[focused_idx].id,
+             desktop_clients[focused_idx].workspace);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[focused_idx].app_id);
+    desktop_json_append_raw(out, out_size, &used, ",\"title\":");
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[focused_idx].title);
+    desktop_json_append_raw(out, out_size, &used, "}");
+  } else {
+    desktop_json_append_raw(out, out_size, &used, ",\"focused\":null");
+  }
+  desktop_json_append_raw(out, out_size, &used, ",\"result\":");
+  desktop_json_append_string(out, out_size, &used, result);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"VM/ZimaOS framebuffer compositor facade\","
+      "\"dispatchers mutate tiled Orizon desktop state\","
+      "\"no upstream Hyprland IPC socket yet\","
+      "\"no Wayland/wlroots backend yet\","
+      "\"no manual window drag or floating desktop\"]}\n");
+  return rc;
+}
+
 static void desktop_json_append_client(char *out, size_t out_size, size_t *used,
                                        int idx) {
   char line[512];
@@ -9191,7 +9265,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
+           "json: desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
@@ -9227,7 +9301,7 @@ void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
       "\"decorations\",\"render\",\"layouts\",\"descriptions\","
       "\"instances\",\"submap\",\"splash\",\"rollinglog\","
       "\"configerrors\",\"configtrace\",\"getoption\",\"keyword\","
-      "\"reload\",\"binds\",\"layers\"],"
+      "\"dispatch\",\"reload\",\"binds\",\"layers\"],"
       "\"dispatchers\":[\"exec\",\"killactive\",\"workspace\","
       "\"focusworkspaceoncurrentmonitor\",\"focusmonitor\","
       "\"movecurrentworkspacetomonitor\",\"moveworkspacetomonitor\","
@@ -9871,7 +9945,8 @@ void gui_desktop_format_hyprctl_version_json(char *out, size_t out_size) {
            "\"cursorpos\",\"animations\",\"decorations\",\"render\","
            "\"layouts\",\"descriptions\",\"instances\",\"submap\","
            "\"splash\",\"rollinglog\",\"configerrors\",\"configtrace\","
-           "\"getoption\",\"keyword\",\"reload\",\"binds\",\"layers\"],"
+           "\"getoption\",\"keyword\",\"dispatch\",\"reload\",\"binds\","
+           "\"layers\"],"
            "\"truth\":\"inspired by Hyprland, not upstream Hyprland\","
            "\"limits\":[\"VM/ZimaOS facade only\","
            "\"no real Wayland/wlroots backend yet\","

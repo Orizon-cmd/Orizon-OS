@@ -92,6 +92,8 @@ int gui_desktop_focus_next_client(void);
 int gui_desktop_focus_prev_client(void);
 int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
                          size_t out_size);
+int gui_desktop_dispatch_json(const char *dispatcher, const char *args,
+                              char *out, size_t out_size);
 void gui_desktop_format_workspaces(char *out, size_t out_size);
 void gui_desktop_format_windows(char *out, size_t out_size);
 void gui_desktop_format_clients_json(char *out, size_t out_size);

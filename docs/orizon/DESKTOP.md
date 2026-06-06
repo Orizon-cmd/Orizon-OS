@@ -545,18 +545,18 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
+[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
 `role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
-`parserSummary`, `trace`, `result`, `runtimeFile`, `singleFramebuffer`,
+`parserSummary`, `trace`, `result`, `dispatcher`, `args`, `runtimeFile`, `singleFramebuffer`,
 `libinput`, `activeSubmap`, `currentBackend`, `futureBackend`, `protocol`,
 `renderer`, `focusRing`, `transition`, `renderProfile`, `manualWindowDrag`,
 `mouseBindsPreparedOnly`, and `waybarActive`, but every object also carries
@@ -564,7 +564,7 @@ mirrors Hyprland-style fields such as `address`, `workspace`,
 not upstream Wayland/wlroots Hyprland. The config JSON diagnostics are
 read-only: they explain parser errors and apply/prepare/ignore decisions
 without changing the session. JSON `getoption` is read-only, while JSON
-`keyword` and `reload` are explicit VM-safe actions with `manualDrag=false`,
+`keyword`, `dispatch`, and `reload` are explicit VM-safe actions with `manualDrag=false`,
 `floatingSceneGraph=false`, and `taskbar=false` boundaries.
 
 `desktop apps` and `desktop app <id>` now form the first native-app control
@@ -670,6 +670,7 @@ desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
 desktop hyprctl -j getoption <key> emits the mapped value as VM-safe JSON
 desktop hyprctl -j keyword <key> <value> applies one supported key as JSON
+desktop hyprctl -j dispatch <dispatcher> [args] emits tiled dispatcher action JSON
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
 desktop hyprctl -j version emits package/compositor truth-map metadata
