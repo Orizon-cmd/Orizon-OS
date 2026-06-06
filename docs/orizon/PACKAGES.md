@@ -202,6 +202,8 @@ desktop hyprctl -j clientmodel
 desktop hyprctl -j rulematches
 desktop hyprctl -j layoutstate
 desktop hyprctl -j layouttree
+desktop hyprctl -j binds
+desktop hyprctl -j layers
 desktop dispatch togglesplit
 desktop dispatch layoutmsg layout master
 desktop dispatch layoutmsg splitratio 60
@@ -256,7 +258,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.68.0` because it includes policy/config files, the persisted session
+`0.69.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -274,7 +276,8 @@ tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`/
 `focushistory`/`workspacestack`/`clientmodel`/`rulematches`/`layoutstate`/
-`layouttree`/`configerrors`/`configtrace`/`getoption`/`keyword`/`reload`,
+`layouttree`/`configerrors`/`configtrace`/`getoption`/`keyword`/`reload`/
+`binds`/`layers`,
 focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 VM-safe monitor dispatch aliases `focusmonitor`,
 `movecurrentworkspacetomonitor`, and `moveworkspacetomonitor`,
@@ -287,7 +290,13 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.68.0` extends the JSON diagnostics/action layer with
+the launcher. Version `0.69.0` extends the JSON diagnostics layer with
+`desktop hyprctl -j binds` and `desktop hyprctl -j layers`, including bind
+variant counts, `bindm` prepared-only status, framebuffer layer state, and
+explicit `manualDrag=false` / `waybarActive=false` / `taskbar=false`
+boundaries for VM-safe tooling without enabling a taskbar, Waybar, floating
+windows, free mouse drag, layer-shell, or upstream Wayland/wlroots Hyprland
+behavior. Version `0.68.0` extends the JSON diagnostics/action layer with
 `desktop hyprctl -j getoption`, `desktop hyprctl -j keyword`, and
 `desktop hyprctl -j reload`, including mapped values, keyword result status,
 runtime hint files, reload results, and explicit `manualDrag=false` /
@@ -453,7 +462,8 @@ without adding any bar/taskbar now. Version `0.64.0` extends that JSON surface
 to `focushistory` and `workspacestack`; version `0.65.0` adds `clientmodel`
 and `rulematches`; version `0.66.0` adds `layoutstate` and `layouttree`;
 version `0.67.0` adds `configerrors` and `configtrace`; version `0.68.0`
-adds `getoption`, `keyword`, and `reload`.
+adds `getoption`, `keyword`, and `reload`; version `0.69.0` adds `binds` and
+`layers`.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.

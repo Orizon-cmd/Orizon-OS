@@ -174,7 +174,9 @@ $commands = @(
   "desktop hyprctl getoption animations:tick_budget",
   "desktop hyprctl -j reload",
   "desktop hyprctl binds",
+  "desktop hyprctl -j binds",
   "desktop hyprctl layers",
+  "desktop hyprctl -j layers",
   "desktop autostart",
   "desktop autostart terminal off",
   "desktop autostart terminal on",
@@ -771,8 +773,14 @@ run_cmd() {
     "desktop hyprctl binds")
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop hyprctl -j binds")
+      grep -q '"command":"binds"' "`$OUT" && grep -q '"mouseBindsPreparedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop hyprctl layers")
       grep -q "Orizon desktop layers" "`$OUT" && grep -q "namespace=launcher" "`$OUT" || { echo "missing hyprctl layers"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j layers")
+      grep -q '"command":"layers"' "`$OUT" && grep -q '"waybarActive":false' "`$OUT" && grep -q '"taskbar":false' "`$OUT" || { echo "missing hyprctl json layers"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop autostart")
       grep -q "Orizon desktop autostart" "`$OUT" && grep -q "terminal:" "`$OUT" || { echo "missing desktop autostart"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

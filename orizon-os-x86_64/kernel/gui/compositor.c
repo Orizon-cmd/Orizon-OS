@@ -8424,6 +8424,128 @@ void gui_desktop_format_layers(char *out, size_t out_size) {
            ORIZON_DESKTOP_LAYERS_PATH);
 }
 
+static int desktop_config_read_text(const char *path, char *out,
+                                    size_t out_size) {
+  file_t *f;
+  ssize_t n;
+
+  if (!out || out_size == 0) {
+    return 0;
+  }
+  out[0] = '\0';
+  f = vfs_open(path, O_RDONLY);
+  if (!f) {
+    return 0;
+  }
+  n = vfs_read(f, out, out_size - 1);
+  vfs_close(f);
+  if (n <= 0) {
+    out[0] = '\0';
+    return 0;
+  }
+  out[n] = '\0';
+  return 1;
+}
+
+static int desktop_config_line_matches_key(const char *line, const char *key) {
+  size_t key_len;
+
+  if (!line || !key) {
+    return 0;
+  }
+  while (*line == ' ' || *line == '\t') {
+    line++;
+  }
+  if (*line == '#' || *line == '\0') {
+    return 0;
+  }
+  key_len = strlen(key);
+  if (strncmp(line, key, key_len) != 0) {
+    return 0;
+  }
+  line += key_len;
+  return *line == '\0' || *line == ' ' || *line == '\t' || *line == '=' ||
+         *line == ':';
+}
+
+static int desktop_config_count_key(const char *cfg, const char *key) {
+  int count = 0;
+  const char *line = cfg ? cfg : "";
+
+  while (*line) {
+    if (desktop_config_line_matches_key(line, key)) {
+      count++;
+    }
+    while (*line && *line != '\n') {
+      line++;
+    }
+    if (*line == '\n') {
+      line++;
+    }
+  }
+  return count;
+}
+
+void gui_desktop_format_layers_json(char *out, size_t out_size) {
+  int total_clients = 0;
+  size_t used = 0;
+  char line[384];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      total_clients++;
+    }
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"layers\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"manualDrag\":false,"
+      "\"floatingSceneGraph\":false,\"taskbar\":false,"
+      "\"waybarActive\":false,\"layerShell\":false,\"monitor\":");
+  desktop_json_append_string(out, out_size, &used, "Orizon framebuffer");
+  snprintf(line, sizeof(line),
+           ",\"workspace\":%d,\"rulesRuntime\":\"%s\","
+           "\"layerrulesRuntime\":\"%s\",\"layers\":[",
+           desktop_active_workspace, ORIZON_DESKTOP_RULES_PATH,
+           ORIZON_DESKTOP_LAYERS_PATH);
+  desktop_json_append_raw(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "{\"namespace\":\"background\",\"z\":0,\"visible\":true,"
+           "\"role\":\"wallpaper\"},"
+           "{\"namespace\":\"bar\",\"z\":10,\"visible\":%s,"
+           "\"position\":\"%s\",\"reservedTop\":%d,\"waybar\":false},"
+           "{\"namespace\":\"launcher\",\"z\":90,\"visible\":%s,"
+           "\"overlay\":true},",
+           desktop_session.bar_enabled ? "true" : "false",
+           desktop_settings.bar_position,
+           desktop_session.bar_enabled ? TOP_BAR_HEIGHT : 0,
+           desktop_launcher_visible ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "{\"namespace\":\"tiled-clients\",\"z\":50,\"visible\":%s,"
+           "\"clients\":%d,\"workspace\":%d},"
+           "{\"namespace\":\"render-transition\",\"z\":95,\"visible\":%s,"
+           "\"reason\":",
+           total_clients > 0 ? "true" : "false", total_clients,
+           desktop_active_workspace,
+           desktop_animation_ticks_remaining > 0 ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_transition_reason);
+  snprintf(line, sizeof(line),
+           ",\"progress\":%d},"
+           "{\"namespace\":\"cursor\",\"z\":100,\"visible\":true,"
+           "\"x\":%d,\"y\":%d}],"
+           "\"limits\":[\"Orizon framebuffer layer model only\","
+           "\"no layer-shell protocol yet\",\"no Waybar/taskbar active\"]}\n",
+           desktop_transition_progress_percent(), mouse_x, mouse_y);
+  desktop_json_append_raw(out, out_size, &used, line);
+}
+
 void gui_desktop_format_binds(char *out, size_t out_size) {
   char cfg[2048];
   size_t used = 0;
@@ -8475,6 +8597,57 @@ void gui_desktop_format_binds(char *out, size_t out_size) {
              "layoutmsg, resizeactive, submap\n"
              "no-drag: windows are tiled by layout dispatchers, not manually moved\n");
   }
+}
+
+void gui_desktop_format_binds_json(char *out, size_t out_size) {
+  char cfg[2048];
+  size_t used = 0;
+  char line[512];
+  int loaded;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  loaded = desktop_config_read_text(ORIZON_DESKTOP_BINDS_PATH, cfg,
+                                    sizeof(cfg));
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"binds\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"manualDrag\":false,"
+      "\"floatingSceneGraph\":false,\"taskbar\":false,"
+      "\"runtime\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BINDS_PATH);
+  snprintf(line, sizeof(line),
+           ",\"loaded\":%s,\"source\":\"%s\",\"counts\":{"
+           "\"bind\":%d,\"bindl\":%d,\"bindr\":%d,\"binde\":%d,"
+           "\"bindm\":%d,\"unbind\":%d,\"submap\":%d},",
+           loaded ? "true" : "false", loaded ? "runtime" : "fallback",
+           desktop_config_count_key(cfg, "bind"),
+           desktop_config_count_key(cfg, "bindl"),
+           desktop_config_count_key(cfg, "bindr"),
+           desktop_config_count_key(cfg, "binde"),
+           desktop_config_count_key(cfg, "bindm"),
+           desktop_config_count_key(cfg, "unbind"),
+           desktop_config_count_key(cfg, "submap"));
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "\"mouseBindsPreparedOnly\":true,"
+      "\"supportedDispatchers\":[\"exec\",\"killactive\",\"workspace\","
+      "\"movetoworkspace\",\"movetoworkspacesilent\",\"movefocus\","
+      "\"focusmwindow\",\"focuswindow\",\"focuscurrentorlast\","
+      "\"focusurgentorlast\",\"swapwindow\",\"swapmwindow\",\"movewindow\","
+      "\"focusmaster\",\"swapwithmaster\",\"fullscreen\",\"fullscreenstate\","
+      "\"pseudo\",\"pseudotile\",\"pin\",\"togglesplit\",\"layoutmsg\","
+      "\"resizeactive\",\"submap\"],\"configuredSample\":");
+  desktop_json_append_string(out, out_size, &used,
+                             loaded ? cfg : "built-in fallback binds");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"bindm is parsed as prepared-only\","
+      "\"no manual window drag\",\"no global Wayland keygrab yet\"]}\n");
 }
 
 void gui_desktop_format_layouts(char *out, size_t out_size) {

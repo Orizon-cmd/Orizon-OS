@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.69.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j binds` and
+  `desktop hyprctl -j layers`. The VM-safe output now exposes bind variant
+  counts, `bindm` prepared-only status, framebuffer layer state, and explicit
+  `manualDrag=false`/`waybarActive=false`/`taskbar=false` boundaries without
+  enabling Waybar, a Windows-like bar/start menu, floating windows, free mouse
+  drag, layer-shell, or upstream Wayland/wlroots Hyprland behavior.
 - Added desktop package version `0.68.0` with structured Hyprland-style JSON
   diagnostics/actions for `desktop hyprctl -j getoption`,
   `desktop hyprctl -j keyword`, and `desktop hyprctl -j reload`. The VM-safe

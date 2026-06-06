@@ -4257,7 +4257,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors, configtrace, getoption, keyword and reload as VM-safe Hyprland-style diagnostics/actions\n");
+                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4330,12 +4330,20 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     } else if (term_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(report, sizeof(report));
     } else if (term_command_is(hypr, "binds")) {
-      gui_desktop_format_binds(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_binds_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_binds(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "keymap") ||
                term_command_is(hypr, "inputmap")) {
       gui_desktop_format_keymap(report, sizeof(report));
     } else if (term_command_is(hypr, "layers")) {
-      gui_desktop_format_layers(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_layers_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_layers(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "layouts")) {
       gui_desktop_format_layouts(report, sizeof(report));
     } else if (term_command_is(hypr, "layoutstate") ||

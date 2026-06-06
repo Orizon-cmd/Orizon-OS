@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors, configtrace, getoption, keyword and reload as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3778,12 +3778,20 @@ static void ssh_shell_print_desktop(const char *args) {
     } else if (ssh_shell_command_is(hypr, "monitors")) {
       gui_desktop_format_monitors(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "binds")) {
-      gui_desktop_format_binds(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_binds_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_binds(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "keymap") ||
                ssh_shell_command_is(hypr, "inputmap")) {
       gui_desktop_format_keymap(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layers")) {
-      gui_desktop_format_layers(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_layers_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_layers(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "layouts")) {
       gui_desktop_format_layouts(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "layoutstate") ||
