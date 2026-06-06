@@ -75,8 +75,8 @@ le developpement noyau:
   `bezier/animation` et hints input/misc/layout/dwindle/master/gestures/xwayland, diagnostics
   (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
   `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
-  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, diagnostics JSON compacts
-  `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, mutation
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, diagnostics JSON compacts
+  `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -178,10 +178,10 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`,
 `desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-state`, `desktop layout-tree`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
-instances`, `desktop shortcuts`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
+instances`, `desktop modules`, `desktop shortcuts`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`,
 `desktop keyword <key> <value>` et
-`desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|devices|keymap|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload|binds|layers` exposent/modifient le
+`desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|keymap|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -230,7 +230,7 @@ un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 Les cibles workspace acceptent maintenant les prefixes Hyprland-style
 `r+/-n`, `r~n`, `m+/-n`, `e+/-n`, `m~n` et `e~n`; `r` inclut les slots vides
 et `m/e` parcourent les workspaces ouverts dans la facade VM mono-moniteur.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 ajoute une sortie JSON compacte pour les futurs paquets/outils de status, avec
 des champs Hyprland-style (`address`, `workspace`, `fullscreenClient`, `tags`,
 `windows`, `lastwindow`, `focusHistoryID`, `scope`, `role`, `pinnedAware`,

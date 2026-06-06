@@ -4256,8 +4256,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4420,6 +4420,14 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_instances_json(report, sizeof(report));
       } else {
         gui_desktop_format_instances(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "modules") ||
+               term_command_is(hypr, "modulemap") ||
+               term_command_is(hypr, "module-map")) {
+      if (json) {
+        orizon_desktop_format_modules_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_modules(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "shortcuts") ||
                term_command_is(hypr, "shortcutmap") ||

@@ -157,6 +157,7 @@ $commands = @(
   "desktop hyprctl -j layouts",
   "desktop hyprctl -j descriptions",
   "desktop hyprctl -j instances",
+  "desktop hyprctl -j modules",
   "desktop hyprctl -j shortcuts",
   "desktop hyprctl -j autostart",
   "desktop hyprctl -j autostart terminal off",
@@ -797,6 +798,9 @@ run_cmd() {
       ;;
     "desktop hyprctl -j instances")
       grep -q '"command":"instances"' "`$OUT" && grep -q '"signature":"orizon-framebuffer-main"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j modules")
+      grep -q '"command":"modules"' "`$OUT" && grep -q '"modularPackaging":true' "`$OUT" && grep -q '"name":"orizon-waybar"' "`$OUT" && grep -q '"plannedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json modules"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j shortcuts")
       grep -q '"command":"shortcuts"' "`$OUT" && grep -q '"keyboardOnly":true' "`$OUT" && grep -q '"bindmPreparedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

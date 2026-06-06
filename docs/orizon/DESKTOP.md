@@ -98,6 +98,7 @@ desktop hyprctl -j render
 desktop hyprctl -j layouts
 desktop hyprctl -j descriptions
 desktop hyprctl -j instances
+desktop hyprctl -j modules
 desktop hyprctl -j shortcuts
 desktop hyprctl -j submap
 desktop hyprctl -j splash
@@ -549,13 +550,13 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
+[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
@@ -707,6 +708,7 @@ desktop hyprctl -j render emits framebuffer renderer/protocol boundaries
 desktop hyprctl -j layouts emits layout catalog and active ratio state
 desktop hyprctl -j descriptions emits command/dispatcher surfaces
 desktop hyprctl -j instances emits the framebuffer compositor instance
+desktop hyprctl -j modules emits modular package split and Waybar future policy
 desktop hyprctl -j shortcuts emits keyboard-only shortcuts/submap policy
 desktop hyprctl -j submap emits active keyboard submap state
 desktop hyprctl -j splash emits VM-safe splash/render boundary metadata

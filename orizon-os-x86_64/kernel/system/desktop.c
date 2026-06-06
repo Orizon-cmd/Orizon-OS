@@ -5212,9 +5212,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -5823,6 +5823,97 @@ void orizon_desktop_format_modules(char *out, size_t out_size) {
     desktop_append(out, out_size, &used,
                    "modules.conf missing WARN run desktop reset or desktop settings sync\n");
   }
+}
+
+void orizon_desktop_format_modules_json(char *out, size_t out_size) {
+  size_t used = 0;
+  size_t size = 0;
+  int modules_present = 0;
+  int module_dir_is_dir = 0;
+  int module_dir_present = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  modules_present =
+      (vfs_stat(ORIZON_DESKTOP_MODULES_PATH, &size, NULL) == 0 && size > 0);
+  module_dir_present =
+      (vfs_stat(ORIZON_DESKTOP_MODULE_DIR, NULL, &module_dir_is_dir) == 0 &&
+       module_dir_is_dir);
+
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"modules\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarActive\":false,\"modularPackaging\":true,"
+      "\"currentBundle\":\"" ORIZON_DESKTOP_PACKAGE "\","
+      "\"moduleMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_MODULES_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"moduleMapPresent\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          modules_present ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"moduleDir\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_MODULE_DIR);
+  desktop_json_append_raw(out, out_size, &used, ",\"moduleDirPresent\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          module_dir_present ? "true" : "false");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"sampleCommand\":\"pkg sample <module>\","
+      "\"installCommand\":\"pkg install <module>\","
+      "\"modules\":["
+      "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_CORE "\","
+      "\"kind\":\"core\",\"role\":\"desktop-runtime\","
+      "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_CORE_PATH "\","
+      "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
+      "\"autoPreparedDependency\":false,\"currentBundle\":false,"
+      "\"plannedOnly\":false},"
+      "{\"name\":\"" ORIZON_DESKTOP_PACKAGE "\","
+      "\"kind\":\"hypr-profile\",\"role\":\"all-in-one-profile\","
+      "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_PATH "\","
+      "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
+      "\"autoPreparedDependency\":false,\"currentBundle\":true,"
+      "\"plannedOnly\":false},"
+      "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_TERMINAL "\","
+      "\"kind\":\"app\",\"role\":\"terminal\","
+      "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_TERMINAL_PATH "\","
+      "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
+      "\"autoPreparedDependency\":true,\"currentBundle\":false,"
+      "\"plannedOnly\":false},"
+      "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_SETTINGS "\","
+      "\"kind\":\"app\",\"role\":\"settings\","
+      "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_SETTINGS_PATH "\","
+      "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
+      "\"autoPreparedDependency\":true,\"currentBundle\":false,"
+      "\"plannedOnly\":false},"
+      "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_LAUNCHER "\","
+      "\"kind\":\"app\",\"role\":\"launcher\","
+      "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_LAUNCHER_PATH "\","
+      "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
+      "\"autoPreparedDependency\":true,\"currentBundle\":false,"
+      "\"plannedOnly\":false},"
+      "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_WAYBAR "\","
+      "\"kind\":\"future-bar\",\"role\":\"separate-status-bar\","
+      "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_WAYBAR_PATH "\","
+      "\"prepared\":true,\"sampleNow\":false,\"installableNow\":false,"
+      "\"autoPreparedDependency\":false,\"currentBundle\":false,"
+      "\"plannedOnly\":true}],"
+      "\"policies\":{\"tilingOnly\":true,\"manualWindowDrag\":false,"
+      "\"nativeAppsAreClients\":true,\"launcherOverlayOnly\":true,"
+      "\"waybarSeparateFuturePackage\":true,"
+      "\"waybarInstalledNow\":false},"
+      "\"diagnostics\":{\"coreAutoPreparedForAppModules\":true,"
+      "\"splitPackagesPrepared\":true,\"allInOnePathKept\":true,"
+      "\"vmReady\":true,\"hardwareValidation\":false},"
+      "\"limits\":[\"VM/ZimaOS packaging facade only\","
+      "\"orizon-waybar is future-only and not installed\","
+      "\"no Windows taskbar/start menu added\","
+      "\"no floating desktop or manual drag enabled\","
+      "\"no physical hardware validation claimed\"]}\n");
 }
 
 void orizon_desktop_format_apps(char *out, size_t out_size) {
