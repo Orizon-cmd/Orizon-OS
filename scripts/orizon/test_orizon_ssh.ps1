@@ -143,6 +143,8 @@ $commands = @(
   "desktop hyprctl -j workspacestack",
   "desktop hyprctl -j layoutstate",
   "desktop hyprctl -j layouttree",
+  "desktop hyprctl -j configerrors",
+  "desktop hyprctl -j configtrace",
   "desktop hyprctl workspacestack",
   "desktop hyprctl layouts",
   "desktop hyprctl layoutstate",
@@ -717,6 +719,12 @@ run_cmd() {
       ;;
     "desktop hyprctl -j layouttree")
       grep -q '"model":"active workspace tiling tree"' "`$OUT" && grep -Fq '"nodes":[' "`$OUT" && grep -q '"floatingSceneGraph":false' "`$OUT" || { echo "missing hyprctl json layouttree"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j configerrors")
+      grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j configtrace")
+      grep -q '"model":"Hyprland-style config trace"' "`$OUT" && grep -q '"parserSummary":{' "`$OUT" && grep -Fq '"trace":[' "`$OUT" || { echo "missing hyprctl json configtrace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl cursorpos")
       grep -q "cursorpos:" "`$OUT" && grep -q "profile:" "`$OUT" || { echo "missing hyprctl cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

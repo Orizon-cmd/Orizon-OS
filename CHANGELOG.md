@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.67.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j configerrors` and
+  `desktop hyprctl -j configtrace`. The VM-safe output now exposes parser
+  summaries, source resolution, line-by-line apply/prepare/ignore trace data,
+  and explicit `manualDrag=false`/`taskbar=false` boundaries without enabling
+  Waybar, a Windows-like bar/start menu, floating windows, free mouse drag, or
+  upstream Wayland/wlroots Hyprland behavior.
 - Added desktop package version `0.66.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j layoutstate` and
   `desktop hyprctl -j layouttree`. The VM-safe output now exposes per-workspace

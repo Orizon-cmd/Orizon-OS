@@ -4257,7 +4257,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate and layouttree as VM-safe Hyprland-style diagnostics\n");
+                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors and configtrace as VM-safe Hyprland-style diagnostics\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4380,10 +4380,18 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     } else if (term_command_is(hypr, "splash")) {
       gui_desktop_format_splash(report, sizeof(report));
     } else if (term_command_is(hypr, "configerrors")) {
-      orizon_desktop_format_config_errors(report, sizeof(report));
+      if (json) {
+        orizon_desktop_format_config_errors_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_config_errors(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "configtrace") ||
                term_command_is(hypr, "config-trace")) {
-      orizon_desktop_format_config_trace(report, sizeof(report));
+      if (json) {
+        orizon_desktop_format_config_trace_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_config_trace(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "rollinglog")) {
       orizon_desktop_format_rolling_log(report, sizeof(report));
     } else if (term_command_is(hypr, "getoption")) {

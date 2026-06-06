@@ -171,6 +171,8 @@ desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
 desktop hyprctl configtrace
+desktop hyprctl -j configerrors
+desktop hyprctl -j configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
@@ -457,11 +459,12 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
-rule-match/layout-tree fields such as `focusHistoryID`, `scope`, `role`,
-`pinnedAware`, `summary`, `safeAction`, `nodes`, and `rect`; it is
+rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,
+`pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`, `parserSummary`, and
+`trace`; it is
 Hyprland-style diagnostic data, not real Wayland/wlroots client state.
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,

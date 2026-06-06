@@ -61,7 +61,7 @@ design note.
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
   v2 state health/counters,
-  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`, compact JSON diagnostics for `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree`, `desktop backend`, `desktop protocol`, `desktop autostart`,
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`, compact JSON diagnostics for `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace`, `desktop backend`, `desktop protocol`, `desktop autostart`,
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.

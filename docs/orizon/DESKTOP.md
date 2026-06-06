@@ -106,6 +106,8 @@ desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
 desktop hyprctl configtrace
+desktop hyprctl -j configerrors
+desktop hyprctl -j configtrace
 desktop hyprctl rollinglog
 desktop dispatch exec terminal
 desktop hyprctl clients
@@ -530,13 +532,16 @@ from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
-`role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, and `rect`, but every
-object also carries `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
-not upstream Wayland/wlroots Hyprland.
+`role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
+`parserSummary`, and `trace`, but every object also carries
+`hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
+not upstream Wayland/wlroots Hyprland. The config JSON diagnostics are
+read-only: they explain parser errors and apply/prepare/ignore decisions
+without changing the session.
 
 `desktop apps` and `desktop app <id>` now form the first native-app control
 surface for the desktop. The terminal/settings/logs/packages/update entries

@@ -251,6 +251,8 @@ desktop hyprctl devices
 desktop hyprctl splash
 desktop hyprctl configerrors
 desktop hyprctl configtrace
+desktop hyprctl -j configerrors
+desktop hyprctl -j configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11

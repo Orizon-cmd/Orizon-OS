@@ -448,6 +448,41 @@ static void desktop_append(char *out, size_t out_size, size_t *used,
   out[*used] = '\0';
 }
 
+static void desktop_json_append_raw(char *out, size_t out_size, size_t *used,
+                                    const char *text) {
+  desktop_append(out, out_size, used, text);
+}
+
+static void desktop_json_append_string(char *out, size_t out_size,
+                                       size_t *used, const char *text) {
+  char one[2] = {0, 0};
+
+  desktop_json_append_raw(out, out_size, used, "\"");
+  if (!text) {
+    text = "";
+  }
+  while (*text) {
+    char c = *text++;
+
+    if (c == '"' || c == '\\') {
+      char esc[3] = {'\\', c, 0};
+      desktop_json_append_raw(out, out_size, used, esc);
+    } else if (c == '\n') {
+      desktop_json_append_raw(out, out_size, used, "\\n");
+    } else if (c == '\r') {
+      desktop_json_append_raw(out, out_size, used, "\\r");
+    } else if (c == '\t') {
+      desktop_json_append_raw(out, out_size, used, "\\t");
+    } else if ((unsigned char)c < 32) {
+      desktop_json_append_raw(out, out_size, used, " ");
+    } else {
+      one[0] = c;
+      desktop_json_append_raw(out, out_size, used, one);
+    }
+  }
+  desktop_json_append_raw(out, out_size, used, "\"");
+}
+
 typedef struct {
   const char *id;
   const char *title;
@@ -2089,6 +2124,231 @@ void orizon_desktop_format_config_trace(char *out, size_t out_size) {
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "commands: desktop config doctor | desktop config apply | desktop hyprctl configtrace\n");
+}
+
+void orizon_desktop_format_config_trace_json(char *out, size_t out_size) {
+  char cfg[4096];
+  char line[512];
+  size_t used = 0;
+  int n;
+  int user_config = 0;
+  int pos = 0;
+  int len;
+  int depth = 0;
+  int line_no = 0;
+  int traced = 0;
+  int apply_count = 0;
+  int prepare_count = 0;
+  int ignored_count = 0;
+  int malformed_count = 0;
+  int section_count = 0;
+  int source_loaded = 0;
+  int source_missing = 0;
+  int source_skipped = 0;
+  int truncated = 0;
+  int first = 1;
+  char sections[4][32];
+  desktop_hypr_summary_t summary;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  memset(sections, 0, sizeof(sections));
+  memset(&summary, 0, sizeof(summary));
+  orizon_desktop_ensure_defaults();
+  n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                             sizeof(cfg));
+  if (!desktop_text_config_usable(cfg, n)) {
+    snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
+  } else {
+    user_config = 1;
+  }
+  desktop_hypr_scan_config(cfg, 0, &summary, NULL, NULL, NULL);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"model\":\"Hyprland-style config trace\","
+      "\"manualDrag\":false,\"floatingSceneGraph\":false,"
+      "\"taskbar\":false,\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"path\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"source\":");
+  desktop_json_append_string(
+      out, out_size, &used,
+      user_config ? "user config" : "built-in template preview");
+  snprintf(line, sizeof(line),
+           ",\"parserSummary\":{\"parsed\":%d,\"malformed\":%d,"
+           "\"prepared\":%d,\"ignored\":%d,\"sources\":%d,"
+           "\"sourceLoaded\":%d,\"sourceMissing\":%d,"
+           "\"sourceSkipped\":%d},\"trace\":[",
+           summary.parsed_lines, summary.malformed_lines,
+           summary.prepared_keywords, summary.ignored_keywords,
+           summary.sources, summary.source_files_loaded,
+           summary.source_files_missing, summary.source_files_skipped);
+  desktop_json_append_raw(out, out_size, &used, line);
+
+  len = (int)strlen(cfg);
+  while (pos < len) {
+    int start;
+    int end;
+    char raw[224];
+    char key[64];
+    char value[128];
+    char full_key[96];
+    desktop_hypr_summary_t local;
+    const char *status = "IGNORE";
+    const char *route = "none";
+    const char *kind = "keyword";
+
+    if (traced >= 40 || used + 420 >= out_size) {
+      truncated = 1;
+      break;
+    }
+    desktop_next_line_bounds(cfg, len, &pos, &start, &end);
+    line_no++;
+    desktop_trim_copy(raw, sizeof(raw), cfg + start, end - start);
+    desktop_strip_inline_comment(raw);
+    desktop_trim_copy(raw, sizeof(raw), raw, (int)strlen(raw));
+    if (!raw[0]) {
+      continue;
+    }
+    if (!first) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    first = 0;
+    if (strcmp(raw, "}") == 0) {
+      kind = "section-close";
+      if (depth > 0) {
+        depth--;
+        status = "OK";
+        section_count++;
+        snprintf(line, sizeof(line),
+                 "{\"line\":%d,\"kind\":\"%s\",\"status\":\"%s\","
+                 "\"depth\":%d}",
+                 line_no, kind, status, depth);
+      } else {
+        status = "ERROR";
+        malformed_count++;
+        snprintf(line, sizeof(line),
+                 "{\"line\":%d,\"kind\":\"%s\",\"status\":\"%s\","
+                 "\"reason\":\"unmatched-section-close\"}",
+                 line_no, kind, status);
+      }
+      desktop_json_append_raw(out, out_size, &used, line);
+      traced++;
+      continue;
+    }
+    if (raw[strlen(raw) - 1] == '{') {
+      raw[strlen(raw) - 1] = '\0';
+      desktop_trim_copy(key, sizeof(key), raw, (int)strlen(raw));
+      kind = "section";
+      if (desktop_token_safe(key) && depth < 4) {
+        snprintf(sections[depth], sizeof(sections[depth]), "%s", key);
+        depth++;
+        status = "OK";
+        section_count++;
+        snprintf(line, sizeof(line),
+                 "{\"line\":%d,\"kind\":\"%s\",\"status\":\"%s\","
+                 "\"key\":",
+                 line_no, kind, status);
+        desktop_json_append_raw(out, out_size, &used, line);
+        desktop_json_append_string(out, out_size, &used, key);
+        snprintf(line, sizeof(line), ",\"depth\":%d}", depth);
+        desktop_json_append_raw(out, out_size, &used, line);
+      } else {
+        status = "ERROR";
+        malformed_count++;
+        snprintf(line, sizeof(line),
+                 "{\"line\":%d,\"kind\":\"%s\",\"status\":\"%s\","
+                 "\"reason\":\"malformed-section\",\"key\":",
+                 line_no, kind, status);
+        desktop_json_append_raw(out, out_size, &used, line);
+        desktop_json_append_string(out, out_size, &used,
+                                   key[0] ? key : "(empty)");
+        desktop_json_append_raw(out, out_size, &used, "}");
+      }
+      traced++;
+      continue;
+    }
+    if (desktop_hypr_key_value(raw, key, sizeof(key), value,
+                               sizeof(value)) < 0) {
+      malformed_count++;
+      snprintf(line, sizeof(line),
+               "{\"line\":%d,\"kind\":\"keyword\",\"status\":\"ERROR\","
+               "\"reason\":\"malformed-key-value\",\"raw\":",
+               line_no);
+      desktop_json_append_raw(out, out_size, &used, line);
+      desktop_json_append_string(out, out_size, &used, raw);
+      desktop_json_append_raw(out, out_size, &used, "}");
+      traced++;
+      continue;
+    }
+    desktop_hypr_join_key(sections, depth, key, full_key, sizeof(full_key));
+    memset(&local, 0, sizeof(local));
+    desktop_hypr_apply_pair(full_key, value, NULL, NULL, &local, 0, NULL);
+    route = desktop_hypr_trace_route(full_key, value);
+    if (desktop_hypr_is_supported_setting_key(full_key) ||
+        desktop_hypr_exec_once_applies(full_key, value)) {
+      status = local.prepared_keywords > 0 ? "APPLY+PREPARE" : "APPLY";
+      apply_count++;
+      if (local.prepared_keywords > 0) {
+        prepare_count++;
+      }
+    } else if (local.prepared_keywords > 0) {
+      status = "PREPARE";
+      prepare_count++;
+    } else {
+      status = "IGNORE";
+      ignored_count++;
+    }
+    snprintf(line, sizeof(line),
+             "{\"line\":%d,\"kind\":\"keyword\",\"status\":\"%s\","
+             "\"key\":",
+             line_no, status);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used, full_key);
+    desktop_json_append_raw(out, out_size, &used, ",\"route\":");
+    desktop_json_append_string(out, out_size, &used, route);
+    desktop_json_append_raw(out, out_size, &used, ",\"value\":");
+    desktop_json_append_string(out, out_size, &used, value);
+    if (strcmp(full_key, "source") == 0) {
+      char source_path[128];
+      const char *source_status = "SKIP";
+
+      if (desktop_hypr_source_path_from_value(value, source_path,
+                                              sizeof(source_path)) == 0) {
+        if (vfs_exists(source_path)) {
+          source_loaded++;
+          source_status = "LOADED";
+        } else {
+          source_missing++;
+          source_status = "MISSING";
+        }
+      } else {
+        snprintf(source_path, sizeof(source_path), "%s", "(unsafe-or-glob)");
+        source_skipped++;
+      }
+      desktop_json_append_raw(out, out_size, &used, ",\"sourcePath\":");
+      desktop_json_append_string(out, out_size, &used, source_path);
+      desktop_json_append_raw(out, out_size, &used, ",\"sourceStatus\":");
+      desktop_json_append_string(out, out_size, &used, source_status);
+    }
+    desktop_json_append_raw(out, out_size, &used, "}");
+    traced++;
+  }
+  snprintf(line, sizeof(line),
+           "],\"summary\":{\"lines\":%d,\"traced\":%d,\"sections\":%d,"
+           "\"apply\":%d,\"prepare\":%d,\"ignored\":%d,"
+           "\"malformed\":%d,\"sourceLoaded\":%d,\"sourceMissing\":%d,"
+           "\"sourceSkipped\":%d,\"truncated\":%s},"
+           "\"limits\":[\"read-only trace\",\"VM framebuffer backend\","
+           "\"no upstream Hyprland/wlroots yet\",\"no manual window drag\"]}\n",
+           line_no, traced, section_count, apply_count, prepare_count,
+           ignored_count, malformed_count, source_loaded, source_missing,
+           source_skipped, truncated ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
 }
 
 static int desktop_write_session(const orizon_desktop_session_t *session) {
@@ -4205,6 +4465,89 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
                  "notes: unsupported but safe Hyprland keywords are reported as ignored/prepared, not hard errors\n");
 }
 
+void orizon_desktop_format_config_errors_json(char *out, size_t out_size) {
+  char cfg[4096];
+  char line[1024];
+  size_t used = 0;
+  int n;
+  int user_config = 0;
+  desktop_hypr_summary_t summary;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  memset(&summary, 0, sizeof(summary));
+  orizon_desktop_ensure_defaults();
+  n = desktop_read_text_file(ORIZON_DESKTOP_USER_CONFIG_PATH, cfg,
+                             sizeof(cfg));
+  if (!desktop_text_config_usable(cfg, n)) {
+    snprintf(cfg, sizeof(cfg), "%s", desktop_user_config);
+  } else {
+    user_config = 1;
+  }
+  desktop_hypr_scan_config(cfg, 0, &summary, NULL, NULL, NULL);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"model\":\"Hyprland-style config parser diagnostics\","
+      "\"manualDrag\":false,\"floatingSceneGraph\":false,"
+      "\"taskbar\":false,\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"path\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"source\":");
+  desktop_json_append_string(
+      out, out_size, &used,
+      user_config ? "user config" : "built-in template preview");
+  snprintf(line, sizeof(line),
+           ",\"ok\":%s,"
+           "\"summary\":{\"status\":\"%s\",\"parsed\":%d,"
+           "\"malformed\":%d,\"ignored\":%d,\"prepared\":%d,"
+           "\"supportedSettings\":%d},"
+           "\"keywords\":{\"variables\":%d,\"monitors\":%d,"
+           "\"binds\":%d,\"execOnce\":%d,\"env\":%d,"
+           "\"windowRules\":%d,\"layerRules\":%d,\"workspaces\":%d,"
+           "\"sources\":%d,\"submaps\":%d,\"animations\":%d},"
+           "\"runtimeHints\":{\"input\":%d,\"device\":%d,"
+           "\"layout\":%d,\"decoration\":%d,\"cursor\":%d,"
+           "\"render\":%d,\"debug\":%d,\"misc\":%d},"
+           "\"binds\":{\"total\":%d,\"supported\":%d,"
+           "\"locked\":%d,\"release\":%d,\"repeat\":%d,"
+           "\"mousePreparedOnly\":%d,\"manualDrag\":false},"
+           "\"sourceResolve\":{\"loaded\":%d,\"missing\":%d,"
+           "\"skipped\":%d,\"depthLimited\":%d},"
+           "\"errors\":",
+           summary.malformed_lines ? "false" : "true",
+           summary.malformed_lines ? "WARN" : "PASS",
+           summary.parsed_lines, summary.malformed_lines,
+           summary.ignored_keywords, summary.prepared_keywords,
+           summary.supported_settings, summary.variables, summary.monitors,
+           summary.binds, summary.exec_once, summary.envs,
+           summary.windowrules, summary.layerrules, summary.workspaces,
+           summary.sources, summary.submaps, summary.animation_rules,
+           summary.input_hints, summary.device_hints, summary.layout_hints,
+           summary.decoration_hints, summary.cursor_hints,
+           summary.render_hints, summary.debug_hints, summary.misc_hints,
+           summary.binds, summary.supported_binds, summary.locked_binds,
+           summary.release_binds, summary.repeat_binds, summary.mouse_binds,
+           summary.source_files_loaded, summary.source_files_missing,
+           summary.source_files_skipped, summary.source_depth_limited);
+  desktop_json_append_raw(out, out_size, &used, line);
+  if (summary.malformed_lines) {
+    desktop_json_append_raw(
+        out, out_size, &used,
+        "[\"malformed lines detected; use desktop hyprctl -j configtrace\"]");
+  } else {
+    desktop_json_append_raw(out, out_size, &used, "[]");
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"notes\":[\"unsupported safe Hyprland keywords are ignored or prepared, not hard errors\","
+      "\"bindm is tracked as prepared-only and does not enable manual window drag\","
+      "\"this is an Orizon Hyprland-style facade, not upstream Hyprland\"]}\n");
+}
+
 static void desktop_append_file_dump(char *out, size_t out_size, size_t *used,
                                      const char *title, const char *path) {
   char line[160];
@@ -4432,7 +4775,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "hyprctl: desktop hyprctl [-j] version|systeminfo|clients|clientmodel|rulematches|workspacestack|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|layoutstate|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow as VM-safe diagnostics\n");
+                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/configerrors/configtrace as VM-safe diagnostics\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,

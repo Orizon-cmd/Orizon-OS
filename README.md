@@ -74,9 +74,9 @@ le developpement noyau:
   variantes `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`, `binds:*`,
   `bezier/animation` et hints input/misc/layout/dwindle/master/gestures/xwayland, diagnostics
   (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
-  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
-  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/rollinglog/getoption/keyword/binds/layers`, diagnostics JSON compacts
-  `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/layouts/layoutstate/layouttree/animations/decorations/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/binds/layers`, diagnostics JSON compacts
+  `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -229,11 +229,11 @@ un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 Les cibles workspace acceptent maintenant les prefixes Hyprland-style
 `r+/-n`, `r~n`, `m+/-n`, `e+/-n`, `m~n` et `e~n`; `r` inclut les slots vides
 et `m/e` parcourent les workspaces ouverts dans la facade VM mono-moniteur.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace`
 ajoute une sortie JSON compacte pour les futurs paquets/outils de status, avec
 des champs Hyprland-style (`address`, `workspace`, `fullscreenClient`, `tags`,
 `windows`, `lastwindow`, `focusHistoryID`, `scope`, `role`, `pinnedAware`,
-`summary`, `safeAction`, `nodes`, `rect`) et le marqueur explicite
+`summary`, `safeAction`, `nodes`, `rect`, `parserSummary`, `trace`) et le marqueur explicite
 `hyprlandStyleFacade=true`.
 `desktop rule-matches` et `desktop hyprctl rulematches` lisent
 `/system/desktop-rules.conf` et indiquent quelles regles `windowrulev2`

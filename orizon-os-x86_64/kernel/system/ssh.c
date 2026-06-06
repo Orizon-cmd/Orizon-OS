@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate and layouttree as VM-safe Hyprland-style diagnostics\r\n");
+               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors and configtrace as VM-safe Hyprland-style diagnostics\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3828,10 +3828,18 @@ static void ssh_shell_print_desktop(const char *args) {
     } else if (ssh_shell_command_is(hypr, "splash")) {
       gui_desktop_format_splash(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "configerrors")) {
-      orizon_desktop_format_config_errors(out, sizeof(out));
+      if (json) {
+        orizon_desktop_format_config_errors_json(out, sizeof(out));
+      } else {
+        orizon_desktop_format_config_errors(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "configtrace") ||
                ssh_shell_command_is(hypr, "config-trace")) {
-      orizon_desktop_format_config_trace(out, sizeof(out));
+      if (json) {
+        orizon_desktop_format_config_trace_json(out, sizeof(out));
+      } else {
+        orizon_desktop_format_config_trace(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "rollinglog")) {
       orizon_desktop_format_rolling_log(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "getoption")) {
