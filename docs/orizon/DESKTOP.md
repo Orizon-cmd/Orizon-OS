@@ -88,6 +88,9 @@ desktop hyprctl -j monitors
 desktop hyprctl -j devices
 desktop hyprctl -j keymap
 desktop hyprctl -j cursorpos
+desktop hyprctl -j animations
+desktop hyprctl -j decorations
+desktop hyprctl -j render
 desktop hyprctl -j binds
 desktop hyprctl -j layers
 desktop hyprctl backend
@@ -532,19 +535,20 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
+[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
 `role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
 `parserSummary`, `trace`, `result`, `runtimeFile`, `singleFramebuffer`,
-`libinput`, `activeSubmap`, `manualWindowDrag`, `mouseBindsPreparedOnly`, and
+`libinput`, `activeSubmap`, `renderer`, `focusRing`, `transition`,
+`renderProfile`, `manualWindowDrag`, `mouseBindsPreparedOnly`, and
 `waybarActive`, but every object also carries
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
 not upstream Wayland/wlroots Hyprland. The config JSON diagnostics are
@@ -666,6 +670,9 @@ desktop hyprctl -j monitors emits the single framebuffer monitor map
 desktop hyprctl -j devices emits VM-safe input backend summaries
 desktop hyprctl -j keymap emits keyboard layout/submap state
 desktop hyprctl -j cursorpos emits pointer position/buttons
+desktop hyprctl -j animations emits software transition/curve state
+desktop hyprctl -j decorations emits focus ring/border/shadow state
+desktop hyprctl -j render emits framebuffer renderer/protocol boundaries
 desktop hyprctl -j binds emits bind counts and prepared-only bindm status
 desktop hyprctl -j layers emits the framebuffer layer graph without Waybar
 ```

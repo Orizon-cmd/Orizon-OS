@@ -8904,6 +8904,59 @@ void gui_desktop_format_animations(char *out, size_t out_size) {
            (unsigned long long)desktop_render_serial);
 }
 
+void gui_desktop_format_animations_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  snprintf(line, sizeof(line),
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"command\":\"animations\",\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+           "\"wlroots\":false,\"manualDrag\":false,\"enabled\":%s,"
+           "\"source\":",
+           desktop_settings.animations_enabled ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_SETTINGS_PATH);
+  snprintf(line, sizeof(line),
+           ",\"runtime\":{\"focusRing\":%s,"
+           "\"workspaceTransition\":true,\"layoutTransition\":true,"
+           "\"tickBudget\":%d,\"curve\":",
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           desktop_animation_tick_budget());
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.animation_curve);
+  desktop_json_append_raw(out, out_size, &used, ",\"profile\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.render_profile);
+  desktop_json_append_raw(out, out_size, &used, "},\"transition\":{\"reason\":");
+  desktop_json_append_string(out, out_size, &used, desktop_transition_reason);
+  snprintf(line, sizeof(line),
+           ",\"from\":%d,\"to\":%d,\"ticksRemaining\":%d,"
+           "\"progress\":%d,\"renderSerial\":%llu},"
+           "\"curves\":[{\"name\":\"orizon-pop\",\"prepared\":true,"
+           "\"bezier\":\"0.16,1,0.3,1\"},"
+           "{\"name\":\"orizon-slide\",\"prepared\":true,"
+           "\"bezier\":\"0.2,0.8,0.2,1\"}],"
+           "\"rules\":[{\"target\":\"windows\",\"enabled\":true,"
+           "\"style\":\"focus-glow+shadow\",\"renderer\":\"software\"},"
+           "{\"target\":\"workspaces\",\"enabled\":true,"
+           "\"style\":\"slide-indicator\",\"renderer\":\"software\"},"
+           "{\"target\":\"layers\",\"enabled\":true,"
+           "\"style\":\"fade-indicator\",\"renderer\":\"software\"}],"
+           "\"limits\":[\"software framebuffer animation hints only\","
+           "\"no wlroots animation graph yet\",\"no manual window drag\"]}\n",
+           desktop_transition_from_workspace, desktop_transition_to_workspace,
+           desktop_animation_ticks_remaining,
+           desktop_transition_progress_percent(),
+           (unsigned long long)desktop_render_serial);
+  desktop_json_append_raw(out, out_size, &used, line);
+}
+
 void gui_desktop_format_decorations(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -8924,6 +8977,34 @@ void gui_desktop_format_decorations(char *out, size_t out_size) {
            desktop_settings.shadows_enabled ? "true" : "false",
            desktop_settings.shadow_range,
            desktop_settings.shadows_enabled ? "enabled" : "disabled");
+}
+
+void gui_desktop_format_decorations_json(char *out, size_t out_size) {
+  if (!out || out_size == 0) {
+    return;
+  }
+  snprintf(out, out_size,
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"command\":\"decorations\",\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+           "\"wlroots\":false,\"manualDrag\":false,"
+           "\"border\":{\"size\":%d,\"activeColor\":\"accent\","
+           "\"inactiveColor\":\"edge\"},"
+           "\"focusRing\":{\"enabled\":%s,\"renderer\":\"software-glow\","
+           "\"follows\":\"activewindow\"},"
+           "\"rounding\":{\"configured\":%d,\"renderer\":\"corner-hints\","
+           "\"trueRounded\":false},"
+           "\"shadows\":{\"enabled\":%s,\"range\":%d,"
+           "\"renderer\":\"software\"},"
+           "\"blur\":{\"enabled\":false,\"prepared\":false},"
+           "\"windowMoving\":{\"manualDrag\":false,\"tiledDispatch\":true},"
+           "\"limits\":[\"software framebuffer decorations only\","
+           "\"no real blur pass yet\",\"no floating scene graph\"]}\n",
+           desktop_settings.border_size,
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           desktop_settings.rounding,
+           desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_settings.shadow_range);
 }
 
 void gui_desktop_format_render(char *out, size_t out_size) {
@@ -8967,6 +9048,76 @@ void gui_desktop_format_render(char *out, size_t out_size) {
            (unsigned long long)desktop_render_serial);
 }
 
+void gui_desktop_format_render_json(char *out, size_t out_size) {
+  color_t accent = desktop_theme_accent();
+  size_t used = 0;
+  char line[512];
+  uint32_t active_address = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  if (desktop_focused_client_id > 0) {
+    active_address = DESKTOP_CLIENT_ADDRESS_BASE +
+                     ((uint32_t)desktop_focused_client_id * 0x100u);
+  }
+  out[0] = '\0';
+  snprintf(line, sizeof(line),
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"command\":\"render\",\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"renderer\":\"software\","
+           "\"wayland\":false,\"wlroots\":false,\"xdgShell\":false,"
+           "\"layerShell\":\"prepared-only\",\"manualDrag\":false,"
+           "\"scale\":%d,\"theme\":",
+           ui_scale);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_session.theme);
+  desktop_json_append_raw(out, out_size, &used, ",\"wallpaper\":");
+  desktop_json_append_string(out, out_size, &used, desktop_session.wallpaper);
+  desktop_json_append_raw(out, out_size, &used, ",\"renderProfile\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.render_profile);
+  snprintf(line, sizeof(line),
+           ",\"accent\":\"#%06x\","
+           "\"focusRing\":{\"enabled\":%s,\"activewindow\":\"0x%x\","
+           "\"style\":\"hyprland-like-glow\"},"
+           "\"shadows\":{\"enabled\":%s,\"range\":%d,"
+           "\"renderer\":\"software\"},"
+           "\"rounding\":{\"configured\":%d,\"renderer\":\"corner-hints\","
+           "\"trueRounded\":false},"
+           "\"transitions\":{\"enabled\":%s,\"curve\":",
+           accent & 0xffffff,
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           active_address,
+           desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_settings.shadow_range, desktop_settings.rounding,
+           desktop_settings.animations_enabled ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.animation_curve);
+  snprintf(line, sizeof(line),
+           ",\"budget\":%d,\"reason\":",
+           desktop_animation_tick_budget());
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_transition_reason);
+  snprintf(line, sizeof(line),
+           ",\"from\":%d,\"to\":%d,\"ticks\":%d,\"progress\":%d},"
+           "\"renderSerial\":%llu,\"backendMap\":",
+           desktop_transition_from_workspace, desktop_transition_to_workspace,
+           desktop_animation_ticks_remaining,
+           desktop_transition_progress_percent(),
+           (unsigned long long)desktop_render_serial);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_PROTOCOL_PATH);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"VM-safe software framebuffer compositor\","
+      "\"not upstream Wayland/wlroots Hyprland\","
+      "\"no floating scene graph or manual window drag\"]}\n");
+}
+
 void gui_desktop_format_descriptions(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -8977,7 +9128,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
+           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"

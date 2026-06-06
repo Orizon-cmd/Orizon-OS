@@ -206,6 +206,9 @@ desktop hyprctl -j monitors
 desktop hyprctl -j devices
 desktop hyprctl -j keymap
 desktop hyprctl -j cursorpos
+desktop hyprctl -j animations
+desktop hyprctl -j decorations
+desktop hyprctl -j render
 desktop hyprctl -j binds
 desktop hyprctl -j layers
 desktop dispatch togglesplit
@@ -262,7 +265,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.71.0` because it includes policy/config files, the persisted session
+`0.72.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
@@ -280,7 +283,7 @@ tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`/
 `focushistory`/`workspacestack`/`clientmodel`/`rulematches`/`layoutstate`/
-`layouttree`/`monitors`/`devices`/`keymap`/`cursorpos`/`configerrors`/`configtrace`/`getoption`/`keyword`/`reload`/
+`layouttree`/`monitors`/`devices`/`keymap`/`cursorpos`/`animations`/`decorations`/`render`/`configerrors`/`configtrace`/`getoption`/`keyword`/`reload`/
 `binds`/`layers`,
 focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 VM-safe monitor dispatch aliases `focusmonitor`,
@@ -294,7 +297,14 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.71.0` extends the JSON diagnostics layer with
+the launcher. Version `0.72.0` extends the JSON diagnostics layer with
+`desktop hyprctl -j animations`, `desktop hyprctl -j decorations`, and
+`desktop hyprctl -j render`, including software framebuffer animation state,
+focus ring/border/shadow state, renderer/profile/protocol boundaries, and
+explicit `manualDrag=false` / `wayland=false` / `wlroots=false` boundaries for
+VM-safe tooling without enabling a taskbar, Waybar, floating windows, free
+mouse drag, upstream Wayland/wlroots Hyprland behavior, or physical hardware
+validation. Version `0.71.0` extends the JSON diagnostics layer with
 `desktop hyprctl -j devices`, `desktop hyprctl -j keymap`, and
 `desktop hyprctl -j cursorpos`, including keyboard layout/submap state,
 pointer coordinates/buttons, input backend summaries, and explicit
@@ -480,7 +490,8 @@ and `rulematches`; version `0.66.0` adds `layoutstate` and `layouttree`;
 version `0.67.0` adds `configerrors` and `configtrace`; version `0.68.0`
 adds `getoption`, `keyword`, and `reload`; version `0.69.0` adds `binds` and
 `layers`; version `0.70.0` adds `monitors`; version `0.71.0` adds
-`devices`, `keymap`, and `cursorpos`.
+`devices`, `keymap`, and `cursorpos`; version `0.72.0` adds `animations`,
+`decorations`, and `render`.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.

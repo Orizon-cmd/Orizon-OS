@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.72.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j animations`,
+  `desktop hyprctl -j decorations`, and `desktop hyprctl -j render`. The
+  VM-safe output now exposes software framebuffer animation/decorations/render
+  state, workspace transition progress, focus ring, shadows, rounding,
+  render profile, and explicit `manualDrag=false`/`wayland=false`/
+  `wlroots=false` boundaries without enabling Waybar, a Windows-like bar/start
+  menu, floating windows, free mouse drag, upstream Wayland/wlroots Hyprland
+  behavior, or physical hardware validation.
 - Added desktop package version `0.71.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j devices`,
   `desktop hyprctl -j keymap`, and `desktop hyprctl -j cursorpos`. The VM-safe

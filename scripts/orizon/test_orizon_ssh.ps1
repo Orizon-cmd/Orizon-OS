@@ -147,6 +147,9 @@ $commands = @(
   "desktop hyprctl -j devices",
   "desktop hyprctl -j keymap",
   "desktop hyprctl -j cursorpos",
+  "desktop hyprctl -j animations",
+  "desktop hyprctl -j decorations",
+  "desktop hyprctl -j render",
   "desktop hyprctl -j configerrors",
   "desktop hyprctl -j configtrace",
   "desktop hyprctl workspacestack",
@@ -740,6 +743,15 @@ run_cmd() {
       ;;
     "desktop hyprctl -j cursorpos")
       grep -q '"command":"cursorpos"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" && grep -q '"profile":' "`$OUT" || { echo "missing hyprctl json cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j animations")
+      grep -q '"command":"animations"' "`$OUT" && grep -q '"workspaceTransition":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j decorations")
+      grep -q '"command":"decorations"' "`$OUT" && grep -q '"focusRing":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j render")
+      grep -q '"command":"render"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configerrors")
       grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

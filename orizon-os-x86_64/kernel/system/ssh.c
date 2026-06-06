@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3819,12 +3819,24 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_format_layout_tree(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "animations")) {
-      gui_desktop_format_animations(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_animations_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_animations(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "decorations")) {
-      gui_desktop_format_decorations(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_decorations_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_decorations(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "render") ||
                ssh_shell_command_is(hypr, "rendering")) {
-      gui_desktop_format_render(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_render_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_render(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "descriptions")) {
       gui_desktop_format_descriptions(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "instances")) {

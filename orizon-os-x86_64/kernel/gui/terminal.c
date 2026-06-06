@@ -4257,7 +4257,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4371,12 +4371,24 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_layout_tree(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "animations")) {
-      gui_desktop_format_animations(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_animations_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_animations(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "decorations")) {
-      gui_desktop_format_decorations(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_decorations_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_decorations(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "render") ||
                term_command_is(hypr, "rendering")) {
-      gui_desktop_format_render(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_render_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_render(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "descriptions")) {
       gui_desktop_format_descriptions(report, sizeof(report));
     } else if (term_command_is(hypr, "instances")) {
