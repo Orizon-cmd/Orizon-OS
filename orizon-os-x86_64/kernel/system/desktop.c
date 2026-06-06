@@ -3890,6 +3890,44 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              : -1;
 }
 
+int orizon_desktop_apply_hypr_config_json(char *status, size_t status_size) {
+  char text[4096];
+  size_t used = 0;
+  int rc;
+
+  if (!status || status_size == 0) {
+    return -1;
+  }
+  status[0] = '\0';
+  text[0] = '\0';
+  rc = orizon_desktop_apply_hypr_config(text, sizeof(text));
+  desktop_json_append_raw(
+      status, status_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"reload\",\"ok\":");
+  desktop_json_append_raw(status, status_size, &used,
+                          rc == 0 ? "true" : "false");
+  desktop_json_append_raw(
+      status, status_size, &used,
+      ",\"status\":\"");
+  desktop_json_append_raw(status, status_size, &used,
+                          rc == 0 ? "applied" : "failed");
+  desktop_json_append_raw(
+      status, status_size, &used,
+      "\",\"manualDrag\":false,\"floatingSceneGraph\":false,"
+      "\"taskbar\":false,\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"source\":");
+  desktop_json_append_string(status, status_size, &used,
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_json_append_raw(status, status_size, &used, ",\"result\":");
+  desktop_json_append_string(status, status_size, &used, text);
+  desktop_json_append_raw(
+      status, status_size, &used,
+      ",\"limits\":[\"reload applies Orizon-supported config only\","
+      "\"no upstream Wayland/wlroots yet\",\"no manual window drag\"]}\n");
+  return rc;
+}
+
 int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
                                       char *status, size_t status_size) {
   orizon_desktop_session_t session;
@@ -3972,6 +4010,59 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
           (summary.supported_settings > 0 || runtime_path))
              ? 0
              : 1;
+}
+
+int orizon_desktop_apply_hypr_keyword_json(const char *key, const char *value,
+                                           char *status, size_t status_size) {
+  char text[2048];
+  size_t used = 0;
+  int rc;
+  const char *runtime_path;
+
+  if (!status || status_size == 0) {
+    return -1;
+  }
+  status[0] = '\0';
+  text[0] = '\0';
+  runtime_path = key ? desktop_hypr_runtime_path_for_key(key) : NULL;
+  rc = orizon_desktop_apply_hypr_keyword(key, value, text, sizeof(text));
+  desktop_json_append_raw(
+      status, status_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"keyword\",\"ok\":");
+  desktop_json_append_raw(status, status_size, &used,
+                          rc == 0 ? "true" : "false");
+  desktop_json_append_raw(status, status_size, &used, ",\"status\":");
+  desktop_json_append_string(status, status_size, &used,
+                             rc == 0 ? "applied" : (rc > 0 ? "warn"
+                                                           : "invalid"));
+  desktop_json_append_raw(status, status_size, &used, ",\"key\":");
+  desktop_json_append_string(status, status_size, &used, key ? key : "");
+  desktop_json_append_raw(status, status_size, &used, ",\"value\":");
+  desktop_json_append_string(status, status_size, &used, value ? value : "");
+  desktop_json_append_raw(status, status_size, &used,
+                          ",\"supportedSetting\":");
+  desktop_json_append_raw(
+      status, status_size, &used,
+      key && desktop_hypr_is_supported_setting_key(key) ? "true" : "false");
+  desktop_json_append_raw(status, status_size, &used,
+                          ",\"runtimeHint\":");
+  desktop_json_append_raw(status, status_size, &used,
+                          runtime_path ? "true" : "false");
+  desktop_json_append_raw(status, status_size, &used, ",\"runtimeFile\":");
+  desktop_json_append_string(status, status_size, &used,
+                             runtime_path ? runtime_path : "none");
+  desktop_json_append_raw(
+      status, status_size, &used,
+      ",\"manualDrag\":false,\"floatingSceneGraph\":false,"
+      "\"taskbar\":false,\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"result\":");
+  desktop_json_append_string(status, status_size, &used, text);
+  desktop_json_append_raw(
+      status, status_size, &used,
+      ",\"limits\":[\"keyword maps to Orizon-supported session/settings or runtime hints\","
+      "\"bindm remains prepared-only and does not enable manual window drag\"]}\n");
+  return rc;
 }
 
 int orizon_desktop_set_enabled(int enabled, char *status, size_t status_size) {
@@ -4634,82 +4725,105 @@ void orizon_desktop_format_monitor_hints(char *out, size_t out_size) {
                  "add: desktop keyword monitor <name,resolution,position,scale>\n");
 }
 
-void orizon_desktop_format_hypr_option(const char *key, char *out,
-                                       size_t out_size) {
-  orizon_desktop_session_t session;
-  orizon_desktop_settings_t settings;
-  const char *known = "yes";
-  const char *kind = "int";
+typedef struct {
+  const char *known;
+  const char *kind;
   const char *runtime_path;
   char value[64];
+} desktop_hypr_option_view_t;
+
+static int desktop_hypr_resolve_option(const char *key,
+                                       desktop_hypr_option_view_t *view) {
+  orizon_desktop_session_t session;
+  orizon_desktop_settings_t settings;
+  const char *runtime_path;
+
+  if (!key || !key[0] || !view || !desktop_hypr_key_safe(key)) {
+    return -1;
+  }
+  view->known = "yes";
+  view->kind = "int";
+  view->runtime_path = NULL;
+  view->value[0] = '\0';
+  orizon_desktop_load_session(&session);
+  orizon_desktop_load_settings(&settings);
+  if (strcmp(key, "general:layout") == 0) {
+    view->kind = "str";
+    snprintf(view->value, sizeof(view->value), "%s", session.layout);
+  } else if (strcmp(key, "general:gaps_in") == 0) {
+    snprintf(view->value, sizeof(view->value), "%d", settings.gaps_in);
+  } else if (strcmp(key, "general:gaps_out") == 0) {
+    snprintf(view->value, sizeof(view->value), "%d", settings.gaps_out);
+  } else if (strcmp(key, "general:border_size") == 0) {
+    snprintf(view->value, sizeof(view->value), "%d", settings.border_size);
+  } else if (strcmp(key, "decoration:rounding") == 0) {
+    snprintf(view->value, sizeof(view->value), "%d", settings.rounding);
+  } else if (strcmp(key, "decoration:shadow:enabled") == 0 ||
+             strcmp(key, "decoration:drop_shadow") == 0) {
+    view->kind = "bool";
+    snprintf(view->value, sizeof(view->value), "%s",
+             settings.shadows_enabled ? "true" : "false");
+  } else if (strcmp(key, "decoration:shadow:range") == 0) {
+    snprintf(view->value, sizeof(view->value), "%d",
+             settings.shadow_range);
+  } else if (strcmp(key, "animations:enabled") == 0) {
+    view->kind = "bool";
+    snprintf(view->value, sizeof(view->value), "%s",
+             settings.animations_enabled ? "true" : "false");
+  } else if (strcmp(key, "animations:tick_budget") == 0) {
+    snprintf(view->value, sizeof(view->value), "%d",
+             settings.animation_ticks);
+  } else if (strcmp(key, "animations:curve") == 0) {
+    view->kind = "str";
+    snprintf(view->value, sizeof(view->value), "%s",
+             settings.animation_curve);
+  } else if (strcmp(key, "render:focus_ring") == 0) {
+    view->kind = "bool";
+    snprintf(view->value, sizeof(view->value), "%s",
+             settings.focus_ring_enabled ? "true" : "false");
+  } else if (strcmp(key, "render:profile") == 0) {
+    view->kind = "str";
+    snprintf(view->value, sizeof(view->value), "%s",
+             settings.render_profile);
+  } else if (strcmp(key, "input:kb_layout") == 0) {
+    view->kind = "str";
+    snprintf(view->value, sizeof(view->value), "%s",
+             settings.keyboard_layout);
+  } else if (strcmp(key, "input:follow_mouse") == 0) {
+    view->kind = "bool";
+    snprintf(view->value, sizeof(view->value), "%s",
+             session.focus_follows_mouse ? "true" : "false");
+  } else if ((runtime_path = desktop_hypr_runtime_path_for_key(key)) != NULL) {
+    const char *default_value;
+    view->kind = "runtime";
+    view->runtime_path = runtime_path;
+    if (desktop_hypr_runtime_get_value(runtime_path, key, view->value,
+                                       sizeof(view->value)) < 0) {
+      default_value = desktop_hypr_runtime_default_value(key);
+      snprintf(view->value, sizeof(view->value), "%s",
+               default_value ? default_value : "prepared-no-value-yet");
+    }
+  } else {
+    view->known = "no";
+    view->kind = "unknown";
+    snprintf(view->value, sizeof(view->value), "%s", "not-implemented");
+  }
+  return 0;
+}
+
+void orizon_desktop_format_hypr_option(const char *key, char *out,
+                                       size_t out_size) {
+  desktop_hypr_option_view_t view;
 
   if (!out || out_size == 0) {
     return;
   }
   out[0] = '\0';
-  if (!key || !key[0] || !desktop_hypr_key_safe(key)) {
+  if (desktop_hypr_resolve_option(key, &view) < 0) {
     snprintf(out, out_size,
              "hyprctl getoption: invalid key\n"
              "usage: desktop hyprctl getoption general:gaps_in\n");
     return;
-  }
-  orizon_desktop_load_session(&session);
-  orizon_desktop_load_settings(&settings);
-  value[0] = '\0';
-  if (strcmp(key, "general:layout") == 0) {
-    kind = "str";
-    snprintf(value, sizeof(value), "%s", session.layout);
-  } else if (strcmp(key, "general:gaps_in") == 0) {
-    snprintf(value, sizeof(value), "%d", settings.gaps_in);
-  } else if (strcmp(key, "general:gaps_out") == 0) {
-    snprintf(value, sizeof(value), "%d", settings.gaps_out);
-  } else if (strcmp(key, "general:border_size") == 0) {
-    snprintf(value, sizeof(value), "%d", settings.border_size);
-  } else if (strcmp(key, "decoration:rounding") == 0) {
-    snprintf(value, sizeof(value), "%d", settings.rounding);
-  } else if (strcmp(key, "decoration:shadow:enabled") == 0 ||
-             strcmp(key, "decoration:drop_shadow") == 0) {
-    kind = "bool";
-    snprintf(value, sizeof(value), "%s",
-             settings.shadows_enabled ? "true" : "false");
-  } else if (strcmp(key, "decoration:shadow:range") == 0) {
-    snprintf(value, sizeof(value), "%d", settings.shadow_range);
-  } else if (strcmp(key, "animations:enabled") == 0) {
-    kind = "bool";
-    snprintf(value, sizeof(value), "%s",
-             settings.animations_enabled ? "true" : "false");
-  } else if (strcmp(key, "animations:tick_budget") == 0) {
-    snprintf(value, sizeof(value), "%d", settings.animation_ticks);
-  } else if (strcmp(key, "animations:curve") == 0) {
-    kind = "str";
-    snprintf(value, sizeof(value), "%s", settings.animation_curve);
-  } else if (strcmp(key, "render:focus_ring") == 0) {
-    kind = "bool";
-    snprintf(value, sizeof(value), "%s",
-             settings.focus_ring_enabled ? "true" : "false");
-  } else if (strcmp(key, "render:profile") == 0) {
-    kind = "str";
-    snprintf(value, sizeof(value), "%s", settings.render_profile);
-  } else if (strcmp(key, "input:kb_layout") == 0) {
-    kind = "str";
-    snprintf(value, sizeof(value), "%s", settings.keyboard_layout);
-  } else if (strcmp(key, "input:follow_mouse") == 0) {
-    kind = "bool";
-    snprintf(value, sizeof(value), "%s",
-             session.focus_follows_mouse ? "true" : "false");
-  } else if ((runtime_path = desktop_hypr_runtime_path_for_key(key)) != NULL) {
-    const char *default_value;
-    kind = "runtime";
-    if (desktop_hypr_runtime_get_value(runtime_path, key, value,
-                                       sizeof(value)) < 0) {
-      default_value = desktop_hypr_runtime_default_value(key);
-      snprintf(value, sizeof(value), "%s",
-               default_value ? default_value : "prepared-no-value-yet");
-    }
-  } else {
-    known = "no";
-    kind = "unknown";
-    snprintf(value, sizeof(value), "%s", "not-implemented");
   }
 
   snprintf(out, out_size,
@@ -4720,11 +4834,54 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
            "source: Orizon desktop session/settings/runtime\n"
            "runtime-file: %s\n"
            "set: desktop keyword %s <value>\n",
-           key, known, kind, value,
-           strcmp(kind, "runtime") == 0
-               ? desktop_hypr_runtime_path_for_key(key)
-               : "none",
-           key);
+           key, view.known, view.kind, view.value,
+           view.runtime_path ? view.runtime_path : "none", key);
+}
+
+void orizon_desktop_format_hypr_option_json(const char *key, char *out,
+                                            size_t out_size) {
+  desktop_hypr_option_view_t view;
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"getoption\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"manualDrag\":false,"
+      "\"floatingSceneGraph\":false,\"taskbar\":false,\"ok\":");
+  if (desktop_hypr_resolve_option(key, &view) < 0) {
+    desktop_json_append_raw(out, out_size, &used,
+                            "false,\"error\":\"invalid key\",\"key\":");
+    desktop_json_append_string(out, out_size, &used, key ? key : "");
+    desktop_json_append_raw(out, out_size, &used, "}\n");
+    return;
+  }
+  desktop_json_append_raw(out, out_size, &used, "true,\"key\":");
+  desktop_json_append_string(out, out_size, &used, key);
+  desktop_json_append_raw(out, out_size, &used, ",\"known\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          strcmp(view.known, "yes") == 0 ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"type\":");
+  desktop_json_append_string(out, out_size, &used, view.kind);
+  desktop_json_append_raw(out, out_size, &used, ",\"value\":");
+  desktop_json_append_string(out, out_size, &used, view.value);
+  desktop_json_append_raw(out, out_size, &used, ",\"source\":");
+  desktop_json_append_string(
+      out, out_size, &used,
+      view.runtime_path ? "Orizon desktop runtime hint"
+                        : "Orizon desktop session/settings");
+  desktop_json_append_raw(out, out_size, &used, ",\"runtimeFile\":");
+  desktop_json_append_string(out, out_size, &used,
+                             view.runtime_path ? view.runtime_path : "none");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"setCommand\":\"desktop keyword <key> <value>\","
+      "\"limits\":[\"Orizon-supported subset or prepared runtime hint\","
+      "\"not upstream Hyprland getoption yet\"]}\n");
 }
 
 void orizon_desktop_format_session(char *out, size_t out_size) {
@@ -4773,9 +4930,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|clients|clientmodel|rulematches|workspacestack|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|layoutstate|animations|devices|cursorpos|splash|configerrors|rollinglog|getoption|keyword|dispatch\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|clients|clientmodel|rulematches|workspacestack|workspaces|activeworkspace|activewindow|monitors|binds|layers|layouts|layoutstate|layouttree|animations|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/configerrors/configtrace as VM-safe diagnostics\n");
+                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/configerrors/configtrace/getoption/keyword/reload as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,

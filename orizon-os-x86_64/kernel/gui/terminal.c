@@ -4257,7 +4257,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors and configtrace as VM-safe Hyprland-style diagnostics\n");
+                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors, configtrace, getoption, keyword and reload as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4399,6 +4399,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
       if (*key == '\0') {
         snprintf(report, sizeof(report),
                  "usage: desktop hyprctl getoption <hypr-key>\n");
+      } else if (json) {
+        orizon_desktop_format_hypr_option_json(key, report, sizeof(report));
       } else {
         orizon_desktop_format_hypr_option(key, report, sizeof(report));
       }
@@ -4415,17 +4417,31 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         value = term_skip_spaces(value);
       }
       if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
-        snprintf(report, sizeof(report),
-                 "usage: desktop hyprctl keyword <hypr-key> <value>\n");
+        if (json) {
+          orizon_desktop_apply_hypr_keyword_json("", "", report,
+                                                sizeof(report));
+        } else {
+          snprintf(report, sizeof(report),
+                   "usage: desktop hyprctl keyword <hypr-key> <value>\n");
+        }
       } else {
         memcpy(key_buf, key, key_len);
         key_buf[key_len] = '\0';
-        orizon_desktop_apply_hypr_keyword(key_buf, value, report,
-                                          sizeof(report));
+        if (json) {
+          orizon_desktop_apply_hypr_keyword_json(key_buf, value, report,
+                                                sizeof(report));
+        } else {
+          orizon_desktop_apply_hypr_keyword(key_buf, value, report,
+                                            sizeof(report));
+        }
         gui_desktop_reload_session();
       }
     } else if (term_command_is(hypr, "reload")) {
-      orizon_desktop_apply_hypr_config(report, sizeof(report));
+      if (json) {
+        orizon_desktop_apply_hypr_config_json(report, sizeof(report));
+      } else {
+        orizon_desktop_apply_hypr_config(report, sizeof(report));
+      }
       gui_desktop_reload_session();
     } else if (term_command_is(hypr, "dispatch")) {
       const char *dispatch = term_skip_spaces(hypr + 8);

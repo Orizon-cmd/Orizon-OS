@@ -164,12 +164,15 @@ $commands = @(
   "desktop hyprctl getoption env",
   "desktop hyprctl getoption workspace",
   "desktop hyprctl getoption general:gaps_in",
+  "desktop hyprctl -j getoption general:gaps_in",
   "desktop hyprctl keyword decoration:rounding 11",
+  "desktop hyprctl -j keyword decoration:rounding 11",
   "desktop hyprctl getoption decoration:rounding",
   "desktop hyprctl keyword decoration:shadow:range 22",
   "desktop hyprctl getoption decoration:shadow:range",
   "desktop hyprctl keyword animations:tick_budget 24",
   "desktop hyprctl getoption animations:tick_budget",
+  "desktop hyprctl -j reload",
   "desktop hyprctl binds",
   "desktop hyprctl layers",
   "desktop autostart",
@@ -735,6 +738,12 @@ run_cmd() {
     "desktop hyprctl getoption general:gaps_in")
       grep -q "option general:gaps_in" "`$OUT" && grep -q "value: 9" "`$OUT" || { echo "missing hyprctl getoption gaps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop hyprctl -j getoption general:gaps_in")
+      grep -q '"command":"getoption"' "`$OUT" && grep -q '"key":"general:gaps_in"' "`$OUT" && grep -q '"value":"9"' "`$OUT" || { echo "missing hyprctl json getoption gaps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j keyword decoration:rounding 11")
+      grep -q '"command":"keyword"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop hyprctl getoption decoration:rounding")
       grep -q "option decoration:rounding" "`$OUT" && grep -q "value: 11" "`$OUT" || { echo "missing hyprctl getoption rounding"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -755,6 +764,9 @@ run_cmd() {
       ;;
     "desktop hyprctl getoption workspace")
       grep -q "option workspace" "`$OUT" && grep -q "value: 1, default:true" "`$OUT" || { echo "missing hyprctl getoption workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j reload")
+      grep -q '"command":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl binds")
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

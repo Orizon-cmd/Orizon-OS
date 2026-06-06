@@ -576,6 +576,9 @@ def run_ssh_checks(
         ("desktop hyprctl getoption animations:tick_budget", "value: 24"),
         ("desktop hyprctl getoption decoration:blur:enabled", "value: false"),
         ("desktop hyprctl reload", "desktop config apply: applied"),
+        ("desktop hyprctl -j reload", '"command":"reload"'),
+        ("desktop hyprctl -j reload", '"ok":true'),
+        ("desktop hyprctl -j reload", '"manualDrag":false'),
         ("desktop hyprctl version", "Orizon desktop hyprctl version"),
         ("desktop hyprctl systeminfo", "Orizon desktop systeminfo"),
         ("desktop hyprctl backend", "current-backend: framebuffer-vm"),
@@ -629,7 +632,13 @@ def run_ssh_checks(
         ("desktop hyprctl configtrace", "PREPARE"),
         ("desktop hyprctl rollinglog", "Hyprland rolling log"),
         ("desktop hyprctl getoption general:gaps_in", "value: 9"),
+        ("desktop hyprctl -j getoption general:gaps_in", '"command":"getoption"'),
+        ("desktop hyprctl -j getoption general:gaps_in", '"key":"general:gaps_in"'),
+        ("desktop hyprctl -j getoption general:gaps_in", '"value":"9"'),
         ("desktop hyprctl keyword decoration:rounding 11", "desktop keyword: applied"),
+        ("desktop hyprctl -j keyword decoration:rounding 11", '"command":"keyword"'),
+        ("desktop hyprctl -j keyword decoration:rounding 11", '"ok":true'),
+        ("desktop hyprctl -j keyword decoration:rounding 11", '"manualDrag":false'),
         ("desktop hyprctl getoption decoration:rounding", "value: 11"),
         ("desktop hyprctl binds", "/system/desktop-binds.conf"),
         ("desktop hyprctl binds", "focusmwindow"),
@@ -822,7 +831,7 @@ def run_ssh_checks(
         ("pkg search orizon-terminal", "pkg install orizon-terminal"),
         ("pkg search waybar", "orizon-waybar"),
         ("pkg info orizon-desktop-hypr", "state available optional"),
-        ("pkg info orizon-desktop-hypr", "version 0.67.0"),
+        ("pkg info orizon-desktop-hypr", "version 0.68.0"),
         ("desktop package", "orizon-desktop-hypr.opkg"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "focusmwindow"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "dispatch-focusmwindow-command"),
@@ -839,6 +848,9 @@ def run_ssh_checks(
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-layouttree-command"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-configerrors-command"),
         ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-configtrace-command"),
+        ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-getoption-command"),
+        ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-keyword-command"),
+        ("cat /workspace/packages/orizon-desktop-hypr.opkg", "hyprctl-json-reload-command"),
         ("pkg simulate /workspace/packages/orizon-desktop-hypr.opkg", "dry-run"),
         ("pkg verify /workspace/packages/orizon-desktop-hypr.opkg", "package verify: OK"),
         ("pkg install orizon-desktop-hypr", "pkg"),
@@ -942,13 +954,16 @@ rm -f "$ASKPASS" "$PASSFILE" "$OUT"
 
 def run_ssh_one(client, ip: str, password: str, command: str, needle: str, timeout: int) -> str:
     encoded = base64.b64encode(password.encode("utf-8")).decode("ascii")
+    encoded_needle = base64.b64encode(needle.encode("utf-8")).decode("ascii")
     remote_script = f"""#!/usr/bin/env bash
 set -u
 ASKPASS=/tmp/orizon_one_askpass.sh
 PASSFILE=/tmp/orizon_one_password.txt
 KNOWN=/tmp/orizon_one_known_hosts
 OUT=/tmp/orizon_one_output.txt
+NEEDLE=/tmp/orizon_one_needle.txt
 printf '%s' '{encoded}' | base64 -d > "$PASSFILE"
+printf '%s' '{encoded_needle}' | base64 -d > "$NEEDLE"
 cat > "$ASKPASS" <<'EOS'
 #!/bin/sh
 cat /tmp/orizon_one_password.txt
@@ -965,12 +980,12 @@ DISPLAY=none SSH_ASKPASS="$ASKPASS" SSH_ASKPASS_REQUIRE=force timeout {timeout}s
   orizon@{ip} "{command}" > "$OUT" 2>&1
 rc=$?
 cat "$OUT"
-if [ "$rc" -ne 0 ] || ! grep -Fqi "{needle}" "$OUT"; then
-  echo "single ssh command failed rc=$rc expected={needle}" >&2
-  rm -f "$ASKPASS" "$PASSFILE" "$OUT"
+if [ "$rc" -ne 0 ] || ! grep -Fqi -f "$NEEDLE" "$OUT"; then
+  echo "single ssh command failed rc=$rc expected=$(cat "$NEEDLE")" >&2
+  rm -f "$ASKPASS" "$PASSFILE" "$OUT" "$NEEDLE"
   exit 1
 fi
-rm -f "$ASKPASS" "$PASSFILE" "$OUT"
+rm -f "$ASKPASS" "$PASSFILE" "$OUT" "$NEEDLE"
 """
     remote = "/tmp/orizon_matrix_ssh_one.sh"
     sftp = client.open_sftp()

@@ -73,7 +73,7 @@
   keyword/getoption/reload runtime inspection, read-only config trace
   diagnostics, split/master ratio controls plus layout reset/preselect recovery, active F9/F10/F11 keyboard submaps,
   explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
-  compact VM-safe `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace` JSON for future tooling,
+  compact VM-safe `desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace|getoption|keyword|reload` JSON for future tooling,
   software focus ring, persistent shadow range/render profile/animation
   tick budget controls, backend/protocol architecture truth maps, active
   layout-tree and workspace-stack diagnostics with client roles/rectangles/master/focus/urgent order/manual-drag boundary,

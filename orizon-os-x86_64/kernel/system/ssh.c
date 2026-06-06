@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors and configtrace as VM-safe Hyprland-style diagnostics\r\n");
+               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, configerrors, configtrace, getoption, keyword and reload as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3847,6 +3847,8 @@ static void ssh_shell_print_desktop(const char *args) {
       if (*key == '\0') {
         snprintf(out, sizeof(out),
                  "usage: desktop hyprctl getoption <hypr-key>\r\n");
+      } else if (json) {
+        orizon_desktop_format_hypr_option_json(key, out, sizeof(out));
       } else {
         orizon_desktop_format_hypr_option(key, out, sizeof(out));
       }
@@ -3863,16 +3865,29 @@ static void ssh_shell_print_desktop(const char *args) {
         value = ssh_shell_skip_spaces(value);
       }
       if (key_len == 0 || key_len >= sizeof(key_buf) || *value == '\0') {
-        snprintf(out, sizeof(out),
-                 "usage: desktop hyprctl keyword <hypr-key> <value>\r\n");
+        if (json) {
+          orizon_desktop_apply_hypr_keyword_json("", "", out, sizeof(out));
+        } else {
+          snprintf(out, sizeof(out),
+                   "usage: desktop hyprctl keyword <hypr-key> <value>\r\n");
+        }
       } else {
         memcpy(key_buf, key, key_len);
         key_buf[key_len] = '\0';
-        orizon_desktop_apply_hypr_keyword(key_buf, value, out, sizeof(out));
+        if (json) {
+          orizon_desktop_apply_hypr_keyword_json(key_buf, value, out,
+                                                sizeof(out));
+        } else {
+          orizon_desktop_apply_hypr_keyword(key_buf, value, out, sizeof(out));
+        }
         gui_desktop_reload_session();
       }
     } else if (ssh_shell_command_is(hypr, "reload")) {
-      orizon_desktop_apply_hypr_config(out, sizeof(out));
+      if (json) {
+        orizon_desktop_apply_hypr_config_json(out, sizeof(out));
+      } else {
+        orizon_desktop_apply_hypr_config(out, sizeof(out));
+      }
       gui_desktop_reload_session();
     } else if (ssh_shell_command_is(hypr, "dispatch")) {
       const char *dispatch = ssh_shell_skip_spaces(hypr + 8);

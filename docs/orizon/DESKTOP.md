@@ -532,16 +532,18 @@ from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace`
+`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|configerrors|configtrace|getoption|keyword|reload`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
 `role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
-`parserSummary`, and `trace`, but every object also carries
+`parserSummary`, `trace`, `result`, and `runtimeFile`, but every object also carries
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
 not upstream Wayland/wlroots Hyprland. The config JSON diagnostics are
 read-only: they explain parser errors and apply/prepare/ignore decisions
-without changing the session.
+without changing the session. JSON `getoption` is read-only, while JSON
+`keyword` and `reload` are explicit VM-safe actions with `manualDrag=false`,
+`floatingSceneGraph=false`, and `taskbar=false` boundaries.
 
 `desktop apps` and `desktop app <id>` now form the first native-app control
 surface for the desktop. The terminal/settings/logs/packages/update entries
@@ -644,11 +646,14 @@ desktop layout-tree shows the active tiling tree and rectangles
 desktop config trace explains apply/prepare/ignore parser decisions
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
+desktop hyprctl -j getoption <key> emits the mapped value as VM-safe JSON
+desktop hyprctl -j keyword <key> <value> applies one supported key as JSON
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
 desktop hyprctl layouttree mirrors desktop layout-tree
 desktop hyprctl configtrace mirrors desktop config trace
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
+desktop hyprctl -j reload reapplies the config and emits VM-safe JSON status
 ```
 
 ## Current Limits

@@ -255,7 +255,9 @@ desktop hyprctl -j configerrors
 desktop hyprctl -j configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
+desktop hyprctl -j getoption general:gaps_in
 desktop hyprctl keyword decoration:rounding 11
+desktop hyprctl -j keyword decoration:rounding 11
 desktop hyprctl keyword decoration:shadow:range 22
 desktop hyprctl getoption decoration:shadow:range
 desktop hyprctl keyword animations:tick_budget 24
@@ -267,6 +269,7 @@ desktop hyprctl getoption layerrule
 desktop hyprctl keyword input:repeat_rate 40
 desktop hyprctl getoption input:repeat_rate
 desktop hyprctl reload
+desktop hyprctl -j reload
 desktop dispatch fullscreen
 desktop dispatch fullscreen off
 desktop dispatch fullscreenstate 1
