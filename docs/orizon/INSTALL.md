@@ -243,6 +243,7 @@ desktop hyprctl -j descriptions
 desktop hyprctl -j instances
 desktop hyprctl -j submap
 desktop hyprctl -j splash
+desktop hyprctl -j session
 desktop hyprctl -j rollinglog
 desktop hyprctl -j binds
 desktop hyprctl -j layers

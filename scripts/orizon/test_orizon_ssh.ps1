@@ -159,6 +159,8 @@ $commands = @(
   "desktop hyprctl -j instances",
   "desktop hyprctl -j submap",
   "desktop hyprctl -j splash",
+  "desktop hyprctl -j session",
+  "desktop hyprctl -j session reload",
   "desktop hyprctl -j rollinglog",
   "desktop hyprctl -j configerrors",
   "desktop hyprctl -j configtrace",
@@ -793,6 +795,12 @@ run_cmd() {
       ;;
     "desktop hyprctl -j splash")
       grep -q '"command":"splash"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json splash"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j session")
+      grep -q '"command":"session"' "`$OUT" && grep -q '"desiredState":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j session reload")
+      grep -q '"command":"session"' "`$OUT" && grep -q '"action":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"sessionLogTail":' "`$OUT" || { echo "missing hyprctl json session reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j rollinglog")
       grep -q '"command":"rollinglog"' "`$OUT" && grep -q '"paths":{"events":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

@@ -28,7 +28,7 @@
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.75.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.76.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"
@@ -99,6 +99,8 @@ int orizon_desktop_apply_hypr_keyword_json(const char *key, const char *value,
                                            char *status, size_t status_size);
 int orizon_desktop_session_manager(const char *action, char *status,
                                    size_t status_size);
+int orizon_desktop_session_manager_json(const char *action, char *status,
+                                        size_t status_size);
 void orizon_desktop_format_status(char *out, size_t out_size);
 void orizon_desktop_format_config(char *out, size_t out_size);
 void orizon_desktop_format_config_doctor(char *out, size_t out_size);
@@ -115,6 +117,7 @@ void orizon_desktop_format_rules(char *out, size_t out_size);
 void orizon_desktop_format_monitor_hints(char *out, size_t out_size);
 void orizon_desktop_format_session(char *out, size_t out_size);
 void orizon_desktop_format_session_state(char *out, size_t out_size);
+void orizon_desktop_format_session_state_json(char *out, size_t out_size);
 void orizon_desktop_format_session_rescue(char *out, size_t out_size);
 void orizon_desktop_format_settings(char *out, size_t out_size);
 void orizon_desktop_format_input(char *out, size_t out_size);

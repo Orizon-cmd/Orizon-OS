@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.76.0` with structured Hyprland-style JSON
+  session diagnostics/actions for `desktop hyprctl -j session
+  [status|start|stop|restart|reload|recover|rescue]`. The VM-safe response
+  exposes desired/runtime state, session health, counters, state/log paths,
+  a session log tail, and explicit `manualDrag=false`, `wayland=false`,
+  `wlroots=false`, and `hardwareValidation=false` limits without adding
+  Waybar, a Windows-like bar/start menu, floating windows, free mouse drag,
+  upstream Hyprland IPC compatibility, or physical hardware validation.
 - Added desktop package version `0.75.0` with structured Hyprland-style JSON
   action output for `desktop hyprctl -j dispatch <dispatcher> [args]`. The
   VM-safe response wraps the existing tiled dispatcher engine with

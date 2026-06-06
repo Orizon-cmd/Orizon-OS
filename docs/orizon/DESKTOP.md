@@ -100,6 +100,7 @@ desktop hyprctl -j descriptions
 desktop hyprctl -j instances
 desktop hyprctl -j submap
 desktop hyprctl -j splash
+desktop hyprctl -j session
 desktop hyprctl -j rollinglog
 desktop hyprctl -j binds
 desktop hyprctl -j layers
@@ -368,7 +369,9 @@ writes `/system/desktop-state.conf`, appends `/logs/desktop-session.log`,
 records live/install boot mode, desired/runtime/policy health, lifecycle
 counters, recovery commands, terminal autostart, and never enables free-drag
 window moving. `desktop state` dumps the state and session log over console or
-SSH. `desktop rescue` is read-only: it prints a recovery checklist, file
+SSH, and `desktop hyprctl -j session
+[status|start|stop|restart|reload|recover|rescue]` exposes the same manager as
+VM-safe JSON diagnostics/actions. `desktop rescue` is read-only: it prints a recovery checklist, file
 health, and the safe next commands before `desktop recover` rewrites anything.
 
 `desktop settings` is the system-wide settings layer for the desktop
@@ -545,19 +548,20 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
+[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
 `role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
 `parserSummary`, `trace`, `result`, `dispatcher`, `args`, `runtimeFile`, `singleFramebuffer`,
-`libinput`, `activeSubmap`, `currentBackend`, `futureBackend`, `protocol`,
+`libinput`, `activeSubmap`, `desiredState`, `runtimeState`,
+`sessionLogTail`, `currentBackend`, `futureBackend`, `protocol`,
 `renderer`, `focusRing`, `transition`, `renderProfile`, `manualWindowDrag`,
 `mouseBindsPreparedOnly`, and `waybarActive`, but every object also carries
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
@@ -671,6 +675,7 @@ desktop hyprctl getoption <key> inspects the current mapped value
 desktop hyprctl -j getoption <key> emits the mapped value as VM-safe JSON
 desktop hyprctl -j keyword <key> <value> applies one supported key as JSON
 desktop hyprctl -j dispatch <dispatcher> [args] emits tiled dispatcher action JSON
+desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue] emits session manager JSON
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
 desktop hyprctl -j version emits package/compositor truth-map metadata
@@ -693,6 +698,7 @@ desktop hyprctl -j descriptions emits command/dispatcher surfaces
 desktop hyprctl -j instances emits the framebuffer compositor instance
 desktop hyprctl -j submap emits active keyboard submap state
 desktop hyprctl -j splash emits VM-safe splash/render boundary metadata
+desktop hyprctl -j session emits health, desired/runtime, counters, paths, and log tail
 desktop hyprctl -j rollinglog emits sampled desktop log paths/status
 desktop hyprctl -j binds emits bind counts and prepared-only bindm status
 desktop hyprctl -j layers emits the framebuffer layer graph without Waybar

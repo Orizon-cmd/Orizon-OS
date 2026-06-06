@@ -4256,8 +4256,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4469,6 +4469,51 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         orizon_desktop_format_rolling_log_json(report, sizeof(report));
       } else {
         orizon_desktop_format_rolling_log(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "session") ||
+               term_command_is(hypr, "sessionstate") ||
+               term_command_is(hypr, "session-state") ||
+               term_command_is(hypr, "state")) {
+      const char *session_args = "";
+      if (term_command_is(hypr, "session")) {
+        session_args = term_skip_spaces(hypr + 7);
+      } else if (term_command_is(hypr, "sessionstate")) {
+        session_args = term_skip_spaces(hypr + 12);
+      } else if (term_command_is(hypr, "session-state")) {
+        session_args = term_skip_spaces(hypr + 13);
+      } else {
+        session_args = term_skip_spaces(hypr + 5);
+      }
+      if (*session_args == '\0' || term_command_is(session_args, "status") ||
+          term_command_is(session_args, "show") ||
+          term_command_is(session_args, "state")) {
+        if (json) {
+          orizon_desktop_format_session_state_json(report, sizeof(report));
+        } else {
+          orizon_desktop_format_session_state(report, sizeof(report));
+        }
+      } else {
+        char action[16];
+        size_t len = 0;
+        while (session_args[len] && session_args[len] != ' ' &&
+               len + 1 < sizeof(action)) {
+          action[len] = session_args[len];
+          len++;
+        }
+        action[len] = '\0';
+        if (json) {
+          orizon_desktop_session_manager_json(action, report, sizeof(report));
+        } else {
+          orizon_desktop_session_manager(action, report, sizeof(report));
+        }
+        if (strcmp(action, "reload") == 0) {
+          gui_desktop_reload_session();
+        } else if (strcmp(action, "start") == 0 ||
+                   strcmp(action, "stop") == 0 ||
+                   strcmp(action, "restart") == 0 ||
+                   strcmp(action, "recover") == 0) {
+          gui_desktop_set_enabled(orizon_desktop_is_enabled());
+        }
       }
     } else if (term_command_is(hypr, "getoption")) {
       const char *key = term_skip_spaces(hypr + 9);

@@ -228,6 +228,7 @@ desktop hyprctl -j descriptions
 desktop hyprctl -j instances
 desktop hyprctl -j submap
 desktop hyprctl -j splash
+desktop hyprctl -j session
 desktop hyprctl -j rollinglog
 desktop autostart
 desktop autostart terminal off
@@ -396,7 +397,8 @@ not upstream Hyprland/Wayland yet. The live ISO keeps it disabled by default.
 Use `desktop start` or `pkg install orizon-desktop-hypr` to start the
 compositor desktop session; `desktop enable` remains a compatibility alias.
 `desktop stop`, `desktop restart`, `desktop reload`, `desktop recover`,
-`desktop rescue`, and `desktop state` manage `/system/desktop-state.conf` and
+`desktop rescue`, `desktop state`, and `desktop hyprctl -j session
+[status|start|stop|restart|reload|recover|rescue]` manage or inspect `/system/desktop-state.conf` and
 `/logs/desktop-session.log`. The state file now records health,
 desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
 and recovery commands. `desktop rescue` is read-only and prints the safe
@@ -471,7 +473,7 @@ idempotent client-state dispatchers
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy
 `fullscreenstate <on|off|toggle|1|0>`,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop backend` and `desktop protocol` expose the VM framebuffer backend map,
 the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
@@ -481,13 +483,14 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
 rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,
 `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`, `parserSummary`, and
 `trace`, plus action/input/layer fields such as `result`, `dispatcher`, `args`, `runtimeFile`,
-`singleFramebuffer`, `libinput`, `activeSubmap`, `currentBackend`,
+`singleFramebuffer`, `libinput`, `activeSubmap`, `desiredState`,
+`runtimeState`, `sessionLogTail`, `currentBackend`,
 `futureBackend`, `protocol`, `renderer`, `focusRing`, `transition`,
 `renderProfile`, `manualWindowDrag`, `mouseBindsPreparedOnly`, and
 `waybarActive`; it is

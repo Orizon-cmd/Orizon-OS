@@ -4213,6 +4213,204 @@ int orizon_desktop_session_manager(const char *action, char *status,
   return (rc == 0 && (apply_rc == 0 || strcmp(action, "stop") == 0)) ? 0 : -1;
 }
 
+static void desktop_format_session_json(const char *action, int rc,
+                                        const char *result, char *out,
+                                        size_t out_size) {
+  char state[1280];
+  char log[768];
+  char health[32];
+  char desired[32];
+  char runtime[32];
+  char last_action[32];
+  char last_ticks[32];
+  char boot_mode[32];
+  char installed_marker[32];
+  char policy[32];
+  char autostart_terminal[16];
+  char focus_follows_mouse[16];
+  char layout[32];
+  char crash_recover[32];
+  char note[96];
+  char value[32];
+  char line[384];
+  size_t used = 0;
+  size_t state_size = 0;
+  size_t log_size = 0;
+  int state_present;
+  int log_present;
+  int start_count;
+  int stop_count;
+  int restart_count;
+  int reload_count;
+  int recover_count;
+  int crash_count;
+  const char *safe_action = (action && action[0]) ? action : "status";
+  const char *safe_result = result ? result : "session-state-read";
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  if (desktop_read_text_file(ORIZON_DESKTOP_STATE_PATH, state,
+                             sizeof(state)) <= 0) {
+    snprintf(state, sizeof(state), "%s", desktop_state_config);
+  }
+  if (desktop_read_text_file(ORIZON_DESKTOP_SESSION_LOG_PATH, log,
+                             sizeof(log)) <= 0) {
+    snprintf(log, sizeof(log), "empty\n");
+  }
+  state_present = vfs_stat(ORIZON_DESKTOP_STATE_PATH, &state_size, NULL) == 0 &&
+                  state_size > 0;
+  log_present = vfs_stat(ORIZON_DESKTOP_SESSION_LOG_PATH, &log_size, NULL) == 0 &&
+                log_size > 0;
+
+  desktop_session_get_value(state, "health", health, sizeof(health), "WARN");
+  desktop_session_get_value(state, "desired-state", desired, sizeof(desired),
+                            "unknown");
+  desktop_session_get_value(state, "runtime-state", runtime, sizeof(runtime),
+                            "unknown");
+  desktop_session_get_value(state, "last-action", last_action,
+                            sizeof(last_action), "unknown");
+  desktop_session_get_value(state, "last-ticks", last_ticks,
+                            sizeof(last_ticks), "0");
+  desktop_session_get_value(state, "boot-mode", boot_mode, sizeof(boot_mode),
+                            orizon_system_is_installed() ? "installed"
+                                                        : "live-iso");
+  desktop_session_get_value(state, "installed-marker", installed_marker,
+                            sizeof(installed_marker),
+                            orizon_system_is_installed() ? "present"
+                                                        : "missing");
+  desktop_session_get_value(state, "policy", policy, sizeof(policy),
+                            orizon_desktop_is_enabled() ? "enabled"
+                                                        : "disabled");
+  desktop_session_get_value(state, "autostart-terminal", autostart_terminal,
+                            sizeof(autostart_terminal), "yes");
+  desktop_session_get_value(state, "focus-follows-mouse", focus_follows_mouse,
+                            sizeof(focus_follows_mouse), "no");
+  desktop_session_get_value(state, "layout", layout, sizeof(layout),
+                            "dwindle");
+  desktop_session_get_value(state, "crash-recover", crash_recover,
+                            sizeof(crash_recover), "ready");
+  desktop_session_get_value(state, "note", note, sizeof(note), "none");
+  desktop_session_get_value(state, "start-count", value, sizeof(value), "0");
+  start_count = desktop_parse_int_value(value, 0);
+  desktop_session_get_value(state, "stop-count", value, sizeof(value), "0");
+  stop_count = desktop_parse_int_value(value, 0);
+  desktop_session_get_value(state, "restart-count", value, sizeof(value), "0");
+  restart_count = desktop_parse_int_value(value, 0);
+  desktop_session_get_value(state, "reload-count", value, sizeof(value), "0");
+  reload_count = desktop_parse_int_value(value, 0);
+  desktop_session_get_value(state, "recover-count", value, sizeof(value), "0");
+  recover_count = desktop_parse_int_value(value, 0);
+  desktop_session_get_value(state, "crash-count", value, sizeof(value), "0");
+  crash_count = desktop_parse_int_value(value, 0);
+
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"session\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"hardwareValidation\":false,"
+      "\"manualDrag\":false,\"floatingDesktop\":false,"
+      "\"taskbar\":false,\"startMenu\":false,\"waybarActive\":false,"
+      "\"action\":");
+  desktop_json_append_string(out, out_size, &used, safe_action);
+  snprintf(line, sizeof(line), ",\"ok\":%s,\"result\":", rc == 0 ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, safe_result);
+
+  desktop_json_append_raw(out, out_size, &used, ",\"state\":{\"health\":");
+  desktop_json_append_string(out, out_size, &used, health);
+  desktop_json_append_raw(out, out_size, &used, ",\"desiredState\":");
+  desktop_json_append_string(out, out_size, &used, desired);
+  desktop_json_append_raw(out, out_size, &used, ",\"runtimeState\":");
+  desktop_json_append_string(out, out_size, &used, runtime);
+  desktop_json_append_raw(out, out_size, &used, ",\"lastAction\":");
+  desktop_json_append_string(out, out_size, &used, last_action);
+  desktop_json_append_raw(out, out_size, &used, ",\"lastTicks\":");
+  desktop_json_append_string(out, out_size, &used, last_ticks);
+  desktop_json_append_raw(out, out_size, &used, ",\"bootMode\":");
+  desktop_json_append_string(out, out_size, &used, boot_mode);
+  desktop_json_append_raw(out, out_size, &used, ",\"installedMarker\":");
+  desktop_json_append_string(out, out_size, &used, installed_marker);
+  desktop_json_append_raw(out, out_size, &used, ",\"policy\":");
+  desktop_json_append_string(out, out_size, &used, policy);
+  snprintf(line, sizeof(line),
+           ",\"installed\":%s,\"policyEnabled\":%s,"
+           "\"autostartTerminal\":%s,\"focusFollowsMouse\":%s,"
+           "\"layout\":",
+           orizon_system_is_installed() ? "true" : "false",
+           orizon_desktop_is_enabled() ? "true" : "false",
+           desktop_bool_value(autostart_terminal, 1) ? "true" : "false",
+           desktop_bool_value(focus_follows_mouse, 0) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, layout);
+  desktop_json_append_raw(out, out_size, &used, ",\"crashRecover\":");
+  desktop_json_append_string(out, out_size, &used, crash_recover);
+  desktop_json_append_raw(out, out_size, &used, ",\"note\":");
+  desktop_json_append_string(out, out_size, &used, note);
+  snprintf(line, sizeof(line),
+           "},\"counters\":{\"start\":%d,\"stop\":%d,\"restart\":%d,"
+           "\"reload\":%d,\"recover\":%d,\"crash\":%d},",
+           start_count, stop_count, restart_count, reload_count, recover_count,
+           crash_count);
+  desktop_json_append_raw(out, out_size, &used, line);
+
+  desktop_json_append_raw(out, out_size, &used, "\"paths\":{\"state\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_STATE_PATH);
+  snprintf(line, sizeof(line), ",\"statePresent\":%s,\"stateBytes\":%lu,"
+                              "\"sessionLog\":",
+           state_present ? "true" : "false",
+           (unsigned long)(state_present ? state_size : 0));
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_SESSION_LOG_PATH);
+  snprintf(line, sizeof(line), ",\"sessionLogPresent\":%s,"
+                              "\"sessionLogBytes\":%lu,\"config\":",
+           log_present ? "true" : "false",
+           (unsigned long)(log_present ? log_size : 0));
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_CONFIG_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"userConfig\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_json_append_raw(out, out_size, &used, "},\"commands\":{"
+      "\"status\":\"desktop state\","
+      "\"start\":\"desktop start\","
+      "\"stop\":\"desktop stop\","
+      "\"restart\":\"desktop restart\","
+      "\"reload\":\"desktop reload\","
+      "\"recover\":\"desktop recover\","
+      "\"rescue\":\"desktop rescue\","
+      "\"hyprctlSession\":\"desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue]\"},"
+      "\"sessionLogTail\":");
+  desktop_json_append_string(out, out_size, &used, log);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"VM/ZimaOS session diagnostics only\","
+      "\"not validated on physical hardware\","
+      "\"not upstream Wayland/wlroots Hyprland\","
+      "\"no taskbar, start menu, floating desktop or manual window drag\"]}\n");
+}
+
+int orizon_desktop_session_manager_json(const char *action, char *status,
+                                        size_t status_size) {
+  char result[1280];
+  int rc;
+
+  if (!action || !action[0] || strcmp(action, "status") == 0 ||
+      strcmp(action, "show") == 0 || strcmp(action, "state") == 0) {
+    desktop_format_session_json("status", 0, "session-state-read", status,
+                                status_size);
+    return 0;
+  }
+  result[0] = '\0';
+  rc = orizon_desktop_session_manager(action, result, sizeof(result));
+  desktop_format_session_json(action, rc, result, status, status_size);
+  return rc;
+}
+
 int orizon_desktop_reset(char *status, size_t status_size) {
   int rc;
   int template_rc;
@@ -4930,9 +5128,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/submap/splash/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -4976,6 +5174,11 @@ void orizon_desktop_format_session_state(char *out, size_t out_size) {
   if (out[0] && out[strlen(out) - 1] != '\n') {
     desktop_append(out, out_size, &used, "\n");
   }
+}
+
+void orizon_desktop_format_session_state_json(char *out, size_t out_size) {
+  desktop_format_session_json("status", 0, "session-state-read", out,
+                              out_size);
 }
 
 void orizon_desktop_format_settings(char *out, size_t out_size) {
