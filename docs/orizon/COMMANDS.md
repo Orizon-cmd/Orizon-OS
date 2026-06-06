@@ -482,7 +482,9 @@ a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematc
 framebuffer backend map, the `orizon-compositor-api-v0` API seam, the
 `compositor-backend-v0` drawing/present seam in
 `kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
-the internal `orizon-desktop-ipc-v0` protocol map, and the honest
+the internal `orizon-desktop-ipc-v0` protocol map plus runtime
+`desktop-protocol-v0` trace in `kernel/include/desktop_protocol.h` and
+`kernel/system/desktop_protocol.c`, and the honest
 not-yet-Wayland/wlroots boundary,
 `desktop layout-tree` and `desktop hyprctl layouttree` show the active
 workspace tiling tree with client roles, rectangles, focus state, and

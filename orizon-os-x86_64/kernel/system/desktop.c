@@ -6,6 +6,7 @@
  */
 
 #include "../include/desktop.h"
+#include "../include/desktop_protocol.h"
 #include "../include/input_layout.h"
 #include "../include/string.h"
 #include "../include/system_state.h"
@@ -374,6 +375,9 @@ static const char *desktop_protocol_config =
     "# Orizon desktop internal protocol map v1\n"
     "# Prepared split between compositor API and the current framebuffer backend.\n"
     "protocol orizon-desktop-ipc-v0\n"
+    "protocol-api desktop-protocol-v0\n"
+    "protocol-api-header kernel/include/desktop_protocol.h\n"
+    "protocol-api-source kernel/system/desktop_protocol.c\n"
     "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "transport internal-kernel-dispatch\n"
     "messages dispatch,spawn-client,close-client,focus-client,workspace,config-keyword,query-state\n"
@@ -407,6 +411,9 @@ static const char *desktop_architecture_config =
     "backend-future wayland-wlroots\n"
     "backend-future-status prepared-not-implemented\n"
     "protocol-current orizon-desktop-ipc-v0\n"
+    "protocol-api desktop-protocol-v0\n"
+    "protocol-api-header kernel/include/desktop_protocol.h\n"
+    "protocol-api-source kernel/system/desktop_protocol.c\n"
     "protocol-transport internal-kernel-dispatch\n"
     "protocol-client-internal prepared\n"
     "external-wayland-clients no\n"
@@ -5766,6 +5773,7 @@ void orizon_desktop_format_backend_json(char *out, size_t out_size) {
 
 void orizon_desktop_format_protocol(char *out, size_t out_size) {
   char cfg[1024];
+  char state[512];
   size_t used = 0;
   int n;
 
@@ -5778,6 +5786,8 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "protocol: orizon-desktop-ipc-v0\n");
   desktop_append(out, out_size, &used,
+                 "protocol-api: desktop-protocol-v0 header=kernel/include/desktop_protocol.h source=kernel/system/desktop_protocol.c\n");
+  desktop_append(out, out_size, &used,
                  "transport: internal-kernel-dispatch\n");
   desktop_append(out, out_size, &used,
                  "messages: dispatch spawn-client close-client focus-client workspace config-keyword query-state\n");
@@ -5788,6 +5798,8 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "path: " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
                  "architecture-path: " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n");
+  orizon_desktop_protocol_format_state(state, sizeof(state));
+  desktop_append(out, out_size, &used, state);
   n = desktop_read_text_file(ORIZON_DESKTOP_PROTOCOL_PATH, cfg, sizeof(cfg));
   if (n > 0) {
     desktop_append(out, out_size, &used, "\n== protocol.conf ==\n");
@@ -5799,6 +5811,7 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
 }
 
 void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
+  char state[768];
   size_t used = 0;
 
   if (!out || out_size == 0) {
@@ -5811,6 +5824,9 @@ void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
       "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
       "\"command\":\"protocol\",\"hyprlandStyleFacade\":true,"
       "\"protocol\":\"orizon-desktop-ipc-v0\","
+      "\"protocolApi\":\"desktop-protocol-v0\","
+      "\"protocolApiHeader\":\"kernel/include/desktop_protocol.h\","
+      "\"protocolApiSource\":\"kernel/system/desktop_protocol.c\","
       "\"transport\":\"internal-kernel-dispatch\","
       "\"security\":\"local-kernel-only\","
       "\"wayland\":false,\"wlroots\":false,\"xdgShell\":false,"
@@ -5843,9 +5859,12 @@ void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
   desktop_json_append_raw(out, out_size, &used,
                           vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) ? "true"
                                                                  : "false");
+  orizon_desktop_protocol_format_state_json(state, sizeof(state));
+  desktop_json_append_raw(out, out_size, &used, "},");
+  desktop_json_append_raw(out, out_size, &used, state);
   desktop_json_append_raw(
       out, out_size, &used,
-      "},\"truth\":\"protocol map for the Orizon Hyprland-style facade\","
+      ",\"truth\":\"protocol map for the Orizon Hyprland-style facade\","
       "\"limits\":[\"not Wayland protocol traffic\","
       "\"no wlroots scene graph yet\","
       "\"no upstream Hyprland socket compatibility yet\"]}\n");

@@ -678,7 +678,7 @@ run_cmd() {
       grep -q "Orizon desktop backend" "`$OUT" && grep -q "current-backend: framebuffer-vm" "`$OUT" || { echo "missing desktop backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop protocol"|"desktop hyprctl protocol")
-      grep -q "Orizon desktop protocol" "`$OUT" && grep -q "wayland: no" "`$OUT" || { echo "missing desktop protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop protocol" "`$OUT" && grep -q "protocol-api: desktop-protocol-v0" "`$OUT" && grep -q "internal-protocol-state:" "`$OUT" && grep -q "wayland: no" "`$OUT" || { echo "missing desktop protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop layouts"|"desktop hyprctl layouts")
       grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -744,7 +744,7 @@ run_cmd() {
       grep -q '"command":"backend"' "`$OUT" && grep -q '"futureBackend":"wayland-wlroots"' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j protocol")
-      grep -q '"command":"protocol"' "`$OUT" && grep -q '"protocol":"orizon-desktop-ipc-v0"' "`$OUT" && grep -q '"wayland":false' "`$OUT" || { echo "missing hyprctl json protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"protocol"' "`$OUT" && grep -q '"protocol":"orizon-desktop-ipc-v0"' "`$OUT" && grep -q '"protocolApi":"desktop-protocol-v0"' "`$OUT" && grep -q '"runtime"' "`$OUT" && grep -q '"lastMessage"' "`$OUT" && grep -q '"wayland":false' "`$OUT" || { echo "missing hyprctl json protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j architecture")
       grep -q '"command":"architecture"' "`$OUT" && grep -q '"backendApi"' "`$OUT" && grep -q '"source":"kernel/gui/compositor_backend.c"' "`$OUT" && grep -q '"api":"orizon-compositor-api-v0"' "`$OUT" && grep -q '"futureImplemented":false' "`$OUT" && grep -q '"wayland":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

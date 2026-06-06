@@ -210,9 +210,10 @@ maintenant.
 split d'architecture: API `orizon-compositor-api-v0`, API backend interne
 `compositor-backend-v0` (`kernel/include/compositor_backend.h` et
 `kernel/gui/compositor_backend.c`), backend actuel `framebuffer-vm`, protocole
-interne `orizon-desktop-ipc-v0`, future cible `wayland-wlroots` preparee, mais
-pas encore Wayland/wlroots, xdg-shell, layer-shell reel, XWayland ni clients
-Wayland externes.
+interne `orizon-desktop-ipc-v0` avec trace runtime `desktop-protocol-v0`
+(`kernel/include/desktop_protocol.h` et `kernel/system/desktop_protocol.c`),
+future cible `wayland-wlroots` preparee, mais pas encore Wayland/wlroots,
+xdg-shell, layer-shell reel, XWayland ni clients Wayland externes.
 `desktop layout-tree` et `desktop hyprctl layouttree` exposent l'arbre actif du
 workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.

@@ -83,9 +83,9 @@ work.
   Orizon compositor. `desktop architecture`, `desktop backend`, and
   `desktop protocol` document the current `framebuffer-vm` backend, the
   implemented internal `compositor-backend-v0` drawing/present API seam,
-  `orizon-compositor-api-v0` compositor API seam, and internal
-  `orizon-desktop-ipc-v0` protocol while Wayland/wlroots/upstream Hyprland
-  remain prepared-only.
+  `orizon-compositor-api-v0` compositor API seam, and implemented
+  `desktop-protocol-v0` runtime trace for the internal `orizon-desktop-ipc-v0`
+  protocol while Wayland/wlroots/upstream Hyprland remain prepared-only.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.

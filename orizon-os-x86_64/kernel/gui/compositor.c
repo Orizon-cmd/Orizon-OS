@@ -10,6 +10,7 @@
 #include "../include/bootinfo.h"
 #include "../include/compositor_backend.h"
 #include "../include/desktop.h"
+#include "../include/desktop_protocol.h"
 #include "../include/i2c_hid.h"
 #include "../include/input_layout.h"
 #include "../include/klog.h"
@@ -2351,6 +2352,8 @@ static int desktop_spawn_known_app_client(const char *app, char *out,
 
   if (desktop_known_app_spec(app, title, sizeof(title), app_id,
                              sizeof(app_id), &terminal_backed) < 0) {
+    orizon_desktop_protocol_record("spawn-client", "desktop-dispatch", app,
+                                   "unsupported-app", 0);
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: exec supports terminal, settings, logs, "
@@ -2360,6 +2363,8 @@ static int desktop_spawn_known_app_client(const char *app, char *out,
   }
   if (strcmp(app_id, "orizon-launcher") == 0) {
     gui_desktop_toggle_launcher();
+    orizon_desktop_protocol_record("dispatch", "desktop-dispatch", app_id,
+                                   "launcher-overlay-toggle", 1);
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: exec orizon-launcher overlay toggled\n");
@@ -2368,10 +2373,19 @@ static int desktop_spawn_known_app_client(const char *app, char *out,
   }
   id = desktop_spawn_client(title, app_id, terminal_backed);
   if (id < 0) {
+    orizon_desktop_protocol_record("spawn-client", "desktop-dispatch", app_id,
+                                   "client-limit", 0);
     if (out && out_size) {
       snprintf(out, out_size, "desktop dispatch: client limit reached\n");
     }
     return -1;
+  }
+  {
+    char protocol_result[64];
+    snprintf(protocol_result, sizeof(protocol_result), "client-spawned id=%d",
+             id);
+    orizon_desktop_protocol_record("spawn-client", "desktop-dispatch", app_id,
+                                   protocol_result, 1);
   }
   if (out && out_size) {
     snprintf(out, out_size,
@@ -4837,7 +4851,18 @@ int gui_desktop_move_terminal_to_workspace(int workspace) {
 }
 
 int gui_desktop_spawn_terminal_client(void) {
-  return desktop_spawn_client("Terminal", "orizon-terminal", 1) > 0 ? 0 : -1;
+  int id = desktop_spawn_client("Terminal", "orizon-terminal", 1);
+  if (id > 0) {
+    char protocol_result[64];
+    snprintf(protocol_result, sizeof(protocol_result), "client-spawned id=%d",
+             id);
+    orizon_desktop_protocol_record("spawn-client", "desktop-api",
+                                   "orizon-terminal", protocol_result, 1);
+    return 0;
+  }
+  orizon_desktop_protocol_record("spawn-client", "desktop-api",
+                                 "orizon-terminal", "client-limit", 0);
+  return -1;
 }
 
 int gui_desktop_spawn_app_client(const char *app, char *out, size_t out_size) {
@@ -4848,11 +4873,22 @@ int gui_desktop_close_active_client(void) {
   int idx;
 
   if (!desktop_mode_enabled) {
+    orizon_desktop_protocol_record("close-client", "desktop-api",
+                                   "activewindow", "desktop-disabled", 0);
     return -1;
   }
   idx = desktop_focused_client_index();
   if (idx < 0) {
+    orizon_desktop_protocol_record("close-client", "desktop-api",
+                                   "activewindow", "no-client", 0);
     return -1;
+  }
+  {
+    char protocol_target[80];
+    snprintf(protocol_target, sizeof(protocol_target), "%s id=%d",
+             desktop_clients[idx].app_id, desktop_clients[idx].id);
+    orizon_desktop_protocol_record("close-client", "desktop-api",
+                                   protocol_target, "closed", 1);
   }
   desktop_workspace_forget_focus_id(desktop_clients[idx].id);
   desktop_focus_history_remove(desktop_clients[idx].id);
@@ -4908,6 +4944,8 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     a++;
   }
   if (!dispatcher || !dispatcher[0]) {
+    orizon_desktop_protocol_record("dispatch", "desktop-dispatch", "",
+                                   "missing-dispatcher", 0);
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: usage exec <terminal|settings|logs|packages|update|launcher> | killactive | "
@@ -4919,15 +4957,23 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     return -1;
   }
   if (strcmp(dispatcher, "exec") == 0) {
-    return desktop_spawn_known_app_client(a, out, out_size);
+    int rc = desktop_spawn_known_app_client(a, out, out_size);
+    orizon_desktop_protocol_record("dispatch", "desktop-dispatch", "exec",
+                                   rc == 0 ? "accepted" : "rejected",
+                                   rc == 0);
+    return rc;
   }
   if (strcmp(dispatcher, "killactive") == 0 || strcmp(dispatcher, "close") == 0) {
     if (gui_desktop_close_active_client() == 0) {
+      orizon_desktop_protocol_record("dispatch", "desktop-dispatch",
+                                     dispatcher, "accepted", 1);
       if (out && out_size) {
         snprintf(out, out_size, "desktop dispatch: killed active client\n");
       }
       return 0;
     }
+    orizon_desktop_protocol_record("dispatch", "desktop-dispatch", dispatcher,
+                                   "no-active-client", 0);
     if (out && out_size) {
       snprintf(out, out_size, "desktop dispatch: no active client\n");
     }
@@ -4938,7 +4984,12 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
     int target = 0;
     if (desktop_parse_workspace_arg(a, &target) == 0 &&
         gui_desktop_switch_workspace(target) == 0) {
+      char protocol_result[64];
       workspace = (uint32_t)target;
+      snprintf(protocol_result, sizeof(protocol_result), "workspace=%u",
+               (unsigned)workspace);
+      orizon_desktop_protocol_record("workspace", "desktop-dispatch",
+                                     dispatcher, protocol_result, 1);
       if (out && out_size) {
         snprintf(out, out_size,
                  strcmp(dispatcher, "focusworkspaceoncurrentmonitor") == 0
@@ -4948,6 +4999,8 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
       }
       return 0;
     }
+    orizon_desktop_protocol_record("workspace", "desktop-dispatch",
+                                   dispatcher, "invalid-workspace-target", 0);
     if (out && out_size) {
       snprintf(out, out_size,
                "desktop dispatch: %s expects 1-%d, name:<name>, next, empty, +/-n, r+/-n, m+/-n, e+/-n, r~n, m~n, e~n, active or previous\n",

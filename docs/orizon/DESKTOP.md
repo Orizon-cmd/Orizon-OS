@@ -486,10 +486,14 @@ architecture seam for the future real compositor path. Today they report
 `api: orizon-compositor-api-v0`, `current-backend: framebuffer-vm`,
 `backend-api: compositor-backend-v0` through
 `kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
-`protocol: orizon-desktop-ipc-v0`, software backbuffer rendering, tiled
-internal clients only, no manual free-drag windows, no taskbar, and no Waybar
-package installed. The compositor and bitmap font renderer now route drawing
-through that backend API while the VM framebuffer remains the only implemented
+`protocol: orizon-desktop-ipc-v0`, and `protocol-api: desktop-protocol-v0`
+through `kernel/include/desktop_protocol.h` and
+`kernel/system/desktop_protocol.c`. The protocol records kernel-local
+dispatcher/client messages with serials and counters; it is not Wayland traffic
+or a Hyprland socket. Rendering remains software backbuffer, clients are tiled
+internal only, there are no manual free-drag windows, no taskbar, and no Waybar
+package installed. The compositor and bitmap font renderer route drawing
+through the backend API while the VM framebuffer remains the only implemented
 backend. They persist the truth files
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`; the future target is documented as

@@ -83,6 +83,7 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/system/sched.c \
            $(KERNEL_DIR)/system/klog.c \
            $(KERNEL_DIR)/system/desktop.c \
+           $(KERNEL_DIR)/system/desktop_protocol.c \
            $(KERNEL_DIR)/system/install.c \
            $(KERNEL_DIR)/system/packages.c \
            $(KERNEL_DIR)/system/report.c \

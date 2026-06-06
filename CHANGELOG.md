@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added desktop package version `0.83.0` with an implemented VM-safe internal
+  `desktop-protocol-v0` trace for `orizon-desktop-ipc-v0`. Real compositor
+  actions now record kernel-local `dispatch`, `spawn-client`, `close-client`,
+  and `workspace` messages with serials/counts exposed by `desktop protocol`
+  and `desktop hyprctl -j protocol`, while keeping `waylandTraffic=false`,
+  `hyprlandSocket=false`, and external clients disabled.
 - Added desktop package version `0.82.0` with a real internal
   `compositor-backend-v0` seam between the Orizon Hyprland-style compositor
   model and the current VM framebuffer renderer. The active backend remains
