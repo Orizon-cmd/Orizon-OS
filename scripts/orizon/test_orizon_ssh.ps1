@@ -768,10 +768,10 @@ run_cmd() {
       grep -Fq '"workspaces":[' "`$OUT" && grep -Fq '"stack":[' "`$OUT" && grep -q '"pinnedAware":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json workspacestack"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j layoutstate")
-      grep -q '"model":"per-workspace tiling layout state"' "`$OUT" && grep -Fq '"workspaces":[' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json layoutstate"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"model":"per-workspace tiling layout state"' "`$OUT" && grep -Fq '"workspaces":[' "`$OUT" && grep -q '"lastDispatch":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json layoutstate"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j layouttree")
-      grep -q '"model":"active workspace tiling tree"' "`$OUT" && grep -Fq '"nodes":[' "`$OUT" && grep -q '"floatingSceneGraph":false' "`$OUT" || { echo "missing hyprctl json layouttree"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"model":"active workspace tiling tree"' "`$OUT" && grep -Fq '"nodes":[' "`$OUT" && grep -q '"lastDispatch":{' "`$OUT" && grep -q '"floatingSceneGraph":false' "`$OUT" || { echo "missing hyprctl json layouttree"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j monitors")
       grep -q '"command":"monitors"' "`$OUT" && grep -q '"singleFramebuffer":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json monitors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -891,7 +891,7 @@ run_cmd() {
       grep -q '"command":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j dispatch workspace active")
-      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"workspace"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"workspace"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"lastDispatch":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j dispatch layoutmsg splitratio reset")
       grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"layoutmsg"' "`$OUT" && grep -q '"args":"splitratio reset"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

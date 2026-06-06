@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.84.0` with a compositor-side
+  `lastDispatch` diagnostic snapshot for Hyprland-style tiling dispatchers.
+  `desktop layout-state`, `desktop layout-tree`, `desktop hyprctl -j
+  layoutstate`, `desktop hyprctl -j layouttree`, and `desktop hyprctl -j
+  dispatch` now report the last dispatcher, args, status, readable result,
+  workspace, layout, split/master ratios, `nmaster`, submap, and focused client
+  while keeping `manualDrag=false`, `floatingDesktop=false`, Waybar disabled,
+  and Wayland/wlroots/upstream Hyprland marked not implemented.
 - Clarified the install and operator-start documentation for desktop package
   `0.83.0`, including the `/system/desktop-architecture.conf`,
   `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,

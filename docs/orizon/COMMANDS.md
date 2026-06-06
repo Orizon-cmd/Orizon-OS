@@ -491,13 +491,15 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `manual-drag=no`; monocle clients outside the active surface are reported as
 `monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
-layout, split mode, split ratio, and master ratio,
+layout, split mode, split ratio, master ratio, `nmaster`, and the
+`lastDispatch` snapshot for the most recent tiling dispatcher result,
 `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
 rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,
 `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`, `parserSummary`, and
-`trace`, plus action/input/layer fields such as `result`, `dispatcher`, `args`, `runtimeFile`,
+`trace`, plus action/input/layer fields such as `result`, `lastDispatch`,
+`dispatcher`, `args`, `runtimeFile`,
 `singleFramebuffer`, `libinput`, `activeSubmap`, `desiredState`,
 `runtimeState`, `sessionLogTail`, `currentBackend`,
 `futureBackend`, `protocol`, `renderer`, `focusRing`, `transition`,

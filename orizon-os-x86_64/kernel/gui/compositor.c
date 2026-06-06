@@ -159,8 +159,40 @@ typedef struct {
   char name[16];
 } desktop_workspace_t;
 
+typedef struct {
+  uint64_t serial;
+  int status;
+  int ok;
+  int workspace;
+  int focused_client_id;
+  int split_ratio_percent;
+  int master_ratio_percent;
+  int master_count;
+  char dispatcher[40];
+  char args[128];
+  char result[240];
+  char layout[24];
+  char split[24];
+  char submap[32];
+} desktop_dispatch_diagnostic_t;
+
 static desktop_client_t desktop_clients[DESKTOP_MAX_CLIENTS];
 static desktop_workspace_t desktop_workspaces[DESKTOP_MAX_WORKSPACES];
+static desktop_dispatch_diagnostic_t desktop_last_dispatch = {
+    0,
+    -1,
+    0,
+    1,
+    0,
+    DESKTOP_DEFAULT_SPLIT_RATIO,
+    DESKTOP_DEFAULT_MASTER_RATIO,
+    DESKTOP_DEFAULT_MASTER_COUNT,
+    "none",
+    "",
+    "no dispatcher has run yet",
+    "dwindle",
+    "auto",
+    "default"};
 static int desktop_next_client_id = 1;
 static int desktop_focused_client_id = 0;
 static int desktop_focus_history[DESKTOP_MAX_CLIENTS];
@@ -4932,8 +4964,59 @@ int gui_desktop_focus_prev_client(void) {
   return desktop_focus_relative(-1);
 }
 
-int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
-                         size_t out_size) {
+static void desktop_dispatch_diag_copy(char *dest, size_t dest_size,
+                                       const char *src) {
+  size_t i = 0;
+
+  if (!dest || dest_size == 0) {
+    return;
+  }
+  if (!src) {
+    src = "";
+  }
+  while (src[i] && i + 1 < dest_size) {
+    char c = src[i];
+    dest[i] = (c == '\n' || c == '\r' || c == '\t') ? ' ' : c;
+    i++;
+  }
+  dest[i] = '\0';
+}
+
+static void desktop_record_dispatch_diagnostic(const char *dispatcher,
+                                               const char *args,
+                                               const char *result, int rc) {
+  const char *safe_dispatcher =
+      dispatcher && dispatcher[0] ? dispatcher : "missing";
+
+  desktop_last_dispatch.serial++;
+  desktop_last_dispatch.status = rc;
+  desktop_last_dispatch.ok = rc == 0;
+  desktop_last_dispatch.workspace = desktop_active_workspace;
+  desktop_last_dispatch.focused_client_id = desktop_focused_client_id;
+  desktop_last_dispatch.split_ratio_percent = desktop_split_ratio_percent;
+  desktop_last_dispatch.master_ratio_percent = desktop_master_ratio_percent;
+  desktop_last_dispatch.master_count = desktop_master_count;
+  desktop_dispatch_diag_copy(desktop_last_dispatch.dispatcher,
+                             sizeof(desktop_last_dispatch.dispatcher),
+                             safe_dispatcher);
+  desktop_dispatch_diag_copy(desktop_last_dispatch.args,
+                             sizeof(desktop_last_dispatch.args), args);
+  desktop_dispatch_diag_copy(
+      desktop_last_dispatch.result, sizeof(desktop_last_dispatch.result),
+      result && result[0] ? result : (rc == 0 ? "ok" : "failed"));
+  desktop_dispatch_diag_copy(desktop_last_dispatch.layout,
+                             sizeof(desktop_last_dispatch.layout),
+                             desktop_layout_engine());
+  desktop_dispatch_diag_copy(desktop_last_dispatch.split,
+                             sizeof(desktop_last_dispatch.split),
+                             desktop_split_mode_name());
+  desktop_dispatch_diag_copy(desktop_last_dispatch.submap,
+                             sizeof(desktop_last_dispatch.submap),
+                             desktop_submap);
+}
+
+static int desktop_dispatch_impl(const char *dispatcher, const char *args,
+                                 char *out, size_t out_size) {
   uint32_t workspace = 0;
   const char *a = args ? args : "";
 
@@ -5882,6 +5965,14 @@ int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
   return -1;
 }
 
+int gui_desktop_dispatch(const char *dispatcher, const char *args, char *out,
+                         size_t out_size) {
+  int rc = desktop_dispatch_impl(dispatcher, args, out, out_size);
+  desktop_record_dispatch_diagnostic(dispatcher, args,
+                                     (out && out_size) ? out : NULL, rc);
+  return rc;
+}
+
 static int desktop_last_focused_index_on_workspace(int workspace) {
   return desktop_last_focused_index_on_workspace_scope(workspace, 0);
 }
@@ -6698,6 +6789,40 @@ static void desktop_json_append_string(char *out, size_t out_size, size_t *used,
   desktop_json_append_raw(out, out_size, used, "\"");
 }
 
+static void desktop_json_append_last_dispatch(char *out, size_t out_size,
+                                              size_t *used) {
+  char line[320];
+
+  snprintf(line, sizeof(line),
+           "{\"serial\":%llu,\"ok\":%s,\"status\":%d,\"dispatcher\":",
+           (unsigned long long)desktop_last_dispatch.serial,
+           desktop_last_dispatch.ok ? "true" : "false",
+           desktop_last_dispatch.status);
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_json_append_string(out, out_size, used,
+                             desktop_last_dispatch.dispatcher);
+  desktop_json_append_raw(out, out_size, used, ",\"args\":");
+  desktop_json_append_string(out, out_size, used, desktop_last_dispatch.args);
+  desktop_json_append_raw(out, out_size, used, ",\"result\":");
+  desktop_json_append_string(out, out_size, used, desktop_last_dispatch.result);
+  desktop_json_append_raw(out, out_size, used, ",\"layout\":");
+  desktop_json_append_string(out, out_size, used, desktop_last_dispatch.layout);
+  desktop_json_append_raw(out, out_size, used, ",\"split\":");
+  desktop_json_append_string(out, out_size, used, desktop_last_dispatch.split);
+  desktop_json_append_raw(out, out_size, used, ",\"submap\":");
+  desktop_json_append_string(out, out_size, used, desktop_last_dispatch.submap);
+  snprintf(line, sizeof(line),
+           ",\"workspace\":%d,\"focusedClientId\":%d,"
+           "\"splitRatio\":%d,\"masterRatio\":%d,\"nmaster\":%d,"
+           "\"manualDrag\":false,\"floatingDesktop\":false}",
+           desktop_last_dispatch.workspace,
+           desktop_last_dispatch.focused_client_id,
+           desktop_last_dispatch.split_ratio_percent,
+           desktop_last_dispatch.master_ratio_percent,
+           desktop_last_dispatch.master_count);
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
 int gui_desktop_dispatch_json(const char *dispatcher, const char *args,
                               char *out, size_t out_size) {
   char result[1024];
@@ -6762,6 +6887,8 @@ int gui_desktop_dispatch_json(const char *dispatcher, const char *args,
   }
   desktop_json_append_raw(out, out_size, &used, ",\"result\":");
   desktop_json_append_string(out, out_size, &used, result);
+  desktop_json_append_raw(out, out_size, &used, ",\"lastDispatch\":");
+  desktop_json_append_last_dispatch(out, out_size, &used);
   desktop_json_append_raw(
       out, out_size, &used,
       ",\"limits\":[\"VM/ZimaOS framebuffer compositor facade\","
@@ -8071,6 +8198,8 @@ void gui_desktop_format_layout_state_json(char *out, size_t out_size) {
            desktop_master_count);
   desktop_json_append_raw(out, out_size, &used, line);
   desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(out, out_size, &used, ",\"lastDispatch\":");
+  desktop_json_append_last_dispatch(out, out_size, &used);
   desktop_json_append_raw(
       out, out_size, &used,
       ",\"dispatchers\":[\"layoutmsg layout\",\"layoutmsg reset\","
@@ -8137,7 +8266,7 @@ void gui_desktop_format_layout_tree_json(char *out, size_t out_size) {
            "\"split\":\"%s\",\"splitRatio\":%d,\"masterRatio\":%d,"
            "\"nmaster\":%d},\"summary\":{\"clients\":%d,\"rendered\":%d,"
            "\"localWindows\":%d,\"focused\":\"0x%x\",\"pinnedAware\":true},"
-           "\"nodes\":[",
+           "\"lastDispatch\":",
            area_x, area_y, area_w, area_h, inner_gap, outer_gap,
            desktop_layout_engine(), desktop_split_mode_name(),
            desktop_split_ratio_percent, desktop_master_ratio_percent,
@@ -8145,6 +8274,8 @@ void gui_desktop_format_layout_tree_json(char *out, size_t out_size) {
            active_idx >= 0 ? desktop_client_address(&desktop_clients[active_idx])
                            : 0);
   desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_last_dispatch(out, out_size, &used);
+  desktop_json_append_raw(out, out_size, &used, ",\"nodes\":[");
   for (int pos = 0; pos < count && used < out_size; pos++) {
     int idx = desktop_nth_client_on_workspace(desktop_active_workspace, pos);
     int rx;
@@ -8955,6 +9086,22 @@ void gui_desktop_format_layout_state(char *out, size_t out_size) {
                    "manual-window-drag: no\n",
                    desktop_active_workspace, desktop_layout_engine(),
                    desktop_session.layout);
+  if (used < out_size) {
+    used += snprintf(
+        out + used, out_size - used,
+        "last-dispatch: serial=%llu ok=%s status=%d dispatcher=\"%s\" args=\"%s\" result=\"%s\"\n"
+        "last-dispatch-state: workspace=%d layout=%s split=%s ratio=%d master=%d nmaster=%d submap=%s focusedClient=%d manual-drag=no floating=no\n",
+        (unsigned long long)desktop_last_dispatch.serial,
+        desktop_last_dispatch.ok ? "yes" : "no",
+        desktop_last_dispatch.status, desktop_last_dispatch.dispatcher,
+        desktop_last_dispatch.args[0] ? desktop_last_dispatch.args : "none",
+        desktop_last_dispatch.result, desktop_last_dispatch.workspace,
+        desktop_last_dispatch.layout, desktop_last_dispatch.split,
+        desktop_last_dispatch.split_ratio_percent,
+        desktop_last_dispatch.master_ratio_percent,
+        desktop_last_dispatch.master_count, desktop_last_dispatch.submap,
+        desktop_last_dispatch.focused_client_id);
+  }
   for (int ws = 1; ws <= desktop_workspace_count && used < out_size; ws++) {
     int idx = ws - 1;
     int count = desktop_client_count_on_workspace(ws);
@@ -9032,6 +9179,22 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
                    inner_gap, outer_gap, desktop_split_mode_name(),
                    desktop_split_ratio_percent, desktop_master_ratio_percent,
                    desktop_master_count);
+  if (used < out_size) {
+    used += snprintf(
+        out + used, out_size - used,
+        "last-dispatch: serial=%llu ok=%s status=%d dispatcher=\"%s\" args=\"%s\" result=\"%s\"\n"
+        "last-dispatch-state: workspace=%d layout=%s split=%s ratio=%d master=%d nmaster=%d submap=%s focusedClient=%d manual-drag=no floating=no\n",
+        (unsigned long long)desktop_last_dispatch.serial,
+        desktop_last_dispatch.ok ? "yes" : "no",
+        desktop_last_dispatch.status, desktop_last_dispatch.dispatcher,
+        desktop_last_dispatch.args[0] ? desktop_last_dispatch.args : "none",
+        desktop_last_dispatch.result, desktop_last_dispatch.workspace,
+        desktop_last_dispatch.layout, desktop_last_dispatch.split,
+        desktop_last_dispatch.split_ratio_percent,
+        desktop_last_dispatch.master_ratio_percent,
+        desktop_last_dispatch.master_count, desktop_last_dispatch.submap,
+        desktop_last_dispatch.focused_client_id);
+  }
   if (count <= 0 && used < out_size) {
     used += snprintf(out + used, out_size - used,
                      "tree: empty workspace; dispatch exec terminal to create the first tiled client\n");

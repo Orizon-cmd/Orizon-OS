@@ -139,7 +139,7 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.83.0` installs explicit architecture truth maps:
+The desktop package version `0.84.0` installs explicit architecture truth maps:
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
 `desktop backend`, `desktop protocol`, or the matching `desktop hyprctl -j`
@@ -162,8 +162,10 @@ recover` repairs/reapplies the session.
 The model is closer to Hyprland dispatchers and automatic tiling than to a
 mouse-drag window desktop. `desktop layout-tree` and
 `desktop hyprctl layouttree` show the active tiling tree, rectangles and
-`manual-drag=no` boundary when debugging the installed VM session. The same
-profile can be installed later through
+`manual-drag=no` boundary when debugging the installed VM session.
+`desktop layout-state`, `desktop layout-tree`, and JSON dispatch diagnostics
+also show the `lastDispatch` snapshot for the latest tiling dispatcher result,
+including status and readable error text. The same profile can be installed later through
 packages:
 
 ```text
