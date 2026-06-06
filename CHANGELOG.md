@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.71.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j devices`,
+  `desktop hyprctl -j keymap`, and `desktop hyprctl -j cursorpos`. The VM-safe
+  output now exposes keyboard layout/submap state, pointer position/buttons,
+  PS/2/USB/I2C input backend summaries, and explicit `libinput=false`/
+  `wayland=false`/`manualDrag=false` boundaries without enabling Wayland
+  keygrabs, libinput, floating windows, free mouse drag, a taskbar, Waybar, or
+  physical hardware input validation.
 - Added desktop package version `0.70.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j monitors`. The VM-safe output now exposes
   the single Orizon framebuffer monitor, active workspace, reserved edges,

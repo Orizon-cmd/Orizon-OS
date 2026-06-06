@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       gui_desktop_format_hyprctl_version(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
@@ -3789,7 +3789,11 @@ static void ssh_shell_print_desktop(const char *args) {
       }
     } else if (ssh_shell_command_is(hypr, "keymap") ||
                ssh_shell_command_is(hypr, "inputmap")) {
-      gui_desktop_format_keymap(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_keymap_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_keymap(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "layers")) {
       if (json) {
         gui_desktop_format_layers_json(out, sizeof(out));
@@ -3834,9 +3838,17 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_dispatch("submap", value, out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "devices")) {
-      gui_desktop_format_devices(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_devices_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_devices(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "cursorpos")) {
-      gui_desktop_format_cursorpos(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_cursorpos_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_cursorpos(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "splash")) {
       gui_desktop_format_splash(out, sizeof(out));
     } else if (ssh_shell_command_is(hypr, "configerrors")) {

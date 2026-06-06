@@ -128,10 +128,13 @@ void gui_desktop_format_submap(char *out, size_t out_size);
 void gui_desktop_format_status(char *out, size_t out_size);
 void gui_desktop_format_pointer(char *out, size_t out_size);
 void gui_desktop_format_devices(char *out, size_t out_size);
+void gui_desktop_format_devices_json(char *out, size_t out_size);
 void gui_desktop_format_keymap(char *out, size_t out_size);
+void gui_desktop_format_keymap_json(char *out, size_t out_size);
 void gui_desktop_format_systeminfo(char *out, size_t out_size);
 void gui_desktop_format_hyprctl_version(char *out, size_t out_size);
 void gui_desktop_format_cursorpos(char *out, size_t out_size);
+void gui_desktop_format_cursorpos_json(char *out, size_t out_size);
 void gui_desktop_format_splash(char *out, size_t out_size);
 
 /* Direct framebuffer access for low-level debug */

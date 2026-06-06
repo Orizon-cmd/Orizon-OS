@@ -8977,7 +8977,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
+           "json: desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
@@ -9199,6 +9199,67 @@ void gui_desktop_format_devices(char *out, size_t out_size) {
            desktop_settings.pointer_profile, ps2, usb, i2c);
 }
 
+void gui_desktop_format_devices_json(char *out, size_t out_size) {
+  char ps2[256];
+  char usb[320];
+  char i2c[256];
+  char key_name[24];
+  size_t used = 0;
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  ps2_format_status(ps2, sizeof(ps2));
+  usb_format_status(usb, sizeof(usb));
+  i2c_hid_format_status(i2c, sizeof(i2c));
+  desktop_key_name(desktop_last_key, key_name, sizeof(key_name));
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"devices\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,\"wlroots\":false,"
+      "\"libinput\":false,\"manualDrag\":false,\"keyboard\":{\"name\":");
+  desktop_json_append_string(out, out_size, &used, "Orizon keyboard");
+  desktop_json_append_raw(out, out_size, &used, ",\"layout\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.keyboard_layout);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"backend\":\"framebuffer-console\",\"activeSubmap\":");
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(out, out_size, &used, ",\"lastKey\":");
+  desktop_json_append_string(out, out_size, &used, key_name);
+  snprintf(line, sizeof(line),
+           ",\"serial\":%llu},\"pointer\":{\"name\":",
+           (unsigned long long)desktop_key_serial);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             "Orizon compositor pointer");
+  desktop_json_append_raw(out, out_size, &used, ",\"profile\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.pointer_profile);
+  snprintf(line, sizeof(line),
+           ",\"x\":%d,\"y\":%d,\"buttons\":%d,\"focusFollowsMouse\":%s,"
+           "\"focusChanges\":%llu,\"manualWindowDrag\":false},"
+           "\"backends\":{\"ps2\":",
+           mouse_x, mouse_y, prev_buttons,
+           desktop_session.focus_follows_mouse ? "true" : "false",
+           (unsigned long long)desktop_pointer_focus_changes);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, ps2);
+  desktop_json_append_raw(out, out_size, &used, ",\"usbHid\":");
+  desktop_json_append_string(out, out_size, &used, usb);
+  desktop_json_append_raw(out, out_size, &used, ",\"i2cHid\":");
+  desktop_json_append_string(out, out_size, &used, i2c);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},\"limits\":[\"VM-safe Orizon input model only\","
+      "\"no libinput/Wayland device graph yet\","
+      "\"no manual window drag\"]}\n");
+}
+
 void gui_desktop_format_keymap(char *out, size_t out_size) {
   char key_name[24];
 
@@ -9228,6 +9289,53 @@ void gui_desktop_format_keymap(char *out, size_t out_size) {
            desktop_session.focus_follows_mouse ? "yes" : "no",
            (unsigned long long)desktop_pointer_focus_changes,
            ORIZON_DESKTOP_BINDS_PATH);
+}
+
+void gui_desktop_format_keymap_json(char *out, size_t out_size) {
+  char key_name[24];
+  size_t used = 0;
+  char line[512];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_key_name(desktop_last_key, key_name, sizeof(key_name));
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"keymap\",\"hyprlandStyleFacade\":true,"
+      "\"model\":\"Hyprland-style dispatcher/submap facade over VM framebuffer input\","
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,\"wlroots\":false,"
+      "\"manualDrag\":false,\"keyboardLayout\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.keyboard_layout);
+  desktop_json_append_raw(out, out_size, &used, ",\"activeSubmap\":");
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(out, out_size, &used, ",\"lastKey\":");
+  desktop_json_append_string(out, out_size, &used, key_name);
+  snprintf(line, sizeof(line),
+           ",\"serial\":%llu,\"focusFollowsMouse\":%s,"
+           "\"pointerFocusChanges\":%llu,\"configBinds\":",
+           (unsigned long long)desktop_key_serial,
+           desktop_session.focus_follows_mouse ? "true" : "false",
+           (unsigned long long)desktop_pointer_focus_changes);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BINDS_PATH);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"directKeys\":[\"F1 exec terminal\",\"F2 killactive\","
+      "\"F3 launcher toggle\",\"F4 fullscreen\",\"F5 pseudo\","
+      "\"F6 cyclenext\",\"F7/F8 workspace +/-1\"],"
+      "\"submaps\":[{\"name\":\"resize\",\"entry\":\"F9\","
+      "\"actions\":[\"split -5/+5\",\"master +5/-5\",\"reset\","
+      "\"togglesplit\",\"default\"]},{\"name\":\"move\",\"entry\":\"F10\","
+      "\"actions\":[\"focus HJKL/arrows\",\"movewindow next/prev\","
+      "\"movewindow master\",\"movetoworkspace 1/2/3\",\"pin\","
+      "\"default\"]},{\"name\":\"launch\",\"entry\":\"F11\","
+      "\"actions\":[\"terminal\",\"launcher\",\"killactive\","
+      "\"default\"]}],\"limits\":[\"VM framebuffer key events only\","
+      "\"no Wayland keygrab protocol yet\",\"no manual window drag\"]}\n");
 }
 
 void gui_desktop_format_systeminfo(char *out, size_t out_size) {
@@ -9313,6 +9421,31 @@ void gui_desktop_format_cursorpos(char *out, size_t out_size) {
            "buttons: %d\n"
            "profile: %s\n",
            mouse_x, mouse_y, prev_buttons, desktop_settings.pointer_profile);
+}
+
+void gui_desktop_format_cursorpos_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[320];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  snprintf(line, sizeof(line),
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"command\":\"cursorpos\",\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+           "\"wlroots\":false,\"manualDrag\":false,\"x\":%d,\"y\":%d,"
+           "\"buttons\":%d,\"profile\":",
+           mouse_x, mouse_y, prev_buttons);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.pointer_profile);
+  snprintf(line, sizeof(line),
+           ",\"focusFollowsMouse\":%s,\"focusChanges\":%llu}\n",
+           desktop_session.focus_follows_mouse ? "true" : "false",
+           (unsigned long long)desktop_pointer_focus_changes);
+  desktop_json_append_raw(out, out_size, &used, line);
 }
 
 void gui_desktop_format_splash(char *out, size_t out_size) {

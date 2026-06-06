@@ -228,6 +228,9 @@ desktop hyprctl -j rulematches
 desktop hyprctl -j layoutstate
 desktop hyprctl -j layouttree
 desktop hyprctl -j monitors
+desktop hyprctl -j devices
+desktop hyprctl -j keymap
+desktop hyprctl -j cursorpos
 desktop hyprctl -j binds
 desktop hyprctl -j layers
 desktop hyprctl focushistory
