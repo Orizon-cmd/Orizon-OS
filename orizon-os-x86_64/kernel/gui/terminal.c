@@ -4257,7 +4257,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4369,7 +4369,11 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_layers(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "layouts")) {
-      gui_desktop_format_layouts(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_layouts_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_layouts(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "layoutstate") ||
                term_command_is(hypr, "layout-state") ||
                term_command_is(hypr, "workspacelayouts")) {
@@ -4406,14 +4410,26 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_render(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "descriptions")) {
-      gui_desktop_format_descriptions(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_descriptions_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_descriptions(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "instances")) {
-      gui_desktop_format_instances(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_instances_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_instances(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "submap")) {
       const char *value = term_skip_spaces(hypr + 6);
       if (*value == '\0' || term_command_is(value, "show") ||
           term_command_is(value, "status")) {
-        gui_desktop_format_submap(report, sizeof(report));
+        if (json) {
+          gui_desktop_format_submap_json(report, sizeof(report));
+        } else {
+          gui_desktop_format_submap(report, sizeof(report));
+        }
       } else {
         gui_desktop_dispatch("submap", value, report, sizeof(report));
       }
@@ -4430,7 +4446,11 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_cursorpos(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "splash")) {
-      gui_desktop_format_splash(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_splash_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_splash(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "configerrors")) {
       if (json) {
         orizon_desktop_format_config_errors_json(report, sizeof(report));
@@ -4445,7 +4465,11 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         orizon_desktop_format_config_trace(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "rollinglog")) {
-      orizon_desktop_format_rolling_log(report, sizeof(report));
+      if (json) {
+        orizon_desktop_format_rolling_log_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_rolling_log(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "getoption")) {
       const char *key = term_skip_spaces(hypr + 9);
       if (*key == '\0') {

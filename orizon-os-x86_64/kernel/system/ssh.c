@@ -3707,7 +3707,7 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, submap, splash, rollinglog, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       if (json) {
         gui_desktop_format_hyprctl_version_json(out, sizeof(out));
@@ -3817,7 +3817,11 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_format_layers(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "layouts")) {
-      gui_desktop_format_layouts(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_layouts_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_layouts(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "layoutstate") ||
                ssh_shell_command_is(hypr, "layout-state") ||
                ssh_shell_command_is(hypr, "workspacelayouts")) {
@@ -3854,14 +3858,26 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_format_render(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "descriptions")) {
-      gui_desktop_format_descriptions(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_descriptions_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_descriptions(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "instances")) {
-      gui_desktop_format_instances(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_instances_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_instances(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "submap")) {
       const char *value = ssh_shell_skip_spaces(hypr + 6);
       if (*value == '\0' || ssh_shell_command_is(value, "show") ||
           ssh_shell_command_is(value, "status")) {
-        gui_desktop_format_submap(out, sizeof(out));
+        if (json) {
+          gui_desktop_format_submap_json(out, sizeof(out));
+        } else {
+          gui_desktop_format_submap(out, sizeof(out));
+        }
       } else {
         gui_desktop_dispatch("submap", value, out, sizeof(out));
       }
@@ -3878,7 +3894,11 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_format_cursorpos(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "splash")) {
-      gui_desktop_format_splash(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_splash_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_splash(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "configerrors")) {
       if (json) {
         orizon_desktop_format_config_errors_json(out, sizeof(out));
@@ -3893,7 +3913,11 @@ static void ssh_shell_print_desktop(const char *args) {
         orizon_desktop_format_config_trace(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "rollinglog")) {
-      orizon_desktop_format_rolling_log(out, sizeof(out));
+      if (json) {
+        orizon_desktop_format_rolling_log_json(out, sizeof(out));
+      } else {
+        orizon_desktop_format_rolling_log(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "getoption")) {
       const char *key = ssh_shell_skip_spaces(hypr + 9);
       if (*key == '\0') {

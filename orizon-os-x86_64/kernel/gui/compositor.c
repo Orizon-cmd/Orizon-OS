@@ -8736,6 +8736,69 @@ void gui_desktop_format_layouts(char *out, size_t out_size) {
            desktop_focus_history[0] > 0 ? "ready" : "empty");
 }
 
+void gui_desktop_format_layouts_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[768];
+  int total = 0;
+  int workspace_clients;
+  uint32_t focused = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    if (desktop_clients[i].visible) {
+      total++;
+    }
+  }
+  workspace_clients = desktop_client_count_on_workspace(desktop_active_workspace);
+  if (desktop_focused_client_id > 0) {
+    focused = DESKTOP_CLIENT_ADDRESS_BASE +
+              ((uint32_t)desktop_focused_client_id * 0x100u);
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"layouts\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,\"activeLayout\":");
+  desktop_json_append_string(out, out_size, &used, desktop_layout_engine());
+  desktop_json_append_raw(out, out_size, &used, ",\"defaultLayout\":");
+  desktop_json_append_string(out, out_size, &used, desktop_session.layout);
+  desktop_json_append_raw(out, out_size, &used, ",\"splitMode\":");
+  desktop_json_append_string(out, out_size, &used, desktop_split_mode_name());
+  snprintf(line, sizeof(line),
+           ",\"splitRatio\":%d,\"masterRatio\":%d,\"masterCount\":%d,"
+           "\"activeWorkspace\":%d,\"clients\":{\"total\":%d,"
+           "\"workspace\":%d,\"focusedAddress\":\"0x%x\","
+           "\"focusHistoryReady\":%s},\"submap\":",
+           desktop_split_ratio_percent, desktop_master_ratio_percent,
+           desktop_master_count, desktop_active_workspace, total,
+           workspace_clients, focused,
+           desktop_focus_history[0] > 0 ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"layouts\":["
+      "{\"name\":\"dwindle\",\"enabled\":true,"
+      "\"description\":\"dynamic split tiling\","
+      "\"dispatchers\":[\"togglesplit\",\"layoutmsg splitratio\","
+      "\"layoutmsg preselect\",\"layoutmsg reset\"]},"
+      "{\"name\":\"master\",\"enabled\":true,"
+      "\"description\":\"main-area plus stack\","
+      "\"dispatchers\":[\"focusmaster\",\"swapwithmaster\","
+      "\"layoutmsg masterratio\",\"layoutmsg nmaster\"]},"
+      "{\"name\":\"monocle\",\"enabled\":true,"
+      "\"description\":\"single focused client\","
+      "\"dispatchers\":[\"workspace\",\"movefocus\",\"focuswindow\"]}],"
+      "\"workspaceState\":\"per-workspace layout/split/master ratios and nmaster\","
+      "\"limits\":[\"VM framebuffer compositor state\","
+      "\"not upstream Hyprland layout plugin ABI\","
+      "\"no floating scene graph or manual window drag\"]}\n");
+}
+
 void gui_desktop_format_layout_state(char *out, size_t out_size) {
   size_t used = 0;
 
@@ -9128,7 +9191,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "commands: backend, protocol, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, configerrors, configtrace, rollinglog, instances, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
+           "json: desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
@@ -9141,6 +9204,52 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "fullscreenstate: internal controls compositor layout; fullscreenClient records state exposed to future clients\n"
            "urgent: markurgent is a VM diagnostic to exercise focusurgentorlast before real client urgency exists\n"
            "truth: Hyprland-style facade for Orizon's framebuffer compositor\n");
+}
+
+void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"descriptions\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,"
+      "\"jsonCommands\":[\"version\",\"systeminfo\",\"backend\","
+      "\"protocol\",\"clients\",\"workspaces\",\"activeworkspace\","
+      "\"activewindow\",\"focushistory\",\"workspacestack\","
+      "\"clientmodel\",\"rulematches\",\"layoutstate\",\"layouttree\","
+      "\"monitors\",\"devices\",\"keymap\",\"cursorpos\",\"animations\","
+      "\"decorations\",\"render\",\"layouts\",\"descriptions\","
+      "\"instances\",\"submap\",\"splash\",\"rollinglog\","
+      "\"configerrors\",\"configtrace\",\"getoption\",\"keyword\","
+      "\"reload\",\"binds\",\"layers\"],"
+      "\"dispatchers\":[\"exec\",\"killactive\",\"workspace\","
+      "\"focusworkspaceoncurrentmonitor\",\"focusmonitor\","
+      "\"movecurrentworkspacetomonitor\",\"moveworkspacetomonitor\","
+      "\"togglespecialworkspace\",\"renameworkspace\","
+      "\"movetoworkspace\",\"movetoworkspacesilent\",\"movefocus\","
+      "\"focusmwindow\",\"focuswindow\",\"focuscurrentorlast\","
+      "\"focusurgentorlast\",\"markurgent\",\"tagwindow\","
+      "\"cyclenext\",\"swapnext\",\"swapwindow\",\"swapmwindow\","
+      "\"movewindow\",\"focusmaster\",\"swapwithmaster\","
+      "\"fullscreen\",\"fullscreenstate\",\"pseudo\",\"pseudotile\","
+      "\"pin\",\"togglesplit\",\"layoutmsg\",\"resizeactive\","
+      "\"submap\"],"
+      "\"aliases\":{\"layoutstate\":[\"layout-state\","
+      "\"workspacelayouts\"],\"layouttree\":[\"layout-tree\",\"tree\"],"
+      "\"backend\":[\"backend-info\"],\"protocol\":[\"protocols\"],"
+      "\"rulematches\":[\"rule-matches\",\"windowrules\","
+      "\"window-rules\"]},"
+      "\"policies\":{\"tilingOnly\":true,\"floatingDesktop\":false,"
+      "\"taskbar\":false,\"startMenu\":false,\"waybarActive\":false},"
+      "\"limits\":[\"VM/ZimaOS facade only\","
+      "\"not upstream Hyprland/wlroots yet\","
+      "\"no physical hardware validation claimed\"]}\n");
 }
 
 void gui_desktop_format_instances(char *out, size_t out_size) {
@@ -9162,6 +9271,37 @@ void gui_desktop_format_instances(char *out, size_t out_size) {
            desktop_layout_engine(), desktop_submap);
 }
 
+void gui_desktop_format_instances_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[128];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"instances\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,\"instances\":[{"
+      "\"id\":0,\"signature\":\"orizon-framebuffer-main\","
+      "\"pid\":\"kernel\",\"wlSocket\":null,\"running\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          desktop_mode_enabled ? "true" : "false");
+  snprintf(line, sizeof(line), ",\"activeWorkspace\":%d,\"layout\":",
+           desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_layout_engine());
+  desktop_json_append_raw(out, out_size, &used, ",\"submap\":");
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "}],\"limits\":[\"single framebuffer compositor instance\","
+      "\"no multi-seat Wayland instance yet\","
+      "\"no upstream Hyprland IPC socket yet\"]}\n");
+}
+
 void gui_desktop_format_submap(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -9174,6 +9314,38 @@ void gui_desktop_format_submap(char *out, size_t out_size) {
            "resize: arrows/HJKL adjust tiling ratios; move: arrows/HJKL focus and 1/2/3 move clients\n"
            "bind-note: config parser records submap-style binds; runtime submaps are active in VM keyboard input\n",
            desktop_submap);
+}
+
+void gui_desktop_format_submap_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"submap\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,\"activeSubmap\":");
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"available\":[\"default\",\"resize\",\"move\",\"launch\"],"
+      "\"keys\":{\"F9\":\"resize\",\"F10\":\"move\","
+      "\"F11\":\"launch\",\"F12\":\"default\",\"Esc\":\"default\"},"
+      "\"modes\":[{\"name\":\"resize\","
+      "\"actions\":[\"adjust tiling ratios with arrows/HJKL\"]},"
+      "{\"name\":\"move\","
+      "\"actions\":[\"focus with arrows/HJKL\","
+      "\"move tiled clients with 1/2/3\"]},"
+      "{\"name\":\"launch\","
+      "\"actions\":[\"open tiled desktop apps\"]}],"
+      "\"bindSource\":\"" ORIZON_DESKTOP_BINDS_PATH "\","
+      "\"limits\":[\"submap runtime is VM keyboard input\","
+      "\"bindm remains prepared-only\","
+      "\"no manual window drag\"]}\n");
 }
 
 void gui_desktop_reload_session(void) {
@@ -9697,8 +9869,9 @@ void gui_desktop_format_hyprctl_version_json(char *out, size_t out_size) {
            "\"clientmodel\",\"rulematches\",\"layoutstate\","
            "\"layouttree\",\"monitors\",\"devices\",\"keymap\","
            "\"cursorpos\",\"animations\",\"decorations\",\"render\","
-           "\"configerrors\",\"configtrace\",\"getoption\",\"keyword\","
-           "\"reload\",\"binds\",\"layers\"],"
+           "\"layouts\",\"descriptions\",\"instances\",\"submap\","
+           "\"splash\",\"rollinglog\",\"configerrors\",\"configtrace\","
+           "\"getoption\",\"keyword\",\"reload\",\"binds\",\"layers\"],"
            "\"truth\":\"inspired by Hyprland, not upstream Hyprland\","
            "\"limits\":[\"VM/ZimaOS facade only\","
            "\"no real Wayland/wlroots backend yet\","
@@ -9749,6 +9922,41 @@ void gui_desktop_format_splash(char *out, size_t out_size) {
            "Orizon desktop splash\n"
            "Welcome to the Hyprland-style Orizon profile.\n"
            "Tiny tiling gremlin status: awake, polite, no mouse-dragging.\n");
+}
+
+void gui_desktop_format_splash_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[256];
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"splash\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"renderer\":\"software\","
+      "\"wayland\":false,\"wlroots\":false,\"manualDrag\":false,"
+      "\"taskbar\":false,\"waybarActive\":false,\"title\":");
+  desktop_json_append_string(out, out_size, &used, "Orizon desktop splash");
+  desktop_json_append_raw(out, out_size, &used, ",\"message\":");
+  desktop_json_append_string(
+      out, out_size, &used,
+      "Welcome to the Hyprland-style Orizon profile.");
+  desktop_json_append_raw(out, out_size, &used, ",\"theme\":");
+  desktop_json_append_string(out, out_size, &used, desktop_session.theme);
+  desktop_json_append_raw(out, out_size, &used, ",\"wallpaper\":");
+  desktop_json_append_string(out, out_size, &used, desktop_session.wallpaper);
+  snprintf(line, sizeof(line), ",\"activeWorkspace\":%d,\"layout\":",
+           desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_layout_engine());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"VM/ZimaOS facade only\","
+      "\"not upstream Hyprland/wlroots yet\","
+      "\"no physical hardware validation claimed\"]}\n");
 }
 
 static void gui_show_boot_stage(const char *stage) {

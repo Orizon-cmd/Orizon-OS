@@ -5974,3 +5974,45 @@ void orizon_desktop_format_rolling_log(char *out, size_t out_size) {
     desktop_append(out, out_size, &used, "\n");
   }
 }
+
+void orizon_desktop_format_rolling_log_json(char *out, size_t out_size) {
+  char log[1024];
+  size_t used = 0;
+  int n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  n = desktop_read_text_file(ORIZON_DESKTOP_LOG_PATH, log, sizeof(log));
+  if (n <= 0) {
+    log[0] = '\0';
+  } else {
+    log[sizeof(log) - 1] = '\0';
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"rollinglog\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"manualDrag\":false,"
+      "\"source\":\"Orizon desktop event log\",\"paths\":{\"events\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_LOG_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"session\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_SESSION_LOG_PATH);
+  desktop_json_append_raw(out, out_size, &used, "},\"empty\":");
+  desktop_json_append_raw(out, out_size, &used, n <= 0 ? "true" : "false");
+  {
+    char line[128];
+    snprintf(line, sizeof(line), ",\"bytesSampled\":%d,\"preview\":",
+             n > 0 ? n : 0);
+    desktop_json_append_raw(out, out_size, &used, line);
+  }
+  desktop_json_append_string(out, out_size, &used, log);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"limits\":[\"tail is sampled from the VM event log\","
+      "\"not an upstream Hyprland socket log\","
+      "\"no physical hardware validation claimed\"]}\n");
+}

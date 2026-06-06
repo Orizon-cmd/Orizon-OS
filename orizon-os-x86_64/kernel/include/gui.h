@@ -117,6 +117,7 @@ void gui_desktop_format_layers_json(char *out, size_t out_size);
 void gui_desktop_format_binds(char *out, size_t out_size);
 void gui_desktop_format_binds_json(char *out, size_t out_size);
 void gui_desktop_format_layouts(char *out, size_t out_size);
+void gui_desktop_format_layouts_json(char *out, size_t out_size);
 void gui_desktop_format_layout_state(char *out, size_t out_size);
 void gui_desktop_format_layout_tree(char *out, size_t out_size);
 void gui_desktop_format_animations(char *out, size_t out_size);
@@ -126,8 +127,11 @@ void gui_desktop_format_decorations_json(char *out, size_t out_size);
 void gui_desktop_format_render(char *out, size_t out_size);
 void gui_desktop_format_render_json(char *out, size_t out_size);
 void gui_desktop_format_descriptions(char *out, size_t out_size);
+void gui_desktop_format_descriptions_json(char *out, size_t out_size);
 void gui_desktop_format_instances(char *out, size_t out_size);
+void gui_desktop_format_instances_json(char *out, size_t out_size);
 void gui_desktop_format_submap(char *out, size_t out_size);
+void gui_desktop_format_submap_json(char *out, size_t out_size);
 void gui_desktop_format_status(char *out, size_t out_size);
 void gui_desktop_format_pointer(char *out, size_t out_size);
 void gui_desktop_format_devices(char *out, size_t out_size);
@@ -141,6 +145,7 @@ void gui_desktop_format_hyprctl_version_json(char *out, size_t out_size);
 void gui_desktop_format_cursorpos(char *out, size_t out_size);
 void gui_desktop_format_cursorpos_json(char *out, size_t out_size);
 void gui_desktop_format_splash(char *out, size_t out_size);
+void gui_desktop_format_splash_json(char *out, size_t out_size);
 
 /* Direct framebuffer access for low-level debug */
 extern uint32_t *g_fb_ptr;

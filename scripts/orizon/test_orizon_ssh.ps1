@@ -154,6 +154,12 @@ $commands = @(
   "desktop hyprctl -j animations",
   "desktop hyprctl -j decorations",
   "desktop hyprctl -j render",
+  "desktop hyprctl -j layouts",
+  "desktop hyprctl -j descriptions",
+  "desktop hyprctl -j instances",
+  "desktop hyprctl -j submap",
+  "desktop hyprctl -j splash",
+  "desktop hyprctl -j rollinglog",
   "desktop hyprctl -j configerrors",
   "desktop hyprctl -j configtrace",
   "desktop hyprctl workspacestack",
@@ -768,6 +774,24 @@ run_cmd() {
       ;;
     "desktop hyprctl -j render")
       grep -q '"command":"render"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j layouts")
+      grep -q '"command":"layouts"' "`$OUT" && grep -q '"activeLayout":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j descriptions")
+      grep -Fq '"jsonCommands":[' "`$OUT" && grep -q '"floatingDesktop":false' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json descriptions"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j instances")
+      grep -q '"command":"instances"' "`$OUT" && grep -q '"signature":"orizon-framebuffer-main"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j submap")
+      grep -q '"command":"submap"' "`$OUT" && grep -q '"activeSubmap":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j splash")
+      grep -q '"command":"splash"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json splash"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j rollinglog")
+      grep -q '"command":"rollinglog"' "`$OUT" && grep -q '"paths":{"events":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configerrors")
       grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

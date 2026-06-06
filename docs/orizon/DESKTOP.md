@@ -95,6 +95,12 @@ desktop hyprctl -j cursorpos
 desktop hyprctl -j animations
 desktop hyprctl -j decorations
 desktop hyprctl -j render
+desktop hyprctl -j layouts
+desktop hyprctl -j descriptions
+desktop hyprctl -j instances
+desktop hyprctl -j submap
+desktop hyprctl -j splash
+desktop hyprctl -j rollinglog
 desktop hyprctl -j binds
 desktop hyprctl -j layers
 desktop hyprctl backend
@@ -545,7 +551,7 @@ from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
@@ -681,6 +687,12 @@ desktop hyprctl -j cursorpos emits pointer position/buttons
 desktop hyprctl -j animations emits software transition/curve state
 desktop hyprctl -j decorations emits focus ring/border/shadow state
 desktop hyprctl -j render emits framebuffer renderer/protocol boundaries
+desktop hyprctl -j layouts emits layout catalog and active ratio state
+desktop hyprctl -j descriptions emits command/dispatcher surfaces
+desktop hyprctl -j instances emits the framebuffer compositor instance
+desktop hyprctl -j submap emits active keyboard submap state
+desktop hyprctl -j splash emits VM-safe splash/render boundary metadata
+desktop hyprctl -j rollinglog emits sampled desktop log paths/status
 desktop hyprctl -j binds emits bind counts and prepared-only bindm status
 desktop hyprctl -j layers emits the framebuffer layer graph without Waybar
 ```

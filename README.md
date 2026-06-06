@@ -76,7 +76,7 @@ le developpement noyau:
   (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
   `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
   `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/submap/devices/keymap/cursorpos/splash/configerrors/configtrace/rollinglog/getoption/keyword/reload/binds/layers`, diagnostics JSON compacts
-  `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`, mutation
+  `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|reload|binds|layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -229,7 +229,7 @@ un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 Les cibles workspace acceptent maintenant les prefixes Hyprland-style
 `r+/-n`, `r~n`, `m+/-n`, `e+/-n`, `m~n` et `e~n`; `r` inclut les slots vides
 et `m/e` parcourent les workspaces ouverts dans la facade VM mono-moniteur.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|submap|splash|rollinglog|configerrors|configtrace|getoption|keyword|reload|binds|layers`
 ajoute une sortie JSON compacte pour les futurs paquets/outils de status, avec
 des champs Hyprland-style (`address`, `workspace`, `fullscreenClient`, `tags`,
 `windows`, `lastwindow`, `focusHistoryID`, `scope`, `role`, `pinnedAware`,

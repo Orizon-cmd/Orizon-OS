@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added desktop package version `0.74.0` with structured Hyprland-style JSON
+  diagnostics for `desktop hyprctl -j layouts`,
+  `desktop hyprctl -j descriptions`, `desktop hyprctl -j instances`,
+  `desktop hyprctl -j submap`, `desktop hyprctl -j splash`, and
+  `desktop hyprctl -j rollinglog`. The VM-safe output now exposes layout
+  catalog state, command/dispatcher surfaces, compositor instance metadata,
+  active submap state, splash/render boundaries, sampled rolling log paths,
+  and explicit `manualDrag=false`/`wayland=false`/`wlroots=false` markers
+  without enabling Waybar, a Windows-like bar/start menu, floating windows,
+  free mouse drag, upstream Wayland/wlroots Hyprland behavior, or physical
+  hardware validation.
 - Added desktop package version `0.73.0` with structured Hyprland-style JSON
   truth-map diagnostics for `desktop hyprctl -j version`,
   `desktop hyprctl -j systeminfo`, `desktop hyprctl -j backend`, and
