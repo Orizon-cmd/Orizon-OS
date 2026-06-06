@@ -8,6 +8,7 @@
 #include "../include/gui.h"
 #include "../include/acpi.h"
 #include "../include/bootinfo.h"
+#include "../include/compositor_backend.h"
 #include "../include/desktop.h"
 #include "../include/i2c_hid.h"
 #include "../include/input_layout.h"
@@ -28,6 +29,18 @@
 #include "../include/wifi.h"
 
 extern void serial_puts(const char *s);
+
+/*
+ * Migration shim: compositor drawing goes through the Orizon backend API while
+ * keeping framebuffer as the active VM backend. The raw fb_* driver remains the
+ * concrete backend implementation, not the compositor contract.
+ */
+#define fb_put_pixel orizon_compositor_backend_put_pixel
+#define fb_fill_rect orizon_compositor_backend_fill_rect
+#define fb_draw_rect orizon_compositor_backend_draw_rect
+#define fb_fill_rect_alpha orizon_compositor_backend_fill_rect_alpha
+#define fb_fill_gradient_v orizon_compositor_backend_fill_gradient_v
+#define fb_swap_buffers orizon_compositor_backend_present
 
 #define TOP_BAR_HEIGHT 30
 #define FOOTER_HEIGHT 28

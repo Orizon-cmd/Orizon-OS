@@ -747,7 +747,7 @@ run_cmd() {
       grep -q '"command":"protocol"' "`$OUT" && grep -q '"protocol":"orizon-desktop-ipc-v0"' "`$OUT" && grep -q '"wayland":false' "`$OUT" || { echo "missing hyprctl json protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j architecture")
-      grep -q '"command":"architecture"' "`$OUT" && grep -q '"api":"orizon-compositor-api-v0"' "`$OUT" && grep -q '"futureImplemented":false' "`$OUT" && grep -q '"wayland":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"architecture"' "`$OUT" && grep -q '"backendApi"' "`$OUT" && grep -q '"source":"kernel/gui/compositor_backend.c"' "`$OUT" && grep -q '"api":"orizon-compositor-api-v0"' "`$OUT" && grep -q '"futureImplemented":false' "`$OUT" && grep -q '"wayland":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j clients")
       grep -q '"hyprlandStyleFacade":true' "`$OUT" && grep -q '"address":"0x' "`$OUT" && grep -q '"floating":false' "`$OUT" || { echo "missing hyprctl json clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

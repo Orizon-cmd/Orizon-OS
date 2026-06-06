@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.82.0` with a real internal
+  `compositor-backend-v0` seam between the Orizon Hyprland-style compositor
+  model and the current VM framebuffer renderer. The active backend remains
+  `framebuffer-vm`; drawing/present primitives now route through
+  `kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
+  including font rendering, while diagnostics and package metadata keep
+  `wayland=false`, `wlroots=false`, and future `wayland-wlroots`
+  prepared-but-not-implemented boundaries explicit.
 - Added desktop package version `0.81.0` with `desktop architecture` and
   `desktop hyprctl -j architecture` diagnostics backed by
   `/system/desktop-architecture.conf`. The VM-safe output separates the

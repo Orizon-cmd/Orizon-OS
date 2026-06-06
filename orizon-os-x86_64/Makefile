@@ -110,6 +110,7 @@ SOURCES := $(KERNEL_DIR)/boot/limine_boot.c \
            $(KERNEL_DIR)/drivers/usb_ehci.c \
            $(KERNEL_DIR)/gui/font.c \
            $(KERNEL_DIR)/gui/terminal.c \
+           $(KERNEL_DIR)/gui/compositor_backend.c \
            $(KERNEL_DIR)/gui/compositor.c
 
 ASM_SOURCES := $(KERNEL_DIR)/drivers/wifi_firmware.S

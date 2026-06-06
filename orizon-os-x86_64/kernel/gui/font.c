@@ -7,6 +7,8 @@
  */
 
 #include "../include/font.h"
+#include "../include/compositor_backend.h"
+#include "../include/gui.h"
 
 const uint8_t font_data[256][16] = {
     // 0x00 - NULL (blank)
@@ -637,9 +639,9 @@ static void font_draw_char(int x, int y, char c, color_t color) {
         int px = x + col * scale;
         int py = y + row * scale;
         if (scale == 1) {
-          fb_put_pixel(px, py, color);
+          orizon_compositor_backend_put_pixel(px, py, color);
         } else {
-          fb_fill_rect(px, py, scale, scale, color);
+          orizon_compositor_backend_fill_rect(px, py, scale, scale, color);
         }
       }
     }

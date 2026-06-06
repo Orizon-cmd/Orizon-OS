@@ -484,9 +484,13 @@ wlroots scene graph.
 `desktop architecture`, `desktop backend`, and `desktop protocol` expose the
 architecture seam for the future real compositor path. Today they report
 `api: orizon-compositor-api-v0`, `current-backend: framebuffer-vm`,
+`backend-api: compositor-backend-v0` through
+`kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
 `protocol: orizon-desktop-ipc-v0`, software backbuffer rendering, tiled
 internal clients only, no manual free-drag windows, no taskbar, and no Waybar
-package installed. They persist the truth files
+package installed. The compositor and bitmap font renderer now route drawing
+through that backend API while the VM framebuffer remains the only implemented
+backend. They persist the truth files
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`; the future target is documented as
 `wayland-wlroots`, but Wayland, wlroots, xdg-shell, real layer-shell clients,

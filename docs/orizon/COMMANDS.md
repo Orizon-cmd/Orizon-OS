@@ -479,8 +479,10 @@ idempotent client-state dispatchers
 `desktop hyprctl ...` exposes
 a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop architecture`, `desktop backend`, and `desktop protocol` expose the VM
-framebuffer backend map, the `orizon-compositor-api-v0` API seam, the internal
-`orizon-desktop-ipc-v0` protocol map, and the honest
+framebuffer backend map, the `orizon-compositor-api-v0` API seam, the
+`compositor-backend-v0` drawing/present seam in
+`kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
+the internal `orizon-desktop-ipc-v0` protocol map, and the honest
 not-yet-Wayland/wlroots boundary,
 `desktop layout-tree` and `desktop hyprctl layouttree` show the active
 workspace tiling tree with client roles, rectangles, focus state, and

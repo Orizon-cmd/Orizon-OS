@@ -207,10 +207,12 @@ installee. Les modules app auto-preparent `orizon-desktop-core`; `orizon-waybar`
 est seulement annonce comme paquet separe ulterieur, pas genere ni installe
 maintenant.
 `desktop architecture`, `desktop backend` et `desktop protocol` documentent le
-split d'architecture: API `orizon-compositor-api-v0`, backend actuel
-`framebuffer-vm`, protocole interne `orizon-desktop-ipc-v0`, future cible
-`wayland-wlroots` preparee, mais pas encore Wayland/wlroots, xdg-shell,
-layer-shell reel, XWayland ni clients Wayland externes.
+split d'architecture: API `orizon-compositor-api-v0`, API backend interne
+`compositor-backend-v0` (`kernel/include/compositor_backend.h` et
+`kernel/gui/compositor_backend.c`), backend actuel `framebuffer-vm`, protocole
+interne `orizon-desktop-ipc-v0`, future cible `wayland-wlroots` preparee, mais
+pas encore Wayland/wlroots, xdg-shell, layer-shell reel, XWayland ni clients
+Wayland externes.
 `desktop layout-tree` et `desktop hyprctl layouttree` exposent l'arbre actif du
 workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.

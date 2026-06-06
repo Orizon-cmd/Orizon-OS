@@ -351,9 +351,14 @@ static const char *desktop_backend_config =
     "# Truth file for the current VM-safe Hyprland-style facade.\n"
     "api orizon-compositor-api-v0\n"
     "api-role compositor-orchestrator\n"
+    "backend-api compositor-backend-v0\n"
+    "backend-api-header kernel/include/compositor_backend.h\n"
+    "backend-api-source kernel/gui/compositor_backend.c\n"
     "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "backend-current framebuffer-vm\n"
-    "backend-current-file gui/compositor.c\n"
+    "backend-current-file gui/compositor_backend.c\n"
+    "compositor-entry gui/compositor.c\n"
+    "font-render-path compositor-backend-api\n"
     "backend-future wayland-wlroots\n"
     "render-path software-backbuffer\n"
     "client-model tiled-internal\n"
@@ -387,10 +392,16 @@ static const char *desktop_architecture_config =
     "api orizon-compositor-api-v0\n"
     "api-owner Orizon\n"
     "api-scope tiling,dispatchers,workspaces,clients,config,rules,diagnostics\n"
+    "backend-api compositor-backend-v0\n"
+    "backend-api-header kernel/include/compositor_backend.h\n"
+    "backend-api-source kernel/gui/compositor_backend.c\n"
+    "backend-api-primitives put_pixel,fill_rect,draw_rect,fill_rect_alpha,fill_gradient_v,present\n"
     "facade hyprland-style\n"
     "facade-upstream-hyprland no\n"
     "backend-current framebuffer-vm\n"
-    "backend-current-file gui/compositor.c\n"
+    "backend-current-file gui/compositor_backend.c\n"
+    "compositor-entry gui/compositor.c\n"
+    "font-render-path compositor-backend-api\n"
     "backend-current-role vm-software-framebuffer-renderer\n"
     "backend-current-status implemented\n"
     "backend-future wayland-wlroots\n"
@@ -5554,9 +5565,11 @@ void orizon_desktop_format_architecture(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "api: orizon-compositor-api-v0\n");
   desktop_append(out, out_size, &used,
+                 "backend-api: compositor-backend-v0 header=kernel/include/compositor_backend.h source=kernel/gui/compositor_backend.c\n");
+  desktop_append(out, out_size, &used,
                  "facade: Hyprland-style compatibility, upstream-hyprland=no\n");
   desktop_append(out, out_size, &used,
-                 "backend-current: framebuffer-vm implemented in gui/compositor.c\n");
+                 "backend-current: framebuffer-vm implemented in gui/compositor_backend.c, composed by gui/compositor.c\n");
   desktop_append(out, out_size, &used,
                  "backend-future: wayland-wlroots prepared, implemented=no\n");
   desktop_append(out, out_size, &used,
@@ -5601,8 +5614,13 @@ void orizon_desktop_format_architecture_json(char *out, size_t out_size) {
       "\"api\":\"orizon-compositor-api-v0\","
       "\"apiLayerSeparated\":true,\"facade\":\"hyprland-style\","
       "\"upstreamHyprland\":false,"
+      "\"backendApi\":{\"name\":\"compositor-backend-v0\","
+      "\"header\":\"kernel/include/compositor_backend.h\","
+      "\"source\":\"kernel/gui/compositor_backend.c\","
+      "\"drawPrimitives\":true,\"fontPath\":true,\"active\":\"framebuffer-vm\"},"
       "\"backend\":{\"current\":\"framebuffer-vm\","
-      "\"currentFile\":\"gui/compositor.c\","
+      "\"currentFile\":\"gui/compositor_backend.c\","
+      "\"compositorEntry\":\"gui/compositor.c\","
       "\"currentImplemented\":true,\"future\":\"wayland-wlroots\","
       "\"futurePrepared\":true,\"futureImplemented\":false},"
       "\"protocol\":{\"current\":\"orizon-desktop-ipc-v0\","
@@ -5668,6 +5686,8 @@ void orizon_desktop_format_backend(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "api: orizon-compositor-api-v0 role=compositor-orchestrator\n");
   desktop_append(out, out_size, &used,
+                 "backend-api: compositor-backend-v0 header=kernel/include/compositor_backend.h source=kernel/gui/compositor_backend.c\n");
+  desktop_append(out, out_size, &used,
                  "renderer: software-backbuffer\n");
   desktop_append(out, out_size, &used,
                  "clients: tiled-internal only; external-wayland-clients=no\n");
@@ -5703,6 +5723,9 @@ void orizon_desktop_format_backend_json(char *out, size_t out_size) {
       "\"command\":\"backend\",\"hyprlandStyleFacade\":true,"
       "\"api\":\"orizon-compositor-api-v0\","
       "\"apiRole\":\"compositor-orchestrator\","
+      "\"backendApi\":\"compositor-backend-v0\","
+      "\"backendApiHeader\":\"kernel/include/compositor_backend.h\","
+      "\"backendApiSource\":\"kernel/gui/compositor_backend.c\","
       "\"backend\":\"framebuffer-vm\",\"renderer\":\"software-backbuffer\","
       "\"currentBackend\":\"framebuffer-vm\","
       "\"futureBackend\":\"wayland-wlroots\","

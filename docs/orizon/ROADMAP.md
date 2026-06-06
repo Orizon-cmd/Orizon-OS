@@ -50,7 +50,8 @@
   `/home/orizon/.config/hypr/orizon-hypr.conf`, a
   `/system/desktop-modules.conf` split map for generated module packages,
   `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`,
-  `/system/desktop-protocol.conf`, generated
+  `/system/desktop-protocol.conf`, an implemented internal
+  `compositor-backend-v0` seam over the VM framebuffer backend, generated
   `/system/desktop-binds.conf` runtime hints, and
   currently focuses on dispatcher-driven terminal clients, named and
   relative/dynamic workspaces with next/empty and Hyprland-style `r/m/e +/-n`

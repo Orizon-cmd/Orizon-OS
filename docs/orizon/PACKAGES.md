@@ -278,7 +278,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.81.0` because it includes policy/config files, the persisted session
+`0.82.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -311,7 +311,11 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.81.0` adds `desktop architecture` and structured
+the launcher. Version `0.82.0` adds the implemented internal
+`compositor-backend-v0` drawing/present API seam over the current framebuffer
+VM backend and exposes it through `desktop architecture`,
+`desktop backend`, JSON diagnostics, and package metadata. Version `0.81.0`
+adds `desktop architecture` and structured
 `desktop hyprctl -j architecture` diagnostics for the
 `orizon-compositor-api-v0` API seam, current `framebuffer-vm` backend,
 internal `orizon-desktop-ipc-v0` protocol, and prepared-only
@@ -517,7 +521,10 @@ future separate package only and is not generated or installed.
 Version `0.33.0` adds the first desktop architecture truth map:
 `desktop backend`, `desktop protocol`, `desktop hyprctl backend`, and
 `desktop hyprctl protocol`, backed by `/system/desktop-backend.conf` and
-`/system/desktop-protocol.conf`. Version `0.81.0` adds the consolidated
+`/system/desktop-protocol.conf`. Version `0.82.0` adds
+`compositor-backend-v0` as the concrete internal backend API seam in
+`kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`.
+Version `0.81.0` adds the consolidated
 `desktop architecture` / `desktop hyprctl -j architecture` map backed by
 `/system/desktop-architecture.conf`. These commands document the current
 `framebuffer-vm` backend and internal `orizon-desktop-ipc-v0` dispatcher
@@ -566,7 +573,8 @@ adds `getoption`, `keyword`, and `reload`; version `0.69.0` adds `binds` and
 `dispatch`; version `0.76.0` adds `session`; version `0.77.0` adds
 `apps`, `app`, and `launch`; version `0.78.0` adds `autostart`;
 version `0.79.0` adds `shortcuts`; version `0.80.0` adds `modules`;
-version `0.81.0` adds `architecture`.
+version `0.81.0` adds `architecture`; version `0.82.0` enriches
+`architecture` and `backend` with the `compositor-backend-v0` API seam.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.
