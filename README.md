@@ -61,9 +61,11 @@ le developpement noyau:
   off by default,
   hub de settings `/system` synchronisable avec `desktop settings paths/export/sync`,
   carte de modules `/system/desktop-modules.conf` consultable avec
-  `desktop modules`, carte backend `/system/desktop-backend.conf` consultable
-  avec `desktop backend`, et protocole interne `/system/desktop-protocol.conf`
-  consultable avec `desktop protocol`, samples modulaires generables/installables avec
+  `desktop modules`, carte architecture `/system/desktop-architecture.conf`
+  consultable avec `desktop architecture`, carte backend
+  `/system/desktop-backend.conf` consultable avec `desktop backend`, et
+  protocole interne `/system/desktop-protocol.conf` consultable avec
+  `desktop protocol`, samples modulaires generables/installables avec
   `pkg sample/install orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher`,
   `orizon-desktop-core`/`orizon-terminal`/`orizon-settings`/`orizon-launcher`
   et `orizon-waybar` seulement prevu pour plus tard,
@@ -74,9 +76,9 @@ le developpement noyau:
   variantes `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`, `binds:*`,
   `bezier/animation` et hints input/misc/layout/dwindle/master/gestures/xwayland, diagnostics
   (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
-  `desktop version/devices/keymap/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
-  `desktop hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, diagnostics JSON compacts
-  `desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, mutation
+  `desktop version/devices/keymap/systeminfo/backend/protocol/architecture/layouts/layout-state/layout-tree/animations/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/architecture/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, diagnostics JSON compacts
+  `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, mutation
   `desktop keyword`, lanceur F3, terminal F1/F2, raccourcis F4-F8 et submaps
   clavier F9/F10/F11; ce n'est
   pas encore le vrai Hyprland/Wayland
@@ -149,8 +151,9 @@ supporte vers la session, les settings, et les fichiers
 runtime inspectables `/system/desktop-binds.conf`,
 `/system/desktop-autostart.conf`, `/system/desktop-rules.conf`,
 `/system/desktop-monitors.conf`, `/system/desktop-layers.conf`,
-`/system/desktop-runtime.conf`, `/system/desktop-backend.conf`,
-`/system/desktop-protocol.conf` et `/system/desktop-state.conf`.
+`/system/desktop-runtime.conf`, `/system/desktop-architecture.conf`,
+`/system/desktop-backend.conf`, `/system/desktop-protocol.conf` et
+`/system/desktop-state.conf`.
 `desktop config trace` explique ligne par ligne ce qui est applique, prepare
 comme hint, ignore ou malforme, et indique aussi si chaque `source` est charge,
 manquant ou ignore, sans modifier la session.
@@ -176,12 +179,12 @@ compteur de focus par souris quand `desktop focus on` active focus-follows-mouse
 `desktop binds` lit maintenant le runtime de binds genere et
 `desktop rules`, `desktop monitors`, `desktop runtime`, `desktop layers`,
 `desktop version`, `desktop devices`, `desktop keymap`, `desktop systeminfo`,
-`desktop backend`, `desktop protocol`, `desktop layouts`, `desktop layout-state`, `desktop layout-tree`,
+`desktop backend`, `desktop protocol`, `desktop architecture`, `desktop layouts`, `desktop layout-state`, `desktop layout-tree`,
 `desktop animations`, `desktop decorations`, `desktop render`, `desktop descriptions`, `desktop
 instances`, `desktop modules`, `desktop shortcuts`, `desktop submap`, `desktop configerrors`, `desktop rollinglog`,
 `desktop focus-history`, `desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`,
 `desktop keyword <key> <value>` et
-`desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|keymap|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload|binds|layers` exposent/modifient le
+`desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|keymap|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload|binds|layers` exposent/modifient le
 sous-ensemble Hyprland-style supporte ou conserve comme hint runtime.
 Le parser conserve maintenant aussi les familles `input`, `device`,
 `decoration`, `cursor`, `render`, `debug`, `dwindle`, `master`, `group`,
@@ -203,10 +206,11 @@ samples `.opkg` separes via `pkg sample <module>` et des installs nommes sur VM
 installee. Les modules app auto-preparent `orizon-desktop-core`; `orizon-waybar`
 est seulement annonce comme paquet separe ulterieur, pas genere ni installe
 maintenant.
-`desktop backend` et `desktop protocol` documentent le split d'architecture:
-backend actuel `framebuffer-vm`, protocole interne `orizon-desktop-ipc-v0`,
-future cible `wayland-wlroots` preparee, mais pas encore Wayland/wlroots,
-xdg-shell, layer-shell reel, XWayland ni clients Wayland externes.
+`desktop architecture`, `desktop backend` et `desktop protocol` documentent le
+split d'architecture: API `orizon-compositor-api-v0`, backend actuel
+`framebuffer-vm`, protocole interne `orizon-desktop-ipc-v0`, future cible
+`wayland-wlroots` preparee, mais pas encore Wayland/wlroots, xdg-shell,
+layer-shell reel, XWayland ni clients Wayland externes.
 `desktop layout-tree` et `desktop hyprctl layouttree` exposent l'arbre actif du
 workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.
@@ -230,7 +234,7 @@ un graphe de diagnostic read-only pour comprendre l'etat tiling courant.
 Les cibles workspace acceptent maintenant les prefixes Hyprland-style
 `r+/-n`, `r~n`, `m+/-n`, `e+/-n`, `m~n` et `e~n`; `r` inclut les slots vides
 et `m/e` parcourent les workspaces ouverts dans la facade VM mono-moniteur.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 ajoute une sortie JSON compacte pour les futurs paquets/outils de status, avec
 des champs Hyprland-style (`address`, `workspace`, `fullscreenClient`, `tags`,
 `windows`, `lastwindow`, `focusHistoryID`, `scope`, `role`, `pinnedAware`,

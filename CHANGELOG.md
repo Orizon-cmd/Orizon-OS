@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.81.0` with `desktop architecture` and
+  `desktop hyprctl -j architecture` diagnostics backed by
+  `/system/desktop-architecture.conf`. The VM-safe output separates the
+  `orizon-compositor-api-v0` API, current `framebuffer-vm` backend, internal
+  `orizon-desktop-ipc-v0` protocol, and future `wayland-wlroots`
+  prepared-but-not-implemented path while keeping explicit `wayland=false`,
+  `wlroots=false`, `manualDrag=false`, `taskbar=false`, `startMenu=false`,
+  `waybarActive=false`, and `hardwareValidation=false` boundaries.
 - Added desktop package version `0.80.0` with structured Hyprland-style JSON
   modular packaging diagnostics for `desktop hyprctl -j modules`. The VM-safe
   response exposes the current all-in-one `orizon-desktop-hypr` path, prepared

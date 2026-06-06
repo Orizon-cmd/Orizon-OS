@@ -278,14 +278,15 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.80.0` because it includes policy/config files, the persisted session
+`0.81.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
-commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
-`/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
+commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
+`/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
+Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
 `/home/orizon/.config/hypr/orizon-local.conf` source override, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches/keymap diagnostics, the
-`hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/architecture/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches/keymap diagnostics, the
+`hyprctl [-j] version/systeminfo/backend/protocol/architecture/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, split `fullscreenstate internal client`
 diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned/urgent client state,
@@ -310,7 +311,11 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.80.0` adds structured
+the launcher. Version `0.81.0` adds `desktop architecture` and structured
+`desktop hyprctl -j architecture` diagnostics for the
+`orizon-compositor-api-v0` API seam, current `framebuffer-vm` backend,
+internal `orizon-desktop-ipc-v0` protocol, and prepared-only
+`wayland-wlroots` future target. Version `0.80.0` adds structured
 `desktop hyprctl -j modules` diagnostics for the current all-in-one
 `orizon-desktop-hypr` path, prepared split modules, core auto-prepare policy,
 and `orizon-waybar` as future-only/not installable now. Version `0.79.0` adds structured
@@ -509,10 +514,12 @@ writes separate `.opkg` files, `pkg install <module>` is accepted by name on an
 installed VM, app modules auto-prepare `orizon-desktop-core`, and
 `pkg info/search` report sample/install paths. `orizon-waybar` remains a
 future separate package only and is not generated or installed.
-Version `0.33.0` adds the desktop architecture truth map:
+Version `0.33.0` adds the first desktop architecture truth map:
 `desktop backend`, `desktop protocol`, `desktop hyprctl backend`, and
 `desktop hyprctl protocol`, backed by `/system/desktop-backend.conf` and
-`/system/desktop-protocol.conf`. These commands document the current
+`/system/desktop-protocol.conf`. Version `0.81.0` adds the consolidated
+`desktop architecture` / `desktop hyprctl -j architecture` map backed by
+`/system/desktop-architecture.conf`. These commands document the current
 `framebuffer-vm` backend and internal `orizon-desktop-ipc-v0` dispatcher
 protocol while keeping Wayland/wlroots/upstream Hyprland marked prepared-only
 and not implemented.
@@ -558,7 +565,8 @@ adds `getoption`, `keyword`, and `reload`; version `0.69.0` adds `binds` and
 `instances`, `submap`, `splash`, and `rollinglog`; version `0.75.0` adds
 `dispatch`; version `0.76.0` adds `session`; version `0.77.0` adds
 `apps`, `app`, and `launch`; version `0.78.0` adds `autostart`;
-version `0.79.0` adds `shortcuts`; version `0.80.0` adds `modules`.
+version `0.79.0` adds `shortcuts`; version `0.80.0` adds `modules`;
+version `0.81.0` adds `architecture`.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.

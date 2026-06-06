@@ -58,6 +58,7 @@ desktop devices
 desktop systeminfo
 desktop backend
 desktop protocol
+desktop architecture
 desktop layouts
 desktop layout-state
 desktop layout-tree
@@ -80,6 +81,7 @@ desktop hyprctl -j version
 desktop hyprctl -j systeminfo
 desktop hyprctl -j backend
 desktop hyprctl -j protocol
+desktop hyprctl -j architecture
 desktop hyprctl -j clients
 desktop hyprctl -j activewindow
 desktop hyprctl -j workspaces
@@ -447,7 +449,7 @@ runtime` expose the generated window-rule, monitor-hint, and aggregated
 runtime files; `desktop layers` shows the compositor's layer-shell-like model.
 `desktop version` reports the Orizon compatibility facade without pretending to
 be upstream Hyprland, and `desktop devices` summarizes the keyboard/pointer
-input model. `desktop systeminfo`, `desktop backend`, `desktop protocol`,
+input model. `desktop systeminfo`, `desktop architecture`, `desktop backend`, `desktop protocol`,
 `desktop layouts`, `desktop layout-state`, `desktop layout-tree`, `desktop animations`,
 `desktop render`, `desktop configerrors`, `desktop config trace`,
 `desktop rollinglog`, `desktop focus-history`, `desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`, `desktop decorations`,
@@ -479,15 +481,16 @@ per-workspace stack view: master candidate, stack/dwindle order, focused client
 for that workspace, local vs pinned scope, focus rank, stable address, and
 geometry. This is a diagnostic over Orizon's framebuffer compositor, not a
 wlroots scene graph.
-`desktop backend` and `desktop protocol` expose the architecture seam for the
-future real compositor path. Today they report `current-backend:
-framebuffer-vm`, `protocol: orizon-desktop-ipc-v0`, software backbuffer
-rendering, tiled internal clients only, no manual free-drag windows, no taskbar,
-and no Waybar package installed. They persist the truth files
-`/system/desktop-backend.conf` and `/system/desktop-protocol.conf`; the future
-target is documented as `wayland-wlroots`, but Wayland, wlroots, xdg-shell,
-real layer-shell clients, XWayland, GPU acceleration, and upstream Hyprland are
-not implemented yet.
+`desktop architecture`, `desktop backend`, and `desktop protocol` expose the
+architecture seam for the future real compositor path. Today they report
+`api: orizon-compositor-api-v0`, `current-backend: framebuffer-vm`,
+`protocol: orizon-desktop-ipc-v0`, software backbuffer rendering, tiled
+internal clients only, no manual free-drag windows, no taskbar, and no Waybar
+package installed. They persist the truth files
+`/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
+`/system/desktop-protocol.conf`; the future target is documented as
+`wayland-wlroots`, but Wayland, wlroots, xdg-shell, real layer-shell clients,
+XWayland, GPU acceleration, and upstream Hyprland are not implemented yet.
 `desktop keyword <key> <value>` applies one Hyprland-style keyword to the
 persisted Orizon session/settings subset when supported, or records safe
 runtime-only hints for keywords such as `windowrulev2`, `monitor`, `env`,
@@ -550,13 +553,13 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
+[-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
@@ -690,10 +693,12 @@ desktop hyprctl -j dispatch <dispatcher> [args] emits tiled dispatcher action JS
 desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue] emits session manager JSON
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
+desktop hyprctl architecture mirrors desktop architecture
 desktop hyprctl -j version emits package/compositor truth-map metadata
 desktop hyprctl -j systeminfo emits VM-safe compositor/session state
 desktop hyprctl -j backend emits framebuffer-vs-future-wayland boundaries
 desktop hyprctl -j protocol emits internal IPC vs not-Wayland boundaries
+desktop hyprctl -j architecture emits API/backend/protocol separation boundaries
 desktop hyprctl layouttree mirrors desktop layout-tree
 desktop hyprctl configtrace mirrors desktop config trace
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
@@ -723,8 +728,8 @@ desktop hyprctl -j layers emits the framebuffer layer graph without Waybar
 - This is a Hyprland-style Orizon profile, not the real Hyprland compositor.
 - No Wayland protocol, wlroots, GPU acceleration, file manager, wallpaper
   daemon, or real external client protocol is implemented yet.
-- `desktop backend` and `desktop protocol` are truthful architecture maps, not
-  a real Wayland/wlroots backend.
+- `desktop architecture`, `desktop backend`, and `desktop protocol` are
+  truthful architecture maps, not a real Wayland/wlroots backend.
 - The launcher/status bar/theme are Orizon compositor primitives, not upstream
   Hyprland plugins.
 - Workspaces, focus, clients, and `dwindle`/`master`/`monocle` placement are

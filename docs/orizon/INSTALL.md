@@ -218,6 +218,7 @@ desktop hyprctl -j version
 desktop hyprctl -j systeminfo
 desktop hyprctl -j backend
 desktop hyprctl -j protocol
+desktop hyprctl -j architecture
 desktop hyprctl -j clients
 desktop hyprctl clientmodel
 desktop hyprctl rulematches
@@ -260,8 +261,10 @@ desktop hyprctl version
 desktop hyprctl systeminfo
 desktop backend
 desktop protocol
+desktop architecture
 desktop hyprctl backend
 desktop hyprctl protocol
+desktop hyprctl architecture
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl layoutstate

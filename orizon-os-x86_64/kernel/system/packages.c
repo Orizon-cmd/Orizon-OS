@@ -3139,7 +3139,7 @@ int orizon_pkg_info(const char *name, char *out, size_t out_size) {
       pkg_append_line(out, out_size,
                       "depends orizon-core core-x86_64; orizon-packages text-payload-v5; orizon-desktop-base hyprland-style-profile-runtime");
       pkg_append_line(out, out_size,
-                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-modules.conf /system/desktop-backend.conf /system/desktop-protocol.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /home/orizon/.config/hypr/orizon-local.conf /system/share/orizon-desktop-hypr.conf");
+                      "payload /system/desktop.conf /system/desktop-session.conf /system/desktop-settings.conf /system/desktop-state.conf /system/desktop-modules.conf /system/desktop-architecture.conf /system/desktop-backend.conf /system/desktop-protocol.conf /system/desktop-binds.conf /system/desktop-autostart.conf /system/desktop-rules.conf /system/desktop-monitors.conf /system/desktop-layers.conf /system/desktop-runtime.conf /home/orizon/.config/hypr/orizon-hypr.conf /home/orizon/.config/hypr/orizon-local.conf /system/share/orizon-desktop-hypr.conf");
       pkg_append_line(out, out_size,
                       "split-modules pkg sample orizon-desktop-core|orizon-terminal|orizon-settings|orizon-launcher");
       return 0;
@@ -3754,6 +3754,8 @@ int orizon_pkg_write_desktop_module_sample(const char *name, char *report,
   pkg_append_line(pkg_buf, sizeof(pkg_buf), "manual-window-drag no");
   pkg_append_line(pkg_buf, sizeof(pkg_buf), "windows-taskbar no");
   pkg_append_line(pkg_buf, sizeof(pkg_buf), "waybar-installed no");
+  pkg_append_line(pkg_buf, sizeof(pkg_buf),
+                  "architecture-map " ORIZON_DESKTOP_ARCHITECTURE_PATH);
   pkg_append_line(pkg_buf, sizeof(pkg_buf), "backend-map " ORIZON_DESKTOP_BACKEND_PATH);
   pkg_append_line(pkg_buf, sizeof(pkg_buf), "protocol-map " ORIZON_DESKTOP_PROTOCOL_PATH);
   pkg_append_line(pkg_buf, sizeof(pkg_buf), "content-end");
@@ -3978,6 +3980,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "settings-path " ORIZON_DESKTOP_SETTINGS_PATH "\n"
       "session-path " ORIZON_DESKTOP_SESSION_PATH "\n"
       "user-config-path " ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
+      "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
       "backend-path " ORIZON_DESKTOP_BACKEND_PATH "\n"
       "protocol-path " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
       "sources 1\n"
@@ -3986,7 +3989,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "file " ORIZON_DESKTOP_MODULES_PATH "\n"
       "# Orizon desktop modular packaging map v1\n"
       "module " ORIZON_DESKTOP_PACKAGE_CORE
-      " state=prepared kind=runtime provides=policy,session,settings,logs,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+      " state=prepared kind=runtime provides=policy,session,settings,logs,architecture-map,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE
       " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling,backend-diagnostics current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
       "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
@@ -3999,13 +4002,46 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
       "policy no-windows-taskbar\n"
       "policy no-free-drag-window-moving\n"
-      "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0\n"
+      "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0 api=orizon-compositor-api-v0 map=" ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
       "install-meta package-current=" ORIZON_DESKTOP_PACKAGE "\n"
       "install-meta package-split-prepared=yes\n"
       "content-end\n"
+      "file " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
+      "# Orizon desktop architecture map v1\n"
+      "api orizon-compositor-api-v0\n"
+      "api-owner Orizon\n"
+      "api-scope tiling,dispatchers,workspaces,clients,config,rules,diagnostics\n"
+      "facade hyprland-style\n"
+      "facade-upstream-hyprland no\n"
+      "backend-current framebuffer-vm\n"
+      "backend-current-file gui/compositor.c\n"
+      "backend-current-role vm-software-framebuffer-renderer\n"
+      "backend-current-status implemented\n"
+      "backend-future wayland-wlroots\n"
+      "backend-future-status prepared-not-implemented\n"
+      "protocol-current orizon-desktop-ipc-v0\n"
+      "protocol-transport internal-kernel-dispatch\n"
+      "protocol-client-internal prepared\n"
+      "external-wayland-clients no\n"
+      "wayland no\n"
+      "wlroots no\n"
+      "xdg-shell no\n"
+      "layer-shell prepared-only\n"
+      "xwayland no\n"
+      "manual-window-drag no\n"
+      "taskbar no\n"
+      "start-menu no\n"
+      "waybar installed-no future-package\n"
+      "waybar-status installed=no active=no future-package=orizon-waybar\n"
+      "vm-ready yes\n"
+      "hardware-validated no\n"
+      "truth hyprland-style-facade-not-upstream\n"
+      "content-end\n"
       "file " ORIZON_DESKTOP_BACKEND_PATH "\n"
       "# Orizon desktop compositor backend map v1\n"
-      "api compositor-orchestrator\n"
+      "api orizon-compositor-api-v0\n"
+      "api-role compositor-orchestrator\n"
+      "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
       "backend-current framebuffer-vm\n"
       "backend-current-file gui/compositor.c\n"
       "backend-future wayland-wlroots\n"
@@ -4015,6 +4051,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "manual-window-drag no\n"
       "taskbar no\n"
       "waybar installed-no future-package\n"
+      "waybar-status installed=no active=no future-package=orizon-waybar\n"
       "vm-ready yes\n"
       "hardware-validated no\n"
       "truth hyprland-style-facade-not-upstream\n"
@@ -4022,6 +4059,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "file " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
       "# Orizon desktop internal protocol map v1\n"
       "protocol orizon-desktop-ipc-v0\n"
+      "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
       "transport internal-kernel-dispatch\n"
       "messages dispatch,spawn-client,close-client,focus-client,workspace,config-keyword,query-state\n"
       "security local-kernel-only\n"
@@ -4358,7 +4396,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "app-settings-source = " ORIZON_DESKTOP_SETTINGS_PATH "," ORIZON_DESKTOP_SESSION_PATH "," ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
       "app-logs-source = " ORIZON_DESKTOP_LOG_PATH "," ORIZON_DESKTOP_SESSION_LOG_PATH ",/logs/security.log\n"
       "app-packages-source = /workspace/packages,/packages," ORIZON_DESKTOP_MODULES_PATH "\n"
-      "app-update-source = /workspace/.orizon/update-manifest,/workspace/.orizon/update-manifest.sig,updates/x86_64/release.txt\n"
+      "app-update-source = /workspace/.orizon/update-manifest," ORIZON_DESKTOP_ARCHITECTURE_PATH "," ORIZON_DESKTOP_BACKEND_PATH "," ORIZON_DESKTOP_PROTOCOL_PATH ",updates/x86_64/release.txt\n"
       "app-surface-policy = terminal/settings/logs/packages/update are compositor-managed tiling clients; launcher is overlay only\n"
       "hyprctl-command = desktop hyprctl <command>\n"
       "hyprctl-version-command = desktop hyprctl version\n"
@@ -4369,6 +4407,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "hyprctl-json-systeminfo-command = desktop hyprctl -j systeminfo\n"
       "hyprctl-json-backend-command = desktop hyprctl -j backend\n"
       "hyprctl-json-protocol-command = desktop hyprctl -j protocol\n"
+      "hyprctl-json-architecture-command = desktop hyprctl -j architecture\n"
       "hyprctl-activeworkspace-command = desktop hyprctl activeworkspace\n"
       "hyprctl-activewindow-command = desktop hyprctl activewindow\n"
       "hyprctl-clients-command = desktop hyprctl clients\n"
@@ -4422,7 +4461,8 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "hyprctl-json-shortcut-diagnostics = keyboardOnly,submaps,workspaceRelative,bindmPreparedOnly,manualDrag=false,taskbar=false,waybarActive=false\n"
       "hyprctl-json-app-diagnostics = apps,app,launch,native/tiled/overlay boundaries,manualDrag=false,taskbar=false,waybarActive=false\n"
       "hyprctl-json-autostart-diagnostics = autostart,terminal action,state,paths,runtime,live-installed boundary,manualDrag=false,taskbar=false,waybarActive=false\n"
-      "hyprctl-json-truth-diagnostics = version,systeminfo,backend,protocol,wayland=false,wlroots=false,hardwareValidation=false\n"
+      "hyprctl-json-truth-diagnostics = version,systeminfo,backend,protocol,architecture,wayland=false,wlroots=false,hardwareValidation=false\n"
+      "hyprctl-json-architecture-diagnostics = apiLayerSeparated,framebufferBackendKept,futureBackendImplemented=false,internalClientProtocol,manualDrag=false,taskbar=false\n"
       "hyprctl-json-config-diagnostics = parserSummary,trace,errors,sourceResolve,manualDrag=false\n"
       "hyprctl-json-session-diagnostics = health,desiredState,runtimeState,counters,paths,sessionLogTail,hardwareValidation=false\n"
       "hyprctl-json-action-diagnostics = getoption,keyword,dispatch,reload,session,result,manualDrag=false\n"

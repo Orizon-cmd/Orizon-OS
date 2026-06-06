@@ -340,6 +340,7 @@ static const char *desktop_runtime_config =
     "settings-path " ORIZON_DESKTOP_SETTINGS_PATH "\n"
     "session-path " ORIZON_DESKTOP_SESSION_PATH "\n"
     "user-config-path " ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
+    "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "backend-path " ORIZON_DESKTOP_BACKEND_PATH "\n"
     "protocol-path " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
     "sources 1\n"
@@ -348,7 +349,9 @@ static const char *desktop_runtime_config =
 static const char *desktop_backend_config =
     "# Orizon desktop compositor backend map v1\n"
     "# Truth file for the current VM-safe Hyprland-style facade.\n"
-    "api compositor-orchestrator\n"
+    "api orizon-compositor-api-v0\n"
+    "api-role compositor-orchestrator\n"
+    "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "backend-current framebuffer-vm\n"
     "backend-current-file gui/compositor.c\n"
     "backend-future wayland-wlroots\n"
@@ -366,6 +369,7 @@ static const char *desktop_protocol_config =
     "# Orizon desktop internal protocol map v1\n"
     "# Prepared split between compositor API and the current framebuffer backend.\n"
     "protocol orizon-desktop-ipc-v0\n"
+    "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "transport internal-kernel-dispatch\n"
     "messages dispatch,spawn-client,close-client,focus-client,workspace,config-keyword,query-state\n"
     "security local-kernel-only\n"
@@ -377,11 +381,43 @@ static const char *desktop_protocol_config =
     "external-clients no\n"
     "status prepared\n";
 
+static const char *desktop_architecture_config =
+    "# Orizon desktop architecture map v1\n"
+    "# This is a truthful VM/ZimaOS boundary map, not a Wayland runtime.\n"
+    "api orizon-compositor-api-v0\n"
+    "api-owner Orizon\n"
+    "api-scope tiling,dispatchers,workspaces,clients,config,rules,diagnostics\n"
+    "facade hyprland-style\n"
+    "facade-upstream-hyprland no\n"
+    "backend-current framebuffer-vm\n"
+    "backend-current-file gui/compositor.c\n"
+    "backend-current-role vm-software-framebuffer-renderer\n"
+    "backend-current-status implemented\n"
+    "backend-future wayland-wlroots\n"
+    "backend-future-status prepared-not-implemented\n"
+    "protocol-current orizon-desktop-ipc-v0\n"
+    "protocol-transport internal-kernel-dispatch\n"
+    "protocol-client-internal prepared\n"
+    "external-wayland-clients no\n"
+    "wayland no\n"
+    "wlroots no\n"
+    "xdg-shell no\n"
+    "layer-shell prepared-only\n"
+    "xwayland no\n"
+    "manual-window-drag no\n"
+    "taskbar no\n"
+    "start-menu no\n"
+    "waybar installed-no future-package\n"
+    "waybar-status installed=no active=no future-package=orizon-waybar\n"
+    "vm-ready yes\n"
+    "hardware-validated no\n"
+    "truth hyprland-style-facade-not-upstream\n";
+
 static const char *desktop_modules_config =
     "# Orizon desktop modular packaging map v1\n"
     "# This prepares a split desktop without installing Waybar yet.\n"
     "module " ORIZON_DESKTOP_PACKAGE_CORE
-    " state=prepared kind=runtime provides=policy,session,settings,logs,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=runtime provides=policy,session,settings,logs,architecture-map,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE
     " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling,backend-diagnostics current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
@@ -394,7 +430,7 @@ static const char *desktop_modules_config =
     " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
     "policy no-windows-taskbar\n"
     "policy no-free-drag-window-moving\n"
-    "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0\n"
+    "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0 api=orizon-compositor-api-v0 map=" ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "install-meta package-current=" ORIZON_DESKTOP_PACKAGE "\n"
     "install-meta package-split-prepared=yes\n";
 
@@ -568,7 +604,7 @@ static const desktop_app_entry_t desktop_app_catalog[] = {
      "F11+u",
      "updater,update-viewer,orizon-update-viewer",
      "update viewer for manifest, signature, bootguard, and rollback state",
-     "/workspace/.orizon/update-manifest," ORIZON_DESKTOP_BACKEND_PATH "," ORIZON_DESKTOP_PROTOCOL_PATH,
+      "/workspace/.orizon/update-manifest," ORIZON_DESKTOP_ARCHITECTURE_PATH "," ORIZON_DESKTOP_BACKEND_PATH "," ORIZON_DESKTOP_PROTOCOL_PATH,
      "update status | bootguard | rollback-status",
      "live ISO can inspect only; installed VM is required for real update flow"},
     {"launcher",
@@ -2949,6 +2985,11 @@ int orizon_desktop_ensure_defaults(void) {
                               desktop_modules_config) < 0) {
     rc = -1;
   }
+  if (!vfs_exists(ORIZON_DESKTOP_ARCHITECTURE_PATH) &&
+      desktop_write_text_file(ORIZON_DESKTOP_ARCHITECTURE_PATH,
+                              desktop_architecture_config) < 0) {
+    rc = -1;
+  }
   if (!vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) &&
       desktop_write_text_file(ORIZON_DESKTOP_BACKEND_PATH,
                               desktop_backend_config) < 0) {
@@ -4521,6 +4562,8 @@ int orizon_desktop_reset(char *status, size_t status_size) {
                           desktop_layers_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_RUNTIME_PATH, desktop_runtime_config);
   desktop_write_text_file(ORIZON_DESKTOP_MODULES_PATH, desktop_modules_config);
+  desktop_write_text_file(ORIZON_DESKTOP_ARCHITECTURE_PATH,
+                          desktop_architecture_config);
   desktop_write_text_file(ORIZON_DESKTOP_BACKEND_PATH, desktop_backend_config);
   desktop_write_text_file(ORIZON_DESKTOP_PROTOCOL_PATH,
                           desktop_protocol_config);
@@ -5212,9 +5255,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/architecture/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -5434,6 +5477,8 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
                              ORIZON_DESKTOP_BINDS_PATH);
   desktop_append_path_status(out, out_size, &used, "runtime-state",
                              ORIZON_DESKTOP_RUNTIME_PATH);
+  desktop_append_path_status(out, out_size, &used, "architecture-map",
+                             ORIZON_DESKTOP_ARCHITECTURE_PATH);
   desktop_append_path_status(out, out_size, &used, "backend-map",
                              ORIZON_DESKTOP_BACKEND_PATH);
   desktop_append_path_status(out, out_size, &used, "protocol-map",
@@ -5495,6 +5540,118 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
                  "limits: this is a Hyprland-style facade; no wlroots/Wayland backend yet and no manual window dragging.\n");
 }
 
+void orizon_desktop_format_architecture(char *out, size_t out_size) {
+  char cfg[1536];
+  size_t used = 0;
+  int n;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used, "Orizon desktop architecture\n");
+  desktop_append(out, out_size, &used,
+                 "api: orizon-compositor-api-v0\n");
+  desktop_append(out, out_size, &used,
+                 "facade: Hyprland-style compatibility, upstream-hyprland=no\n");
+  desktop_append(out, out_size, &used,
+                 "backend-current: framebuffer-vm implemented in gui/compositor.c\n");
+  desktop_append(out, out_size, &used,
+                 "backend-future: wayland-wlroots prepared, implemented=no\n");
+  desktop_append(out, out_size, &used,
+                 "protocol-current: orizon-desktop-ipc-v0 internal-kernel-dispatch\n");
+  desktop_append(out, out_size, &used,
+                 "client-protocol: internal/prepared only, external-wayland-clients=no\n");
+  desktop_append(out, out_size, &used,
+                 "boundaries: wayland=no wlroots=no xdg-shell=no layer-shell=prepared-only xwayland=no\n");
+  desktop_append(out, out_size, &used,
+                 "policy: tiling-only manual-window-drag=no taskbar=no start-menu=no waybar-installed=no\n");
+  desktop_append(out, out_size, &used,
+                 "waybar: installed=no active=no future-package=orizon-waybar\n");
+  desktop_append(out, out_size, &used,
+                 "validation: VM/ZimaOS-ready, hardware-validated=no\n");
+  desktop_append(out, out_size, &used,
+                 "paths: architecture=" ORIZON_DESKTOP_ARCHITECTURE_PATH
+                 " backend=" ORIZON_DESKTOP_BACKEND_PATH
+                 " protocol=" ORIZON_DESKTOP_PROTOCOL_PATH "\n");
+  n = desktop_read_text_file(ORIZON_DESKTOP_ARCHITECTURE_PATH, cfg,
+                             sizeof(cfg));
+  if (n > 0) {
+    desktop_append(out, out_size, &used, "\n== architecture.conf ==\n");
+    desktop_append(out, out_size, &used, cfg);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "architecture-map WARN missing; run desktop reset\n");
+  }
+}
+
+void orizon_desktop_format_architecture_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"architecture\",\"hyprlandStyleFacade\":true,"
+      "\"api\":\"orizon-compositor-api-v0\","
+      "\"apiLayerSeparated\":true,\"facade\":\"hyprland-style\","
+      "\"upstreamHyprland\":false,"
+      "\"backend\":{\"current\":\"framebuffer-vm\","
+      "\"currentFile\":\"gui/compositor.c\","
+      "\"currentImplemented\":true,\"future\":\"wayland-wlroots\","
+      "\"futurePrepared\":true,\"futureImplemented\":false},"
+      "\"protocol\":{\"current\":\"orizon-desktop-ipc-v0\","
+      "\"transport\":\"internal-kernel-dispatch\","
+      "\"internalClientProtocol\":true,\"externalWaylandClients\":false,"
+      "\"messages\":[\"dispatch\",\"spawn-client\",\"close-client\","
+      "\"focus-client\",\"workspace\",\"config-keyword\",\"query-state\"]},"
+      "\"boundaries\":{\"wayland\":false,\"wlroots\":false,"
+      "\"xdgShell\":false,\"layerShell\":\"prepared-only\","
+      "\"xwayland\":false,\"manualDrag\":false,\"taskbar\":false,"
+      "\"startMenu\":false,\"waybarActive\":false},"
+      "\"paths\":{\"architectureMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_ARCHITECTURE_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_PROTOCOL_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"modulesMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_MODULES_PATH);
+  desktop_json_append_raw(out, out_size, &used,
+                          "},\"files\":{\"architectureMap\":");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      vfs_exists(ORIZON_DESKTOP_ARCHITECTURE_PATH) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) ? "true"
+                                                                 : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          vfs_exists(ORIZON_DESKTOP_PROTOCOL_PATH) ? "true"
+                                                                   : "false");
+  desktop_json_append_raw(out, out_size, &used,
+                          "},\"diagnostics\":{\"vmReady\":true,"
+                          "\"hardwareValidation\":false,"
+                          "\"waylandRuntime\":false,\"wlrootsRuntime\":false,"
+                          "\"framebufferBackendKept\":true},"
+                          "\"truth\":\"Orizon compositor API over the VM "
+                          "framebuffer backend; future Wayland/wlroots is "
+                          "prepared only\","
+                          "\"limits\":[\"no Wayland protocol traffic\","
+                          "\"no wlroots scene graph\","
+                          "\"no upstream Hyprland socket compatibility\","
+                          "\"no manual window drag\","
+                          "\"no physical hardware validation claimed\"]}\n");
+}
+
 void orizon_desktop_format_backend(char *out, size_t out_size) {
   char cfg[1024];
   size_t used = 0;
@@ -5509,7 +5666,7 @@ void orizon_desktop_format_backend(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "current-backend: framebuffer-vm\n");
   desktop_append(out, out_size, &used,
-                 "api: compositor-orchestrator\n");
+                 "api: orizon-compositor-api-v0 role=compositor-orchestrator\n");
   desktop_append(out, out_size, &used,
                  "renderer: software-backbuffer\n");
   desktop_append(out, out_size, &used,
@@ -5544,7 +5701,8 @@ void orizon_desktop_format_backend_json(char *out, size_t out_size) {
       out, out_size, &used,
       "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
       "\"command\":\"backend\",\"hyprlandStyleFacade\":true,"
-      "\"api\":\"compositor-orchestrator\","
+      "\"api\":\"orizon-compositor-api-v0\","
+      "\"apiRole\":\"compositor-orchestrator\","
       "\"backend\":\"framebuffer-vm\",\"renderer\":\"software-backbuffer\","
       "\"currentBackend\":\"framebuffer-vm\","
       "\"futureBackend\":\"wayland-wlroots\","
@@ -5554,12 +5712,20 @@ void orizon_desktop_format_backend_json(char *out, size_t out_size) {
       "\"clientModel\":\"tiled-internal\",\"manualDrag\":false,"
       "\"floatingSceneGraph\":false,\"taskbar\":false,"
       "\"waybarInstalled\":false,\"hardwareValidation\":false,"
-      "\"paths\":{\"backendMap\":");
+      "\"paths\":{\"architectureMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_ARCHITECTURE_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
   desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
   desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
   desktop_json_append_string(out, out_size, &used,
                              ORIZON_DESKTOP_PROTOCOL_PATH);
-  desktop_json_append_raw(out, out_size, &used, "},\"files\":{\"backendMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          "},\"files\":{\"architectureMap\":");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      vfs_exists(ORIZON_DESKTOP_ARCHITECTURE_PATH) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
   desktop_json_append_raw(out, out_size, &used,
                           vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) ? "true"
                                                                  : "false");
@@ -5597,7 +5763,8 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "status: prepared split between Orizon compositor API and framebuffer backend\n");
   desktop_append(out, out_size, &used,
-                 "path: " ORIZON_DESKTOP_PROTOCOL_PATH "\n");
+                 "path: " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
+                 "architecture-path: " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n");
   n = desktop_read_text_file(ORIZON_DESKTOP_PROTOCOL_PATH, cfg, sizeof(cfg));
   if (n > 0) {
     desktop_append(out, out_size, &used, "\n== protocol.conf ==\n");
@@ -5632,12 +5799,20 @@ void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
       "\"xdgShell\":false,\"externalClients\":false},"
       "\"implemented\":{\"framebufferBackend\":true,"
       "\"internalProtocol\":true,\"waylandBackend\":false,"
-      "\"wlroots\":false},\"paths\":{\"protocolMap\":");
+      "\"wlroots\":false},\"paths\":{\"architectureMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_ARCHITECTURE_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
   desktop_json_append_string(out, out_size, &used,
                              ORIZON_DESKTOP_PROTOCOL_PATH);
   desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
   desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
-  desktop_json_append_raw(out, out_size, &used, "},\"files\":{\"protocolMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          "},\"files\":{\"architectureMap\":");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      vfs_exists(ORIZON_DESKTOP_ARCHITECTURE_PATH) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
   desktop_json_append_raw(out, out_size, &used,
                           vfs_exists(ORIZON_DESKTOP_PROTOCOL_PATH) ? "true"
                                                                   : "false");
@@ -6617,6 +6792,16 @@ void orizon_desktop_format_doctor(char *out, size_t out_size) {
   } else {
     desktop_append(out, out_size, &used,
                    "modules missing WARN run desktop reset\n");
+    warn = 1;
+  }
+  if (vfs_stat(ORIZON_DESKTOP_ARCHITECTURE_PATH, &size, NULL) == 0 &&
+      size > 0) {
+    snprintf(line, sizeof(line), "architecture-map %s PASS bytes=%lu\n",
+             ORIZON_DESKTOP_ARCHITECTURE_PATH, (unsigned long)size);
+    desktop_append(out, out_size, &used, line);
+  } else {
+    desktop_append(out, out_size, &used,
+                   "architecture-map missing WARN run desktop reset\n");
     warn = 1;
   }
   if (vfs_stat(ORIZON_DESKTOP_BACKEND_PATH, &size, NULL) == 0 && size > 0) {
