@@ -3707,17 +3707,33 @@ static void ssh_shell_print_desktop(const char *args) {
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
                "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
-      gui_desktop_format_hyprctl_version(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_hyprctl_version_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_hyprctl_version(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "systeminfo")) {
-      gui_desktop_format_systeminfo(out, sizeof(out));
+      if (json) {
+        gui_desktop_format_systeminfo_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_systeminfo(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "backend") ||
                ssh_shell_command_is(hypr, "backend-info")) {
-      orizon_desktop_format_backend(out, sizeof(out));
+      if (json) {
+        orizon_desktop_format_backend_json(out, sizeof(out));
+      } else {
+        orizon_desktop_format_backend(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "protocol") ||
                ssh_shell_command_is(hypr, "protocols")) {
-      orizon_desktop_format_protocol(out, sizeof(out));
+      if (json) {
+        orizon_desktop_format_protocol_json(out, sizeof(out));
+      } else {
+        orizon_desktop_format_protocol(out, sizeof(out));
+      }
     } else if (ssh_shell_command_is(hypr, "clients")) {
       if (json) {
         gui_desktop_format_clients_json(out, sizeof(out));

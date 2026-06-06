@@ -203,6 +203,10 @@ desktop hyprctl -j layers
 desktop dispatch exec terminal
 desktop hyprctl clients
 desktop hyprctl activewindow
+desktop hyprctl -j version
+desktop hyprctl -j systeminfo
+desktop hyprctl -j backend
+desktop hyprctl -j protocol
 desktop hyprctl -j clients
 desktop hyprctl -j activewindow
 desktop hyprctl -j workspaces
@@ -471,15 +475,16 @@ workspace tiling tree with client roles, rectangles, focus state, and
 `monocle-deck` with `rendered=no`,
 `desktop layout-state` and `desktop hyprctl layoutstate` show per-workspace
 layout, split mode, split ratio, and master ratio,
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
 rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,
 `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`, `parserSummary`, and
 `trace`, plus action/input/layer fields such as `result`, `runtimeFile`,
-`singleFramebuffer`, `libinput`, `activeSubmap`, `renderer`, `focusRing`,
-`transition`, `renderProfile`, `manualWindowDrag`, `mouseBindsPreparedOnly`,
-and `waybarActive`; it is
+`singleFramebuffer`, `libinput`, `activeSubmap`, `currentBackend`,
+`futureBackend`, `protocol`, `renderer`, `focusRing`, `transition`,
+`renderProfile`, `manualWindowDrag`, `mouseBindsPreparedOnly`, and
+`waybarActive`; it is
 Hyprland-style diagnostic data, not real Wayland/wlroots client state.
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,

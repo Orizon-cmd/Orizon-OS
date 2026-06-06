@@ -4932,7 +4932,7 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/configerrors/configtrace/getoption/keyword/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/configerrors/configtrace/getoption/keyword/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -5245,6 +5245,49 @@ void orizon_desktop_format_backend(char *out, size_t out_size) {
   }
 }
 
+void orizon_desktop_format_backend_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"backend\",\"hyprlandStyleFacade\":true,"
+      "\"api\":\"compositor-orchestrator\","
+      "\"backend\":\"framebuffer-vm\",\"renderer\":\"software-backbuffer\","
+      "\"currentBackend\":\"framebuffer-vm\","
+      "\"futureBackend\":\"wayland-wlroots\","
+      "\"futureBackendPrepared\":true,\"futureBackendImplemented\":false,"
+      "\"wayland\":false,\"wlroots\":false,\"xdgShell\":false,"
+      "\"xwayland\":false,\"externalWaylandClients\":false,"
+      "\"clientModel\":\"tiled-internal\",\"manualDrag\":false,"
+      "\"floatingSceneGraph\":false,\"taskbar\":false,"
+      "\"waybarInstalled\":false,\"hardwareValidation\":false,"
+      "\"paths\":{\"backendMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_PROTOCOL_PATH);
+  desktop_json_append_raw(out, out_size, &used, "},\"files\":{\"backendMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) ? "true"
+                                                                 : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          vfs_exists(ORIZON_DESKTOP_PROTOCOL_PATH) ? "true"
+                                                                  : "false");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},\"truth\":\"Hyprland-style facade on Orizon framebuffer VM\","
+      "\"limits\":[\"backend map only, not a wlroots compositor\","
+      "\"no multi-output Wayland routing yet\","
+      "\"no real PC or Lenovo validation claimed\"]}\n");
+}
+
 void orizon_desktop_format_protocol(char *out, size_t out_size) {
   char cfg[1024];
   size_t used = 0;
@@ -5276,6 +5319,51 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
     desktop_append(out, out_size, &used,
                    "protocol-map WARN missing; run desktop reset\n");
   }
+}
+
+void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"protocol\",\"hyprlandStyleFacade\":true,"
+      "\"protocol\":\"orizon-desktop-ipc-v0\","
+      "\"transport\":\"internal-kernel-dispatch\","
+      "\"security\":\"local-kernel-only\","
+      "\"wayland\":false,\"wlroots\":false,\"xdgShell\":false,"
+      "\"layerShell\":\"prepared-only\",\"xwayland\":false,"
+      "\"externalClients\":false,\"manualDrag\":false,"
+      "\"messages\":[\"dispatch\",\"spawn-client\",\"close-client\","
+      "\"focus-client\",\"workspace\",\"config-keyword\",\"query-state\"],"
+      "\"preparedFor\":{\"waylandWlroots\":true,\"layerShell\":true,"
+      "\"xdgShell\":false,\"externalClients\":false},"
+      "\"implemented\":{\"framebufferBackend\":true,"
+      "\"internalProtocol\":true,\"waylandBackend\":false,"
+      "\"wlroots\":false},\"paths\":{\"protocolMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_PROTOCOL_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_json_append_raw(out, out_size, &used, "},\"files\":{\"protocolMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          vfs_exists(ORIZON_DESKTOP_PROTOCOL_PATH) ? "true"
+                                                                  : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          vfs_exists(ORIZON_DESKTOP_BACKEND_PATH) ? "true"
+                                                                 : "false");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},\"truth\":\"protocol map for the Orizon Hyprland-style facade\","
+      "\"limits\":[\"not Wayland protocol traffic\","
+      "\"no wlroots scene graph yet\","
+      "\"no upstream Hyprland socket compatibility yet\"]}\n");
 }
 
 void orizon_desktop_format_settings_presets(char *out, size_t out_size) {

@@ -214,6 +214,10 @@ desktop rule-matches
 desktop keyword general:gaps_in 9
 desktop dispatch exec terminal
 desktop hyprctl clients
+desktop hyprctl -j version
+desktop hyprctl -j systeminfo
+desktop hyprctl -j backend
+desktop hyprctl -j protocol
 desktop hyprctl -j clients
 desktop hyprctl clientmodel
 desktop hyprctl rulematches

@@ -4257,19 +4257,35 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
                   "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|submap|devices|cursorpos|splash|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "json: -j supports version, systeminfo, backend, protocol, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, configerrors, configtrace, getoption, keyword, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
-      gui_desktop_format_hyprctl_version(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_hyprctl_version_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_hyprctl_version(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "systeminfo")) {
-      gui_desktop_format_systeminfo(report, sizeof(report));
+      if (json) {
+        gui_desktop_format_systeminfo_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_systeminfo(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "backend") ||
                term_command_is(hypr, "backend-info")) {
-      orizon_desktop_format_backend(report, sizeof(report));
+      if (json) {
+        orizon_desktop_format_backend_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_backend(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "protocol") ||
                term_command_is(hypr, "protocols")) {
-      orizon_desktop_format_protocol(report, sizeof(report));
+      if (json) {
+        orizon_desktop_format_protocol_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_protocol(report, sizeof(report));
+      }
     } else if (term_command_is(hypr, "clients")) {
       if (json) {
         gui_desktop_format_clients_json(report, sizeof(report));

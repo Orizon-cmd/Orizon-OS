@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.73.0` with structured Hyprland-style JSON
+  truth-map diagnostics for `desktop hyprctl -j version`,
+  `desktop hyprctl -j systeminfo`, `desktop hyprctl -j backend`, and
+  `desktop hyprctl -j protocol`. The VM-safe output now exposes package
+  version, compositor/backend/protocol boundaries, prepared future
+  `wayland-wlroots` intent, path status, and explicit `wayland=false`/
+  `wlroots=false`/`manualDrag=false`/`hardwareValidation=false` markers without
+  enabling upstream Hyprland socket compatibility, Wayland clients, wlroots,
+  Waybar, floating windows, free mouse drag, or physical hardware validation.
 - Added desktop package version `0.72.0` with structured Hyprland-style JSON
   diagnostics for `desktop hyprctl -j animations`,
   `desktop hyprctl -j decorations`, and `desktop hyprctl -j render`. The

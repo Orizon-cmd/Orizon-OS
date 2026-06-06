@@ -130,6 +130,10 @@ $commands = @(
   "desktop hyprctl systeminfo",
   "desktop hyprctl backend",
   "desktop hyprctl protocol",
+  "desktop hyprctl -j version",
+  "desktop hyprctl -j systeminfo",
+  "desktop hyprctl -j backend",
+  "desktop hyprctl -j protocol",
   "desktop hyprctl clientmodel",
   "desktop hyprctl -j clientmodel",
   "desktop hyprctl rulematches",
@@ -707,6 +711,18 @@ run_cmd() {
       ;;
     "desktop hyprctl activeworkspace")
       grep -q "active workspace:" "`$OUT" && grep -q "layout:" "`$OUT" || { echo "missing hyprctl activeworkspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j version")
+      grep -q '"command":"version"' "`$OUT" && grep -q '"upstreamHyprland":false' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json version"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j systeminfo")
+      grep -q '"command":"systeminfo"' "`$OUT" && grep -q '"protocols":{"wayland":false' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json systeminfo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j backend")
+      grep -q '"command":"backend"' "`$OUT" && grep -q '"futureBackend":"wayland-wlroots"' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j protocol")
+      grep -q '"command":"protocol"' "`$OUT" && grep -q '"protocol":"orizon-desktop-ipc-v0"' "`$OUT" && grep -q '"wayland":false' "`$OUT" || { echo "missing hyprctl json protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j clients")
       grep -q '"hyprlandStyleFacade":true' "`$OUT" && grep -q '"address":"0x' "`$OUT" && grep -q '"floating":false' "`$OUT" || { echo "missing hyprctl json clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

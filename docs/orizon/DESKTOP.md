@@ -76,6 +76,10 @@ desktop rule-matches
 desktop keyword general:gaps_in 9
 desktop hyprctl version
 desktop hyprctl systeminfo
+desktop hyprctl -j version
+desktop hyprctl -j systeminfo
+desktop hyprctl -j backend
+desktop hyprctl -j protocol
 desktop hyprctl -j clients
 desktop hyprctl -j activewindow
 desktop hyprctl -j workspaces
@@ -541,15 +545,15 @@ from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|configerrors|configtrace|getoption|keyword|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
 `role`, `pinnedAware`, `summary`, `safeAction`, `nodes`, `rect`,
 `parserSummary`, `trace`, `result`, `runtimeFile`, `singleFramebuffer`,
-`libinput`, `activeSubmap`, `renderer`, `focusRing`, `transition`,
-`renderProfile`, `manualWindowDrag`, `mouseBindsPreparedOnly`, and
-`waybarActive`, but every object also carries
+`libinput`, `activeSubmap`, `currentBackend`, `futureBackend`, `protocol`,
+`renderer`, `focusRing`, `transition`, `renderProfile`, `manualWindowDrag`,
+`mouseBindsPreparedOnly`, and `waybarActive`, but every object also carries
 `hyprlandStyleFacade=true` because the backend is still Orizon framebuffer VM,
 not upstream Wayland/wlroots Hyprland. The config JSON diagnostics are
 read-only: they explain parser errors and apply/prepare/ignore decisions
@@ -662,6 +666,10 @@ desktop hyprctl -j getoption <key> emits the mapped value as VM-safe JSON
 desktop hyprctl -j keyword <key> <value> applies one supported key as JSON
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
+desktop hyprctl -j version emits package/compositor truth-map metadata
+desktop hyprctl -j systeminfo emits VM-safe compositor/session state
+desktop hyprctl -j backend emits framebuffer-vs-future-wayland boundaries
+desktop hyprctl -j protocol emits internal IPC vs not-Wayland boundaries
 desktop hyprctl layouttree mirrors desktop layout-tree
 desktop hyprctl configtrace mirrors desktop config trace
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
