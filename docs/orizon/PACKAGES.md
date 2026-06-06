@@ -216,6 +216,7 @@ desktop hyprctl -j render
 desktop hyprctl -j layouts
 desktop hyprctl -j descriptions
 desktop hyprctl -j instances
+desktop hyprctl -j shortcuts
 desktop hyprctl -j submap
 desktop hyprctl -j splash
 desktop hyprctl -j session
@@ -276,14 +277,14 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.78.0` because it includes policy/config files, the persisted session
+`0.79.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-backend.conf`,
 `/system/desktop-protocol.conf`, Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
 `/home/orizon/.config/hypr/orizon-local.conf` source override, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches/keymap diagnostics, the
-`hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/shortcuts/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches/keymap diagnostics, the
+`hyprctl [-j] version/systeminfo/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, split `fullscreenstate internal client`
 diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned/urgent client state,
@@ -294,7 +295,7 @@ tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`/
 `focushistory`/`workspacestack`/`clientmodel`/`rulematches`/`layoutstate`/
-`layouttree`/`monitors`/`devices`/`keymap`/`cursorpos`/`animations`/`decorations`/`render`/`layouts`/`descriptions`/`instances`/`autostart`/`apps`/`app`/`launch`/`submap`/`splash`/`session`/`rollinglog`/`version`/`systeminfo`/`backend`/`protocol`/`configerrors`/`configtrace`/`getoption`/`keyword`/`dispatch`/`reload`/
+`layouttree`/`monitors`/`devices`/`keymap`/`cursorpos`/`animations`/`decorations`/`render`/`layouts`/`descriptions`/`instances`/`shortcuts`/`autostart`/`apps`/`app`/`launch`/`submap`/`splash`/`session`/`rollinglog`/`version`/`systeminfo`/`backend`/`protocol`/`configerrors`/`configtrace`/`getoption`/`keyword`/`dispatch`/`reload`/
 `binds`/`layers`,
 focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
 VM-safe monitor dispatch aliases `focusmonitor`,
@@ -308,7 +309,11 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.78.0` adds structured
+the launcher. Version `0.79.0` adds structured
+`desktop hyprctl -j shortcuts` diagnostics for keyboard-only navigation,
+submaps, dispatcher-backed workspace/client actions, optional
+focus-follows-mouse state, and the `manualDrag=false` plus
+`bindmPreparedOnly=true` boundary. Version `0.78.0` adds structured
 `desktop hyprctl -j autostart` and `desktop hyprctl -j autostart terminal
 on|off|toggle` diagnostics/actions with persisted terminal autostart state,
 generated `exec-once` runtime hints, session/runtime paths, live-installed
@@ -332,7 +337,8 @@ it does not add Waybar, a taskbar/start menu, floating windows, free mouse
 drag, upstream Hyprland IPC compatibility, Wayland/wlroots, or physical
 hardware validation. Version `0.74.0` extends the JSON shell/diagnostic layer with
 `desktop hyprctl -j layouts`, `desktop hyprctl -j descriptions`,
-`desktop hyprctl -j instances`, `desktop hyprctl -j submap`,
+`desktop hyprctl -j instances`, `desktop hyprctl -j shortcuts`,
+`desktop hyprctl -j submap`,
 `desktop hyprctl -j splash`, and `desktop hyprctl -j rollinglog`, including
 layout catalog state, command/dispatcher surfaces, the framebuffer compositor
 instance, active submap state, splash/render boundary metadata, sampled rolling
@@ -546,7 +552,8 @@ adds `getoption`, `keyword`, and `reload`; version `0.69.0` adds `binds` and
 `backend`, and `protocol`; version `0.74.0` adds `layouts`, `descriptions`,
 `instances`, `submap`, `splash`, and `rollinglog`; version `0.75.0` adds
 `dispatch`; version `0.76.0` adds `session`; version `0.77.0` adds
-`apps`, `app`, and `launch`; version `0.78.0` adds `autostart`.
+`apps`, `app`, and `launch`; version `0.78.0` adds `autostart`;
+version `0.79.0` adds `shortcuts`.
 Version `0.54.0` adds VM-safe Hyprland-style `source` resolution for
 `~/.config/hypr/orizon-local.conf`, with `source-resolve` diagnostics and
 runtime `env`/`workspace` hints visible through `desktop hyprctl getoption`.

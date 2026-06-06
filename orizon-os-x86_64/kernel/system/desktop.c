@@ -5212,9 +5212,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -6373,6 +6373,82 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
                  "dispatchers: exec terminal/settings/logs/packages/update | killactive | workspace/focusworkspaceoncurrentmonitor | focusmonitor <monitor> | movecurrentworkspacetomonitor <monitor> | moveworkspacetomonitor <workspace> <monitor> | togglespecialworkspace [name] | movefocus l/r/u/d | focusmwindow next/prev/master/rank:n | movewindow l/r/u/d/master | swapmwindow next/prev/master/rank:n | focuswindow <target> | tagwindow <tag> [target] | layoutmsg layout <name> | cyclenext | swapnext | swapwindow | fullscreen/fullscreenstate | pseudo/pseudotile | pin | resizeactive\n");
   desktop_append(out, out_size, &used,
                  "status: desktop status; config: desktop config; package: desktop package\n");
+}
+
+void orizon_desktop_format_shortcuts_json(char *out, size_t out_size) {
+  size_t used = 0;
+  orizon_desktop_session_t session;
+  orizon_desktop_settings_t settings;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+
+  orizon_desktop_load_session(&session);
+  orizon_desktop_load_settings(&settings);
+
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"shortcuts\",\"hyprlandStyleFacade\":true,"
+      "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+      "\"wlroots\":false,\"keyboardOnly\":true,\"manualDrag\":false,"
+      "\"dragMoves\":false,\"bindmPreparedOnly\":true,"
+      "\"tilingOnly\":true,\"taskbar\":false,\"startMenu\":false,"
+      "\"waybarActive\":false,\"focusFollowsMouse\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          session.focus_follows_mouse ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"keyboardLayout\":");
+  desktop_json_append_string(
+      out, out_size, &used,
+      settings.keyboard_layout[0] ? settings.keyboard_layout : "us");
+  desktop_json_append_raw(out, out_size, &used, ",\"pointerProfile\":");
+  desktop_json_append_string(
+      out, out_size, &used,
+      settings.pointer_profile[0] ? settings.pointer_profile : "flat");
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"submaps\":[\"default\",\"resize\",\"move\",\"launch\"],"
+      "\"shortcuts\":["
+      "{\"keys\":\"F1\",\"dispatcher\":\"exec\",\"args\":\"terminal\","
+      "\"scope\":\"global\",\"submap\":\"default\"},"
+      "{\"keys\":\"F2\",\"dispatcher\":\"killactive\",\"args\":\"\","
+      "\"scope\":\"global\",\"submap\":\"default\"},"
+      "{\"keys\":\"F3\",\"dispatcher\":\"exec\",\"args\":\"launcher\","
+      "\"scope\":\"overlay\",\"submap\":\"default\"},"
+      "{\"keys\":\"F4\",\"dispatcher\":\"fullscreen\","
+      "\"args\":\"toggle\",\"scope\":\"client\",\"submap\":\"default\"},"
+      "{\"keys\":\"F5\",\"dispatcher\":\"pseudo\","
+      "\"args\":\"toggle\",\"scope\":\"client\",\"submap\":\"default\"},"
+      "{\"keys\":\"F6\",\"dispatcher\":\"cyclenext\",\"args\":\"\","
+      "\"scope\":\"workspace\",\"submap\":\"default\"},"
+      "{\"keys\":\"F7/F8\",\"dispatcher\":\"workspace\","
+      "\"args\":\"+1/-1\",\"scope\":\"workspace\",\"submap\":\"default\"},"
+      "{\"keys\":\"F9/F10/F11/F12\",\"dispatcher\":\"submap\","
+      "\"args\":\"resize/move/launch/default\",\"scope\":\"keyboard\","
+      "\"submap\":\"default\"}],"
+      "\"submapActions\":{\"resize\":[\"resizeactive\",\"splitratio\","
+      "\"masterratio\",\"togglesplit\",\"reset\"],"
+      "\"move\":[\"movefocus\",\"movewindow\",\"focusmwindow\","
+      "\"swapmwindow\",\"movetoworkspace\",\"pin\"],"
+      "\"launch\":[\"terminal\",\"settings\",\"logs\",\"packages\","
+      "\"update\",\"launcher\",\"killactive\"],"
+      "\"default\":[\"Esc\",\"F12\",\"submap reset\"]},"
+      "\"dispatchers\":[\"exec\",\"killactive\",\"workspace\","
+      "\"movetoworkspace\",\"movetoworkspacesilent\",\"movefocus\","
+      "\"focusmwindow\",\"swapmwindow\",\"movewindow\","
+      "\"focusmaster\",\"swapwithmaster\",\"fullscreen\",\"pseudo\","
+      "\"pin\",\"resizeactive\",\"layoutmsg\",\"submap\"],"
+      "\"diagnostics\":{\"keyboardNavigation\":true,"
+      "\"mouseDiagnostics\":true,\"focusFollowsMouseOptional\":true,"
+      "\"workspaceRelative\":true,\"pinnedAware\":true,"
+      "\"fullscreenAware\":true,\"pseudoAware\":true,"
+      "\"nativeAppsTiled\":true,\"manualWindowDrag\":false},"
+      "\"limits\":[\"VM/ZimaOS keyboard dispatcher map only\","
+      "\"bindm parsed/prepared but does not enable manual drag\","
+      "\"not upstream Hyprland IPC yet\","
+      "\"no physical hardware validation claimed\"]}\n");
 }
 
 void orizon_desktop_format_doctor(char *out, size_t out_size) {

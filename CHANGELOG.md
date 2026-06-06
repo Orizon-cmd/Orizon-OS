@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.79.0` with structured Hyprland-style JSON
+  shortcut/input diagnostics for `desktop hyprctl -j shortcuts`. The VM-safe
+  response exposes keyboard-only navigation, submaps, dispatcher-backed
+  workspace/client actions, keyboard layout, focus-follows-mouse policy, and
+  explicit `manualDrag=false`, `bindmPreparedOnly=true`, `taskbar=false`,
+  `startMenu=false`, `waybarActive=false`, `wayland=false`, and `wlroots=false`
+  limits without adding Waybar, a Windows-like bar/start menu, floating
+  windows, free mouse drag, upstream Hyprland IPC compatibility, or physical
+  hardware validation.
 - Added desktop package version `0.78.0` with structured Hyprland-style JSON
   autostart diagnostics/actions for `desktop hyprctl -j autostart` and
   `desktop hyprctl -j autostart terminal on|off|toggle`. The VM-safe response
