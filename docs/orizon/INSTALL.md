@@ -111,6 +111,10 @@ It writes runtime/staging state:
 /system/desktop-layers.conf
 /system/desktop-runtime.conf
 /system/desktop-state.conf
+/system/desktop-modules.conf
+/system/desktop-architecture.conf
+/system/desktop-backend.conf
+/system/desktop-protocol.conf
 /home/orizon/.config/hypr/orizon-hypr.conf
 /logs/desktop-session.log
 ```
@@ -135,6 +139,16 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
+The desktop package version `0.83.0` installs explicit architecture truth maps:
+`/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
+`/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
+`desktop backend`, `desktop protocol`, or the matching `desktop hyprctl -j`
+commands. These maps document the current VM framebuffer backend,
+`compositor-backend-v0`, and the internal `desktop-protocol-v0` runtime trace
+for `orizon-desktop-ipc-v0`; they do not make Orizon upstream Hyprland,
+Wayland, wlroots, XWayland, layer-shell, an external Wayland client protocol,
+Waybar, a taskbar/start menu, floating/free-drag windows, or physical hardware
+validation.
 Render tuning stays VM-safe and tiling-only: use `desktop settings set
 focus-ring <yes|no>`, `desktop settings set render-profile
 <balanced|performance|cozy>`, `desktop keyword decoration:shadow:range <0-32>`,

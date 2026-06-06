@@ -65,6 +65,16 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
+- Desktop release boundary for current package `0.83.0`: `desktop architecture`,
+  `desktop backend`, and `desktop protocol` expose
+  `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
+  `/system/desktop-protocol.conf`. The implemented VM-ready pieces are the
+  Orizon compositor API seam, `compositor-backend-v0` over `framebuffer-vm`,
+  and the internal kernel-local `desktop-protocol-v0` trace for
+  `orizon-desktop-ipc-v0`. The future `wayland-wlroots` backend remains
+  prepared-only; there is still no upstream Hyprland, Wayland/wlroots server,
+  external Wayland client protocol, XWayland, layer-shell, Waybar, taskbar/start
+  menu, free manual window drag, or physical hardware validation.
 - Installed/live lifecycle is visible with `system status`; `system health`
   gives a PASS/WARN summary, `system snapshot` writes
   `/workspace/.orizon/system-snapshot.txt`, `system backup` exports non-secret

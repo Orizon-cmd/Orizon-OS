@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clarified the install and operator-start documentation for desktop package
+  `0.83.0`, including the `/system/desktop-architecture.conf`,
+  `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
+  `compositor-backend-v0`, and `desktop-protocol-v0` VM-ready boundaries
+  without changing release artifacts or claiming upstream Wayland/wlroots,
+  Waybar, floating/free-drag windows, or physical hardware validation.
 - Added desktop package version `0.83.0` with an implemented VM-safe internal
   `desktop-protocol-v0` trace for `orizon-desktop-ipc-v0`. Real compositor
   actions now record kernel-local `dispatch`, `spawn-client`, `close-client`,
