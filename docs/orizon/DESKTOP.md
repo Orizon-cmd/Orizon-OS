@@ -406,6 +406,13 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.98.0` adds richer `getoption` diagnostics through
+`desktop hyprctl getoption <hint>` and `desktop hyprctl -j getoption <hint>`.
+Repeated runtime hints now expose `entry-count`/`entries` while `value:` keeps
+the effective mapped value, so `env`, `workspace`, `monitor`, `bind`,
+`windowrulev2`, `layerrule`, and `source` imports are inspectable in ZimaOS VM
+without claiming upstream Hyprland IPC, Wayland/wlroots, Waybar, floating/manual
+drag, or physical hardware validation.
 Package `0.97.0` adds focus-state diagnostics through `desktop focus-state`,
 `desktop hyprctl focusstate`, and `desktop hyprctl -j focusstate`. The report
 combines activewindow, master candidate, stack order, focusHistoryID,
@@ -796,7 +803,7 @@ desktop layout-tree shows the active tiling tree and rectangles
 desktop config trace explains apply/prepare/ignore parser decisions
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
 desktop hyprctl getoption <key> inspects the current mapped value
-desktop hyprctl -j getoption <key> emits the mapped value as VM-safe JSON
+desktop hyprctl -j getoption <key> emits the mapped value and repeated runtime entries as VM-safe JSON
 desktop hyprctl -j keyword <key> <value> applies one supported key as JSON
 desktop hyprctl -j dispatch <dispatcher> [args] emits tiled dispatcher action JSON
 desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue] emits session manager JSON

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.98.0` with richer VM-ready
+  `desktop hyprctl getoption` diagnostics. Text output now keeps the mapped
+  `value:` and adds `entry-count` plus stored runtime entries for repeated
+  Hyprland-style hints such as `env`, `workspace`, `monitor`, `bind`,
+  `windowrulev2`, and `layerrule`; JSON output adds `entryCount`, `entries`,
+  `entriesStored`, and `entriesTruncated`. This is still Orizon framebuffer
+  runtime state for ZimaOS VMs only: no upstream Hyprland IPC, Wayland/wlroots
+  server, Waybar activation, floating desktop, manual window drag, or physical
+  hardware validation is claimed.
 - Added desktop package version `0.97.0` with VM-ready focus-state
   diagnostics. `desktop focus-state`, `desktop hyprctl focusstate`, and JSON
   `desktop hyprctl -j focusstate` now combine activewindow, master, stack,

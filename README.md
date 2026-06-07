@@ -241,6 +241,12 @@ Depuis `0.94.0`, `desktop modules`, `desktop hyprctl -j modules`, `pkg info`
 et les `.opkg` de modules exposent aussi `split-plan`, `dependency-graph`,
 frontieres de modules, roles d'activation et `split-version 2`, afin de rendre
 la separation `orizon-desktop-core`/apps plus verifiable en VM.
+Depuis `0.98.0`, `desktop hyprctl getoption <hint>` et
+`desktop hyprctl -j getoption <hint>` exposent aussi `entry-count`/`entries`
+pour les hints repetables (`env`, `workspace`, `monitor`, `bind`,
+`windowrulev2`, `layerrule`, `source`) afin de diagnostiquer la config importee
+en VM sans socket Hyprland reel, Wayland/wlroots, Waybar actif, drag manuel ni
+validation materielle.
 Depuis `0.97.0`, `desktop focus-state`, `desktop hyprctl focusstate` et
 `desktop hyprctl -j focusstate` regroupent activewindow, master, stack,
 `focusHistoryID`, ratios split/master, flags fullscreen/pseudo/pinned et

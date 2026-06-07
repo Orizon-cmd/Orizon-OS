@@ -75,6 +75,7 @@
   free-drag window moving, package `0.86.0` bind flag diagnostics for
   plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
   package `0.87.0` source resolution diagnostics for included config files,
+  package `0.98.0` `getoption` entry diagnostics for repeated runtime hints,
   package `0.97.0` focus-state active/master/stack diagnostics,
   package `0.96.0` runtime truth taxonomy diagnostics,
   package `0.95.0` architecture/backend/protocol contract diagnostics,

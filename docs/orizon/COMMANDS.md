@@ -183,6 +183,7 @@ desktop hyprctl -j configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl -j getoption general:gaps_in
+desktop hyprctl -j getoption env
 desktop hyprctl keyword decoration:rounding 11
 desktop hyprctl -j keyword decoration:rounding 11
 desktop hyprctl keyword decoration:shadow:range 22
@@ -455,6 +456,13 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.98.0`, `desktop hyprctl getoption <hint>` keeps the mapped
+`value:` and adds `entry-count`, while JSON getoption adds `entryCount`,
+`entries`, `entriesStored`, and `entriesTruncated` for repeated Hyprland-style
+runtime hints such as `env`, `workspace`, `monitor`, `bind`, `windowrulev2`,
+`layerrule`, and `source`. This remains VM/ZimaOS framebuffer diagnostics, not
+upstream Hyprland IPC, Wayland/wlroots, Waybar, floating/manual drag, or
+physical hardware validation.
 Since package `0.97.0`, `desktop focus-state`, `desktop hyprctl focusstate`,
 and JSON `desktop hyprctl -j focusstate` expose a read-only active-workspace
 focus/master/stack diagnostic with `focusHistoryID`, split/master ratios,

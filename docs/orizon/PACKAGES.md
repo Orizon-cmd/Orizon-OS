@@ -180,6 +180,7 @@ desktop hyprctl -j configtrace
 desktop hyprctl rollinglog
 desktop hyprctl getoption general:gaps_in
 desktop hyprctl -j getoption general:gaps_in
+desktop hyprctl -j getoption env
 desktop hyprctl keyword decoration:rounding 11
 desktop hyprctl -j keyword decoration:rounding 11
 desktop hyprctl keyword decoration:shadow:range 22
@@ -285,7 +286,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.97.0` because it includes policy/config files, the persisted session
+`0.98.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -319,7 +320,13 @@ sticky reset diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.97.0` adds focus-state diagnostics to
+the launcher. Version `0.98.0` adds `getoption` entry diagnostics to
+`desktop hyprctl getoption`, JSON `getoption`, and generated package metadata
+through `hyprctl-json-getoption-entries`, so repeated VM runtime hints
+(`env`, `workspace`, `monitor`, `bind`, `windowrulev2`, `layerrule`, `source`)
+can be checked without claiming upstream Hyprland IPC, Wayland/wlroots,
+Waybar activation, floating/manual drag, or physical hardware validation.
+Version `0.97.0` adds focus-state diagnostics to
 `desktop focus-state`, `desktop hyprctl focusstate`, JSON `focusstate`, and
 generated package metadata so activewindow, master, stack, ratios, client flags,
 and `lastDispatch` can be checked together in the VM without enabling

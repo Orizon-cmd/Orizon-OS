@@ -79,6 +79,7 @@ $commands = @(
   "desktop config apply",
   "desktop config trace",
   "desktop hyprctl getoption env",
+  "desktop hyprctl -j getoption env",
   "desktop hyprctl getoption workspace",
   "desktop session",
   "desktop settings",
@@ -200,6 +201,7 @@ $commands = @(
   "desktop hyprctl rollinglog",
   "desktop hyprctl focusstate",
   "desktop hyprctl getoption env",
+  "desktop hyprctl -j getoption env",
   "desktop hyprctl getoption workspace",
   "desktop hyprctl getoption general:gaps_in",
   "desktop hyprctl -j getoption general:gaps_in",
@@ -921,7 +923,10 @@ run_cmd() {
       grep -q "option animations:tick_budget" "`$OUT" && grep -q "value: 24" "`$OUT" || { echo "missing hyprctl getoption animation budget"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl getoption env")
-      grep -q "option env" "`$OUT" && grep -q "value: ORIZON_DESKTOP_SOURCE,1" "`$OUT" || { echo "missing hyprctl getoption env"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "option env" "`$OUT" && grep -q "value: ORIZON_DESKTOP_SOURCE,1" "`$OUT" && grep -q "entry-count:" "`$OUT" && grep -q "entry\[0\]: ORIZON_DESKTOP_SOURCE,1" "`$OUT" || { echo "missing hyprctl getoption env"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j getoption env")
+      grep -q '"command":"getoption"' "`$OUT" && grep -q '"key":"env"' "`$OUT" && grep -q '"entryCount":' "`$OUT" && grep -Fq '"entries":[' "`$OUT" && grep -q 'ORIZON_DESKTOP_SOURCE,1' "`$OUT" || { echo "missing hyprctl json getoption env"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl getoption workspace")
       grep -q "option workspace" "`$OUT" && grep -q "value: 1, default:true" "`$OUT" || { echo "missing hyprctl getoption workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

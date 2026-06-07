@@ -1043,6 +1043,8 @@ static int desktop_session_get_value(const char *text, const char *key,
 
 #define DESKTOP_HYPR_SOURCE_MAX_DEPTH 3
 #define DESKTOP_HYPR_SOURCE_MAX_FILES 8
+#define DESKTOP_HYPR_OPTION_MAX_ENTRIES 6
+#define DESKTOP_HYPR_OPTION_VALUE_SIZE 128
 
 typedef struct {
   int parsed_lines;
@@ -1726,6 +1728,64 @@ static int desktop_hypr_runtime_get_value(const char *path, const char *key,
     }
   }
   return found ? 0 : -1;
+}
+
+static int desktop_hypr_runtime_collect_values(
+    const char *path, const char *key,
+    char entries[][DESKTOP_HYPR_OPTION_VALUE_SIZE], int max_entries,
+    int *entry_count, int *entries_stored, int *truncated) {
+  char cfg[8192];
+  int n;
+  int pos = 0;
+  int total = 0;
+  int stored = 0;
+
+  if (entry_count) {
+    *entry_count = 0;
+  }
+  if (entries_stored) {
+    *entries_stored = 0;
+  }
+  if (truncated) {
+    *truncated = 0;
+  }
+  if (!path || !key || !entries || max_entries <= 0) {
+    return -1;
+  }
+  n = desktop_read_text_file(path, cfg, sizeof(cfg));
+  if (n <= 0) {
+    return -1;
+  }
+  while (pos < n) {
+    int start;
+    int end;
+    char line[256];
+    char line_key[96];
+    char line_value[DESKTOP_HYPR_OPTION_VALUE_SIZE];
+
+    desktop_next_line_bounds(cfg, n, &pos, &start, &end);
+    desktop_trim_copy(line, sizeof(line), cfg + start, end - start);
+    if (desktop_hypr_key_value(line, line_key, sizeof(line_key), line_value,
+                               sizeof(line_value)) == 0 &&
+        strcmp(line_key, key) == 0) {
+      if (stored < max_entries) {
+        snprintf(entries[stored], DESKTOP_HYPR_OPTION_VALUE_SIZE, "%s",
+                 line_value);
+        stored++;
+      }
+      total++;
+    }
+  }
+  if (entry_count) {
+    *entry_count = total;
+  }
+  if (entries_stored) {
+    *entries_stored = stored;
+  }
+  if (truncated) {
+    *truncated = total > stored ? 1 : 0;
+  }
+  return total > 0 ? 0 : -1;
 }
 
 static const char *desktop_hypr_runtime_default_value(const char *key) {
@@ -5470,7 +5530,11 @@ typedef struct {
   const char *known;
   const char *kind;
   const char *runtime_path;
-  char value[64];
+  char value[DESKTOP_HYPR_OPTION_VALUE_SIZE];
+  int entry_count;
+  int entries_stored;
+  int entries_truncated;
+  char entries[DESKTOP_HYPR_OPTION_MAX_ENTRIES][DESKTOP_HYPR_OPTION_VALUE_SIZE];
 } desktop_hypr_option_view_t;
 
 static int desktop_hypr_resolve_option(const char *key,
@@ -5486,6 +5550,10 @@ static int desktop_hypr_resolve_option(const char *key,
   view->kind = "int";
   view->runtime_path = NULL;
   view->value[0] = '\0';
+  view->entry_count = 0;
+  view->entries_stored = 0;
+  view->entries_truncated = 0;
+  memset(view->entries, 0, sizeof(view->entries));
   orizon_desktop_load_session(&session);
   orizon_desktop_load_settings(&settings);
   if (strcmp(key, "general:layout") == 0) {
@@ -5544,6 +5612,10 @@ static int desktop_hypr_resolve_option(const char *key,
       snprintf(view->value, sizeof(view->value), "%s",
                default_value ? default_value : "prepared-no-value-yet");
     }
+    desktop_hypr_runtime_collect_values(
+        runtime_path, key, view->entries, DESKTOP_HYPR_OPTION_MAX_ENTRIES,
+        &view->entry_count, &view->entries_stored,
+        &view->entries_truncated);
   } else {
     view->known = "no";
     view->kind = "unknown";
@@ -5555,6 +5627,9 @@ static int desktop_hypr_resolve_option(const char *key,
 void orizon_desktop_format_hypr_option(const char *key, char *out,
                                        size_t out_size) {
   desktop_hypr_option_view_t view;
+  char line[192];
+  size_t used = 0;
+  int i;
 
   if (!out || out_size == 0) {
     return;
@@ -5567,22 +5642,39 @@ void orizon_desktop_format_hypr_option(const char *key, char *out,
     return;
   }
 
-  snprintf(out, out_size,
-           "option %s\n"
-           "known: %s\n"
-           "type: %s\n"
-           "value: %s\n"
-           "source: Orizon desktop session/settings/runtime\n"
-           "runtime-file: %s\n"
-           "set: desktop keyword %s <value>\n",
-           key, view.known, view.kind, view.value,
-           view.runtime_path ? view.runtime_path : "none", key);
+  desktop_append(out, out_size, &used, "option ");
+  desktop_append(out, out_size, &used, key);
+  desktop_append(out, out_size, &used, "\nknown: ");
+  desktop_append(out, out_size, &used, view.known);
+  desktop_append(out, out_size, &used, "\ntype: ");
+  desktop_append(out, out_size, &used, view.kind);
+  desktop_append(out, out_size, &used, "\nvalue: ");
+  desktop_append(out, out_size, &used, view.value);
+  desktop_append(out, out_size, &used,
+                 "\nsource: Orizon desktop session/settings/runtime\n");
+  desktop_append(out, out_size, &used, "runtime-file: ");
+  desktop_append(out, out_size, &used,
+                 view.runtime_path ? view.runtime_path : "none");
+  snprintf(line, sizeof(line),
+           "\nentry-count: %d stored=%d truncated=%s\n",
+           view.entry_count, view.entries_stored,
+           view.entries_truncated ? "true" : "false");
+  desktop_append(out, out_size, &used, line);
+  for (i = 0; i < view.entries_stored; ++i) {
+    snprintf(line, sizeof(line), "entry[%d]: %s\n", i, view.entries[i]);
+    desktop_append(out, out_size, &used, line);
+  }
+  desktop_append(out, out_size, &used, "set: desktop keyword ");
+  desktop_append(out, out_size, &used, key);
+  desktop_append(out, out_size, &used, " <value>\n");
 }
 
 void orizon_desktop_format_hypr_option_json(const char *key, char *out,
                                             size_t out_size) {
   desktop_hypr_option_view_t view;
   size_t used = 0;
+  char line[96];
+  int i;
 
   if (!out || out_size == 0) {
     return;
@@ -5618,6 +5710,19 @@ void orizon_desktop_format_hypr_option_json(const char *key, char *out,
   desktop_json_append_raw(out, out_size, &used, ",\"runtimeFile\":");
   desktop_json_append_string(out, out_size, &used,
                              view.runtime_path ? view.runtime_path : "none");
+  snprintf(line, sizeof(line),
+           ",\"entryCount\":%d,\"entriesStored\":%d,"
+           "\"entriesTruncated\":%s,\"entries\":[",
+           view.entry_count, view.entries_stored,
+           view.entries_truncated ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  for (i = 0; i < view.entries_stored; ++i) {
+    if (i > 0) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_json_append_string(out, out_size, &used, view.entries[i]);
+  }
+  desktop_json_append_raw(out, out_size, &used, "]");
   desktop_json_append_raw(
       out, out_size, &used,
       ",\"setCommand\":\"desktop keyword <key> <value>\","
