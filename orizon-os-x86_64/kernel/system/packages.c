@@ -4482,7 +4482,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "hyprctl-json-architecture-diagnostics = apiLayerSeparated,backendApi=compositor-backend-v0,framebufferBackendKept,futureBackendImplemented=false,internalClientProtocol,manualDrag=false,taskbar=false\n"
       "hyprctl-json-protocol-diagnostics = desktop-protocol-v0,runtime,lastMessage,counts,localKernelOnly,waylandTraffic=false,hyprlandSocket=false\n"
       "hyprctl-json-config-diagnostics = parserSummary,trace,errors,sourceResolve,manualDrag=false\n"
-      "hyprctl-json-session-diagnostics = health,desiredState,runtimeState,counters,paths,sessionLogTail,hardwareValidation=false\n"
+      "hyprctl-json-session-diagnostics = health,desiredState,runtimeState,counters,audit,recommendedAction,paths,sessionLogTail,hardwareValidation=false\n"
       "hyprctl-json-action-diagnostics = getoption,keyword,dispatch,reload,session,result,manualDrag=false\n"
       "hyprctl-json-input-layer-diagnostics = binds,layers,bindmPreparedOnly,waybarActive=false,taskbar=false\n"
       "hyprctl-clientmodel-command = desktop hyprctl clientmodel\n"

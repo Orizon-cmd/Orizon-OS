@@ -385,6 +385,11 @@ SSH, and `desktop hyprctl -j session
 [status|start|stop|restart|reload|recover|rescue]` exposes the same manager as
 VM-safe JSON diagnostics/actions. `desktop rescue` is read-only: it prints a recovery checklist, file
 health, and the safe next commands before `desktop recover` rewrites anything.
+Package `0.88.0` adds a structured session audit to those outputs with
+policy/session/settings/state/log/runtime file checks, byte counts,
+`recommendedAction`, and `rescueRecommended` so VM operators can decide between
+`desktop state`, `desktop reload`, `desktop recover`, and `desktop rescue`
+without guessing or claiming physical hardware validation.
 
 `desktop settings` is the system-wide settings layer for the desktop
 environment. It is written to `/system/desktop-settings.conf` when the desktop

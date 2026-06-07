@@ -70,6 +70,8 @@ $commands = @(
   "pkg verify /workspace/packages/orizon-hello.opkg",
   "pkg install /workspace/packages/orizon-hello.opkg",
   "desktop status",
+  "desktop state",
+  "desktop rescue",
   "desktop config",
   "desktop config doctor",
   "desktop config apply",
@@ -578,6 +580,12 @@ run_cmd() {
     "desktop status")
       grep -q "Orizon desktop" "`$OUT" && grep -q "hyprland-inspired" "`$OUT" || { echo "missing desktop status"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop state")
+      grep -q "Orizon desktop session manager" "`$OUT" && grep -q "recommended-action:" "`$OUT" && grep -q "file-audit:" "`$OUT" || { echo "missing desktop state audit"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop rescue")
+      grep -q "Orizon desktop rescue" "`$OUT" && grep -q "rescue-recommended:" "`$OUT" && grep -q "next:" "`$OUT" || { echo "missing desktop rescue audit"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop config")
       grep -q "Hyprland-style" "`$OUT" || { echo "missing desktop config"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -837,7 +845,7 @@ run_cmd() {
       grep -q '"command":"splash"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json splash"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j session")
-      grep -q '"command":"session"' "`$OUT" && grep -q '"desiredState":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"session"' "`$OUT" && grep -q '"desiredState":' "`$OUT" && grep -q '"audit":{' "`$OUT" && grep -q '"recommendedAction":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json session"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j session reload")
       grep -q '"command":"session"' "`$OUT" && grep -q '"action":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"sessionLogTail":' "`$OUT" || { echo "missing hyprctl json session reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

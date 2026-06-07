@@ -2941,6 +2941,213 @@ static int desktop_state_counter(const char *key) {
   return desktop_parse_int_value(value, 0);
 }
 
+typedef struct {
+  const char *path;
+  size_t bytes;
+  int present;
+} desktop_session_audit_file_t;
+
+typedef struct {
+  desktop_session_audit_file_t policy;
+  desktop_session_audit_file_t session;
+  desktop_session_audit_file_t settings;
+  desktop_session_audit_file_t state;
+  desktop_session_audit_file_t session_log;
+  desktop_session_audit_file_t user_config;
+  desktop_session_audit_file_t local_source;
+  desktop_session_audit_file_t binds_runtime;
+  desktop_session_audit_file_t autostart_runtime;
+  desktop_session_audit_file_t runtime_state;
+  const char *summary;
+  const char *recommended_action;
+  int rescue_recommended;
+  int installed;
+  int policy_enabled;
+} desktop_session_audit_t;
+
+static void desktop_session_audit_file(desktop_session_audit_file_t *file,
+                                       const char *path) {
+  size_t bytes = 0;
+  int present = 0;
+
+  if (!file) {
+    return;
+  }
+  if (path && vfs_stat(path, &bytes, NULL) == 0 && bytes > 0) {
+    present = 1;
+  } else {
+    bytes = 0;
+  }
+  file->path = path ? path : "none";
+  file->bytes = bytes;
+  file->present = present;
+}
+
+static int desktop_session_audit_file_warn(
+    const desktop_session_audit_file_t *file) {
+  return !file || !file->present;
+}
+
+static void desktop_session_audit_snapshot(desktop_session_audit_t *audit,
+                                           const char *desired,
+                                           const char *runtime,
+                                           const char *health) {
+  int warn = 0;
+
+  if (!audit) {
+    return;
+  }
+  memset(audit, 0, sizeof(*audit));
+  audit->installed = orizon_system_is_installed();
+  audit->policy_enabled = desktop_policy_enabled_from_file();
+  audit->summary = "PASS";
+  audit->recommended_action = "none";
+
+  desktop_session_audit_file(&audit->policy, ORIZON_DESKTOP_CONFIG_PATH);
+  desktop_session_audit_file(&audit->session, ORIZON_DESKTOP_SESSION_PATH);
+  desktop_session_audit_file(&audit->settings, ORIZON_DESKTOP_SETTINGS_PATH);
+  desktop_session_audit_file(&audit->state, ORIZON_DESKTOP_STATE_PATH);
+  desktop_session_audit_file(&audit->session_log,
+                             ORIZON_DESKTOP_SESSION_LOG_PATH);
+  desktop_session_audit_file(&audit->user_config,
+                             ORIZON_DESKTOP_USER_CONFIG_PATH);
+  desktop_session_audit_file(&audit->local_source,
+                             ORIZON_DESKTOP_LOCAL_CONFIG_PATH);
+  desktop_session_audit_file(&audit->binds_runtime,
+                             ORIZON_DESKTOP_BINDS_PATH);
+  desktop_session_audit_file(&audit->autostart_runtime,
+                             ORIZON_DESKTOP_AUTOSTART_PATH);
+  desktop_session_audit_file(&audit->runtime_state,
+                             ORIZON_DESKTOP_RUNTIME_PATH);
+
+  if (desktop_session_audit_file_warn(&audit->policy) ||
+      desktop_session_audit_file_warn(&audit->session) ||
+      desktop_session_audit_file_warn(&audit->settings) ||
+      desktop_session_audit_file_warn(&audit->state) ||
+      desktop_session_audit_file_warn(&audit->local_source) ||
+      desktop_session_audit_file_warn(&audit->binds_runtime) ||
+      desktop_session_audit_file_warn(&audit->autostart_runtime) ||
+      desktop_session_audit_file_warn(&audit->runtime_state)) {
+    warn = 1;
+    audit->recommended_action = "desktop recover";
+  }
+  if (desired && strcmp(desired, "started") == 0 &&
+      desktop_session_audit_file_warn(&audit->user_config)) {
+    warn = 1;
+    audit->recommended_action = "desktop recover";
+  }
+  if (health && strcmp(health, "WARN") == 0) {
+    warn = 1;
+    if (strcmp(audit->recommended_action, "none") == 0) {
+      audit->recommended_action = "desktop rescue";
+    }
+  }
+  if (runtime && strstr(runtime, "degraded")) {
+    warn = 1;
+    audit->recommended_action = "desktop recover";
+  }
+  if (desired && strcmp(desired, "started") == 0 &&
+      (!audit->policy_enabled || !runtime || strcmp(runtime, "active") != 0)) {
+    warn = 1;
+    if (strcmp(audit->recommended_action, "none") == 0) {
+      audit->recommended_action = "desktop rescue";
+    }
+  }
+
+  audit->rescue_recommended = warn;
+  audit->summary = warn ? "WARN" : "PASS";
+}
+
+static const char *desktop_session_audit_status(
+    const desktop_session_audit_file_t *file) {
+  return file && file->present ? "PASS" : "WARN";
+}
+
+static void desktop_append_session_audit_summary(
+    char *out, size_t out_size, size_t *used,
+    const desktop_session_audit_t *audit) {
+  char line[384];
+
+  if (!audit) {
+    return;
+  }
+  snprintf(line, sizeof(line),
+           "audit: %s\nrecommended-action: %s\nrescue-recommended: %s\n"
+           "file-audit: policy=%s session=%s settings=%s state=%s "
+           "session-log=%s user-config=%s local-source=%s binds=%s "
+           "autostart=%s runtime=%s\n",
+           audit->summary, audit->recommended_action,
+           audit->rescue_recommended ? "yes" : "no",
+           desktop_session_audit_status(&audit->policy),
+           desktop_session_audit_status(&audit->session),
+           desktop_session_audit_status(&audit->settings),
+           desktop_session_audit_status(&audit->state),
+           audit->session_log.present ? "PASS" : "EMPTY",
+           desktop_session_audit_status(&audit->user_config),
+           desktop_session_audit_status(&audit->local_source),
+           desktop_session_audit_status(&audit->binds_runtime),
+           desktop_session_audit_status(&audit->autostart_runtime),
+           desktop_session_audit_status(&audit->runtime_state));
+  desktop_append(out, out_size, used, line);
+}
+
+static void desktop_session_audit_json_file(
+    char *out, size_t out_size, size_t *used, const char *name,
+    const desktop_session_audit_file_t *file, int first) {
+  char line[96];
+
+  desktop_json_append_raw(out, out_size, used, first ? "\"" : ",\"");
+  desktop_json_append_raw(out, out_size, used, name);
+  desktop_json_append_raw(out, out_size, used, "\":{\"path\":");
+  desktop_json_append_string(out, out_size, used, file ? file->path : "none");
+  snprintf(line, sizeof(line), ",\"present\":%s,\"bytes\":%lu}",
+           file && file->present ? "true" : "false",
+           (unsigned long)(file && file->present ? file->bytes : 0));
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
+static void desktop_session_audit_json(char *out, size_t out_size,
+                                       size_t *used,
+                                       const desktop_session_audit_t *audit) {
+  char line[192];
+
+  if (!audit) {
+    return;
+  }
+  desktop_json_append_raw(out, out_size, used, "\"audit\":{\"summary\":");
+  desktop_json_append_string(out, out_size, used, audit->summary);
+  desktop_json_append_raw(out, out_size, used, ",\"recommendedAction\":");
+  desktop_json_append_string(out, out_size, used, audit->recommended_action);
+  snprintf(line, sizeof(line),
+           ",\"rescueRecommended\":%s,\"installed\":%s,"
+           "\"policyEnabled\":%s,\"files\":{",
+           audit->rescue_recommended ? "true" : "false",
+           audit->installed ? "true" : "false",
+           audit->policy_enabled ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, line);
+  desktop_session_audit_json_file(out, out_size, used, "policy",
+                                  &audit->policy, 1);
+  desktop_session_audit_json_file(out, out_size, used, "session",
+                                  &audit->session, 0);
+  desktop_session_audit_json_file(out, out_size, used, "settings",
+                                  &audit->settings, 0);
+  desktop_session_audit_json_file(out, out_size, used, "state",
+                                  &audit->state, 0);
+  desktop_session_audit_json_file(out, out_size, used, "sessionLog",
+                                  &audit->session_log, 0);
+  desktop_session_audit_json_file(out, out_size, used, "userConfig",
+                                  &audit->user_config, 0);
+  desktop_session_audit_json_file(out, out_size, used, "localSource",
+                                  &audit->local_source, 0);
+  desktop_session_audit_json_file(out, out_size, used, "bindsRuntime",
+                                  &audit->binds_runtime, 0);
+  desktop_session_audit_json_file(out, out_size, used, "autostartRuntime",
+                                  &audit->autostart_runtime, 0);
+  desktop_session_audit_json_file(out, out_size, used, "runtimeState",
+                                  &audit->runtime_state, 0);
+  desktop_json_append_raw(out, out_size, used, "}},");
+}
+
 static int desktop_write_session_state(const char *desired,
                                        const char *runtime,
                                        const char *action,
@@ -4359,9 +4566,12 @@ int orizon_desktop_session_manager(const char *action, char *status,
   const char *desired = "stopped";
   const char *runtime = "inactive";
   const char *note = "none";
+  const char *health = "PASS";
+  desktop_session_audit_t audit;
   int rc = 0;
   int apply_rc = 0;
   int enabled;
+  size_t used;
 
   if (status && status_size) {
     status[0] = '\0';
@@ -4437,6 +4647,12 @@ int orizon_desktop_session_manager(const char *action, char *status,
   desktop_log_event(note);
   vfs_persist_save();
   if (status && status_size) {
+    health = strcmp(runtime, "active") == 0 ||
+                     (strcmp(desired, "stopped") == 0 &&
+                      strcmp(runtime, "inactive") == 0)
+                 ? "PASS"
+                 : "WARN";
+    desktop_session_audit_snapshot(&audit, desired, runtime, health);
     snprintf(status, status_size,
              "desktop session-manager: %s\n"
              "health: %s\n"
@@ -4450,11 +4666,7 @@ int orizon_desktop_session_manager(const char *action, char *status,
              "manual-window-drag: no\n"
              "recover: desktop recover\n"
              "rescue: desktop rescue\n",
-             action, strcmp(runtime, "active") == 0 ||
-                         (strcmp(desired, "stopped") == 0 &&
-                          strcmp(runtime, "inactive") == 0)
-                         ? "PASS"
-                         : "WARN",
+             action, health,
              desired, runtime,
              orizon_system_is_installed() ? "installed" : "live-iso",
              orizon_system_is_installed() ? "present" : "missing",
@@ -4463,6 +4675,8 @@ int orizon_desktop_session_manager(const char *action, char *status,
                                                                    : "warn"),
              ORIZON_DESKTOP_STATE_PATH, ORIZON_DESKTOP_SESSION_LOG_PATH,
              strstr(note, "standby") ? "prepared" : "ready");
+    used = strlen(status);
+    desktop_append_session_audit_summary(status, status_size, &used, &audit);
   }
   return (rc == 0 && (apply_rc == 0 || strcmp(action, "stop") == 0)) ? 0 : -1;
 }
@@ -4487,6 +4701,7 @@ static void desktop_format_session_json(const char *action, int rc,
   char note[96];
   char value[32];
   char line[384];
+  desktop_session_audit_t audit;
   size_t used = 0;
   size_t state_size = 0;
   size_t log_size = 0;
@@ -4559,6 +4774,7 @@ static void desktop_format_session_json(const char *action, int rc,
   recover_count = desktop_parse_int_value(value, 0);
   desktop_session_get_value(state, "crash-count", value, sizeof(value), "0");
   crash_count = desktop_parse_int_value(value, 0);
+  desktop_session_audit_snapshot(&audit, desired, runtime, health);
 
   desktop_json_append_raw(
       out, out_size, &used,
@@ -4610,6 +4826,7 @@ static void desktop_format_session_json(const char *action, int rc,
            start_count, stop_count, restart_count, reload_count, recover_count,
            crash_count);
   desktop_json_append_raw(out, out_size, &used, line);
+  desktop_session_audit_json(out, out_size, &used, &audit);
 
   desktop_json_append_raw(out, out_size, &used, "\"paths\":{\"state\":");
   desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_STATE_PATH);
@@ -5407,6 +5624,10 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
 void orizon_desktop_format_session_state(char *out, size_t out_size) {
   char state[1024];
   char log[1024];
+  char health[32];
+  char desired[32];
+  char runtime[32];
+  desktop_session_audit_t audit;
   size_t used = 0;
   int n;
 
@@ -5415,6 +5636,17 @@ void orizon_desktop_format_session_state(char *out, size_t out_size) {
   }
   out[0] = '\0';
   orizon_desktop_ensure_defaults();
+  n = desktop_read_text_file(ORIZON_DESKTOP_STATE_PATH, state, sizeof(state));
+  if (n <= 0) {
+    snprintf(state, sizeof(state), "%s", desktop_state_config);
+  }
+  desktop_session_get_value(state, "health", health, sizeof(health), "WARN");
+  desktop_session_get_value(state, "desired-state", desired, sizeof(desired),
+                            "unknown");
+  desktop_session_get_value(state, "runtime-state", runtime, sizeof(runtime),
+                            "unknown");
+  desktop_session_audit_snapshot(&audit, desired, runtime, health);
+
   desktop_append(out, out_size, &used, "Orizon desktop session manager\n");
   desktop_append(out, out_size, &used,
                  "commands: desktop start | desktop stop | desktop restart | desktop reload | desktop recover | desktop rescue\n");
@@ -5424,11 +5656,11 @@ void orizon_desktop_format_session_state(char *out, size_t out_size) {
                  "health: PASS means desired/runtime/policy are coherent; WARN means use desktop rescue/recover\n");
   desktop_append(out, out_size, &used,
                  "manual-window-drag: no\n");
+  desktop_append_session_audit_summary(out, out_size, &used, &audit);
   desktop_append(out, out_size, &used, "state-path: ");
   desktop_append(out, out_size, &used, ORIZON_DESKTOP_STATE_PATH);
   desktop_append(out, out_size, &used, "\n\n== state ==\n");
-  n = desktop_read_text_file(ORIZON_DESKTOP_STATE_PATH, state, sizeof(state));
-  desktop_append(out, out_size, &used, n > 0 ? state : desktop_state_config);
+  desktop_append(out, out_size, &used, state);
   if (out[0] && out[strlen(out) - 1] != '\n') {
     desktop_append(out, out_size, &used, "\n");
   }
@@ -5553,6 +5785,7 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
   char health[32];
   char policy[32];
   char line[192];
+  desktop_session_audit_t audit;
   size_t used = 0;
   int n;
   int installed;
@@ -5575,6 +5808,7 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
   desktop_session_get_value(state, "policy", policy, sizeof(policy),
                             orizon_desktop_is_enabled() ? "enabled"
                                                         : "disabled");
+  desktop_session_audit_snapshot(&audit, desired, runtime, health);
 
   desktop_append(out, out_size, &used, "Orizon desktop rescue\n");
   desktop_append(out, out_size, &used,
@@ -5584,6 +5818,7 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
            health, desired, runtime, policy,
            installed ? "installed" : "live-iso");
   desktop_append(out, out_size, &used, line);
+  desktop_append_session_audit_summary(out, out_size, &used, &audit);
   desktop_append(out, out_size, &used,
                  "safe-actions:\n"
                  "  desktop state              inspect manager state/log\n"
@@ -5623,8 +5858,14 @@ void orizon_desktop_format_session_rescue(char *out, size_t out_size) {
                              ORIZON_DESKTOP_BACKEND_PATH);
   desktop_append_path_status(out, out_size, &used, "protocol-map",
                              ORIZON_DESKTOP_PROTOCOL_PATH);
-  desktop_append(out, out_size, &used,
-                 "\nnext: desktop recover if files are WARN, then desktop state\n");
+  snprintf(line, sizeof(line), "\nnext: %s%s\n",
+           strcmp(audit.recommended_action, "none") == 0
+               ? "desktop state"
+               : audit.recommended_action,
+           strcmp(audit.recommended_action, "none") == 0
+               ? " (no recovery action currently recommended)"
+               : ", then desktop state");
+  desktop_append(out, out_size, &used, line);
 }
 
 void orizon_desktop_format_settings_paths(char *out, size_t out_size) {

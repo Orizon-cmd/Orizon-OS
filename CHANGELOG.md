@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.88.0` with session audit diagnostics for
+  the installed/live desktop manager. `desktop state`, `desktop rescue`, and
+  `desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue]`
+  now expose file presence/size checks for policy, session, settings, state,
+  logs, generated runtime hints, and user config, plus `recommendedAction` and
+  `rescueRecommended` fields for VM/ZimaOS recovery. This is still a
+  Hyprland-style framebuffer VM facade only: no real Wayland/wlroots/upstream
+  Hyprland, Waybar activation, taskbar/start menu, floating desktop, free
+  manual window drag, or physical hardware validation is claimed.
 - Added desktop package version `0.87.0` with structured `source`
   resolution diagnostics for the Hyprland-style config parser. `desktop config
   apply`, `desktop config doctor`, `desktop configerrors`, and

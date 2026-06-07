@@ -165,6 +165,11 @@ focus`, `desktop bar` et `desktop launcher` reglent la session persistante.
 `desktop rescue` affiche une checklist non destructive avec health,
 desired/runtime/policy, boot live/installe et les fichiers a reparer avant
 `desktop recover`.
+Depuis `0.88.0`, `desktop state`, `desktop rescue` et
+`desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue]`
+exposent aussi un audit de session VM-ready: fichiers presents/taille,
+`recommendedAction`, `rescueRecommended`, policy, runtime et limites explicites
+sans validation materiel.
 `desktop input` centralise le layout clavier, le profil pointeur et
 focus-follows-mouse: `desktop input layout fr|us` synchronise
 `/system/desktop-settings.conf`, `/system/keyboard` et

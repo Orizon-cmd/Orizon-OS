@@ -406,7 +406,10 @@ compositor desktop session; `desktop enable` remains a compatibility alias.
 `/logs/desktop-session.log`. The state file now records health,
 desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
 and recovery commands. `desktop rescue` is read-only and prints the safe
-checklist before `desktop recover` repairs/reapplies anything. `desktop config doctor` validates the Hyprland-style
+checklist before `desktop recover` repairs/reapplies anything. Since package
+`0.88.0`, `desktop state`, `desktop rescue`, and JSON `hyprctl session` also
+include a VM-ready session audit with file presence/size checks,
+`recommendedAction`, and `rescueRecommended`. `desktop config doctor` validates the Hyprland-style
 user config and reports VM-safe `source-resolve` status for
 `/home/orizon/.config/hypr/orizon-local.conf`; `desktop config apply` imports the supported subset into the
 session/settings files plus generated runtime hint files such as

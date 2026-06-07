@@ -139,7 +139,8 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.87.0` installs explicit source/bind diagnostics
+The desktop package version `0.88.0` installs explicit source/bind diagnostics,
+session audit diagnostics,
 and architecture truth maps:
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
@@ -152,7 +153,10 @@ not make Orizon upstream Hyprland, Wayland, wlroots, XWayland, layer-shell, an
 external Wayland client protocol, Waybar, a taskbar/start menu,
 floating/free-drag windows, or physical hardware validation. Source diagnostics
 report per-file `LOADED`/`MISSING`/`SKIP_*`/`*_LIMIT` statuses for VM config
-debugging.
+debugging. Session audit diagnostics report policy/session/settings/state/log
+and generated runtime file checks, byte counts, `recommendedAction`, and
+`rescueRecommended` through `desktop state`, `desktop rescue`, and
+`desktop hyprctl -j session`.
 Render tuning stays VM-safe and tiling-only: use `desktop settings set
 focus-ring <yes|no>`, `desktop settings set render-profile
 <balanced|performance|cozy>`, `desktop keyword decoration:shadow:range <0-32>`,
@@ -161,8 +165,8 @@ and `desktop keyword animations:tick_budget <4-60>`, then inspect with
 `desktop start|stop|restart|reload|recover|rescue` writes or inspects
 session-manager state in `/system/desktop-state.conf` and logs lifecycle events
 in `/logs/desktop-session.log`. `desktop rescue` is non-destructive and reports
-state health, live/install mode, policy, and file checks before `desktop
-recover` repairs/reapplies the session.
+state health, live/install mode, policy, file checks, and the recommended next
+command before `desktop recover` repairs/reapplies the session.
 The model is closer to Hyprland dispatchers and automatic tiling than to a
 mouse-drag window desktop. `desktop layout-tree` and
 `desktop hyprctl layouttree` show the active tiling tree, rectangles and
