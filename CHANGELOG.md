@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added desktop package version `0.86.0` with stronger Hyprland-style bind
+  config diagnostics. `desktop config apply`, `desktop config doctor`,
+  `desktop configerrors`, `desktop hyprctl -j configerrors`,
+  `desktop hyprctl -j binds`, and `desktop hyprctl -j shortcuts` now expose
+  plain/keyboard/mouse/composite bind flag counts plus stable flag semantics for
+  `bind`, `bindl`, `bindr`, `binde`, and `bindm`. `bindm` remains parsed as a
+  VM-safe prepared-only compatibility hint and explicitly reports
+  `manualDragFromBindm=false`; no free manual window drag, floating desktop,
+  taskbar/start menu, Waybar activation, real Wayland/wlroots, upstream
+  Hyprland, or physical hardware validation is claimed.
 - Added desktop package version `0.85.0` with structured dispatch failure
   diagnostics for the Hyprland-style compositor facade. `desktop hyprctl -j
   dispatch` and `lastDispatch` now expose stable `error` and `hint` fields

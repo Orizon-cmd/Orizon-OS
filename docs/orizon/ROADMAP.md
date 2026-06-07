@@ -71,7 +71,8 @@
   a first launcher/status-bar layer, symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
-  free-drag window moving,
+  free-drag window moving, package `0.86.0` bind flag diagnostics for
+  plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`,
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, read-only config trace

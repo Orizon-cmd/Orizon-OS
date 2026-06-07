@@ -327,6 +327,11 @@ features. Bind variants are
 classified in `desktop config doctor` and `desktop configerrors`; mouse binds
 are parsed for compatibility, but `bindm` remains a prepared hint and Orizon
 does not enable free-drag window moving by default.
+Package `0.86.0` adds explicit bind flag diagnostics in
+`desktop configerrors`, `desktop hyprctl -j configerrors`,
+`desktop hyprctl -j binds`, and `desktop hyprctl -j shortcuts`: plain keyboard
+binds, keyboard-only variants, prepared-only mouse binds, composite flag
+variants, and `manualDragFromBindm=false` are all reported separately.
 Supported `desktop keyword` settings such as `general:gaps_in` and
 `decoration:rounding` are synced back into
 `/home/orizon/.config/hypr/orizon-hypr.conf`, so `desktop hyprctl reload`

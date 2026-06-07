@@ -708,7 +708,7 @@ run_cmd() {
       grep -q "submap:" "`$OUT" || { echo "missing desktop submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop configerrors"|"desktop hyprctl configerrors")
-      grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" && grep -q "plain=" "`$OUT" && grep -q "composite=" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop rollinglog"|"desktop hyprctl rollinglog")
       grep -q "Hyprland rolling log" "`$OUT" && grep -q "/logs/desktop.log" "`$OUT" || { echo "missing desktop rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -807,7 +807,7 @@ run_cmd() {
       grep -q '"command":"modules"' "`$OUT" && grep -q '"modularPackaging":true' "`$OUT" && grep -q '"name":"orizon-waybar"' "`$OUT" && grep -q '"plannedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json modules"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j shortcuts")
-      grep -q '"command":"shortcuts"' "`$OUT" && grep -q '"keyboardOnly":true' "`$OUT" && grep -q '"bindmPreparedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"shortcuts"' "`$OUT" && grep -q '"keyboardOnly":true' "`$OUT" && grep -q '"bindmPreparedOnly":true' "`$OUT" && grep -q '"manualDragFromBindm":false' "`$OUT" && grep -q '"bindFlags":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j autostart")
       grep -q '"command":"autostart"' "`$OUT" && grep -q '"terminal":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json autostart"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -846,7 +846,7 @@ run_cmd() {
       grep -q '"command":"rollinglog"' "`$OUT" && grep -q '"paths":{"events":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configerrors")
-      grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"plain":' "`$OUT" && grep -q '"compositeFlags":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configtrace")
       grep -q '"model":"Hyprland-style config trace"' "`$OUT" && grep -q '"parserSummary":{' "`$OUT" && grep -Fq '"trace":[' "`$OUT" || { echo "missing hyprctl json configtrace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -906,7 +906,7 @@ run_cmd() {
       grep -q "Orizon desktop binds" "`$OUT" && grep -q "/system/desktop-binds.conf" "`$OUT" || { echo "missing hyprctl binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j binds")
-      grep -q '"command":"binds"' "`$OUT" && grep -q '"mouseBindsPreparedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"binds"' "`$OUT" && grep -q '"mouseBindsPreparedOnly":true' "`$OUT" && grep -q '"manualDragFromBindm":false' "`$OUT" && grep -q '"flagSemantics":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json binds"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl layers")
       grep -q "Orizon desktop layers" "`$OUT" && grep -q "namespace=launcher" "`$OUT" || { echo "missing hyprctl layers"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

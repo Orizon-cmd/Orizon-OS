@@ -192,6 +192,11 @@ Le parser conserve maintenant aussi les familles `input`, `device`,
 Orizon ne sait pas encore les appliquer comme un vrai backend Wayland. Les
 variantes `bindl`/`bindr`/`binde`/`bindm` sont classees dans les diagnostics;
 `bindm` reste un hint prepare et n'active pas de drag souris.
+Depuis `0.86.0`, `desktop configerrors`, `desktop hyprctl -j configerrors`,
+`desktop hyprctl -j binds` et `desktop hyprctl -j shortcuts` exposent aussi les
+compteurs `plain`/`keyboard`/`mouse`/`compositeFlags` et
+`manualDragFromBindm=false` pour distinguer clairement la compatibilite
+Hyprland-style de l'absence de deplacement manuel libre.
 `desktop render` detaille le focus ring, les shadows, le `render-profile`, la
 courbe/budget d'animation, les transitions workspace/layout/focus et le backend
 framebuffer logiciel sans pretendre fournir Wayland/wlroots. Les reglages

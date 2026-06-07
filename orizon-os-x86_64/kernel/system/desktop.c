@@ -990,6 +990,9 @@ typedef struct {
   int monitors;
   int binds;
   int supported_binds;
+  int plain_binds;
+  int keyboard_binds;
+  int composite_binds;
   int exec_once;
   int envs;
   int windowrules;
@@ -1197,6 +1200,21 @@ static int desktop_hypr_bind_has_flag(const char *key, char flag) {
     }
   }
   return 0;
+}
+
+static int desktop_hypr_bind_flag_count(const char *key) {
+  const char *p;
+  int count = 0;
+
+  if (!desktop_hypr_is_bind_key(key)) {
+    return 0;
+  }
+  for (p = key + 4; *p; p++) {
+    if (*p == 'e' || *p == 'l' || *p == 'r' || *p == 'm') {
+      count++;
+    }
+  }
+  return count;
 }
 
 static int desktop_hypr_key_global(const char *key) {
@@ -1659,9 +1677,17 @@ static int desktop_hypr_apply_pair(const char *key, const char *value,
     return 0;
   }
   if (desktop_hypr_is_bind_key(key)) {
+    int flag_count = desktop_hypr_bind_flag_count(key);
     summary->binds++;
+    if (flag_count == 0) {
+      summary->plain_binds++;
+    } else if (flag_count > 1) {
+      summary->composite_binds++;
+    }
     if (desktop_hypr_bind_has_flag(key, 'm')) {
       summary->mouse_binds++;
+    } else {
+      summary->keyboard_binds++;
     }
     if (desktop_hypr_bind_has_flag(key, 'l')) {
       summary->locked_binds++;
@@ -3974,7 +4000,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n"
              "parsed-lines: %d malformed: %d\n"
              "supported-settings: %d applied: %d prepared-keywords: %d ignored: %d runtime-lines: %d\n"
-             "binds: total=%d supported-dispatchers=%d mouse=%d locked=%d release=%d repeat=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
+             "binds: total=%d supported-dispatchers=%d plain=%d keyboard=%d mouse=%d locked=%d release=%d repeat=%d composite=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
              "hints: input=%d layout=%d animations=%d misc=%d submaps=%d\n"
              "runtime-files: binds=%s autostart=%s rules=%s monitors=%s layers=%s state=%s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
@@ -3993,9 +4019,11 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              summary.supported_settings, summary.applied_settings,
              summary.prepared_keywords, summary.ignored_keywords,
              summary.runtime_lines,
-             summary.binds, summary.supported_binds, summary.mouse_binds,
+             summary.binds, summary.supported_binds, summary.plain_binds,
+             summary.keyboard_binds, summary.mouse_binds,
              summary.locked_binds, summary.release_binds,
-             summary.repeat_binds, summary.monitors, summary.exec_once,
+             summary.repeat_binds, summary.composite_binds,
+             summary.monitors, summary.exec_once,
              summary.envs, summary.windowrules, summary.layerrules,
              summary.workspaces, summary.sources, summary.variables,
              summary.input_hints, summary.layout_hints,
@@ -4799,11 +4827,13 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.malformed_lines);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d mouse-binds=%d locked-binds=%d release-binds=%d repeat-binds=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d submaps=%d\n",
+           "keywords: variables=%d monitors=%d binds=%d supported-binds=%d plain-binds=%d keyboard-binds=%d mouse-binds=%d locked-binds=%d release-binds=%d repeat-binds=%d composite-binds=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d submaps=%d\n",
            summary.variables, summary.monitors, summary.binds,
-           summary.supported_binds, summary.mouse_binds,
+           summary.supported_binds, summary.plain_binds,
+           summary.keyboard_binds, summary.mouse_binds,
            summary.locked_binds, summary.release_binds,
-           summary.repeat_binds, summary.exec_once, summary.envs,
+           summary.repeat_binds, summary.composite_binds,
+           summary.exec_once, summary.envs,
            summary.windowrules, summary.layerrules, summary.workspaces,
            summary.sources, summary.submaps);
   desktop_append(out, out_size, &used, line);
@@ -4885,10 +4915,11 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
            summary.render_hints, summary.debug_hints, summary.misc_hints);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
-           "bind-detail: total=%d supported=%d locked=%d release=%d repeat=%d mouse=%d note=bindm-prepared-only-no-manual-drag\n",
-           summary.binds, summary.supported_binds, summary.locked_binds,
+           "bind-detail: total=%d supported=%d plain=%d keyboard=%d locked=%d release=%d repeat=%d mouse=%d composite=%d note=bindm-prepared-only-no-manual-drag\n",
+           summary.binds, summary.supported_binds, summary.plain_binds,
+           summary.keyboard_binds, summary.locked_binds,
            summary.release_binds, summary.repeat_binds,
-           summary.mouse_binds);
+           summary.mouse_binds, summary.composite_binds);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line),
            "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n",
@@ -4947,7 +4978,8 @@ void orizon_desktop_format_config_errors_json(char *out, size_t out_size) {
            "\"layout\":%d,\"decoration\":%d,\"cursor\":%d,"
            "\"render\":%d,\"debug\":%d,\"misc\":%d},"
            "\"binds\":{\"total\":%d,\"supported\":%d,"
-           "\"locked\":%d,\"release\":%d,\"repeat\":%d,"
+           "\"plain\":%d,\"keyboard\":%d,\"locked\":%d,"
+           "\"release\":%d,\"repeat\":%d,\"compositeFlags\":%d,"
            "\"mousePreparedOnly\":%d,\"manualDrag\":false},"
            "\"sourceResolve\":{\"loaded\":%d,\"missing\":%d,"
            "\"skipped\":%d,\"depthLimited\":%d},"
@@ -4963,8 +4995,10 @@ void orizon_desktop_format_config_errors_json(char *out, size_t out_size) {
            summary.input_hints, summary.device_hints, summary.layout_hints,
            summary.decoration_hints, summary.cursor_hints,
            summary.render_hints, summary.debug_hints, summary.misc_hints,
-           summary.binds, summary.supported_binds, summary.locked_binds,
-           summary.release_binds, summary.repeat_binds, summary.mouse_binds,
+           summary.binds, summary.supported_binds, summary.plain_binds,
+           summary.keyboard_binds, summary.locked_binds,
+           summary.release_binds, summary.repeat_binds,
+           summary.composite_binds, summary.mouse_binds,
            summary.source_files_loaded, summary.source_files_missing,
            summary.source_files_skipped, summary.source_depth_limited);
   desktop_json_append_raw(out, out_size, &used, line);
@@ -6703,6 +6737,7 @@ void orizon_desktop_format_shortcuts_json(char *out, size_t out_size) {
       "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
       "\"wlroots\":false,\"keyboardOnly\":true,\"manualDrag\":false,"
       "\"dragMoves\":false,\"bindmPreparedOnly\":true,"
+      "\"manualDragFromBindm\":false,"
       "\"tilingOnly\":true,\"taskbar\":false,\"startMenu\":false,"
       "\"waybarActive\":false,\"focusFollowsMouse\":");
   desktop_json_append_raw(out, out_size, &used,
@@ -6718,6 +6753,10 @@ void orizon_desktop_format_shortcuts_json(char *out, size_t out_size) {
   desktop_json_append_raw(
       out, out_size, &used,
       ",\"submaps\":[\"default\",\"resize\",\"move\",\"launch\"],"
+      "\"bindFlags\":{\"bind\":\"keyboard dispatcher\","
+      "\"bindl\":\"locked bind hint\",\"bindr\":\"release trigger hint\","
+      "\"binde\":\"repeat trigger hint\","
+      "\"bindm\":\"mouse bind prepared-only; no manual window drag\"},"
       "\"shortcuts\":["
       "{\"keys\":\"F1\",\"dispatcher\":\"exec\",\"args\":\"terminal\","
       "\"scope\":\"global\",\"submap\":\"default\"},"

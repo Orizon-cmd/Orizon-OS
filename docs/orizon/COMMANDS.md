@@ -420,8 +420,11 @@ state.
 `layerrule`, `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`, `binds:*`,
 `bezier`, `animation`, and input/device/decoration/cursor/render/debug/misc/layout/dwindle/master/gestures/xwayland
 hints are preserved there until the real Wayland backend exists; bind variants
-are counted in diagnostics, and mouse binds are parsed for compatibility
-without enabling free-drag window moving by default.
+are counted in diagnostics. Since package `0.86.0`, `desktop configerrors`,
+`desktop hyprctl -j configerrors`, `desktop hyprctl -j binds`, and
+`desktop hyprctl -j shortcuts` expose plain/keyboard/mouse/composite bind flag
+counts plus `manualDragFromBindm=false`; mouse binds are parsed for
+compatibility without enabling free-drag window moving by default.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,

@@ -9033,6 +9033,11 @@ void gui_desktop_format_binds_json(char *out, size_t out_size) {
   desktop_json_append_raw(
       out, out_size, &used,
       "\"mouseBindsPreparedOnly\":true,"
+      "\"manualDragFromBindm\":false,"
+      "\"flagSemantics\":{\"bind\":\"keyboard dispatcher\","
+      "\"bindl\":\"locked bind hint\",\"bindr\":\"release trigger hint\","
+      "\"binde\":\"repeat trigger hint\","
+      "\"bindm\":\"mouse bind prepared-only; no manual window drag\"},"
       "\"supportedDispatchers\":[\"exec\",\"killactive\",\"workspace\","
       "\"movetoworkspace\",\"movetoworkspacesilent\",\"movefocus\","
       "\"focusmwindow\",\"focuswindow\",\"focuscurrentorlast\","
