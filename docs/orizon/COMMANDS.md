@@ -456,6 +456,12 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.100.0`, `desktop hyprctl -j reload` keeps the text `result`
+and adds structured `parserSummary`, `sourceResolve`, `runtimeFiles`,
+`session`, and `settings` objects. VM automation can now check parser/source
+counts, generated runtime files, session policy, and render/input settings
+without scraping the prose report, still inside the Orizon VM framebuffer
+facade.
 Since package `0.99.0`, `desktop hyprctl keyword <key> <value>` reports
 `route`, `effect`, `target-path`, and `reload-recommended`; JSON keyword adds
 `route`, `effect`, `targetPath`, and `reloadRecommended`. These labels separate

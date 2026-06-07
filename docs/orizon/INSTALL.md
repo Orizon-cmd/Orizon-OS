@@ -144,8 +144,10 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.99.0` installs explicit source/bind diagnostics,
-`keyword` route/effect diagnostics for settings, session and runtime hints,
+The desktop package version `0.100.0` installs structured JSON reload
+diagnostics (`parserSummary`, `sourceResolve`, `runtimeFiles`, `session`, and
+`settings`), explicit source/bind diagnostics, `keyword` route/effect
+diagnostics for settings, session and runtime hints,
 `getoption` entry diagnostics for repeated runtime hints (`env`, `workspace`,
 `monitor`, `bind`, `windowrulev2`, `layerrule`, `source`), focus-state
 diagnostics (`desktop focus-state`, `desktop hyprctl focusstate`,

@@ -1174,6 +1174,86 @@ static void desktop_next_line_bounds(const char *cfg, int len, int *pos,
   *pos = p;
 }
 
+static int desktop_report_token_after_marker(const char *text,
+                                             const char *marker, char *out,
+                                             size_t out_size,
+                                             const char *fallback) {
+  const char *p;
+  const char *start;
+  int len = 0;
+
+  if (!out || out_size == 0) {
+    return -1;
+  }
+  snprintf(out, out_size, "%s", fallback ? fallback : "");
+  if (!text || !marker || !marker[0]) {
+    return -1;
+  }
+  p = strstr(text, marker);
+  if (!p) {
+    return -1;
+  }
+  start = p + strlen(marker);
+  while (*start == ' ' || *start == '\t') {
+    start++;
+  }
+  while (start[len] && start[len] != ' ' && start[len] != '\t' &&
+         start[len] != '\r' && start[len] != '\n') {
+    len++;
+  }
+  desktop_trim_copy(out, out_size, start, len);
+  return 0;
+}
+
+static int desktop_report_int_after_marker(const char *text,
+                                           const char *marker,
+                                           int fallback) {
+  char value[32];
+
+  if (desktop_report_token_after_marker(text, marker, value, sizeof(value),
+                                        NULL) < 0) {
+    return fallback;
+  }
+  return desktop_parse_int_value(value, fallback);
+}
+
+static void desktop_json_append_string_property(char *out, size_t out_size,
+                                                size_t *used,
+                                                const char *name,
+                                                const char *value) {
+  desktop_json_append_raw(out, out_size, used, "\"");
+  desktop_json_append_raw(out, out_size, used, name ? name : "");
+  desktop_json_append_raw(out, out_size, used, "\":");
+  desktop_json_append_string(out, out_size, used, value ? value : "");
+}
+
+static void desktop_json_append_int_property(char *out, size_t out_size,
+                                             size_t *used, const char *name,
+                                             int value) {
+  char line[64];
+
+  snprintf(line, sizeof(line), "\"%s\":%d", name ? name : "", value);
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
+static void desktop_json_append_report_string_property(
+    char *out, size_t out_size, size_t *used, const char *report,
+    const char *name, const char *marker, const char *fallback) {
+  char value[128];
+
+  desktop_report_token_after_marker(report, marker, value, sizeof(value),
+                                    fallback);
+  desktop_json_append_string_property(out, out_size, used, name, value);
+}
+
+static void desktop_json_append_report_int_property(
+    char *out, size_t out_size, size_t *used, const char *report,
+    const char *name, const char *marker, int fallback) {
+  desktop_json_append_int_property(
+      out, out_size, used, name,
+      desktop_report_int_after_marker(report, marker, fallback));
+}
+
 static void desktop_strip_inline_comment(char *line) {
   int quoted = 0;
 
@@ -4564,6 +4644,124 @@ int orizon_desktop_apply_hypr_config_json(char *status, size_t status_size) {
                              ORIZON_DESKTOP_USER_CONFIG_PATH);
   desktop_json_append_raw(status, status_size, &used, ",\"result\":");
   desktop_json_append_string(status, status_size, &used, text);
+  desktop_json_append_raw(status, status_size, &used,
+                          ",\"parserSummary\":{");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "parsedLines", "parsed-lines:", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "malformed", "malformed:", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "supportedSettings",
+                                          "supported-settings:", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "applied", "applied:", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "preparedKeywords",
+                                          "prepared-keywords:", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "ignored", "ignored:", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "runtimeLines",
+                                          "runtime-lines:", 0);
+  desktop_json_append_raw(status, status_size, &used,
+                          "},\"sourceResolve\":{");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "loaded", "loaded=", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "missing", "missing=", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "skipped", "skipped=", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "depthLimited",
+                                          "depth-limited=", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "files", "files=", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "maxFiles", "max-files=", 0);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "maxDepth", "max-depth=", 0);
+  desktop_json_append_raw(status, status_size, &used,
+                          "},\"runtimeFiles\":{");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "binds", "binds=", "none");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "autostart", "autostart=",
+                                             "none");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "rules", "rules=", "none");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "monitors", "monitors=",
+                                             "none");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "layers", "layers=", "none");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "state", "state=", "none");
+  desktop_json_append_raw(status, status_size, &used, "},\"session\":{");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "layout", "layout=", "dwindle");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "autostartTerminal",
+                                             "autostart-terminal=", "yes");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "focusFollowsMouse",
+                                             "focus-follows-mouse=", "no");
+  desktop_json_append_raw(status, status_size, &used, "},\"settings\":{");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "gaps", "gaps=", "6/12");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "border", "border=", 2);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "rounding", "rounding=", 8);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "animations", "animations=",
+                                             "yes");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "ticks", "ticks=", 12);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "curve", "curve=", "easeOut");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "shadows", "shadows=", "yes");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_int_property(status, status_size, &used, text,
+                                          "shadowRange",
+                                          "shadow-range=", 12);
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "focusRing", "focus-ring=",
+                                             "yes");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "render", "render=",
+                                             "balanced");
+  desktop_json_append_raw(status, status_size, &used, ",");
+  desktop_json_append_report_string_property(status, status_size, &used, text,
+                                             "keyboard", "keyboard=", "us");
+  desktop_json_append_raw(status, status_size, &used, "}");
   desktop_json_append_raw(
       status, status_size, &used,
       ",\"limits\":[\"reload applies Orizon-supported config only\","

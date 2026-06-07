@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.100.0` with VM-ready structured
+  `desktop hyprctl -j reload` diagnostics. JSON reload still keeps the text
+  `result` report and now adds `parserSummary`, `sourceResolve`,
+  `runtimeFiles`, `session`, and `settings` objects so automation can inspect
+  parser counts, source recursion limits, generated runtime files, session
+  policy, and render/input settings without scraping prose. This remains the
+  Orizon framebuffer/ZimaOS VM facade only: no upstream Hyprland IPC,
+  Wayland/wlroots server, Waybar activation, floating desktop, manual window
+  drag, or physical hardware validation is claimed.
 - Added desktop package version `0.99.0` with VM-ready `keyword` route
   diagnostics. `desktop hyprctl keyword` text output now reports `route`,
   `effect`, `target-path`, and `reload-recommended`; JSON

@@ -406,6 +406,13 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.100.0` adds structured `desktop hyprctl -j reload` diagnostics.
+JSON reload still includes the text `result` report and now exposes
+`parserSummary`, `sourceResolve`, `runtimeFiles`, `session`, and `settings` so
+VM checks can inspect parser counts, source recursion limits, generated runtime
+files, session policy, and render/input settings without parsing free text.
+This is Orizon framebuffer VM/ZimaOS state only, not upstream Hyprland IPC,
+Wayland/wlroots, Waybar, floating/manual drag, or physical hardware validation.
 Package `0.99.0` adds `keyword` route/effect diagnostics through
 `desktop hyprctl keyword <key> <value>` and
 `desktop hyprctl -j keyword <key> <value>`. Text and JSON now distinguish

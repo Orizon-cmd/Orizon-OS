@@ -70,7 +70,13 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/focus-state/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.99.0`: `desktop hyprctl keyword <key> <value>`
+- Desktop release boundary for current package `0.100.0`: `desktop hyprctl -j reload`
+  keeps the text `result` report and adds structured `parserSummary`,
+  `sourceResolve`, `runtimeFiles`, `session`, and `settings` objects for VM
+  automation. This is VM/ZimaOS framebuffer state for Orizon's Hyprland-style
+  facade, not upstream Hyprland IPC, Wayland/wlroots, Waybar,
+  floating/manual drag, or physical hardware validation.
+- Desktop release boundary for package `0.99.0`: `desktop hyprctl keyword <key> <value>`
   and `desktop hyprctl -j keyword <key> <value>` expose route/effect diagnostics
   (`settings`, `session`, `runtime-hint`, or `unsupported`) with target path and
   reload recommendation. This is VM/ZimaOS framebuffer state for Orizon's

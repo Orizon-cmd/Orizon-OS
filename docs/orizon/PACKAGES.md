@@ -286,7 +286,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.99.0` because it includes policy/config files, the persisted session
+`0.100.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -320,7 +320,13 @@ sticky reset diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.99.0` adds `keyword` route/effect diagnostics to
+the launcher. Version `0.100.0` adds structured JSON reload diagnostics to
+`desktop hyprctl -j reload` and generated package metadata through
+`hyprctl-json-reload-structured`, so parser/source counts, runtime files,
+session policy, and render/input settings can be checked in VM automation
+without scraping prose or claiming upstream Hyprland IPC, Wayland/wlroots,
+Waybar activation, floating/manual drag, or physical hardware validation.
+Version `0.99.0` adds `keyword` route/effect diagnostics to
 `desktop hyprctl keyword`, JSON `keyword`, and generated package metadata
 through `hyprctl-json-keyword-route`, so settings/session/runtime-hint targets
 can be checked in VM automation without claiming upstream Hyprland IPC,
