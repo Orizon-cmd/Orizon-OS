@@ -9,6 +9,18 @@ The desktop is not enabled by default in the live ISO. It can be selected in
 the guided installer, enabled later from the shell, or installed through an
 `.opkg` package after Orizon is installed to disk.
 
+## Truth Labels
+
+The authoritative desktop taxonomy lives in [STATUS.md](STATUS.md). In short:
+implemented/VM-ready means Orizon code running through the ZimaOS framebuffer
+VM workflow; simulated facade means Hyprland-shaped commands, config and JSON
+diagnostics over Orizon internals; prepared means a future contract or package
+slot exists but is not active; not implemented covers upstream Hyprland,
+Wayland/wlroots, xdg-shell, real layer-shell, XWayland, external Wayland
+clients, Waybar activation, taskbar/start menu behavior, floating desktop, and
+free manual window dragging. No desktop result here is physical hardware
+validation.
+
 ## Commands
 
 ```text

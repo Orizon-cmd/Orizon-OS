@@ -9,6 +9,10 @@ docs.
 Before claiming a feature is complete, check [STATUS.md](STATUS.md). It is the
 short source of truth for VM-ready features, prepared hardware paths, known
 limits, and the rule that Lenovo/real-hardware validation needs fresh captures.
+Desktop commands should be read through the desktop taxonomy there:
+`desktop hyprctl` is a Hyprland-style Orizon facade, framebuffer VM outputs are
+VM-ready only, future Wayland/wlroots and `orizon-waybar` entries are prepared
+only, and no command proves physical hardware.
 Use [RELEASE.md](RELEASE.md) for the artifact/CI checklist and
 [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for VM/ZimaOS failure triage.
 

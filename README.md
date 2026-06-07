@@ -10,6 +10,12 @@ prepare pour le materiel futur, commence par
 la VM ZimaOS peut etre testee, mais aucune validation Lenovo, dongle USB, AP
 Wi-Fi reel ou autre PC physique ne doit etre revendiquee sans capture materielle
 fraiche.
+Pour le bureau, la section "Desktop Hyprland-Style Truth Taxonomy" de
+`STATUS.md` est la grille de lecture: implemente/VM-ready signifie Orizon en
+VM, "simulated facade" signifie surface compatible Hyprland-style, "prepared"
+signifie contrat ou paquet futur, et "not implemented" couvre toujours le vrai
+Wayland/wlroots/upstream Hyprland, XWayland, layer-shell, Waybar actif,
+taskbar/menu demarrer, flottant libre et drag manuel.
 
 ## Direction actuelle
 

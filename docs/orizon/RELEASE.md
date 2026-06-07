@@ -78,7 +78,10 @@ operator docs before the commit lands:
 
 - `CHANGELOG.md` for the short human history.
 - `docs/orizon/STATUS.md` for implemented, VM-ready, prepared, and missing
-  boundaries.
+  boundaries. For desktop work, keep its Hyprland-style truth taxonomy aligned
+  so VM-ready Orizon behavior, simulated facade surfaces, prepared future
+  contracts, missing Wayland/wlroots/upstream runtime, and no-hardware
+  validation remain distinct.
 - `docs/orizon/COMMANDS.md` for command syntax and quick validation commands.
 - The subsystem page such as `SSH.md`, `UPDATE.md`, `INSTALL.md`,
   `PACKAGES.md`, `SECURITY.md`, or `NETWORK.md`.

@@ -8,6 +8,10 @@ Current package-manager limits are summarized in [STATUS.md](STATUS.md).
 `pkg rollback` is local package recovery, not full boot-level package rollback.
 Package/update release rules are centralized in [RELEASE.md](RELEASE.md), and
 VM package failure triage is in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+For desktop packages, use the desktop truth taxonomy in `STATUS.md`: generated
+`.opkg` samples and named installs can be VM-ready, `desktop hyprctl` metadata
+is still a Hyprland-style facade, and `orizon-waybar` remains prepared-only
+until a future separate package explicitly implements it.
 When package behavior changes, update `CHANGELOG.md`, this page, and
 `STATUS.md`; regenerate release artifacts only when runtime source or generated
 package/update artifacts changed.

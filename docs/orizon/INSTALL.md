@@ -5,6 +5,11 @@ disk installation path:
 
 Current validation and safety limits are summarized in [STATUS.md](STATUS.md).
 Do not treat VM install success as Lenovo or physical-PC validation.
+If the optional desktop is selected, interpret it through the desktop truth
+taxonomy in `STATUS.md`: the installer can make the Orizon Hyprland-style
+profile VM-ready, but it does not install upstream Hyprland, Wayland/wlroots,
+XWayland, real layer-shell, Waybar, a taskbar/start menu, floating windows, free
+manual drag, or hardware validation.
 For VM install failure triage, use [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 For release artifact publishing after installer changes, use
 [RELEASE.md](RELEASE.md).

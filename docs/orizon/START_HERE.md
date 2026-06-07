@@ -7,7 +7,12 @@ design note.
 
 - For the precise truth table, read [STATUS.md](STATUS.md). It separates
   VM-ready features, prepared hardware paths, and work that is not implemented
-  yet.
+  yet. For desktop work, use its "Desktop Hyprland-Style Truth Taxonomy":
+  implemented/VM-ready is Orizon VM code, simulated facade is Hyprland-shaped
+  compatibility, prepared is future plumbing, and not implemented still means
+  no upstream Hyprland, Wayland/wlroots server, XWayland, layer-shell, Waybar
+  activation, taskbar/start menu, floating desktop, free manual drag, or
+  physical hardware validation.
 - Installed updates are active: the in-OS `update` command downloads the signed
   GitHub manifest, verifies boot payload SHA-256 values, refreshes the installed
   ESP, and writes rollback metadata.

@@ -68,7 +68,8 @@
   VM-only `markurgent`, VM-only `tagwindow`, `focusworkspaceoncurrentmonitor`,
   VM-only monitor dispatch aliases
   as a single-framebuffer alias, `cyclenext`/`swapnext`/`focusmaster`/`swapwithmaster`/`togglesplit`/`layoutmsg layout/reset/preselect`/`resizeactive`/`submap`,
-  a first launcher/status-bar layer, symbolic profile/preset discovery,
+  a first launcher overlay with bar state kept disabled by default,
+  symbolic profile/preset discovery,
   focus-follows-mouse policy, Hyprland-style config import/runtime files,
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving, package `0.86.0` bind flag diagnostics for
@@ -121,10 +122,12 @@
   guarded limits, quick checks, and next captures, while `COMMANDS.md` keeps the
   operator command checklist separate from the long-form subsystem notes.
   `STATUS.md` is the compact truth table for implemented, VM-ready, prepared,
-  not-yet-implemented, and not-yet-hardware-validated work. `RELEASE.md`,
-  `TROUBLESHOOTING.md`, and `CHANGELOG.md` now define the docs/release loop so
-  every block records what changed, how to validate it, and which artifacts
-  should or should not move.
+  not-yet-implemented, and not-yet-hardware-validated work, including the
+  desktop-specific taxonomy that separates VM-ready Orizon code, simulated
+  Hyprland-style facade, prepared future Wayland/Waybar contracts, and missing
+  upstream runtime. `RELEASE.md`, `TROUBLESHOOTING.md`, and `CHANGELOG.md` now
+  define the docs/release loop so every block records what changed, how to
+  validate it, and which artifacts should or should not move.
 - Staged remote-management base: `ssh start/status/algorithms/stop`, TCP/22
   listener, SSH banner, server/client `KEXINIT`, X25519, RSA host-key
   signature, `ECDH_REPLY`, key derivation, `NEWKEYS`, encrypted

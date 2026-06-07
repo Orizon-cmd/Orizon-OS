@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Clarified the desktop documentation/release truth taxonomy across the main
+  operator docs. `STATUS.md` now maps implemented, VM-ready, simulated facade,
+  prepared, not implemented, and not hardware-proven labels to the
+  Hyprland-style desktop so future release notes do not blur framebuffer VM
+  behavior with upstream Hyprland, Wayland/wlroots, Waybar, floating/manual
+  drag, or physical hardware validation.
 - Added desktop package version `0.95.0` with stronger future Wayland
   architecture preparation while keeping the active VM backend as framebuffer.
   `compositor-backend-v0` now exposes surface/render/client contracts,

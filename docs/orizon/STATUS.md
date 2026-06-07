@@ -30,6 +30,21 @@ work.
   validation without fresh user-provided evidence.
 - Not implemented: documented future work, not just an untested feature.
 
+## Desktop Hyprland-Style Truth Taxonomy
+
+Use these labels when documenting, testing, or releasing the Orizon desktop.
+They are intentionally strict so VM progress is useful without accidentally
+claiming upstream Hyprland, Wayland/wlroots, or real hardware validation.
+
+| Label | Desktop meaning | Current examples |
+| --- | --- | --- |
+| Implemented | Code exists in the Orizon tree and is wired into the desktop command/compositor path. | Tiling dispatchers, dynamic workspaces, `dwindle`/`master`/`monocle`, focus history, client state, config import, native tiled app clients, `compositor-backend-v0`, and `desktop-protocol-v0`. |
+| VM-ready | Implemented and covered by the ZimaOS VM workflow, quick checks, release validation, or targeted VM smoke when runtime changes require it. | `desktop start/stop/restart/reload/recover/rescue`, session restore through `system init`, framebuffer render diagnostics, JSON `desktop hyprctl` diagnostics, and modular package samples. |
+| Simulated facade | A Hyprland-shaped compatibility or diagnostic surface over Orizon internals, not the upstream Hyprland IPC/protocol/runtime. | `desktop hyprctl`, preserved `hyprland.conf` hints, simplified `windowrulev2` matching, VM-only `markurgent`/`tagwindow`, and `bindm` parsing without free mouse drag. |
+| Prepared | Contracts, package names, maps, or hints exist so a future implementation has a place to land, but the runtime path is not active. | Future `wayland-wlroots` backend contract, layer-shell/xdg-shell/XWayland placeholders, `orizon-waybar` as a future separate package, and multi-output Wayland routing. |
+| Not implemented | No real runtime implementation exists yet; do not describe it as working. | Upstream Hyprland, a Wayland/wlroots server, external Wayland clients, xdg-shell, real layer-shell, XWayland, GPU scene graph, Waybar activation, free-floating desktop, taskbar/start menu, and free manual window dragging. |
+| Not hardware-proven | No physical PC, Lenovo, real AP, or USB dongle claim is allowed from VM output alone. | Every desktop result in this repository is VM/ZimaOS-scoped unless a future user-provided hardware capture explicitly says otherwise. |
+
 ## Implemented And VM-Ready
 
 - Persistent roots: `/workspace`, `/home`, `/system`, `/packages`, and `/logs`
