@@ -452,6 +452,12 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.96.0`, `desktop truth`, `desktop hyprctl truth`, and JSON
+`desktop hyprctl -j truth` expose the runtime truth taxonomy used by the docs:
+implemented, VM-ready, simulated facade, prepared, not implemented, and not
+hardware-proven. This gives VM/ZimaOS operators a direct command for checking
+the Orizon framebuffer facade versus upstream Hyprland, Wayland/wlroots,
+Waybar activation, floating/manual drag, and physical hardware validation.
 Since package `0.95.0`, `desktop architecture`, `desktop backend`, `desktop
 protocol`, and JSON `architecture|backend|protocol` expose concrete
 architecture contracts: `single-framebuffer-surface-v0`,
@@ -495,7 +501,8 @@ and pointer inputs, `desktop systeminfo`, `desktop layouts`, `desktop
 layout-state`, `desktop layout-tree`, `desktop animations`, `desktop decorations`, `desktop descriptions`, `desktop instances`,
 `desktop render`, `desktop submap`, `desktop configerrors`,
 `desktop config trace`, `desktop rollinglog`, `desktop focus-history`,
-`desktop workspace-stack`, `desktop client-model`, and `desktop rule-matches` expose more Hyprland-like inspection surfaces,
+`desktop workspace-stack`, `desktop client-model`, `desktop rule-matches`, and
+`desktop truth` expose more Hyprland-like inspection surfaces,
 `desktop keyword <key> <value>` applies a single
 Hyprland-style runtime keyword, and supported settings keywords are written
 back into `/home/orizon/.config/hypr/orizon-hypr.conf` so a later
@@ -526,8 +533,8 @@ idempotent client-state dispatchers
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy
 `fullscreenstate <on|off|toggle|1|0>`,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
-`desktop architecture`, `desktop backend`, and `desktop protocol` expose the VM
+a small Hyprland-like facade for version/systeminfo/architecture/truth/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+`desktop truth`, `desktop architecture`, `desktop backend`, and `desktop protocol` expose the VM
 framebuffer backend map, the `orizon-compositor-api-v0` API seam, the
 `compositor-backend-v0` drawing/present seam in
 `kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
@@ -544,7 +551,7 @@ workspace tiling tree with client roles, rectangles, focus state, and
 layout, split mode, split ratio, master ratio, `nmaster`, and the
 `lastDispatch` snapshot for the most recent tiling dispatcher result,
 including stable `error`/`hint` fields for scriptable failure diagnostics,
-`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
 rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,

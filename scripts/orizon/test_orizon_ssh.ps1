@@ -299,6 +299,9 @@ $commands = @(
   "desktop bar toggle",
   "desktop apply",
   "desktop launcher show",
+  "desktop truth",
+  "desktop hyprctl truth",
+  "desktop hyprctl -j truth",
   "desktop launch terminal",
   "desktop dispatch exec settings",
   "desktop dispatch tagwindow +settings class:orizon-settings",
@@ -701,6 +704,9 @@ run_cmd() {
     "desktop architecture"|"desktop hyprctl architecture")
       grep -q "Orizon desktop architecture" "`$OUT" && grep -q "backend-contract: surface=single-framebuffer-surface-v0" "`$OUT" && grep -q "backend-capabilities: put_pixel" "`$OUT" && grep -q "protocol-client-contract: internal-tiled-client-v0" "`$OUT" && grep -q "backend-future: wayland-wlroots prepared" "`$OUT" || { echo "missing desktop architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop truth"|"desktop hyprctl truth")
+      grep -q "Orizon desktop Hyprland-style truth taxonomy" "`$OUT" && grep -q "implemented: tiling dispatchers" "`$OUT" && grep -q "simulated-facade: desktop hyprctl" "`$OUT" && grep -q "not-implemented: upstream Hyprland" "`$OUT" && grep -q "not-hardware-proven:" "`$OUT" || { echo "missing desktop truth taxonomy"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop layouts"|"desktop hyprctl layouts")
       grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -769,6 +775,9 @@ run_cmd() {
       ;;
     "desktop hyprctl -j architecture")
       grep -q '"command":"architecture"' "`$OUT" && grep -q '"backendApi"' "`$OUT" && grep -q '"surfaceContract":"single-framebuffer-surface-v0"' "`$OUT" && grep -q '"clientContract":"internal-tiled-client-v0' "`$OUT" && grep -q '"source":"kernel/gui/compositor_backend.c"' "`$OUT" && grep -q '"api":"orizon-compositor-api-v0"' "`$OUT" && grep -q '"futureImplemented":false' "`$OUT" && grep -q '"wayland":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j truth")
+      grep -q '"command":"truth"' "`$OUT" && grep -q '"label":"implemented"' "`$OUT" && grep -q '"label":"simulated-facade"' "`$OUT" && grep -q '"label":"not-implemented"' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json truth"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j clients")
       grep -q '"hyprlandStyleFacade":true' "`$OUT" && grep -q '"address":"0x' "`$OUT" && grep -q '"floating":false' "`$OUT" || { echo "missing hyprctl json clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

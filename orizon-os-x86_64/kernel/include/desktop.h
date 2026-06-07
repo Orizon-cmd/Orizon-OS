@@ -29,7 +29,7 @@
 #define ORIZON_DESKTOP_PACKAGE_PATH "/workspace/packages/orizon-desktop-hypr.opkg"
 #define ORIZON_DESKTOP_PROFILE "hyprland-inspired"
 #define ORIZON_DESKTOP_PACKAGE "orizon-desktop-hypr"
-#define ORIZON_DESKTOP_PACKAGE_VERSION "0.95.0"
+#define ORIZON_DESKTOP_PACKAGE_VERSION "0.96.0"
 #define ORIZON_DESKTOP_PACKAGE_CORE "orizon-desktop-core"
 #define ORIZON_DESKTOP_PACKAGE_TERMINAL "orizon-terminal"
 #define ORIZON_DESKTOP_PACKAGE_SETTINGS "orizon-settings"
@@ -128,6 +128,8 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size);
 void orizon_desktop_format_settings_presets(char *out, size_t out_size);
 void orizon_desktop_format_settings_doctor(char *out, size_t out_size);
 void orizon_desktop_format_modules(char *out, size_t out_size);
+void orizon_desktop_format_truth(char *out, size_t out_size);
+void orizon_desktop_format_truth_json(char *out, size_t out_size);
 void orizon_desktop_format_architecture(char *out, size_t out_size);
 void orizon_desktop_format_architecture_json(char *out, size_t out_size);
 void orizon_desktop_format_backend(char *out, size_t out_size);

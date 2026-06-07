@@ -404,6 +404,12 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.96.0` adds runtime truth taxonomy diagnostics through
+`desktop truth`, `desktop hyprctl truth`, and `desktop hyprctl -j truth`.
+The output separates implemented, VM-ready, simulated facade, prepared, not
+implemented, and not-hardware-proven state so VM/ZimaOS testing can stay clear
+about Orizon framebuffer behavior versus upstream Hyprland, Wayland/wlroots,
+Waybar activation, floating/manual drag, and physical hardware validation.
 Package `0.95.0` strengthens the future Wayland architecture preparation:
 `desktop architecture`, `desktop backend`, `desktop protocol`, and JSON
 `architecture|backend|protocol` expose the backend surface/render/client
@@ -644,13 +650,13 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
+[-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,
@@ -774,6 +780,7 @@ desktop focus on|off|toggle controls focus-follows-mouse
 desktop devices shows keyboard/pointer input state
 desktop backend shows the current framebuffer-vm backend map
 desktop protocol shows the internal orizon-desktop-ipc-v0 protocol map
+desktop truth shows implemented/VM-ready/facade/prepared/not-implemented/not-hardware-proven boundaries
 desktop layout-tree shows the active tiling tree and rectangles
 desktop config trace explains apply/prepare/ignore parser decisions
 desktop keyword <key> <value> applies a Hyprland-style runtime setting
@@ -785,11 +792,13 @@ desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue] emi
 desktop hyprctl backend mirrors desktop backend
 desktop hyprctl protocol mirrors desktop protocol
 desktop hyprctl architecture mirrors desktop architecture
+desktop hyprctl truth mirrors desktop truth
 desktop hyprctl -j version emits package/compositor truth-map metadata
 desktop hyprctl -j systeminfo emits VM-safe compositor/session state
 desktop hyprctl -j backend emits framebuffer-vs-future-wayland boundaries
 desktop hyprctl -j protocol emits internal IPC vs not-Wayland boundaries
 desktop hyprctl -j architecture emits API/backend/protocol separation boundaries
+desktop hyprctl -j truth emits runtime truth taxonomy boundaries
 desktop hyprctl layouttree mirrors desktop layout-tree
 desktop hyprctl configtrace mirrors desktop config trace
 desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf

@@ -9797,10 +9797,10 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
   snprintf(out, out_size,
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, clientmodel, rulematches, workspaces, activeworkspace, activewindow\n"
-           "commands: backend, protocol, architecture, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
+           "commands: backend, protocol, architecture, truth, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
            "commands: cursorpos, splash, session, configerrors, configtrace, rollinglog, instances, modules, shortcuts, autostart, apps, app <id>, launch <app>, submap, focushistory, workspacestack\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers\n"
+           "json: desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
@@ -9812,7 +9812,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"
            "fullscreenstate: internal controls compositor layout; fullscreenClient records state exposed to future clients\n"
            "urgent: markurgent is a VM diagnostic to exercise focusurgentorlast before real client urgency exists\n"
-           "truth: Hyprland-style facade for Orizon's framebuffer compositor\n");
+           "truth: desktop truth and desktop hyprctl -j truth separate implemented, VM-ready, simulated facade, prepared, not implemented and not hardware-proven state\n");
 }
 
 void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
@@ -9829,7 +9829,7 @@ void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
       "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
       "\"wlroots\":false,\"manualDrag\":false,"
       "\"jsonCommands\":[\"version\",\"systeminfo\",\"backend\","
-      "\"protocol\",\"architecture\",\"clients\",\"workspaces\",\"activeworkspace\","
+      "\"protocol\",\"architecture\",\"truth\",\"clients\",\"workspaces\",\"activeworkspace\","
       "\"activewindow\",\"focushistory\",\"workspacestack\","
       "\"clientmodel\",\"rulematches\",\"layoutstate\",\"layouttree\","
       "\"monitors\",\"devices\",\"keymap\",\"cursorpos\",\"animations\","
@@ -9853,7 +9853,7 @@ void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
       "\"aliases\":{\"layoutstate\":[\"layout-state\","
       "\"workspacelayouts\"],\"layouttree\":[\"layout-tree\",\"tree\"],"
       "\"backend\":[\"backend-info\"],\"protocol\":[\"protocols\"],"
-      "\"architecture\":[\"arch\"],"
+      "\"architecture\":[\"arch\"],\"truth\":[\"taxonomy\",\"limits\"],"
       "\"rulematches\":[\"rule-matches\",\"windowrules\","
       "\"window-rules\"]},"
       "\"policies\":{\"tilingOnly\":true,\"floatingDesktop\":false,"

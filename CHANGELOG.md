@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.96.0` with VM-ready truth taxonomy
+  diagnostics. `desktop truth`, `desktop hyprctl truth`, and JSON
+  `desktop hyprctl -j truth` now expose the implemented, VM-ready, simulated
+  facade, prepared, not implemented, and not hardware-proven labels at runtime
+  so ZimaOS checks can distinguish Orizon framebuffer desktop behavior from
+  upstream Hyprland, Wayland/wlroots, Waybar activation, floating/manual drag,
+  or physical hardware validation.
 - Clarified the desktop documentation/release truth taxonomy across the main
   operator docs. `STATUS.md` now maps implemented, VM-ready, simulated facade,
   prepared, not implemented, and not hardware-proven labels to the

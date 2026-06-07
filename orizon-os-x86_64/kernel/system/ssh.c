@@ -3355,6 +3355,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop backend         show current framebuffer backend and future split\r\n"
              "  desktop protocol        show internal client/compositor protocol map\r\n"
              "  desktop architecture    show API/backend/protocol boundary map\r\n"
+             "  desktop truth           show VM/facade/prepared/not-implemented taxonomy\r\n"
              "  desktop layouts         show available tiling layouts\r\n"
              "  desktop layout-tree     show active workspace tiling tree/rectangles\r\n"
              "  desktop animations      show animation/runtime transition state\r\n"
@@ -3596,6 +3597,10 @@ static void ssh_shell_print_desktop(const char *args) {
   } else if (ssh_shell_command_is(sub, "architecture") ||
              ssh_shell_command_is(sub, "arch")) {
     orizon_desktop_format_architecture(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "truth") ||
+             ssh_shell_command_is(sub, "taxonomy") ||
+             ssh_shell_command_is(sub, "limits")) {
+    orizon_desktop_format_truth(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "layouts")) {
     gui_desktop_format_layouts(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "layout-state") ||
@@ -3711,8 +3716,8 @@ static void ssh_shell_print_desktop(const char *args) {
     }
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports version, systeminfo, backend, protocol, architecture, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
+               "json: -j supports version, systeminfo, backend, protocol, architecture, truth, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       if (json) {
         gui_desktop_format_hyprctl_version_json(out, sizeof(out));
@@ -3745,6 +3750,14 @@ static void ssh_shell_print_desktop(const char *args) {
         orizon_desktop_format_architecture_json(out, sizeof(out));
       } else {
         orizon_desktop_format_architecture(out, sizeof(out));
+      }
+    } else if (ssh_shell_command_is(hypr, "truth") ||
+               ssh_shell_command_is(hypr, "taxonomy") ||
+               ssh_shell_command_is(hypr, "limits")) {
+      if (json) {
+        orizon_desktop_format_truth_json(out, sizeof(out));
+      } else {
+        orizon_desktop_format_truth(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "clients")) {
       if (json) {

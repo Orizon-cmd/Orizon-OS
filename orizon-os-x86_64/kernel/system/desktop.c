@@ -448,6 +448,9 @@ static const char *desktop_architecture_config =
     "waybar-status installed=no active=no future-package=orizon-waybar\n"
     "vm-ready yes\n"
     "hardware-validated no\n"
+    "truth-command desktop truth\n"
+    "truth-json-command desktop hyprctl -j truth\n"
+    "truth-labels implemented,vm-ready,simulated-facade,prepared,not-implemented,not-hardware-proven\n"
     "truth hyprland-style-facade-not-upstream\n";
 
 static const char *desktop_modules_config =
@@ -5664,9 +5667,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/architecture/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/architecture/truth/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,
@@ -5971,6 +5974,111 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
                  "commands: desktop settings export | desktop settings sync | desktop config apply | desktop settings doctor\n");
   desktop_append(out, out_size, &used,
                  "limits: this is a Hyprland-style facade; no wlroots/Wayland backend yet and no manual window dragging.\n");
+}
+
+void orizon_desktop_format_truth(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_append(out, out_size, &used,
+                 "Orizon desktop Hyprland-style truth taxonomy\n");
+  desktop_append(out, out_size, &used,
+                 "scope: VM/ZimaOS Orizon framebuffer desktop\n");
+  desktop_append(out, out_size, &used,
+                 "version: " ORIZON_DESKTOP_PACKAGE_VERSION "\n");
+  desktop_append(out, out_size, &used,
+                 "implemented: tiling dispatchers, dynamic workspaces, dwindle/master/monocle, focus history, client state, config import, native tiled app clients, compositor-backend-v0, desktop-protocol-v0\n");
+  desktop_append(out, out_size, &used,
+                 "vm-ready: desktop start/stop/restart/reload/recover/rescue, system init desktop-restore, framebuffer render diagnostics, JSON desktop hyprctl diagnostics, modular package samples\n");
+  desktop_append(out, out_size, &used,
+                 "simulated-facade: desktop hyprctl, Hyprland-style config hints, simplified windowrulev2 matching, VM-only markurgent/tagwindow, bindm parsing without free mouse drag\n");
+  desktop_append(out, out_size, &used,
+                 "prepared: wayland-wlroots backend contract, layer-shell/xdg-shell/XWayland placeholders, orizon-waybar future separate package, multi-output Wayland routing\n");
+  desktop_append(out, out_size, &used,
+                 "not-implemented: upstream Hyprland, Wayland/wlroots server, external Wayland clients, real xdg-shell/layer-shell/XWayland, GPU scene graph, Waybar activation, taskbar/start menu, floating desktop, free manual window drag\n");
+  desktop_append(out, out_size, &used,
+                 "not-hardware-proven: no Lenovo, real AP, USB dongle, or physical-PC validation is claimed from VM output\n");
+  desktop_append(out, out_size, &used,
+                 "current-backend: framebuffer-vm\n");
+  desktop_append(out, out_size, &used, "contracts: surface=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_surface_contract());
+  desktop_append(out, out_size, &used, " render=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_render_contract());
+  desktop_append(out, out_size, &used, " client=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_client_contract());
+  desktop_append(out, out_size, &used, "\nprotocol: ");
+  desktop_append(out, out_size, &used, orizon_desktop_protocol_contract());
+  desktop_append(out, out_size, &used, "\ncommands: desktop truth | desktop hyprctl truth | desktop hyprctl -j truth\n");
+  desktop_append(out, out_size, &used,
+                 "related: desktop architecture | desktop backend | desktop protocol | desktop modules | desktop render\n");
+  desktop_append(out, out_size, &used,
+                 "policy: tiling-only manual-drag=no floating-desktop=no taskbar=no start-menu=no waybar-active=no\n");
+  desktop_append(out, out_size, &used,
+                 "truth: hyprland-style-facade-not-upstream, VM-ready only\n");
+}
+
+void orizon_desktop_format_truth_json(char *out, size_t out_size) {
+  size_t used = 0;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  orizon_desktop_ensure_defaults();
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+      "\"command\":\"truth\",\"hyprlandStyleFacade\":true,"
+      "\"scope\":\"VM/ZimaOS framebuffer desktop\","
+      "\"current\":{\"backend\":\"framebuffer-vm\",\"surfaceContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_surface_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"renderContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_render_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"clientContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_client_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_desktop_protocol_contract());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},\"labels\":["
+      "{\"label\":\"implemented\",\"meaning\":\"code exists in the Orizon tree and is wired into desktop commands/compositor\",\"examples\":[\"tiling-dispatchers\",\"dynamic-workspaces\",\"dwindle-master-monocle\",\"focus-history\",\"client-state\",\"config-import\",\"native-tiled-app-clients\",\"compositor-backend-v0\",\"desktop-protocol-v0\"]},"
+      "{\"label\":\"vm-ready\",\"meaning\":\"implemented and usable through the ZimaOS VM workflow\",\"examples\":[\"desktop-session-manager\",\"system-init-desktop-restore\",\"framebuffer-render-diagnostics\",\"desktop-hyprctl-json\",\"modular-package-samples\"]},"
+      "{\"label\":\"simulated-facade\",\"meaning\":\"Hyprland-shaped compatibility over Orizon internals, not upstream Hyprland runtime\",\"examples\":[\"desktop-hyprctl\",\"hyprland-conf-hints\",\"simplified-windowrulev2\",\"vm-markurgent-tagwindow\",\"bindm-no-free-drag\"]},"
+      "{\"label\":\"prepared\",\"meaning\":\"contract, map, package name, or hint exists for future implementation but is not active runtime\",\"examples\":[\"future-wayland-wlroots-backend\",\"layer-shell-placeholder\",\"xdg-shell-placeholder\",\"xwayland-placeholder\",\"orizon-waybar-future-package\",\"multi-output-wayland-routing\"]},"
+      "{\"label\":\"not-implemented\",\"meaning\":\"no real runtime implementation exists yet\",\"examples\":[\"upstream-hyprland\",\"wayland-wlroots-server\",\"external-wayland-clients\",\"real-xdg-shell\",\"real-layer-shell\",\"xwayland\",\"gpu-scene-graph\",\"waybar-activation\",\"taskbar-start-menu\",\"floating-desktop\",\"free-manual-window-drag\"]},"
+      "{\"label\":\"not-hardware-proven\",\"meaning\":\"VM output does not prove Lenovo or physical-PC behavior\",\"examples\":[\"no-lenovo-validation\",\"no-real-ap-validation\",\"no-usb-dongle-validation\",\"no-physical-pc-validation\"]}],"
+      "\"booleans\":{\"vmReady\":true,\"hardwareValidation\":false,"
+      "\"upstreamHyprland\":false,\"wayland\":false,\"wlroots\":false,"
+      "\"externalWaylandClients\":false,\"xwayland\":false,"
+      "\"waybarActive\":false,\"taskbar\":false,\"startMenu\":false,"
+      "\"floatingDesktop\":false,\"manualDrag\":false},"
+      "\"commands\":{\"text\":\"desktop truth\","
+      "\"hyprctl\":\"desktop hyprctl truth\","
+      "\"json\":\"desktop hyprctl -j truth\","
+      "\"related\":[\"desktop architecture\",\"desktop backend\","
+      "\"desktop protocol\",\"desktop modules\",\"desktop render\"]},"
+      "\"paths\":{\"architectureMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_ARCHITECTURE_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"backendMap\":");
+  desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolMap\":");
+  desktop_json_append_string(out, out_size, &used,
+                             ORIZON_DESKTOP_PROTOCOL_PATH);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},\"truth\":\"hyprland-style-facade-not-upstream-vm-ready-only\"}\n");
 }
 
 void orizon_desktop_format_architecture(char *out, size_t out_size) {

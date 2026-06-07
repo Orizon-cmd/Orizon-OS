@@ -3776,6 +3776,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop backend         - Show current framebuffer backend and future split\n");
     term_puts_t(term, "  desktop protocol        - Show internal client/compositor protocol map\n");
     term_puts_t(term, "  desktop architecture    - Show API/backend/protocol boundary map\n");
+    term_puts_t(term, "  desktop truth           - Show VM/facade/prepared/not-implemented taxonomy\n");
     term_puts_t(term, "  desktop layouts         - Show available tiling layouts\n");
     term_puts_t(term, "  desktop layout-tree     - Show active workspace tiling tree/rectangles\n");
     term_puts_t(term, "  desktop animations      - Show animation/runtime transition state\n");
@@ -4092,6 +4093,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "truth") ||
+      term_command_is(args, "taxonomy") ||
+      term_command_is(args, "limits")) {
+    orizon_desktop_format_truth(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "layouts")) {
     gui_desktop_format_layouts(report, sizeof(report));
     term_puts_t(term, report);
@@ -4264,8 +4272,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, architecture, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports version, systeminfo, backend, protocol, architecture, truth, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4300,6 +4308,14 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         orizon_desktop_format_architecture_json(report, sizeof(report));
       } else {
         orizon_desktop_format_architecture(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "truth") ||
+               term_command_is(hypr, "taxonomy") ||
+               term_command_is(hypr, "limits")) {
+      if (json) {
+        orizon_desktop_format_truth_json(report, sizeof(report));
+      } else {
+        orizon_desktop_format_truth(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "clients")) {
       if (json) {

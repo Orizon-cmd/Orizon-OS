@@ -144,8 +144,10 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.95.0` installs explicit source/bind diagnostics,
-session audit diagnostics, boot/session `desktop-restore` init diagnostics with
+The desktop package version `0.96.0` installs explicit source/bind diagnostics,
+runtime truth taxonomy diagnostics (`desktop truth`, `desktop hyprctl truth`,
+and `desktop hyprctl -j truth`), session audit diagnostics, boot/session
+`desktop-restore` init diagnostics with
 reload-to-recover fallback, read-only native app runtime diagnostics,
 active submap role/action/sticky reset diagnostics,
 VM render/decorations/animations diagnostics for framebuffer surface/reserved
@@ -160,9 +162,9 @@ architecture/backend/protocol contract diagnostics for
 the future `wayland-wlroots` backend contract,
 and architecture truth maps:
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
-`/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
-`desktop backend`, `desktop protocol`, or the matching `desktop hyprctl -j`
-commands. These maps document the current VM framebuffer backend,
+`/system/desktop-protocol.conf`. Inspect them with `desktop truth`,
+`desktop architecture`, `desktop backend`, `desktop protocol`, or the matching
+`desktop hyprctl -j` commands. These maps document the current VM framebuffer backend,
 `compositor-backend-v0`, and the internal `desktop-protocol-v0` runtime trace
 for `orizon-desktop-ipc-v0`. The bind diagnostics report
 plain/keyboard/mouse/composite flags and `manualDragFromBindm=false`; they do
@@ -263,6 +265,7 @@ desktop hyprctl -j systeminfo
 desktop hyprctl -j backend
 desktop hyprctl -j protocol
 desktop hyprctl -j architecture
+desktop hyprctl -j truth
 desktop hyprctl -j clients
 desktop hyprctl clientmodel
 desktop hyprctl rulematches
@@ -306,9 +309,11 @@ desktop hyprctl systeminfo
 desktop backend
 desktop protocol
 desktop architecture
+desktop truth
 desktop hyprctl backend
 desktop hyprctl protocol
 desktop hyprctl architecture
+desktop hyprctl truth
 desktop hyprctl activeworkspace
 desktop hyprctl layouts
 desktop hyprctl layoutstate

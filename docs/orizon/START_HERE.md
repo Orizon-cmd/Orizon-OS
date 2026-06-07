@@ -66,11 +66,17 @@ design note.
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
   v2 state health/counters,
-  `desktop hyprctl [-j] version/systeminfo/backend/protocol/architecture/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, compact JSON diagnostics/actions for `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, `desktop architecture`, `desktop backend`, `desktop protocol`, `desktop autostart`,
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/architecture/truth/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, compact JSON diagnostics/actions for `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, `desktop architecture`, `desktop backend`, `desktop protocol`, `desktop truth`, `desktop autostart`,
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.95.0`: `desktop architecture`,
+- Desktop release boundary for current package `0.96.0`: `desktop truth`,
+  `desktop hyprctl truth`, and `desktop hyprctl -j truth` expose the runtime
+  truth taxonomy: implemented, VM-ready, simulated facade, prepared, not
+  implemented, and not hardware-proven. This keeps VM/ZimaOS diagnostics honest
+  about the Orizon framebuffer facade versus upstream Hyprland, Wayland/wlroots,
+  Waybar activation, floating/manual drag, and physical hardware validation.
+- `desktop architecture`,
   `desktop backend`, and `desktop protocol` expose
   `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
   `/system/desktop-protocol.conf`. The implemented VM-ready pieces are the
