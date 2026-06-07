@@ -406,6 +406,14 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.101.0` adds session-manager log mirroring to
+`desktop hyprctl -j rollinglog`. The JSON now samples both `/logs/desktop.log`
+and `/logs/desktop-session.log` through `preview`, `sessionPreview`,
+`bytesSampled`, `sessionBytesSampled`, `eventsEmpty`, and `sessionEmpty` so VM
+admin checks can inspect persistent desktop logs without parsing `desktop logs`.
+This is Orizon framebuffer VM/ZimaOS state only, not upstream Hyprland
+IPC, Wayland/wlroots, Waybar, floating/manual drag, or physical hardware
+validation.
 Package `0.100.0` adds structured `desktop hyprctl -j reload` diagnostics.
 JSON reload still includes the text `result` report and now exposes
 `parserSummary`, `sourceResolve`, `runtimeFiles`, `session`, and `settings` so

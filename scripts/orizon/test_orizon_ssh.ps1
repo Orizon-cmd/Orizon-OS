@@ -884,7 +884,7 @@ run_cmd() {
       grep -q '"command":"session"' "`$OUT" && grep -q '"action":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"sessionLogTail":' "`$OUT" || { echo "missing hyprctl json session reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j rollinglog")
-      grep -q '"command":"rollinglog"' "`$OUT" && grep -q '"paths":{"events":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"rollinglog"' "`$OUT" && grep -q '"paths":{"events":' "`$OUT" && grep -q '"sessionPreview":' "`$OUT" && grep -q '"sessionBytesSampled":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configerrors")
       grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"plain":' "`$OUT" && grep -q '"compositeFlags":' "`$OUT" && grep -q '"sourceResolve":{' "`$OUT" && grep -q '"maxDepth":3' "`$OUT" && grep -Fq '"files":[' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -1181,7 +1181,7 @@ run_cmd() {
       grep -q "orizon-launcher overlay toggled" "`$OUT" || { echo "missing desktop launch launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg info orizon-desktop-hypr")
-      grep -q "orizon-desktop-hypr" "`$OUT" && grep -q "version 0.100.0" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "orizon-desktop-hypr" "`$OUT" && grep -q "version 0.101.0" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop package")
       grep -q "orizon-desktop-hypr.opkg" "`$OUT" || { echo "missing desktop package output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

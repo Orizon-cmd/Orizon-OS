@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.101.0` with VM-ready session log mirroring
+  in `desktop hyprctl -j rollinglog`. The JSON now includes
+  `sessionPreview`, `sessionBytesSampled`, `sessionEmpty`, `eventsEmpty`, and
+  the existing log paths so admin checks can inspect both `/logs/desktop.log`
+  and `/logs/desktop-session.log` without parsing the text-only `desktop logs`
+  output. This remains the Orizon framebuffer/ZimaOS VM facade only: no
+  upstream Hyprland IPC, Wayland/wlroots server, Waybar activation, floating
+  desktop, manual window drag, or physical hardware validation is claimed.
 - Added desktop package version `0.100.0` with VM-ready structured
   `desktop hyprctl -j reload` diagnostics. JSON reload still keeps the text
   `result` report and now adds `parserSummary`, `sourceResolve`,

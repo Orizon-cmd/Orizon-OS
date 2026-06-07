@@ -456,6 +456,11 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.101.0`, `desktop hyprctl -j rollinglog` mirrors both
+`/logs/desktop.log` and `/logs/desktop-session.log` as structured VM admin
+data. JSON includes `preview`, `sessionPreview`, `bytesSampled`,
+`sessionBytesSampled`, `eventsEmpty`, and `sessionEmpty`, while still avoiding
+upstream Hyprland socket-log claims.
 Since package `0.100.0`, `desktop hyprctl -j reload` keeps the text `result`
 and adds structured `parserSummary`, `sourceResolve`, `runtimeFiles`,
 `session`, and `settings` objects. VM automation can now check parser/source

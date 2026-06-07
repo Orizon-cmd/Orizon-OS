@@ -8138,8 +8138,10 @@ void orizon_desktop_format_rolling_log(char *out, size_t out_size) {
 
 void orizon_desktop_format_rolling_log_json(char *out, size_t out_size) {
   char log[1024];
+  char session_log[1024];
   size_t used = 0;
   int n;
+  int session_n;
 
   if (!out || out_size == 0) {
     return;
@@ -8151,29 +8153,45 @@ void orizon_desktop_format_rolling_log_json(char *out, size_t out_size) {
   } else {
     log[sizeof(log) - 1] = '\0';
   }
+  session_n = desktop_read_text_file(ORIZON_DESKTOP_SESSION_LOG_PATH,
+                                     session_log, sizeof(session_log));
+  if (session_n <= 0) {
+    session_log[0] = '\0';
+  } else {
+    session_log[sizeof(session_log) - 1] = '\0';
+  }
   desktop_json_append_raw(
       out, out_size, &used,
       "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
       "\"command\":\"rollinglog\",\"hyprlandStyleFacade\":true,"
       "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
       "\"wlroots\":false,\"manualDrag\":false,"
-      "\"source\":\"Orizon desktop event log\",\"paths\":{\"events\":");
+      "\"source\":\"Orizon desktop event/session logs\",\"paths\":{\"events\":");
   desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_LOG_PATH);
   desktop_json_append_raw(out, out_size, &used, ",\"session\":");
   desktop_json_append_string(out, out_size, &used,
                              ORIZON_DESKTOP_SESSION_LOG_PATH);
   desktop_json_append_raw(out, out_size, &used, "},\"empty\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          (n <= 0 && session_n <= 0) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"eventsEmpty\":");
   desktop_json_append_raw(out, out_size, &used, n <= 0 ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, ",\"sessionEmpty\":");
+  desktop_json_append_raw(out, out_size, &used,
+                          session_n <= 0 ? "true" : "false");
   {
     char line[128];
-    snprintf(line, sizeof(line), ",\"bytesSampled\":%d,\"preview\":",
-             n > 0 ? n : 0);
+    snprintf(line, sizeof(line),
+             ",\"bytesSampled\":%d,\"sessionBytesSampled\":%d,\"preview\":",
+             n > 0 ? n : 0, session_n > 0 ? session_n : 0);
     desktop_json_append_raw(out, out_size, &used, line);
   }
   desktop_json_append_string(out, out_size, &used, log);
+  desktop_json_append_raw(out, out_size, &used, ",\"sessionPreview\":");
+  desktop_json_append_string(out, out_size, &used, session_log);
   desktop_json_append_raw(
       out, out_size, &used,
-      ",\"limits\":[\"tail is sampled from the VM event log\","
+      ",\"limits\":[\"tails are sampled from VM event/session logs\","
       "\"not an upstream Hyprland socket log\","
       "\"no physical hardware validation claimed\"]}\n");
 }

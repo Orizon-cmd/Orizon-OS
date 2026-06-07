@@ -241,6 +241,13 @@ Depuis `0.94.0`, `desktop modules`, `desktop hyprctl -j modules`, `pkg info`
 et les `.opkg` de modules exposent aussi `split-plan`, `dependency-graph`,
 frontieres de modules, roles d'activation et `split-version 2`, afin de rendre
 la separation `orizon-desktop-core`/apps plus verifiable en VM.
+Depuis `0.101.0`, `desktop hyprctl -j rollinglog` expose aussi le journal
+session-manager via `sessionPreview`, `sessionBytesSampled` et `sessionEmpty`
+en plus du log evenementiel. Les checks admin VM peuvent donc lire
+`/logs/desktop.log` et `/logs/desktop-session.log` en JSON sans parser
+`desktop logs`. Cela reste une facade Orizon framebuffer VM/ZimaOS, pas un IPC
+Hyprland upstream, Wayland/wlroots, Waybar actif, drag manuel ni validation
+materielle.
 Depuis `0.100.0`, `desktop hyprctl -j reload` conserve le rapport texte
 `result` et expose aussi `parserSummary`, `sourceResolve`, `runtimeFiles`,
 `session` et `settings` pour diagnostiquer les compteurs de parsing, la

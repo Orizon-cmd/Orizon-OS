@@ -4568,6 +4568,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "hyprctl-json-splash-command = desktop hyprctl -j splash\n"
       "hyprctl-json-session-command = desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue]\n"
       "hyprctl-json-rollinglog-command = desktop hyprctl -j rollinglog\n"
+      "hyprctl-json-rollinglog-session = sessionPreview,sessionBytesSampled,sessionEmpty\n"
       "hyprctl-json-configerrors-command = desktop hyprctl -j configerrors\n"
       "hyprctl-json-configtrace-command = desktop hyprctl -j configtrace\n"
       "hyprctl-json-getoption-command = desktop hyprctl -j getoption <key>\n"
