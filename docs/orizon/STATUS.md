@@ -76,7 +76,8 @@ work.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.93.0` renderer surface/scale/frame-budget
+  diagnostics for `source` files, plus `0.94.0` modular packaging split-plan,
+  dependency graph and module-boundary diagnostics, plus `0.93.0` renderer surface/scale/frame-budget
   diagnostics for render/decorations/animations, plus `0.92.0` active submap role/action and
   sticky reset diagnostics, plus `0.91.0` native app runtime diagnostics
   for client/focus/workspace/overlay state, plus `0.90.0` reload-to-recover fallback

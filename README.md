@@ -231,6 +231,10 @@ samples `.opkg` separes via `pkg sample <module>` et des installs nommes sur VM
 installee. Les modules app auto-preparent `orizon-desktop-core`; `orizon-waybar`
 est seulement annonce comme paquet separe ulterieur, pas genere ni installe
 maintenant.
+Depuis `0.94.0`, `desktop modules`, `desktop hyprctl -j modules`, `pkg info`
+et les `.opkg` de modules exposent aussi `split-plan`, `dependency-graph`,
+frontieres de modules, roles d'activation et `split-version 2`, afin de rendre
+la separation `orizon-desktop-core`/apps plus verifiable en VM.
 `desktop architecture`, `desktop backend` et `desktop protocol` documentent le
 split d'architecture: API `orizon-compositor-api-v0`, API backend interne
 `compositor-backend-v0` (`kernel/include/compositor_backend.h` et

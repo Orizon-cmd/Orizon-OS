@@ -74,6 +74,8 @@
   free-drag window moving, package `0.86.0` bind flag diagnostics for
   plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
   package `0.87.0` source resolution diagnostics for included config files,
+  package `0.94.0` modular packaging split-plan/dependency/module-boundary
+  diagnostics,
   package `0.93.0` renderer surface/scale/frame-budget diagnostics for
   render/decorations/animations,
   package `0.92.0` active submap role/action/sticky reset diagnostics,

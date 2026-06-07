@@ -298,7 +298,10 @@ restores the last removed desktop package snapshot.
 module `.opkg` samples and named install commands. App modules depend on
 `orizon-desktop-core`, which is auto-prepared for named installs. `orizon-waybar`
 is listed only as a future separate package; it is not generated or installed
-now and no Windows-style taskbar is added.
+now and no Windows-style taskbar is added. Since `0.94.0`, this surface also
+reports `split-plan`, dependency graph, module boundaries, activation roles,
+and `split-version 2` in generated module packages so the split is inspectable
+without installing Waybar or enabling a bar.
 
 `desktop config doctor` parses the Hyprland-style user config at
 `/home/orizon/.config/hypr/orizon-hypr.conf`. It understands common Hyprland
@@ -389,6 +392,12 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.94.0` strengthens modular desktop packaging diagnostics:
+`desktop modules`, JSON `modules`, `pkg info <desktop-module>`, and generated
+module `.opkg` samples expose `split-plan`, dependency graph, module
+boundaries, activation roles, and `split-version 2` while keeping the
+all-in-one `orizon-desktop-hypr` compatibility path. `orizon-waybar` remains a
+future-only separate package and is not generated, installed, or activated.
 Package `0.93.0` strengthens VM renderer diagnostics:
 `desktop render`, `desktop decorations`, `desktop animations`, and JSON
 `render|decorations|animations` expose framebuffer surface/reserved areas,

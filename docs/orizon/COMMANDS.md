@@ -448,6 +448,12 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.94.0`, `desktop modules`, JSON `modules`, `pkg info
+<desktop-module>`, and generated module `.opkg` samples expose `split-plan`,
+dependency graph, module boundaries, activation roles, and `split-version 2`.
+This prepares `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
+`orizon-launcher` as separate packages while keeping `orizon-waybar`
+future-only and inactive.
 Since package `0.93.0`, `desktop render`, `desktop decorations`, `desktop
 animations`, and JSON `render|decorations|animations` expose framebuffer
 surface/reserved areas, tiling area, scale policy, frame budget, rendered

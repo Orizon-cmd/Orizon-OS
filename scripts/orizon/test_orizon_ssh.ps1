@@ -64,7 +64,9 @@ $commands = @(
   "pkg sample",
   "pkg sample orizon-desktop-core",
   "pkg verify /workspace/packages/orizon-desktop-core.opkg",
+  "cat /workspace/packages/orizon-desktop-core.opkg",
   "pkg sample orizon-terminal",
+  "pkg info orizon-terminal",
   "pkg sample orizon-waybar",
   "pkg simulate /workspace/packages/orizon-hello.opkg",
   "pkg verify /workspace/packages/orizon-hello.opkg",
@@ -557,13 +559,19 @@ run_cmd() {
       grep -q "Sample package written" "`$OUT" || { echo "missing pkg sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg sample orizon-desktop-core")
-      grep -q "Desktop module package written" "`$OUT" && grep -q "orizon-desktop-core.opkg" "`$OUT" || { echo "missing desktop core sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Desktop module package written" "`$OUT" && grep -q "orizon-desktop-core.opkg" "`$OUT" && grep -q "split-plan: core-first" "`$OUT" || { echo "missing desktop core sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg verify /workspace/packages/orizon-desktop-core.opkg")
       grep -q "package verify: OK" "`$OUT" || { echo "missing desktop core verify output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "cat /workspace/packages/orizon-desktop-core.opkg")
+      grep -q "split-version 2" "`$OUT" && grep -q "activation policy-session-settings" "`$OUT" && grep -q "split-contract module-opkg-plus-runtime-hints" "`$OUT" || { echo "missing desktop core split manifest"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "pkg sample orizon-terminal")
-      grep -q "Desktop module package written" "`$OUT" && grep -q "orizon-terminal.opkg" "`$OUT" || { echo "missing desktop terminal sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Desktop module package written" "`$OUT" && grep -q "orizon-terminal.opkg" "`$OUT" && grep -q "dependency: orizon-desktop-core" "`$OUT" || { echo "missing desktop terminal sample output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "pkg info orizon-terminal")
+      grep -q "dependency orizon-desktop-core" "`$OUT" && grep -q "activation tiled-terminal-client" "`$OUT" && grep -q "split-plan core-first" "`$OUT" || { echo "missing desktop terminal package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg sample orizon-waybar")
       grep -q "planned later" "`$OUT" && grep -q "not generated" "`$OUT" || { echo "missing desktop waybar planned output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -812,7 +820,7 @@ run_cmd() {
       grep -q '"command":"instances"' "`$OUT" && grep -q '"signature":"orizon-framebuffer-main"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j modules")
-      grep -q '"command":"modules"' "`$OUT" && grep -q '"modularPackaging":true' "`$OUT" && grep -q '"name":"orizon-waybar"' "`$OUT" && grep -q '"plannedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json modules"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"modules"' "`$OUT" && grep -q '"modularPackaging":true' "`$OUT" && grep -q '"splitPlan":{' "`$OUT" && grep -q '"dependencyGraph":\[' "`$OUT" && grep -q '"boundary":"policy-session-settings-logs"' "`$OUT" && grep -q '"name":"orizon-waybar"' "`$OUT" && grep -q '"plannedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json modules"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j shortcuts")
       grep -q '"command":"shortcuts"' "`$OUT" && grep -q '"keyboardOnly":true' "`$OUT" && grep -q '"bindmPreparedOnly":true' "`$OUT" && grep -q '"manualDragFromBindm":false' "`$OUT" && grep -q '"bindFlags":{' "`$OUT" && grep -q '"submapPolicy":{' "`$OUT" && grep -q '"stickySubmaps":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

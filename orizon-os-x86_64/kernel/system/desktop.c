@@ -435,18 +435,25 @@ static const char *desktop_architecture_config =
 static const char *desktop_modules_config =
     "# Orizon desktop modular packaging map v1\n"
     "# This prepares a split desktop without installing Waybar yet.\n"
+    "split-version 2\n"
+    "split-plan core-first app-modules-after-core all-in-one-compatible\n"
+    "dependency " ORIZON_DESKTOP_PACKAGE_CORE " -> orizon-core,orizon-packages\n"
+    "dependency " ORIZON_DESKTOP_PACKAGE_TERMINAL " -> " ORIZON_DESKTOP_PACKAGE_CORE "\n"
+    "dependency " ORIZON_DESKTOP_PACKAGE_SETTINGS " -> " ORIZON_DESKTOP_PACKAGE_CORE "\n"
+    "dependency " ORIZON_DESKTOP_PACKAGE_LAUNCHER " -> " ORIZON_DESKTOP_PACKAGE_CORE "\n"
+    "dependency " ORIZON_DESKTOP_PACKAGE_WAYBAR " -> future-only\n"
     "module " ORIZON_DESKTOP_PACKAGE_CORE
-    " state=prepared kind=runtime provides=policy,session,settings,logs,architecture-map,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=runtime activation=policy-session-settings provides=policy,session,settings,logs,architecture-map,backend-map,protocol-map sample='pkg sample " ORIZON_DESKTOP_PACKAGE_CORE "' install='pkg install " ORIZON_DESKTOP_PACKAGE_CORE "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE
-    " state=prepared kind=profile provides=hyprland-style-config,dispatchers,tiling,backend-diagnostics current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=profile activation=compat-all-in-one provides=hyprland-style-config,dispatchers,tiling,backend-diagnostics current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_TERMINAL
-    " state=prepared kind=app provides=terminal-client shortcut=F1 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_TERMINAL "' install='pkg install " ORIZON_DESKTOP_PACKAGE_TERMINAL "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=app activation=tiled-terminal-client provides=terminal-client shortcut=F1 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_TERMINAL "' install='pkg install " ORIZON_DESKTOP_PACKAGE_TERMINAL "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_SETTINGS
-    " state=prepared kind=app provides=settings,logs,packages,update-viewers shortcut=F11+s sample='pkg sample " ORIZON_DESKTOP_PACKAGE_SETTINGS "' install='pkg install " ORIZON_DESKTOP_PACKAGE_SETTINGS "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=app activation=tiled-admin-viewers provides=settings,logs,packages,update-viewers shortcut=F11+s sample='pkg sample " ORIZON_DESKTOP_PACKAGE_SETTINGS "' install='pkg install " ORIZON_DESKTOP_PACKAGE_SETTINGS "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_LAUNCHER
-    " state=prepared kind=app provides=launcher-overlay shortcut=SUPER+D/F3 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' install='pkg install " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
+    " state=prepared kind=app activation=overlay-dispatch-client provides=launcher-overlay shortcut=SUPER+D/F3 sample='pkg sample " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' install='pkg install " ORIZON_DESKTOP_PACKAGE_LAUNCHER "' current-bundle=" ORIZON_DESKTOP_PACKAGE "\n"
     "module " ORIZON_DESKTOP_PACKAGE_WAYBAR
-    " state=planned kind=bar provides=waybar-style-layer package-later=yes installed=no\n"
+    " state=planned kind=bar activation=not-installed-now provides=waybar-style-layer package-later=yes installed=no\n"
     "policy no-windows-taskbar\n"
     "policy no-free-drag-window-moving\n"
     "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0 api=orizon-compositor-api-v0 map=" ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
@@ -6419,6 +6426,14 @@ void orizon_desktop_format_modules(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "compat-meta: pkg install " ORIZON_DESKTOP_PACKAGE " remains the current all-in-one path while split packages are prepared\n");
   desktop_append(out, out_size, &used,
+                 "split-plan: core -> hypr profile -> terminal/settings/launcher app clients; app modules auto-prepare core\n");
+  desktop_append(out, out_size, &used,
+                 "dependency-graph: " ORIZON_DESKTOP_PACKAGE_CORE " depends on orizon-core/orizon-packages; app modules depend on " ORIZON_DESKTOP_PACKAGE_CORE "\n");
+  desktop_append(out, out_size, &used,
+                 "module-boundaries: core=policy/session/settings/logs hypr=tiling/config/dispatchers apps=managed-tiling-clients\n");
+  desktop_append(out, out_size, &used,
+                 "waybar-policy: " ORIZON_DESKTOP_PACKAGE_WAYBAR " planned-only sample=no install=no active=no\n");
+  desktop_append(out, out_size, &used,
                  "module-dir: " ORIZON_DESKTOP_MODULE_DIR "\n");
   desktop_append(out, out_size, &used,
                  "path: " ORIZON_DESKTOP_MODULES_PATH "\n");
@@ -6472,40 +6487,68 @@ void orizon_desktop_format_modules_json(char *out, size_t out_size) {
       out, out_size, &used,
       ",\"sampleCommand\":\"pkg sample <module>\","
       "\"installCommand\":\"pkg install <module>\","
+      "\"splitPlan\":{\"phase\":\"prepared\",\"coreFirst\":true,"
+      "\"appModulesDependOnCore\":true,"
+      "\"namedInstallAutoPreparesCore\":true,"
+      "\"allInOneCompatibilityKept\":true,"
+      "\"waybarFutureOnly\":true},"
+      "\"dependencyGraph\":["
+      "{\"module\":\"" ORIZON_DESKTOP_PACKAGE_CORE "\","
+      "\"dependsOn\":[\"orizon-core\",\"orizon-packages\"]},"
+      "{\"module\":\"" ORIZON_DESKTOP_PACKAGE_TERMINAL "\","
+      "\"dependsOn\":[\"" ORIZON_DESKTOP_PACKAGE_CORE "\"]},"
+      "{\"module\":\"" ORIZON_DESKTOP_PACKAGE_SETTINGS "\","
+      "\"dependsOn\":[\"" ORIZON_DESKTOP_PACKAGE_CORE "\"]},"
+      "{\"module\":\"" ORIZON_DESKTOP_PACKAGE_LAUNCHER "\","
+      "\"dependsOn\":[\"" ORIZON_DESKTOP_PACKAGE_CORE "\"]},"
+      "{\"module\":\"" ORIZON_DESKTOP_PACKAGE_WAYBAR "\","
+      "\"dependsOn\":[\"future-only\"]}],"
       "\"modules\":["
       "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_CORE "\","
       "\"kind\":\"core\",\"role\":\"desktop-runtime\","
       "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_CORE_PATH "\","
+      "\"boundary\":\"policy-session-settings-logs\","
+      "\"activation\":\"policy-session-settings\","
       "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
       "\"autoPreparedDependency\":false,\"currentBundle\":false,"
       "\"plannedOnly\":false},"
       "{\"name\":\"" ORIZON_DESKTOP_PACKAGE "\","
       "\"kind\":\"hypr-profile\",\"role\":\"all-in-one-profile\","
       "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_PATH "\","
+      "\"boundary\":\"tiling-config-dispatchers\","
+      "\"activation\":\"compat-all-in-one\","
       "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
       "\"autoPreparedDependency\":false,\"currentBundle\":true,"
       "\"plannedOnly\":false},"
       "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_TERMINAL "\","
       "\"kind\":\"app\",\"role\":\"terminal\","
       "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_TERMINAL_PATH "\","
+      "\"boundary\":\"tiled-terminal-client\","
+      "\"activation\":\"desktop launch terminal\","
       "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
       "\"autoPreparedDependency\":true,\"currentBundle\":false,"
       "\"plannedOnly\":false},"
       "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_SETTINGS "\","
       "\"kind\":\"app\",\"role\":\"settings\","
       "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_SETTINGS_PATH "\","
+      "\"boundary\":\"tiled-admin-viewers\","
+      "\"activation\":\"desktop launch settings|logs|packages|update\","
       "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
       "\"autoPreparedDependency\":true,\"currentBundle\":false,"
       "\"plannedOnly\":false},"
       "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_LAUNCHER "\","
       "\"kind\":\"app\",\"role\":\"launcher\","
       "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_LAUNCHER_PATH "\","
+      "\"boundary\":\"overlay-dispatch-client\","
+      "\"activation\":\"desktop launch launcher\","
       "\"prepared\":true,\"sampleNow\":true,\"installableNow\":true,"
       "\"autoPreparedDependency\":true,\"currentBundle\":false,"
       "\"plannedOnly\":false},"
       "{\"name\":\"" ORIZON_DESKTOP_PACKAGE_WAYBAR "\","
       "\"kind\":\"future-bar\",\"role\":\"separate-status-bar\","
       "\"packagePath\":\"" ORIZON_DESKTOP_PACKAGE_WAYBAR_PATH "\","
+      "\"boundary\":\"future-package-not-generated\","
+      "\"activation\":\"not-installed-now\","
       "\"prepared\":true,\"sampleNow\":false,\"installableNow\":false,"
       "\"autoPreparedDependency\":false,\"currentBundle\":false,"
       "\"plannedOnly\":true}],"

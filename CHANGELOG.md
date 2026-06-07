@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added desktop package version `0.94.0` with stronger modular desktop
+  packaging diagnostics. `desktop modules`, `desktop hyprctl -j modules`,
+  `pkg info orizon-terminal`, `pkg search desktop`, and generated module
+  `.opkg` samples now expose a split plan, dependency graph, module boundaries,
+  activation roles, and `split-version 2` manifests for
+  `orizon-desktop-core`, `orizon-terminal`, `orizon-settings`, and
+  `orizon-launcher`. `orizon-waybar` remains explicitly future-only: no sample
+  generation, no install path, no active Waybar, no taskbar/start menu, no
+  floating desktop, no manual drag, and no physical hardware validation is
+  claimed.
 - Added desktop package version `0.93.0` with VM-ready renderer diagnostics for
   the Hyprland-style framebuffer facade. `desktop render`, `desktop
   decorations`, `desktop animations`, and JSON `desktop hyprctl -j

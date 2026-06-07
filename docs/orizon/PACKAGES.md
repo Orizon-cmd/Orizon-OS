@@ -278,7 +278,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.93.0` because it includes policy/config files, the persisted session
+`0.94.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -312,7 +312,11 @@ sticky reset diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.93.0` adds render/decorations/animations audit
+the launcher. Version `0.94.0` adds modular desktop split diagnostics to
+`desktop modules`, JSON `modules`, `pkg info <desktop-module>`, and generated
+module `.opkg` samples: `split-plan`, dependency graph, module boundaries,
+activation roles, and `split-version 2` while keeping `orizon-waybar`
+planned-only and not generated/installed/activated. Version `0.93.0` adds render/decorations/animations audit
 diagnostics to `desktop render`, `desktop decorations`, `desktop animations`,
 and JSON `render|decorations|animations`: framebuffer surface/reserved areas,
 tiling area, scale policy, frame budget, rendered client counts,
