@@ -144,9 +144,11 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.96.0` installs explicit source/bind diagnostics,
-runtime truth taxonomy diagnostics (`desktop truth`, `desktop hyprctl truth`,
-and `desktop hyprctl -j truth`), session audit diagnostics, boot/session
+The desktop package version `0.97.0` installs explicit source/bind diagnostics,
+focus-state diagnostics (`desktop focus-state`, `desktop hyprctl focusstate`,
+and `desktop hyprctl -j focusstate`), runtime truth taxonomy diagnostics
+(`desktop truth`, `desktop hyprctl truth`, and `desktop hyprctl -j truth`),
+session audit diagnostics, boot/session
 `desktop-restore` init diagnostics with
 reload-to-recover fallback, read-only native app runtime diagnostics,
 active submap role/action/sticky reset diagnostics,
@@ -255,6 +257,7 @@ desktop config trace
 desktop rollinglog
 desktop focus-history
 desktop workspace-stack
+desktop focus-state
 desktop client-model
 desktop rule-matches
 desktop keyword general:gaps_in 9
@@ -268,6 +271,7 @@ desktop hyprctl -j architecture
 desktop hyprctl -j truth
 desktop hyprctl -j clients
 desktop hyprctl clientmodel
+desktop hyprctl focusstate
 desktop hyprctl rulematches
 desktop hyprctl activewindow
 desktop hyprctl -j activewindow
@@ -275,6 +279,7 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j focusstate
 desktop hyprctl -j clientmodel
 desktop hyprctl -j rulematches
 desktop hyprctl -j layoutstate
@@ -304,6 +309,7 @@ desktop hyprctl -j binds
 desktop hyprctl -j layers
 desktop hyprctl focushistory
 desktop hyprctl workspacestack
+desktop hyprctl focusstate
 desktop hyprctl version
 desktop hyprctl systeminfo
 desktop backend

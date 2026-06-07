@@ -3789,6 +3789,7 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, "  desktop rollinglog      - Show desktop event log as hyprctl rollinglog\n");
     term_puts_t(term, "  desktop focus-history   - Show Hyprland-style focusHistoryID order\n");
     term_puts_t(term, "  desktop workspace-stack - Show master/stack/focus order per workspace\n");
+    term_puts_t(term, "  desktop focus-state     - Show active focus/master/stack diagnostics\n");
     term_puts_t(term, "  desktop client-model    - Show client/workspace/focus state graph\n");
     term_puts_t(term, "  desktop rule-matches    - Show windowrulev2 matches against tiled clients\n");
     term_puts_t(term, "  desktop modules         - Show prepared modular desktop packages\n");
@@ -4184,6 +4185,13 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     term_puts_t(term, report);
     return;
   }
+  if (term_command_is(args, "focus-state") ||
+      term_command_is(args, "focusstate") ||
+      term_command_is(args, "focus-diagnostics")) {
+    gui_desktop_format_focus_state(report, sizeof(report));
+    term_puts_t(term, report);
+    return;
+  }
   if (term_command_is(args, "apps") || term_command_is(args, "launcher apps")) {
     const char *app = term_command_is(args, "apps")
                           ? term_skip_spaces(args + 4)
@@ -4272,8 +4280,8 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
     }
     if (*hypr == '\0' || term_command_is(hypr, "help")) {
       term_puts_t(term,
-                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
-                  "json: -j supports version, systeminfo, backend, protocol, architecture, truth, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
+                  "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\n"
+                  "json: -j supports version, systeminfo, backend, protocol, architecture, truth, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, focusstate, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\n");
       return;
     }
     if (term_command_is(hypr, "version")) {
@@ -4373,6 +4381,15 @@ static void term_run_desktop(terminal_t *term, const char *cmd) {
         gui_desktop_format_workspace_stack_json(report, sizeof(report));
       } else {
         gui_desktop_format_workspace_stack(report, sizeof(report));
+      }
+    } else if (term_command_is(hypr, "focusstate") ||
+               term_command_is(hypr, "focus-state") ||
+               term_command_is(hypr, "focusdiagnostics") ||
+               term_command_is(hypr, "focus-diagnostics")) {
+      if (json) {
+        gui_desktop_format_focus_state_json(report, sizeof(report));
+      } else {
+        gui_desktop_format_focus_state(report, sizeof(report));
       }
     } else if (term_command_is(hypr, "monitors")) {
       if (json) {

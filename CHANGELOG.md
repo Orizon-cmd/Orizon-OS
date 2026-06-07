@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.97.0` with VM-ready focus-state
+  diagnostics. `desktop focus-state`, `desktop hyprctl focusstate`, and JSON
+  `desktop hyprctl -j focusstate` now combine activewindow, master, stack,
+  focusHistoryID, split/master ratios, fullscreen/pseudo/pinned flags, and
+  `lastDispatch` error/hint/result state in one read-only report. This remains
+  an Orizon framebuffer/ZimaOS VM facade only: no Wayland/wlroots server,
+  upstream Hyprland IPC, Waybar activation, floating desktop, manual window
+  drag, or physical hardware validation is claimed.
 - Added desktop package version `0.96.0` with VM-ready truth taxonomy
   diagnostics. `desktop truth`, `desktop hyprctl truth`, and JSON
   `desktop hyprctl -j truth` now expose the implemented, VM-ready, simulated

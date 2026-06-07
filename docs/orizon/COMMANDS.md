@@ -149,6 +149,7 @@ desktop configerrors
 desktop rollinglog
 desktop focus-history
 desktop workspace-stack
+desktop focus-state
 desktop client-model
 desktop rule-matches
 desktop keyword general:gaps_in 9
@@ -161,6 +162,7 @@ desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl workspacestack
+desktop hyprctl focusstate
 desktop hyprctl layouts
 desktop hyprctl layoutstate
 desktop hyprctl layouttree
@@ -219,6 +221,7 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j focusstate
 desktop hyprctl -j clientmodel
 desktop hyprctl -j rulematches
 desktop hyprctl monitors
@@ -452,6 +455,12 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.97.0`, `desktop focus-state`, `desktop hyprctl focusstate`,
+and JSON `desktop hyprctl -j focusstate` expose a read-only active-workspace
+focus/master/stack diagnostic with `focusHistoryID`, split/master ratios,
+fullscreen/pseudo/pinned flags, and `lastDispatch` status/error/hint/result.
+It is VM framebuffer state only, not upstream Hyprland IPC, Wayland/wlroots,
+Waybar, floating/manual drag, or physical hardware validation.
 Since package `0.96.0`, `desktop truth`, `desktop hyprctl truth`, and JSON
 `desktop hyprctl -j truth` expose the runtime truth taxonomy used by the docs:
 implemented, VM-ready, simulated facade, prepared, not implemented, and not
@@ -533,7 +542,7 @@ idempotent client-state dispatchers
 `fullscreenstate <internal 0-3|-1> <client 0-3|-1>` or the legacy
 `fullscreenstate <on|off|toggle|1|0>`,
 `desktop hyprctl ...` exposes
-a small Hyprland-like facade for version/systeminfo/architecture/truth/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
+a small Hyprland-like facade for version/systeminfo/architecture/truth/backend/protocol/clients/clientmodel/rulematches/workspaces/activeworkspace/monitors/activewindow/focushistory/workspacestack/focusstate/binds/keymap/layers/layouts/layoutstate/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload,
 `desktop truth`, `desktop architecture`, `desktop backend`, and `desktop protocol` expose the VM
 framebuffer backend map, the `orizon-compositor-api-v0` API seam, the
 `compositor-backend-v0` drawing/present seam in
@@ -551,7 +560,7 @@ workspace tiling tree with client roles, rectangles, focus state, and
 layout, split mode, split ratio, master ratio, `nmaster`, and the
 `lastDispatch` snapshot for the most recent tiling dispatcher result,
 including stable `error`/`hint` fields for scriptable failure diagnostics,
-`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 emits a compact VM-safe JSON facade for future desktop tooling. It includes
 client/workspace state, focus-history, workspace-stack, client-model, and
 rule-match/layout-tree/config fields such as `focusHistoryID`, `scope`, `role`,
@@ -567,6 +576,9 @@ Hyprland-style diagnostic data, not real Wayland/wlroots client state.
 `desktop workspace-stack` and `desktop hyprctl workspacestack` show
 master/stack/focus order, local vs pinned scope, focus rank, stable addresses,
 urgent state, and geometry for each workspace,
+`desktop focus-state` and `desktop hyprctl focusstate` show the active
+workspace's active client, master, stack, ratios, flags, and last dispatcher
+result in one VM-safe report,
 `movetoworkspace <workspace|special[:name]>[,<window>]` follows the moved tiled client while
 `movetoworkspacesilent <workspace|special[:name]>[,<window>]` keeps the current workspace
 active and restores workspace-local focus; window selectors accept `id`,

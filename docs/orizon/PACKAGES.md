@@ -147,6 +147,7 @@ desktop config trace
 desktop rollinglog
 desktop focus-history
 desktop workspace-stack
+desktop focus-state
 desktop client-model
 desktop rule-matches
 desktop keyword general:gaps_in 9
@@ -159,6 +160,7 @@ desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl workspacestack
+desktop hyprctl focusstate
 desktop hyprctl layouts
 desktop hyprctl layoutstate
 desktop hyprctl layouttree
@@ -206,6 +208,7 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j focusstate
 desktop hyprctl -j clientmodel
 desktop hyprctl -j rulematches
 desktop hyprctl -j layoutstate
@@ -282,15 +285,15 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.96.0` because it includes policy/config files, the persisted session
+`0.97.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
 Hyprland-style config doctor/apply/trace import diagnostics, the VM-safe
 `/home/orizon/.config/hypr/orizon-local.conf` source override, generated
 bind/autostart/window-rule/monitor/layer/runtime hint files, runtime inspection
-commands, `desktop keyword`, input/version/systeminfo/backend/protocol/architecture/truth/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches/keymap diagnostics, the
-`hyprctl [-j] version/systeminfo/backend/protocol/architecture/truth/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`
+commands, `desktop keyword`, input/version/systeminfo/backend/protocol/architecture/truth/layouts/layout-state/layout-tree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/configerrors/config-trace/rollinglog/focus-history/workspace-stack/focus-state/client-model/rule-matches/keymap diagnostics, the
+`hyprctl [-j] version/systeminfo/backend/protocol/architecture/truth/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/focusstate/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`
 facade, pointer diagnostics, the aligned Hyprland-style key template,
 preset/focus commands, dispatcher commands, split `fullscreenstate internal client`
 diagnostics with `fullscreenClient`, pseudo/pseudotile/pinned/urgent client state,
@@ -300,7 +303,7 @@ VM-safe `tagwindow` diagnostics and safe spawn-time `windowrulev2` actions for
 tile/fullscreen/pseudo/pin/tag/workspace,
 stable client addresses, `focusHistoryID`, active-window/client geometry,
 compact JSON for `clients`/`workspaces`/`activeworkspace`/`activewindow`/
-`focushistory`/`workspacestack`/`clientmodel`/`rulematches`/`layoutstate`/
+`focushistory`/`workspacestack`/`focusstate`/`clientmodel`/`rulematches`/`layoutstate`/
 `layouttree`/`monitors`/`devices`/`keymap`/`cursorpos`/`animations`/`decorations`/`render`/`layouts`/`descriptions`/`instances`/`modules`/`shortcuts`/`autostart`/`apps`/`app`/`launch`/`submap`/`splash`/`session`/`rollinglog`/`version`/`systeminfo`/`backend`/`protocol`/`architecture`/`truth`/`configerrors`/`configtrace`/`getoption`/`keyword`/`dispatch`/`reload`/
 `binds`/`layers`,
 focus-cycle/focusmwindow/focuswindow/focuscurrentorlast/focusurgentorlast/markurgent/swap/focusmaster/swapwithmaster/swapmwindow/togglesplit/layoutmsg layout plus split/master ratio/nmaster/resizeactive/submap actions, idempotent client-state dispatch, per-workspace layout state, monocle deck rendered diagnostics, a `bar no` default so Waybar/status-bar work remains future and opt-in, workspace stack diagnostics, directional movefocus/swapwindow/movewindow, rank-based active-workspace focus/swap dispatch, dynamic workspace next/empty plus `r/m/e` prefixed targets and `focusworkspaceoncurrentmonitor` VM alias, silent move-to-workspace dispatch, active F9/F10/F11 submaps,
@@ -316,7 +319,12 @@ sticky reset diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.96.0` adds runtime truth taxonomy diagnostics to
+the launcher. Version `0.97.0` adds focus-state diagnostics to
+`desktop focus-state`, `desktop hyprctl focusstate`, JSON `focusstate`, and
+generated package metadata so activewindow, master, stack, ratios, client flags,
+and `lastDispatch` can be checked together in the VM without enabling
+floating/manual drag or claiming real Hyprland IPC. Version `0.96.0` adds
+runtime truth taxonomy diagnostics to
 `desktop truth`, `desktop hyprctl truth`, JSON `truth`, and generated package
 metadata so implemented, VM-ready, simulated facade, prepared, not
 implemented, and not-hardware-proven state can be checked in the VM without

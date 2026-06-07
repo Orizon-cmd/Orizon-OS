@@ -506,10 +506,12 @@ static const char *desktop_state_config =
     "rescue-command desktop rescue\n"
     "client-model-command desktop client-model\n"
     "workspace-stack-command desktop workspace-stack\n"
+    "focus-state-command desktop focus-state\n"
     "rule-matches-command desktop rule-matches\n"
     "rule-spawn-apply tile/fullscreen/pseudo/pin/tag/workspace\n"
     "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
     "hyprctl-workspacestack-command desktop hyprctl workspacestack\n"
+    "hyprctl-focusstate-command desktop hyprctl focusstate\n"
     "hyprctl-rulematches-command desktop hyprctl rulematches\n"
     "manual-window-drag no\n";
 
@@ -3285,10 +3287,12 @@ static int desktop_write_session_state(const char *desired,
            "config-trace-command desktop config trace\n"
            "client-model-command desktop client-model\n"
            "workspace-stack-command desktop workspace-stack\n"
+           "focus-state-command desktop focus-state\n"
            "rule-matches-command desktop rule-matches\n"
            "rule-spawn-apply tile/fullscreen/pseudo/pin/tag/workspace\n"
            "hyprctl-clientmodel-command desktop hyprctl clientmodel\n"
            "hyprctl-workspacestack-command desktop hyprctl workspacestack\n"
+           "hyprctl-focusstate-command desktop hyprctl focusstate\n"
            "hyprctl-rulematches-command desktop hyprctl rulematches\n"
            "settings-doctor-command desktop settings doctor\n"
            "state-path " ORIZON_DESKTOP_STATE_PATH "\n"
@@ -5667,9 +5671,9 @@ void orizon_desktop_format_session(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "manager: desktop start|stop|restart|reload|recover|rescue | desktop state\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
+                 "hyprctl: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload\n");
   desktop_append(out, out_size, &used,
-                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/architecture/truth/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
+                 "hyprctl-json: -j supports version/systeminfo/backend/protocol/architecture/truth/clients/workspaces/activeworkspace/activewindow/focushistory/workspacestack/focusstate/clientmodel/rulematches/layoutstate/layouttree/monitors/devices/keymap/cursorpos/animations/decorations/render/layouts/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/splash/session/rollinglog/configerrors/configtrace/getoption/keyword/dispatch/reload/binds/layers as VM-safe diagnostics/actions\n");
   desktop_append(out, out_size, &used,
                  "launcher: desktop launcher | desktop launch <app>\n");
   desktop_append(out, out_size, &used,

@@ -129,6 +129,7 @@ $commands = @(
   "desktop rollinglog",
   "desktop client-model",
   "desktop workspace-stack",
+  "desktop focus-state",
   "desktop rule-matches",
   "desktop keyword general:gaps_in 9",
   "desktop hyprctl version",
@@ -152,6 +153,7 @@ $commands = @(
   "desktop hyprctl -j activeworkspace",
   "desktop hyprctl -j focushistory",
   "desktop hyprctl -j workspacestack",
+  "desktop hyprctl -j focusstate",
   "desktop hyprctl -j layoutstate",
   "desktop hyprctl -j layouttree",
   "desktop hyprctl -j monitors",
@@ -196,6 +198,7 @@ $commands = @(
   "desktop hyprctl configerrors",
   "desktop hyprctl configtrace",
   "desktop hyprctl rollinglog",
+  "desktop hyprctl focusstate",
   "desktop hyprctl getoption env",
   "desktop hyprctl getoption workspace",
   "desktop hyprctl getoption general:gaps_in",
@@ -749,6 +752,9 @@ run_cmd() {
     "desktop workspace-stack"|"desktop hyprctl workspacestack")
       grep -q "Orizon desktop workspace stack" "`$OUT" && grep -q "master/stack/focus" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop workspace stack"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
+    "desktop focus-state"|"desktop hyprctl focusstate")
+      grep -q "Orizon desktop focus state" "`$OUT" && grep -q "master:" "`$OUT" && grep -q "last-dispatch:" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop focus state"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
     "desktop rule-matches"|"desktop hyprctl rulematches")
       grep -q "Orizon desktop rule matches" "`$OUT" && grep -q "windowrulev2" "`$OUT" && grep -q "safe-actions=tile" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop rule matches"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
@@ -796,6 +802,9 @@ run_cmd() {
       ;;
     "desktop hyprctl -j workspacestack")
       grep -Fq '"workspaces":[' "`$OUT" && grep -Fq '"stack":[' "`$OUT" && grep -q '"pinnedAware":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json workspacestack"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop hyprctl -j focusstate")
+      grep -q '"command":"focusstate"' "`$OUT" && grep -q '"lastDispatch":' "`$OUT" && grep -Fq '"stack":[' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json focusstate"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j layoutstate")
       grep -q '"model":"per-workspace tiling layout state"' "`$OUT" && grep -Fq '"workspaces":[' "`$OUT" && grep -q '"lastDispatch":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json layoutstate"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

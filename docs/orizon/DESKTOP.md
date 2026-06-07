@@ -100,6 +100,7 @@ desktop hyprctl -j workspaces
 desktop hyprctl -j activeworkspace
 desktop hyprctl -j focushistory
 desktop hyprctl -j workspacestack
+desktop hyprctl -j focusstate
 desktop hyprctl -j clientmodel
 desktop hyprctl -j rulematches
 desktop hyprctl -j monitors
@@ -127,6 +128,7 @@ desktop hyprctl rulematches
 desktop hyprctl activeworkspace
 desktop hyprctl focushistory
 desktop hyprctl workspacestack
+desktop hyprctl focusstate
 desktop hyprctl layouts
 desktop hyprctl layoutstate
 desktop hyprctl layouttree
@@ -404,6 +406,11 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.97.0` adds focus-state diagnostics through `desktop focus-state`,
+`desktop hyprctl focusstate`, and `desktop hyprctl -j focusstate`. The report
+combines activewindow, master candidate, stack order, focusHistoryID,
+split/master ratios, fullscreen/pseudo/pinned flags, and `lastDispatch`
+status/error/hint/result while staying read-only and tiling-only.
 Package `0.96.0` adds runtime truth taxonomy diagnostics through
 `desktop truth`, `desktop hyprctl truth`, and `desktop hyprctl -j truth`.
 The output separates implemented, VM-ready, simulated facade, prepared, not
@@ -561,6 +568,10 @@ per-workspace stack view: master candidate, stack/dwindle order, focused client
 for that workspace, local vs pinned scope, focus rank, stable address, and
 geometry. This is a diagnostic over Orizon's framebuffer compositor, not a
 wlroots scene graph.
+`desktop focus-state` and `desktop hyprctl focusstate` focus the same model on
+the active workspace: active client, master, stack, ratios, flags, and the last
+dispatcher result in one VM-safe report. JSON `focusstate` is intended for
+future status tooling and keeps `manualDrag=false`.
 `desktop architecture`, `desktop backend`, and `desktop protocol` expose the
 architecture seam for the future real compositor path. Today they report
 `api: orizon-compositor-api-v0`, `current-backend: framebuffer-vm`,
@@ -650,13 +661,13 @@ floating mode and does not enable mouse dragging; clients still use the active
 tiling layout.
 
 `desktop hyprctl
-[-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
+[-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|monitors|binds|keymap|layers|layouts|layoutstate|layouttree|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption|keyword|dispatch|reload`
 is a small compatibility facade for the commands people expect when coming
 from Hyprland. `desktop hyprctl getoption <key>` reports the current Orizon
 value or runtime hint for a Hyprland-style key, `desktop hyprctl keyword <key>
 <value>` maps to `desktop keyword`, and `desktop hyprctl dispatch <dispatcher>
 [args]` maps to Orizon's dispatcher layer.
-`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
+`desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`
 provides compact JSON for status tooling and future separate bar packages. It
 mirrors Hyprland-style fields such as `address`, `workspace`,
 `fullscreenClient`, `tags`, `windows`, `lastwindow`, `focusHistoryID`, `scope`,

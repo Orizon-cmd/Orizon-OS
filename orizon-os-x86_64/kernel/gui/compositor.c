@@ -8065,7 +8065,7 @@ void gui_desktop_format_client_model(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "\ncommands: desktop clients | desktop workspaces | desktop focus-history | desktop workspace-stack | desktop rule-matches | desktop layout-tree\n"
-             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl workspacestack | desktop hyprctl rulematches | desktop hyprctl clients | desktop hyprctl workspaces\n"
+             "hyprctl: desktop hyprctl clientmodel | desktop hyprctl workspacestack | desktop hyprctl focusstate | desktop hyprctl rulematches | desktop hyprctl clients | desktop hyprctl workspaces\n"
              "limits: VM-safe diagnostic only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
 }
@@ -8805,9 +8805,307 @@ void gui_desktop_format_workspace_stack(char *out, size_t out_size) {
   if (used < out_size) {
     snprintf(out + used, out_size - used,
              "dispatch: desktop dispatch focusmaster | desktop dispatch focusmwindow next|master|rank:n | desktop dispatch focuscurrentorlast | desktop dispatch focusurgentorlast | desktop dispatch swapwithmaster | desktop dispatch swapmwindow next|master|rank:n | desktop dispatch swapwindow l|r|u|d | desktop dispatch movewindow l|r|u|d|master | desktop dispatch togglespecialworkspace [name] | desktop dispatch movetoworkspace <target|special[:name]>[,<window>] | desktop dispatch renameworkspace <target> <name>\n"
-             "hyprctl: desktop hyprctl workspacestack\n"
+             "hyprctl: desktop hyprctl workspacestack | desktop hyprctl focusstate\n"
              "limits: diagnostic stack only; no free-drag, no floating scene graph, no upstream Hyprland/wlroots yet\n");
   }
+}
+
+void gui_desktop_format_focus_state(char *out, size_t out_size) {
+  size_t used = 0;
+  int active_idx;
+  int master_idx;
+  int last_idx;
+  int count;
+  int local_count;
+  int rendered;
+  int active_rank;
+  int master_rank;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_focus_history_compact();
+  active_idx = desktop_focused_client_index();
+  master_idx = desktop_nth_client_on_workspace(desktop_active_workspace, 0);
+  last_idx = desktop_last_focused_index_on_workspace(desktop_active_workspace);
+  count = desktop_client_count_on_workspace(desktop_active_workspace);
+  local_count = desktop_workspace_local_client_count(desktop_active_workspace);
+  rendered = desktop_rendered_client_count_on_workspace(desktop_active_workspace);
+  active_rank = desktop_client_rank_on_workspace(desktop_active_workspace,
+                                                 active_idx);
+  master_rank = desktop_client_rank_on_workspace(desktop_active_workspace,
+                                                 master_idx);
+
+  used += snprintf(
+      out + used, out_size - used,
+      "Orizon desktop focus state\n"
+      "version: " ORIZON_DESKTOP_PACKAGE_VERSION "\n"
+      "model: Hyprland-style tiled focus/master diagnostics, manual-drag=no floating=no\n"
+      "workspace: id=%d name=\"%s\" previous=%d clients=%d local=%d rendered=%d\n"
+      "layout: engine=%s configured=%s split=%s splitRatio=%d masterRatio=%d nmaster=%d submap=%s\n",
+      desktop_active_workspace, desktop_workspace_name(desktop_active_workspace),
+      desktop_previous_workspace, count, local_count, rendered,
+      desktop_layout_engine(), desktop_session.layout,
+      desktop_split_mode_name(), desktop_split_ratio_percent,
+      desktop_master_ratio_percent, desktop_master_count, desktop_submap);
+
+  if (active_idx >= 0) {
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    desktop_client_rect(active_idx, &rx, &ry, &rw, &rh);
+    used += snprintf(
+        out + used, out_size - used,
+        "active: address=0x%x id=%d rank=%d focusHistoryID=%d title=\"%s\" class=%s workspace=%d pinned=%s fullscreen=%d pseudo=%s urgent=%s at=%d,%d size=%dx%d\n",
+        desktop_client_address(&desktop_clients[active_idx]),
+        desktop_clients[active_idx].id, active_rank,
+        desktop_clients[active_idx].focus_history_id,
+        desktop_clients[active_idx].title, desktop_clients[active_idx].app_id,
+        desktop_clients[active_idx].workspace,
+        desktop_clients[active_idx].pinned ? "yes" : "no",
+        desktop_clients[active_idx].fullscreen_state_internal,
+        desktop_clients[active_idx].pseudo ? "yes" : "no",
+        desktop_clients[active_idx].urgent ? "yes" : "no", rx, ry, rw, rh);
+  } else {
+    used += snprintf(out + used, out_size - used,
+                     "active: none error=no-client hint=dispatch exec terminal\n");
+  }
+
+  if (master_idx >= 0) {
+    used += snprintf(
+        out + used, out_size - used,
+        "master: address=0x%x id=%d rank=%d title=\"%s\" focused=%s\n",
+        desktop_client_address(&desktop_clients[master_idx]),
+        desktop_clients[master_idx].id, master_rank,
+        desktop_clients[master_idx].title,
+        master_idx == active_idx ? "yes" : "no");
+  } else {
+    used += snprintf(out + used, out_size - used,
+                     "master: none error=no-client\n");
+  }
+
+  used += snprintf(
+      out + used, out_size - used,
+      "last-focus: address=0x%x id=%d title=\"%s\"\n"
+      "last-dispatch: serial=%llu ok=%s dispatcher=%s args=\"%s\" error=%s hint=\"%s\" result=\"%s\"\n",
+      last_idx >= 0 ? desktop_client_address(&desktop_clients[last_idx]) : 0,
+      last_idx >= 0 ? desktop_clients[last_idx].id : 0,
+      last_idx >= 0 ? desktop_clients[last_idx].title : "none",
+      (unsigned long long)desktop_last_dispatch.serial,
+      desktop_last_dispatch.ok ? "yes" : "no",
+      desktop_last_dispatch.dispatcher, desktop_last_dispatch.args,
+      desktop_last_dispatch.error[0] ? desktop_last_dispatch.error : "none",
+      desktop_last_dispatch.hint, desktop_last_dispatch.result);
+
+  for (int pos = 0; pos < count && used < out_size; pos++) {
+    int idx = desktop_nth_client_on_workspace(desktop_active_workspace, pos);
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    if (idx < 0) {
+      continue;
+    }
+    desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+    used += snprintf(
+        out + used, out_size - used,
+        "stack[%d]: role=%s address=0x%x id=%d rendered=%s focused=%s local=%s pinned=%s special=%s fullscreen=%d pseudo=%s urgent=%s rect=%d,%d %dx%d title=\"%s\"\n",
+        pos, pos == 0 ? "master" : "stack",
+        desktop_client_address(&desktop_clients[idx]), desktop_clients[idx].id,
+        desktop_client_rendered_on_workspace(idx, desktop_active_workspace)
+            ? "yes"
+            : "no",
+        idx == active_idx ? "yes" : "no",
+        desktop_client_local_to_workspace(&desktop_clients[idx],
+                                          desktop_active_workspace)
+            ? "yes"
+            : "no",
+        desktop_clients[idx].pinned ? "yes" : "no",
+        desktop_clients[idx].special ? "yes" : "no",
+        desktop_clients[idx].fullscreen_state_internal,
+        desktop_clients[idx].pseudo ? "yes" : "no",
+        desktop_clients[idx].urgent ? "yes" : "no", rx, ry, rw, rh,
+        desktop_clients[idx].title);
+  }
+
+  if (used < out_size) {
+    snprintf(out + used, out_size - used,
+             "commands: desktop focus-state | desktop hyprctl focusstate | desktop hyprctl -j focusstate\n"
+             "related: desktop activewindow | desktop focus-history | desktop workspace-stack | desktop layout-state | desktop layout-tree\n"
+             "limits: VM framebuffer tiling diagnostics only; no mouse drag, no floating desktop, no upstream Hyprland IPC.\n");
+  }
+}
+
+void gui_desktop_format_focus_state_json(char *out, size_t out_size) {
+  size_t used = 0;
+  char line[512];
+  int active_idx;
+  int master_idx;
+  int last_idx;
+  int count;
+  int local_count;
+  int rendered;
+  int active_rank;
+  int master_rank;
+
+  if (!out || out_size == 0) {
+    return;
+  }
+  out[0] = '\0';
+  desktop_focus_history_compact();
+  active_idx = desktop_focused_client_index();
+  master_idx = desktop_nth_client_on_workspace(desktop_active_workspace, 0);
+  last_idx = desktop_last_focused_index_on_workspace(desktop_active_workspace);
+  count = desktop_client_count_on_workspace(desktop_active_workspace);
+  local_count = desktop_workspace_local_client_count(desktop_active_workspace);
+  rendered = desktop_rendered_client_count_on_workspace(desktop_active_workspace);
+  active_rank = desktop_client_rank_on_workspace(desktop_active_workspace,
+                                                 active_idx);
+  master_rank = desktop_client_rank_on_workspace(desktop_active_workspace,
+                                                 master_idx);
+
+  snprintf(line, sizeof(line),
+           "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
+           "\"command\":\"focusstate\",\"hyprlandStyleFacade\":true,"
+           "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
+           "\"wlroots\":false,\"manualDrag\":false,"
+           "\"floatingDesktop\":false,\"workspace\":{\"id\":%d,\"name\":",
+           desktop_active_workspace);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_workspace_name(desktop_active_workspace));
+  snprintf(line, sizeof(line),
+           ",\"previous\":%d,\"clients\":%d,\"local\":%d,\"rendered\":%d},"
+           "\"layout\":{\"engine\":\"%s\",\"configured\":\"%s\","
+           "\"split\":\"%s\",\"splitRatio\":%d,\"masterRatio\":%d,"
+           "\"nmaster\":%d,\"submap\":",
+           desktop_previous_workspace, count, local_count, rendered,
+           desktop_layout_engine(), desktop_session.layout,
+           desktop_split_mode_name(), desktop_split_ratio_percent,
+           desktop_master_ratio_percent, desktop_master_count);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_submap);
+  desktop_json_append_raw(out, out_size, &used, "},\"active\":");
+  if (active_idx >= 0) {
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    desktop_client_rect(active_idx, &rx, &ry, &rw, &rh);
+    snprintf(line, sizeof(line),
+             "{\"address\":\"0x%08x\",\"id\":%d,\"rank\":%d,"
+             "\"focusHistoryID\":%d,\"workspace\":%d,\"title\":",
+             desktop_client_address(&desktop_clients[active_idx]),
+             desktop_clients[active_idx].id, active_rank,
+             desktop_clients[active_idx].focus_history_id,
+             desktop_clients[active_idx].workspace);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[active_idx].title);
+    desktop_json_append_raw(out, out_size, &used, ",\"class\":");
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[active_idx].app_id);
+    snprintf(line, sizeof(line),
+             ",\"pinned\":%s,\"fullscreen\":%d,\"fullscreenClient\":%d,"
+             "\"pseudo\":%s,\"urgent\":%s,\"rect\":[%d,%d,%d,%d]}",
+             desktop_clients[active_idx].pinned ? "true" : "false",
+             desktop_clients[active_idx].fullscreen_state_internal,
+             desktop_clients[active_idx].fullscreen_state_client,
+             desktop_clients[active_idx].pseudo ? "true" : "false",
+             desktop_clients[active_idx].urgent ? "true" : "false", rx, ry,
+             rw, rh);
+    desktop_json_append_raw(out, out_size, &used, line);
+  } else {
+    desktop_json_append_raw(out, out_size, &used, "null");
+  }
+  desktop_json_append_raw(out, out_size, &used, ",\"master\":");
+  if (master_idx >= 0) {
+    snprintf(line, sizeof(line),
+             "{\"address\":\"0x%08x\",\"id\":%d,\"rank\":%d,"
+             "\"focused\":%s,\"title\":",
+             desktop_client_address(&desktop_clients[master_idx]),
+             desktop_clients[master_idx].id, master_rank,
+             master_idx == active_idx ? "true" : "false");
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[master_idx].title);
+    desktop_json_append_raw(out, out_size, &used, "}");
+  } else {
+    desktop_json_append_raw(out, out_size, &used, "null");
+  }
+  desktop_json_append_raw(out, out_size, &used, ",\"lastFocus\":");
+  if (last_idx >= 0) {
+    snprintf(line, sizeof(line),
+             "{\"address\":\"0x%08x\",\"id\":%d,\"title\":",
+             desktop_client_address(&desktop_clients[last_idx]),
+             desktop_clients[last_idx].id);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[last_idx].title);
+    desktop_json_append_raw(out, out_size, &used, "}");
+  } else {
+    desktop_json_append_raw(out, out_size, &used, "null");
+  }
+  desktop_json_append_raw(out, out_size, &used, ",\"lastDispatch\":");
+  desktop_json_append_last_dispatch(out, out_size, &used);
+  desktop_json_append_raw(out, out_size, &used, ",\"stack\":[");
+  for (int pos = 0; pos < count; pos++) {
+    int idx = desktop_nth_client_on_workspace(desktop_active_workspace, pos);
+    int rx;
+    int ry;
+    int rw;
+    int rh;
+    if (idx < 0) {
+      continue;
+    }
+    if (pos > 0) {
+      desktop_json_append_raw(out, out_size, &used, ",");
+    }
+    desktop_client_rect(idx, &rx, &ry, &rw, &rh);
+    snprintf(line, sizeof(line),
+             "{\"rank\":%d,\"role\":\"%s\",\"address\":\"0x%08x\","
+             "\"id\":%d,\"rendered\":%s,\"focused\":%s,\"local\":%s,"
+             "\"pinned\":%s,\"special\":%s,\"fullscreen\":%d,"
+             "\"pseudo\":%s,\"urgent\":%s,\"rect\":[%d,%d,%d,%d],"
+             "\"focusHistoryID\":%d,\"title\":",
+             pos, pos == 0 ? "master" : "stack",
+             desktop_client_address(&desktop_clients[idx]),
+             desktop_clients[idx].id,
+             desktop_client_rendered_on_workspace(idx, desktop_active_workspace)
+                 ? "true"
+                 : "false",
+             idx == active_idx ? "true" : "false",
+             desktop_client_local_to_workspace(&desktop_clients[idx],
+                                               desktop_active_workspace)
+                 ? "true"
+                 : "false",
+             desktop_clients[idx].pinned ? "true" : "false",
+             desktop_clients[idx].special ? "true" : "false",
+             desktop_clients[idx].fullscreen_state_internal,
+             desktop_clients[idx].pseudo ? "true" : "false",
+             desktop_clients[idx].urgent ? "true" : "false", rx, ry, rw, rh,
+             desktop_clients[idx].focus_history_id);
+    desktop_json_append_raw(out, out_size, &used, line);
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_clients[idx].title);
+    desktop_json_append_raw(out, out_size, &used, "}");
+  }
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "],\"commands\":{\"text\":\"desktop focus-state\","
+      "\"hyprctl\":\"desktop hyprctl focusstate\","
+      "\"json\":\"desktop hyprctl -j focusstate\","
+      "\"related\":[\"desktop activewindow\",\"desktop focus-history\","
+      "\"desktop workspace-stack\",\"desktop layout-state\","
+      "\"desktop layout-tree\"]},"
+      "\"diagnostics\":[\"activewindow\",\"master\",\"stack\","
+      "\"focusHistoryID\",\"lastDispatch\",\"splitRatio\","
+      "\"masterRatio\",\"fullscreen\",\"pseudo\",\"pinned\"],"
+      "\"limits\":[\"VM framebuffer tiling diagnostics only\","
+      "\"no manual window drag\",\"no floating desktop\","
+      "\"no upstream Hyprland IPC socket\"]}\n");
 }
 
 void gui_desktop_format_monitors(char *out, size_t out_size) {
@@ -9798,9 +10096,9 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "Orizon desktop hyprctl descriptions\n"
            "commands: version, systeminfo, clients, clientmodel, rulematches, workspaces, activeworkspace, activewindow\n"
            "commands: backend, protocol, architecture, truth, monitors, binds, layers, layouts, layoutstate, layouttree, animations, decorations, render, devices\n"
-           "commands: cursorpos, splash, session, configerrors, configtrace, rollinglog, instances, modules, shortcuts, autostart, apps, app <id>, launch <app>, submap, focushistory, workspacestack\n"
+           "commands: cursorpos, splash, session, configerrors, configtrace, rollinglog, instances, modules, shortcuts, autostart, apps, app <id>, launch <app>, submap, focushistory, workspacestack, focusstate\n"
            "commands: getoption <key>, keyword <key> <value>, dispatch <dispatcher> [args], reload\n"
-           "json: desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers\n"
+           "json: desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers\n"
            "dispatchers: exec, killactive, workspace, focusworkspaceoncurrentmonitor, focusmonitor, movecurrentworkspacetomonitor, moveworkspacetomonitor, togglespecialworkspace, renameworkspace, movetoworkspace, movetoworkspacesilent, movefocus, focusmwindow, focuswindow, focuscurrentorlast, focusurgentorlast, markurgent, tagwindow, cyclenext, swapnext, swapwindow, swapmwindow, movewindow\n"
            "dispatchers: focusmaster, swapwithmaster, fullscreen [on|off|toggle], fullscreenstate <internal 0-3|-1> <client 0-3|-1>, pseudo|pseudotile [on|off|toggle], pin [on|off|toggle], togglesplit, layoutmsg, resizeactive, submap\n"
            "special: togglespecialworkspace [name]; movetoworkspace special[:name] keeps tiling and never enables floating/manual drag\n"
@@ -9811,6 +10109,7 @@ void gui_desktop_format_descriptions(char *out, size_t out_size) {
            "layoutmsg: splitratio <10-90|+/-n|reset>, masterratio|mfact <10-90|+/-n|reset>, nmaster <1-8|+/-n|reset>, addmaster, removemaster, focusmaster, swapwithmaster, movewindowmaster\n"
            "monocle: renders only active tiled client; other clients remain in monocle-deck diagnostics\n"
            "fullscreenstate: internal controls compositor layout; fullscreenClient records state exposed to future clients\n"
+           "focusstate: combines activewindow, master, stack, focusHistoryID, ratios and lastDispatch diagnostics\n"
            "urgent: markurgent is a VM diagnostic to exercise focusurgentorlast before real client urgency exists\n"
            "truth: desktop truth and desktop hyprctl -j truth separate implemented, VM-ready, simulated facade, prepared, not implemented and not hardware-proven state\n");
 }
@@ -9831,6 +10130,7 @@ void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
       "\"jsonCommands\":[\"version\",\"systeminfo\",\"backend\","
       "\"protocol\",\"architecture\",\"truth\",\"clients\",\"workspaces\",\"activeworkspace\","
       "\"activewindow\",\"focushistory\",\"workspacestack\","
+      "\"focusstate\","
       "\"clientmodel\",\"rulematches\",\"layoutstate\",\"layouttree\","
       "\"monitors\",\"devices\",\"keymap\",\"cursorpos\",\"animations\","
       "\"decorations\",\"render\",\"layouts\",\"descriptions\","
@@ -9854,6 +10154,8 @@ void gui_desktop_format_descriptions_json(char *out, size_t out_size) {
       "\"workspacelayouts\"],\"layouttree\":[\"layout-tree\",\"tree\"],"
       "\"backend\":[\"backend-info\"],\"protocol\":[\"protocols\"],"
       "\"architecture\":[\"arch\"],\"truth\":[\"taxonomy\",\"limits\"],"
+      "\"focusstate\":[\"focus-state\",\"focusdiagnostics\","
+      "\"focus-diagnostics\"],"
       "\"rulematches\":[\"rule-matches\",\"windowrules\","
       "\"window-rules\"]},"
       "\"policies\":{\"tilingOnly\":true,\"floatingDesktop\":false,"
@@ -10596,6 +10898,7 @@ void gui_desktop_format_hyprctl_version_json(char *out, size_t out_size) {
            "\"jsonCommands\":[\"version\",\"systeminfo\",\"backend\","
            "\"protocol\",\"architecture\",\"clients\",\"workspaces\",\"activeworkspace\","
            "\"activewindow\",\"focushistory\",\"workspacestack\","
+           "\"focusstate\","
            "\"clientmodel\",\"rulematches\",\"layoutstate\","
            "\"layouttree\",\"monitors\",\"devices\",\"keymap\","
            "\"cursorpos\",\"animations\",\"decorations\",\"render\","

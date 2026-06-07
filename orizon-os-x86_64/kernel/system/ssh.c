@@ -3368,6 +3368,7 @@ static void ssh_shell_print_desktop(const char *args) {
              "  desktop rollinglog      show desktop event log as hyprctl rollinglog\r\n"
              "  desktop focus-history   show Hyprland-style focusHistoryID order\r\n"
              "  desktop workspace-stack show master/stack/focus order per workspace\r\n"
+             "  desktop focus-state     show active focus/master/stack diagnostics\r\n"
              "  desktop client-model    show client/workspace/focus state graph\r\n"
              "  desktop rule-matches    show windowrulev2 matches against tiled clients\r\n"
              "  desktop modules         show prepared modular desktop packages\r\n"
@@ -3647,6 +3648,10 @@ static void ssh_shell_print_desktop(const char *args) {
              ssh_shell_command_is(sub, "workspacestack") ||
              ssh_shell_command_is(sub, "stack")) {
     gui_desktop_format_workspace_stack(out, sizeof(out));
+  } else if (ssh_shell_command_is(sub, "focus-state") ||
+             ssh_shell_command_is(sub, "focusstate") ||
+             ssh_shell_command_is(sub, "focus-diagnostics")) {
+    gui_desktop_format_focus_state(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "apps") ||
              ssh_shell_command_is(sub, "launcher apps")) {
     const char *app = ssh_shell_command_is(sub, "apps")
@@ -3716,8 +3721,8 @@ static void ssh_shell_print_desktop(const char *args) {
     }
     if (*hypr == '\0' || ssh_shell_command_is(hypr, "help")) {
       snprintf(out, sizeof(out),
-               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
-               "json: -j supports version, systeminfo, backend, protocol, architecture, truth, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
+               "usage: desktop hyprctl [-j] version|systeminfo|backend|protocol|architecture|truth|clients|clientmodel|rulematches|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|layoutstate|layouttree|monitors|binds|keymap|layers|layouts|animations|decorations|render|descriptions|instances|modules|shortcuts|autostart|apps|app <id>|launch <app>|submap|devices|cursorpos|splash|session|configerrors|configtrace|rollinglog|getoption <k>|keyword <k> <v>|dispatch <d> [args]|reload\r\n"
+               "json: -j supports version, systeminfo, backend, protocol, architecture, truth, clients, workspaces, activeworkspace, activewindow, focushistory, workspacestack, focusstate, clientmodel, rulematches, layoutstate, layouttree, monitors, devices, keymap, cursorpos, animations, decorations, render, layouts, descriptions, instances, modules, shortcuts, autostart, apps, app, launch, submap, splash, session, rollinglog, configerrors, configtrace, getoption, keyword, dispatch, reload, binds and layers as VM-safe Hyprland-style diagnostics/actions\r\n");
     } else if (ssh_shell_command_is(hypr, "version")) {
       if (json) {
         gui_desktop_format_hyprctl_version_json(out, sizeof(out));
@@ -3815,6 +3820,15 @@ static void ssh_shell_print_desktop(const char *args) {
         gui_desktop_format_workspace_stack_json(out, sizeof(out));
       } else {
         gui_desktop_format_workspace_stack(out, sizeof(out));
+      }
+    } else if (ssh_shell_command_is(hypr, "focusstate") ||
+               ssh_shell_command_is(hypr, "focus-state") ||
+               ssh_shell_command_is(hypr, "focusdiagnostics") ||
+               ssh_shell_command_is(hypr, "focus-diagnostics")) {
+      if (json) {
+        gui_desktop_format_focus_state_json(out, sizeof(out));
+      } else {
+        gui_desktop_format_focus_state(out, sizeof(out));
       }
     } else if (ssh_shell_command_is(hypr, "monitors")) {
       if (json) {

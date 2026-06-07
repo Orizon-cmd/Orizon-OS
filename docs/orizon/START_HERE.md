@@ -53,7 +53,7 @@ design note.
   with F1 exec terminal, F2 killactive, F3 launcher, F4 fullscreen, F5 pseudo,
   F6 focus cycle, F7/F8 workspace navigation, `desktop profiles`, `desktop
   preset`, `desktop focus`, `desktop binds/rules/monitors/runtime/layers`,
-  `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`,
+  `desktop version/devices/systeminfo/layouts/layout-state/layout-tree/animations/decorations/render/configerrors/config-trace/rollinglog/focus-history/workspace-stack/focus-state/client-model/rule-matches`,
   `desktop keyword`, `desktop dispatch` including focusmwindow/swapmwindow/focusmaster/swapwithmaster
   plus split/master ratio, `nmaster`, layout reset/preselect recovery, monocle deck rendered diagnostics, and per-workspace layout messages, directional movefocus/swapwindow,
   direct focuswindow targeting,
@@ -66,11 +66,18 @@ design note.
   free-drag window moving,
   `desktop start/stop/restart/reload/recover/rescue/state` session-manager commands,
   v2 state health/counters,
-  `desktop hyprctl [-j] version/systeminfo/backend/protocol/architecture/truth/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, compact JSON diagnostics/actions for `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, `desktop architecture`, `desktop backend`, `desktop protocol`, `desktop truth`, `desktop autostart`,
-  `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
+  `desktop hyprctl [-j] version/systeminfo/backend/protocol/architecture/truth/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/focusstate/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, compact JSON diagnostics/actions for `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|truth|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|focusstate|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, `desktop architecture`, `desktop backend`, `desktop protocol`, `desktop truth`, `desktop autostart`,
+  `desktop windows/clients/activewindow/workspace-stack/focus-state/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.96.0`: `desktop truth`,
+- Desktop release boundary for current package `0.97.0`: `desktop focus-state`,
+  `desktop hyprctl focusstate`, and `desktop hyprctl -j focusstate` expose one
+  VM-ready read-only focus/master/stack report with activewindow,
+  `focusHistoryID`, split/master ratios, fullscreen/pseudo/pinned flags, and
+  `lastDispatch` status/error/hint/result. This remains the Orizon framebuffer
+  facade, not upstream Hyprland IPC, Wayland/wlroots, Waybar, floating/manual
+  drag, or physical hardware validation.
+- Desktop release boundary for package `0.96.0`: `desktop truth`,
   `desktop hyprctl truth`, and `desktop hyprctl -j truth` expose the runtime
   truth taxonomy: implemented, VM-ready, simulated facade, prepared, not
   implemented, and not hardware-proven. This keeps VM/ZimaOS diagnostics honest
