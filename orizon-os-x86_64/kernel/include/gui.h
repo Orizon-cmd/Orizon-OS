@@ -67,6 +67,24 @@ void font_draw_string(int x, int y, const char *str, color_t color);
 int font_string_width(const char *str);
 
 /* ========== GUI Functions ========== */
+typedef struct {
+  int clients;
+  int mapped;
+  int hidden;
+  int workspace;
+  int active_workspace;
+  int focused;
+  int focused_client_id;
+  uint32_t focused_address;
+  int pinned;
+  int fullscreen;
+  int pseudo;
+  int urgent;
+  int overlay_visible;
+  char focused_title[48];
+  char focused_app_id[32];
+} orizon_desktop_app_runtime_t;
+
 void gui_init(void);
 void gui_compose(void);
 void gui_main_loop(void);
@@ -87,6 +105,8 @@ int gui_desktop_switch_workspace(int workspace);
 int gui_desktop_move_terminal_to_workspace(int workspace);
 int gui_desktop_spawn_terminal_client(void);
 int gui_desktop_spawn_app_client(const char *app, char *out, size_t out_size);
+int gui_desktop_get_app_runtime(const char *app_id,
+                                orizon_desktop_app_runtime_t *runtime);
 int gui_desktop_close_active_client(void);
 int gui_desktop_focus_next_client(void);
 int gui_desktop_focus_prev_client(void);

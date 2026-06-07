@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added desktop package version `0.91.0` with runtime diagnostics for the
+  native app catalog. `desktop apps`, `desktop app <id>`, and
+  `desktop hyprctl -j apps|app <id>|launch <app>` now expose read-only
+  compositor state per app: tiled client count, mapped/hidden counts,
+  workspace/focus state, focused client address/title in text output, and
+  launcher overlay visibility. The settings/logs/packages/update framebuffer
+  tiles also show a runtime row. This is VM/ZimaOS-ready only and remains
+  tiling-first: no Waybar activation, taskbar/start menu, floating desktop,
+  free manual window drag, real Wayland/wlroots/upstream Hyprland, or physical
+  hardware validation is claimed.
 - Added desktop package version `0.90.0` with an automatic VM-safe
   `desktop recover` fallback during installed/live init. `system init` still
   starts with `desktop-restore` reload, but if reload reports WARN it now tries

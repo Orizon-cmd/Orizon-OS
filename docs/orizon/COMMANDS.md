@@ -412,6 +412,9 @@ and recovery commands. `desktop rescue` is read-only and prints the safe
 checklist before `desktop recover` repairs/reapplies anything. Since package
 `0.90.0`, `system init` also records `reload-result`, `fallback-action`, and
 `fallback-result`, and attempts `desktop recover` before recommending rescue.
+Since package `0.91.0`, native app diagnostics also expose read-only compositor
+runtime per app: client counts, mapped/hidden state, focus/workspace state,
+focused client address/title in text output, and launcher overlay visibility.
 Since package `0.89.0`, `system init`, `system services`, and `system logs`
 expose `desktop-restore` boot/session reload diagnostics for VM/ZimaOS recovery.
 Since package
@@ -537,12 +540,13 @@ single-monitor VM `m/e +/-n`/`m/e ~n` open-workspace selectors, and
 `togglespecialworkspace [name]`,
 `desktop profiles` lists available symbolic profiles, `desktop autostart` controls startup apps,
 `desktop apps` lists compositor-managed app entries, `desktop app <id>` shows
-class/module/surface plus data-source/runbook/limit details, and `desktop launch
-terminal|settings|logs|packages|update|launcher` opens the first native apps as
-tiled clients or toggles the launcher overlay. The settings/logs/packages/update
-tiles render practical source and command hints in the framebuffer compositor.
+class/module/surface plus data-source/runbook/limit/runtime details, and
+`desktop launch terminal|settings|logs|packages|update|launcher` opens the first
+native apps as tiled clients or toggles the launcher overlay. The
+settings/logs/packages/update tiles render practical source, command, and
+runtime hints in the framebuffer compositor.
 `desktop hyprctl -j apps`, `desktop hyprctl -j app <id>`, and `desktop hyprctl
--j launch <app>` expose the same VM-ready app model and launch result as JSON,
+-j launch <app>` expose the same VM-ready app model, runtime object, and launch result as JSON,
 with launcher overlay boundaries and no taskbar, start menu, floating desktop,
 manual drag, Wayland/wlroots, or hardware validation claim.
 `desktop hyprctl -j autostart` and `desktop hyprctl -j autostart terminal

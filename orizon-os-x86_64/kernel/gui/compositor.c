@@ -1873,6 +1873,50 @@ static uint32_t desktop_client_address(const desktop_client_t *client) {
   return DESKTOP_CLIENT_ADDRESS_BASE + ((uint32_t)client->id * 0x100u);
 }
 
+int gui_desktop_get_app_runtime(const char *app_id,
+                                orizon_desktop_app_runtime_t *runtime) {
+  if (!runtime) {
+    return -1;
+  }
+  memset(runtime, 0, sizeof(*runtime));
+  runtime->workspace = 0;
+  runtime->active_workspace = desktop_active_workspace;
+  if (!app_id || !app_id[0]) {
+    return -1;
+  }
+  if (strcmp(app_id, "orizon-launcher") == 0 ||
+      strcmp(app_id, "launcher") == 0) {
+    runtime->overlay_visible = desktop_launcher_visible ? 1 : 0;
+  }
+  for (int i = 0; i < DESKTOP_MAX_CLIENTS; i++) {
+    const desktop_client_t *client = &desktop_clients[i];
+    if (!client->visible || strcmp(client->app_id, app_id) != 0) {
+      continue;
+    }
+    runtime->clients++;
+    runtime->mapped += client->mapped ? 1 : 0;
+    runtime->hidden += client->hidden ? 1 : 0;
+    runtime->pinned += client->pinned ? 1 : 0;
+    runtime->fullscreen += client->fullscreen ? 1 : 0;
+    runtime->pseudo += client->pseudo ? 1 : 0;
+    runtime->urgent += client->urgent ? 1 : 0;
+    if (runtime->workspace == 0 ||
+        client->workspace == desktop_active_workspace) {
+      runtime->workspace = client->workspace;
+    }
+    if (client->id == desktop_focused_client_id) {
+      runtime->focused = 1;
+      runtime->focused_client_id = client->id;
+      runtime->focused_address = desktop_client_address(client);
+      snprintf(runtime->focused_title, sizeof(runtime->focused_title), "%s",
+               client->title);
+      snprintf(runtime->focused_app_id, sizeof(runtime->focused_app_id), "%s",
+               client->app_id);
+    }
+  }
+  return runtime->clients;
+}
+
 static void desktop_workspace_record_focus_index(int idx) {
   int workspace;
 
@@ -3979,15 +4023,22 @@ static void draw_desktop_native_app(const desktop_client_t *client, int x,
   int line = y + 8;
   color_t accent = desktop_theme_accent();
   char info[160];
+  orizon_desktop_app_runtime_t runtime;
 
   if (!client || width < 48 || height < 48) {
     return;
   }
+  gui_desktop_get_app_runtime(client->app_id, &runtime);
   draw_desktop_app_chip(x, line, "tiled native client", accent);
   line += 34;
   draw_desktop_app_line(
       x, &line, "surface=tiled-client floating=no manual-drag=no",
       COLOR_TEXT_MUTED);
+  snprintf(info, sizeof(info),
+           "runtime clients=%d mapped=%d focused=%s ws=%d active-ws=%d",
+           runtime.clients, runtime.mapped, runtime.focused ? "yes" : "no",
+           runtime.workspace, runtime.active_workspace);
+  draw_desktop_app_line(x, &line, info, COLOR_TEXT_SECONDARY);
   if (strcmp(client->app_id, "orizon-settings") == 0) {
     draw_desktop_app_line(x, &line, "Settings", COLOR_TEXT_PRIMARY);
     snprintf(info, sizeof(info),

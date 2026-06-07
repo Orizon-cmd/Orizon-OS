@@ -65,7 +65,7 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.90.0`: `desktop architecture`,
+- Desktop release boundary for current package `0.91.0`: `desktop architecture`,
   `desktop backend`, and `desktop protocol` expose
   `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
   `/system/desktop-protocol.conf`. The implemented VM-ready pieces are the
@@ -75,6 +75,10 @@ design note.
   prepared-only; there is still no upstream Hyprland, Wayland/wlroots server,
   external Wayland client protocol, XWayland, layer-shell, Waybar, taskbar/start
   menu, free manual window drag, or physical hardware validation.
+- `0.91.0` adds VM-ready native app runtime diagnostics: `desktop apps`,
+  `desktop app <id>`, and JSON `apps|app|launch` expose client count,
+  mapped/hidden state, focus/workspace state, focused client address/title in
+  text output, and launcher overlay visibility.
 - `0.90.0` adds an init-time recover fallback: `system init` records
   `reload-result`, `fallback-action`, `fallback-result`, and
   `recommended-action`, trying `desktop recover` before recommending rescue.

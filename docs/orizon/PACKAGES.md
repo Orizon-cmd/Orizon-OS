@@ -278,7 +278,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.90.0` because it includes policy/config files, the persisted session
+`0.91.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -307,11 +307,14 @@ Hyprland-style tiled special workspace dispatchers `togglespecialworkspace
 VM-safe tiled-order `movewindow <l|r|u|d|next|prev|master>` dispatchers,
 native tiling clients for settings/logs/packages/update, the app catalog/detail
 commands `desktop apps` and `desktop app <id>` with native app data-source,
-runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
+runbook, VM-ready, limit, and runtime diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.90.0` adds reload-to-recover fallback diagnostics to
+the launcher. Version `0.91.0` adds read-only app runtime diagnostics to
+`desktop apps`, `desktop app <id>`, and JSON `apps|app|launch`: client counts,
+mapped/hidden state, focus/workspace state, focused client address/title in text
+output, and launcher overlay visibility. Version `0.90.0` adds reload-to-recover fallback diagnostics to
 `system init`: `reload-result`, `fallback-action`, `fallback-result`, and
 `recommended-action` distinguish recovered WARN states from rescue-required
 states. Version `0.89.0` adds boot/session `desktop-restore` diagnostics

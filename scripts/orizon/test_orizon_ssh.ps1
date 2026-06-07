@@ -644,10 +644,10 @@ run_cmd() {
       grep -q "Orizon desktop pointer" "`$OUT" && grep -q "usb-hid:" "`$OUT" || { echo "missing desktop pointer"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop apps")
-      grep -q "Orizon desktop apps" "`$OUT" && grep -q "terminal" "`$OUT" || { echo "missing desktop apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop apps" "`$OUT" && grep -q "terminal" "`$OUT" && grep -q "runtime: clients/focus/workspace" "`$OUT" || { echo "missing desktop apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop app settings")
-      grep -q "Orizon desktop app" "`$OUT" && grep -q "class: orizon-settings" "`$OUT" || { echo "missing desktop app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop app" "`$OUT" && grep -q "class: orizon-settings" "`$OUT" && grep -q "runtime-clients:" "`$OUT" || { echo "missing desktop app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop apps launcher")
       grep -q "Orizon desktop app" "`$OUT" && grep -q "surface: overlay" "`$OUT" || { echo "missing desktop launcher detail"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -827,13 +827,13 @@ run_cmd() {
       grep -q '"command":"autostart"' "`$OUT" && grep -q '"requestedValue":"on"' "`$OUT" && grep -q '"terminal":true' "`$OUT" || { echo "missing hyprctl json autostart on"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j apps")
-      grep -q '"command":"apps"' "`$OUT" && grep -q '"tilingClients":5' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"apps"' "`$OUT" && grep -q '"tilingClients":5' "`$OUT" && grep -q '"runtime":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j app settings")
-      grep -q '"command":"app"' "`$OUT" && grep -q '"class":"orizon-settings"' "`$OUT" && grep -q '"tiledClient":true' "`$OUT" || { echo "missing hyprctl json app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"app"' "`$OUT" && grep -q '"class":"orizon-settings"' "`$OUT" && grep -q '"tiledClient":true' "`$OUT" && grep -q '"runtime":{' "`$OUT" || { echo "missing hyprctl json app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j app launcher")
-      grep -q '"command":"app"' "`$OUT" && grep -q '"overlay":true' "`$OUT" && grep -q '"taskbar":false' "`$OUT" || { echo "missing hyprctl json app launcher"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"app"' "`$OUT" && grep -q '"overlay":true' "`$OUT" && grep -q '"overlayVisible":' "`$OUT" && grep -q '"taskbar":false' "`$OUT" || { echo "missing hyprctl json app launcher"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j launch settings")
       grep -q '"command":"launch"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json launch settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

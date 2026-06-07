@@ -389,6 +389,11 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.91.0` adds read-only native app runtime diagnostics for VM/ZimaOS:
+`desktop apps`, `desktop app <id>`, and `desktop hyprctl -j apps|app` show
+client counts, mapped/hidden state, focus/workspace state, focused client
+address/title in text output, and launcher overlay visibility without enabling
+floating windows, manual drag, Waybar, or a taskbar/start menu.
 Package `0.89.0` also connects the installed/live init path to the session
 manager: `system init` performs an idempotent `desktop-restore` reload, records
 it in `/logs/init.log` and `/logs/service.log`, and the framebuffer compositor
@@ -449,7 +454,10 @@ launcher, and `Q` kills the active client. This is keyboard dispatcher control,
 not free window dragging.
 
 `desktop apps` lists the compositor-managed app catalog and `desktop app <id>`
-shows each app's class, module, backend, surface and launch command.
+shows each app's class, module, backend, surface, launch command, and read-only
+runtime state. Runtime diagnostics include tiled client count, mapped/hidden
+count, active/focused workspace, focused client address/title, and launcher
+overlay visibility; they are VM/ZimaOS diagnostics, not hardware validation.
 `desktop launcher show` opens the launcher overlay, `F3` toggles it locally,
 and `desktop launch terminal|settings|logs|packages|update|launcher` opens the
 first native Orizon apps or toggles the launcher overlay. They are
@@ -614,14 +622,14 @@ without changing the session. JSON `getoption` is read-only, while JSON
 `desktop apps` and `desktop app <id>` now form the first native-app control
 surface for the desktop. The terminal/settings/logs/packages/update entries
 declare their compositor class, module, data source, runbook, and remaining
-limits; settings/logs/packages/update also render practical source/command
-hints inside their framebuffer tiles. They are VM-ready tiling clients, not
+limits plus read-only runtime state; settings/logs/packages/update also render
+practical source/command/runtime hints inside their framebuffer tiles. They are VM-ready tiling clients, not
 floating windows, not a Windows-style shell, and not Wayland/wlroots native
 applications yet. The launcher remains a transient overlay only; Waybar remains
 a future separate package.
 `desktop hyprctl -j apps`, `desktop hyprctl -j app <id>`, and
 `desktop hyprctl -j launch <app>` expose the same VM-ready app catalog,
-detail, and launch result as structured diagnostics without enabling a bar,
+detail, runtime object, and launch result as structured diagnostics without enabling a bar,
 start menu, floating windows, manual drag, Wayland, wlroots, or hardware
 validation.
 `desktop hyprctl -j autostart` and

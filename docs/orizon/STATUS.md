@@ -76,7 +76,8 @@ work.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.90.0` reload-to-recover fallback
+  diagnostics for `source` files, plus `0.91.0` native app runtime diagnostics
+  for client/focus/workspace/overlay state, plus `0.90.0` reload-to-recover fallback
   diagnostics for `system init`, plus `0.89.0` boot/session restore
   diagnostics through `system init` and `desktop-restore`, plus `0.88.0`
   session audit diagnostics with

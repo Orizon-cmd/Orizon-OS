@@ -286,12 +286,14 @@ detaille classe/module/surface, source de donnees, runbook et limites, et
 `desktop launch terminal|settings|logs|packages|update|launcher` ouvre les
 premieres apps natives comme clients tiles geres par le compositor. Les panels
 framebuffer settings/logs/packages/update affichent maintenant leurs sources et
-commandes utiles dans le tile actif; le launcher est seulement un overlay de
-dispatch: il n'ajoute ni barre type Windows, ni menu demarrer permanent, ni
-fenetres flottantes.
+commandes utiles dans le tile actif. Depuis `0.91.0`, ces apps exposent aussi
+des diagnostics runtime read-only par app: clients ouverts/mappes/caches,
+workspace, focus, adresse du client focalise et visibilite overlay du launcher.
+Le launcher est seulement un overlay de dispatch: il n'ajoute ni barre type
+Windows, ni menu demarrer permanent, ni fenetres flottantes.
 `desktop hyprctl -j apps|app <id>|launch <app>` expose les memes apps en JSON
-VM-ready avec resultats de lancement, `manualDrag=false`, `taskbar=false`,
-`startMenu=false` et `waybarActive=false`.
+VM-ready avec resultats de lancement, objet `runtime`, `manualDrag=false`,
+`taskbar=false`, `startMenu=false` et `waybarActive=false`.
 `desktop hyprctl -j autostart [terminal on|off|toggle]` expose et pilote
 l'autostart terminal persistant avec runtime `exec-once` VM-ready, sans ajouter
 de barre, menu demarrer, Waybar actif ou drag manuel.

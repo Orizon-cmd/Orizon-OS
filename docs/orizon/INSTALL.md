@@ -139,9 +139,9 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.90.0` installs explicit source/bind diagnostics,
+The desktop package version `0.91.0` installs explicit source/bind diagnostics,
 session audit diagnostics, boot/session `desktop-restore` init diagnostics with
-reload-to-recover fallback,
+reload-to-recover fallback, read-only native app runtime diagnostics,
 and architecture truth maps:
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
@@ -205,6 +205,8 @@ desktop input focus toggle
 desktop apps
 desktop app settings
 desktop apps launcher
+desktop hyprctl -j apps
+desktop hyprctl -j app settings
 desktop launch settings
 desktop launch logs
 desktop launch packages

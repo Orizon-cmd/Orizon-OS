@@ -7,6 +7,7 @@
 
 #include "../include/desktop.h"
 #include "../include/desktop_protocol.h"
+#include "../include/gui.h"
 #include "../include/input_layout.h"
 #include "../include/string.h"
 #include "../include/system_state.h"
@@ -704,6 +705,30 @@ static void desktop_append_app_known_json(char *out, size_t out_size,
   desktop_json_append_raw(out, out_size, used, "]");
 }
 
+static void desktop_append_app_runtime_json(char *out, size_t out_size,
+                                            size_t *used,
+                                            const desktop_app_entry_t *app) {
+  orizon_desktop_app_runtime_t runtime;
+  char line[384];
+
+  if (!app || gui_desktop_get_app_runtime(app->class_name, &runtime) < 0) {
+    desktop_json_append_raw(out, out_size, used, "null");
+    return;
+  }
+  snprintf(line, sizeof(line),
+           "{\"clients\":%d,\"mapped\":%d,\"hidden\":%d,"
+           "\"workspace\":%d,\"activeWorkspace\":%d,\"focused\":%s,"
+           "\"focusedClientId\":%d,\"focusedAddress\":\"0x%08x\","
+           "\"pinned\":%d,\"fullscreen\":%d,\"pseudo\":%d,\"urgent\":%d,"
+           "\"overlayVisible\":%s,\"vmReady\":true}",
+           runtime.clients, runtime.mapped, runtime.hidden, runtime.workspace,
+           runtime.active_workspace, runtime.focused ? "true" : "false",
+           runtime.focused_client_id, runtime.focused_address, runtime.pinned,
+           runtime.fullscreen, runtime.pseudo, runtime.urgent,
+           runtime.overlay_visible ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, line);
+}
+
 static void desktop_append_app_entry_json(char *out, size_t out_size,
                                           size_t *used,
                                           const desktop_app_entry_t *app) {
@@ -752,6 +777,8 @@ static void desktop_append_app_entry_json(char *out, size_t out_size,
   desktop_json_append_raw(
       out, out_size, used,
       desktop_app_is_tiling_client(app) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, used, ",\"runtime\":");
+  desktop_append_app_runtime_json(out, out_size, used, app);
   desktop_json_append_raw(
       out, out_size, used,
       ",\"floating\":false,\"manualDrag\":false,\"taskbar\":false,"
@@ -6499,7 +6526,7 @@ void orizon_desktop_format_modules_json(char *out, size_t out_size) {
 void orizon_desktop_format_apps(char *out, size_t out_size) {
   size_t used = 0;
   size_t count = sizeof(desktop_app_catalog) / sizeof(desktop_app_catalog[0]);
-  char line[256];
+  char line[384];
   int native_count = 0;
   int overlay_count = 0;
   int terminal_count = 0;
@@ -6515,8 +6542,11 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
                  "launcher-policy: overlay only; no Windows taskbar, no start menu, Waybar is future package\n");
   desktop_append(out, out_size, &used,
                  "sources: each native app exposes a command runbook and system/log/package data source\n");
+  desktop_append(out, out_size, &used,
+                 "runtime: clients/focus/workspace are read-only compositor diagnostics, VM/ZimaOS only\n");
   for (size_t i = 0; i < count; i++) {
     const desktop_app_entry_t *app = &desktop_app_catalog[i];
+    orizon_desktop_app_runtime_t runtime;
     if (strcmp(app->backend, "native-app") == 0) {
       native_count++;
     } else if (strcmp(app->backend, "overlay") == 0) {
@@ -6524,10 +6554,15 @@ void orizon_desktop_format_apps(char *out, size_t out_size) {
     } else if (strcmp(app->backend, "terminal") == 0) {
       terminal_count++;
     }
+    memset(&runtime, 0, sizeof(runtime));
+    gui_desktop_get_app_runtime(app->class_name, &runtime);
     snprintf(line, sizeof(line),
-             "%-9s status=%s class=%s module=%s surface=%s backend=%s command='%s' shortcut=%s\n",
+             "%-9s status=%s class=%s module=%s surface=%s backend=%s clients=%d focused=%s workspace=%d overlay=%s command='%s' shortcut=%s\n",
              app->id, app->status, app->class_name, app->module,
-             app->surface, app->backend, app->command, app->shortcut);
+             app->surface, app->backend, runtime.clients,
+             runtime.focused ? "yes" : "no", runtime.workspace,
+             runtime.overlay_visible ? "visible" : "hidden", app->command,
+             app->shortcut);
     desktop_append(out, out_size, &used, line);
   }
   snprintf(line, sizeof(line),
@@ -6607,6 +6642,7 @@ void orizon_desktop_format_apps_json(char *out, size_t out_size) {
 void orizon_desktop_format_app_detail(const char *app, char *out,
                                       size_t out_size) {
   const desktop_app_entry_t *entry;
+  orizon_desktop_app_runtime_t runtime;
   size_t used = 0;
   char line[256];
 
@@ -6627,6 +6663,8 @@ void orizon_desktop_format_app_detail(const char *app, char *out,
     return;
   }
   snprintf(line, sizeof(line), "id: %s\n", entry->id);
+  memset(&runtime, 0, sizeof(runtime));
+  gui_desktop_get_app_runtime(entry->class_name, &runtime);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "title: %s\n", entry->title);
   desktop_append(out, out_size, &used, line);
@@ -6656,6 +6694,25 @@ void orizon_desktop_format_app_detail(const char *app, char *out,
   snprintf(line, sizeof(line), "runbook: %s\n", entry->runbook);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "limits: %s\n", entry->limits);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "runtime-clients: %d mapped=%d hidden=%d focused=%s\n",
+           runtime.clients, runtime.mapped, runtime.hidden,
+           runtime.focused ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "runtime-workspace: %d active-workspace=%d overlay-visible=%s\n",
+           runtime.workspace, runtime.active_workspace,
+           runtime.overlay_visible ? "yes" : "no");
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "runtime-states: pinned=%d fullscreen=%d pseudo=%d urgent=%d\n",
+           runtime.pinned, runtime.fullscreen, runtime.pseudo, runtime.urgent);
+  desktop_append(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "runtime-focused-client: id=%d address=0x%08x title=%s\n",
+           runtime.focused_client_id, runtime.focused_address,
+           runtime.focused_title[0] ? runtime.focused_title : "none");
   desktop_append(out, out_size, &used, line);
   desktop_append(out, out_size, &used,
                  "vm-ready: yes\nimplemented: compositor-client catalog/detail\n");
