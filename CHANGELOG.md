@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added desktop package version `0.102.0` with VM-ready native-app data-source
+  diagnostics. `desktop app <id>`, `desktop hyprctl -j apps`, and
+  `desktop hyprctl -j app <id>` now expose per-source `dataSources` entries
+  with `kind`, `present`, and `bytes` so settings/logs/packages/update viewers
+  can prove which system/log/package/update paths back each compositor-managed
+  tiled client. This remains the Orizon framebuffer/ZimaOS VM facade only: no
+  upstream Hyprland IPC, Wayland/wlroots server, Waybar activation, floating
+  desktop, manual window drag, or physical hardware validation is claimed.
 - Added desktop package version `0.101.0` with VM-ready session log mirroring
   in `desktop hyprctl -j rollinglog`. The JSON now includes
   `sessionPreview`, `sessionBytesSampled`, `sessionEmpty`, `eventsEmpty`, and

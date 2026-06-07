@@ -863,7 +863,7 @@ run_cmd() {
       grep -q '"command":"apps"' "`$OUT" && grep -q '"tilingClients":5' "`$OUT" && grep -q '"runtime":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json apps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j app settings")
-      grep -q '"command":"app"' "`$OUT" && grep -q '"class":"orizon-settings"' "`$OUT" && grep -q '"tiledClient":true' "`$OUT" && grep -q '"runtime":{' "`$OUT" || { echo "missing hyprctl json app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"app"' "`$OUT" && grep -q '"class":"orizon-settings"' "`$OUT" && grep -q '"dataSources":\[' "`$OUT" && grep -q '"source":"/system/desktop-settings.conf"' "`$OUT" && grep -q '"kind":"path"' "`$OUT" && grep -q '"tiledClient":true' "`$OUT" && grep -q '"runtime":{' "`$OUT" || { echo "missing hyprctl json app settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j app launcher")
       grep -q '"command":"app"' "`$OUT" && grep -q '"overlay":true' "`$OUT" && grep -q '"overlayVisible":' "`$OUT" && grep -q '"taskbar":false' "`$OUT" || { echo "missing hyprctl json app launcher"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -1181,7 +1181,7 @@ run_cmd() {
       grep -q "orizon-launcher overlay toggled" "`$OUT" || { echo "missing desktop launch launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg info orizon-desktop-hypr")
-      grep -q "orizon-desktop-hypr" "`$OUT" && grep -q "version 0.101.0" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "orizon-desktop-hypr" "`$OUT" && grep -q "version 0.102.0" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop package")
       grep -q "orizon-desktop-hypr.opkg" "`$OUT" || { echo "missing desktop package output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

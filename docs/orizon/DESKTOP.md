@@ -406,6 +406,14 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.102.0` adds data-source diagnostics to the native app control
+surface. `desktop app <id>`, `desktop hyprctl -j apps`, and
+`desktop hyprctl -j app <id>` expose `dataSources` entries with `kind`,
+`present`, and `bytes`, so the settings/logs/packages/update viewers can prove
+which system/log/package/update paths back each app. Terminal, settings, logs,
+packages, and update remain compositor-managed tiling clients; launcher remains an
+overlay only, with no persistent bar, start menu, floating desktop, or manual
+drag.
 Package `0.101.0` adds session-manager log mirroring to
 `desktop hyprctl -j rollinglog`. The JSON now samples both `/logs/desktop.log`
 and `/logs/desktop-session.log` through `preview`, `sessionPreview`,

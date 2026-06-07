@@ -91,7 +91,8 @@ claiming upstream Hyprland, Wayland/wlroots, or real hardware validation.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.101.0` structured JSON `rollinglog`
+  diagnostics for `source` files, plus `0.102.0` native-app `dataSources`
+  diagnostics, plus `0.101.0` structured JSON `rollinglog`
   session-manager mirroring, plus `0.100.0` structured JSON `reload`
   diagnostics for parser/source/runtime/session/settings state, plus `0.99.0` `keyword` route/effect
   diagnostics, plus `0.98.0` `getoption` `entry-count`/`entries`

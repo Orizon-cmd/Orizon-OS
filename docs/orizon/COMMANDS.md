@@ -456,6 +456,11 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.102.0`, native app diagnostics expose concrete data-source
+status. `desktop app <id>`, `desktop hyprctl -j apps`, and
+`desktop hyprctl -j app <id>` include `dataSources` with `kind`, `present`, and
+`bytes` so the settings/logs/packages/update viewers can be checked as
+compositor-managed tiled clients rather than floating utilities.
 Since package `0.101.0`, `desktop hyprctl -j rollinglog` mirrors both
 `/logs/desktop.log` and `/logs/desktop-session.log` as structured VM admin
 data. JSON includes `preview`, `sessionPreview`, `bytesSampled`,

@@ -144,8 +144,10 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.101.0` installs structured JSON rolling-log
-session mirroring (`sessionPreview`, `sessionBytesSampled`, `sessionEmpty`),
+The desktop package version `0.102.0` installs native-app data-source
+diagnostics (`dataSources`, `kind`, `present`, `bytes`) for
+settings/logs/packages/update viewers, structured JSON rolling-log session
+mirroring (`sessionPreview`, `sessionBytesSampled`, `sessionEmpty`),
 structured JSON reload diagnostics (`parserSummary`, `sourceResolve`,
 `runtimeFiles`, `session`, and `settings`), explicit source/bind diagnostics,
 `keyword` route/effect

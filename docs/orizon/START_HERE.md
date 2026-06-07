@@ -70,7 +70,12 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/focus-state/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.101.0`: `desktop hyprctl -j rollinglog`
+- Desktop release boundary for current package `0.102.0`: `desktop app <id>`
+  and JSON `desktop hyprctl -j apps|app <id>` expose per-source `dataSources`
+  with `kind`, `present`, and `bytes` for settings/logs/packages/update native
+  app viewers. These remain compositor-managed tiling clients in the VM/ZimaOS
+  framebuffer facade; launcher is overlay-only, not a start menu or taskbar.
+- Desktop release boundary for package `0.101.0`: `desktop hyprctl -j rollinglog`
   includes event and session-manager log samples (`preview`,
   `sessionPreview`, `bytesSampled`, `sessionBytesSampled`, `eventsEmpty`, and
   `sessionEmpty`) so VM admin checks can inspect persistent desktop logs as

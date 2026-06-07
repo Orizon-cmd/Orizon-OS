@@ -241,6 +241,12 @@ Depuis `0.94.0`, `desktop modules`, `desktop hyprctl -j modules`, `pkg info`
 et les `.opkg` de modules exposent aussi `split-plan`, `dependency-graph`,
 frontieres de modules, roles d'activation et `split-version 2`, afin de rendre
 la separation `orizon-desktop-core`/apps plus verifiable en VM.
+Depuis `0.102.0`, `desktop app <id>`, `desktop hyprctl -j apps` et
+`desktop hyprctl -j app <id>` exposent `dataSources` avec `kind`, `present` et
+`bytes` pour verifier les donnees qui alimentent les apps natives
+settings/logs/packages/update. Ces apps restent des clients tiling geres par le
+compositor Orizon; le launcher reste un overlay transitoire, sans barre,
+menu demarrer, drag manuel ni validation materielle.
 Depuis `0.101.0`, `desktop hyprctl -j rollinglog` expose aussi le journal
 session-manager via `sessionPreview`, `sessionBytesSampled` et `sessionEmpty`
 en plus du log evenementiel. Les checks admin VM peuvent donc lire

@@ -759,6 +759,114 @@ static void desktop_append_app_runtime_json(char *out, size_t out_size,
   desktop_json_append_raw(out, out_size, used, line);
 }
 
+static int desktop_data_source_token(const char *src, int *pos, char *out,
+                                     size_t out_size) {
+  int start;
+  int end;
+  int len;
+
+  if (!src || !pos || !out || out_size == 0) {
+    return 0;
+  }
+  out[0] = '\0';
+  start = *pos;
+  while (src[start] == ' ' || src[start] == '\t' || src[start] == ',') {
+    start++;
+  }
+  if (!src[start]) {
+    *pos = start;
+    return 0;
+  }
+  end = start;
+  while (src[end] && src[end] != ',') {
+    end++;
+  }
+  len = end - start;
+  while (len > 0 &&
+         (src[start + len - 1] == ' ' || src[start + len - 1] == '\t')) {
+    len--;
+  }
+  if (len >= (int)out_size) {
+    len = (int)out_size - 1;
+  }
+  if (len > 0) {
+    memcpy(out, src + start, (size_t)len);
+  }
+  out[len] = '\0';
+  *pos = src[end] == ',' ? end + 1 : end;
+  return len > 0;
+}
+
+static int desktop_data_source_is_path(const char *token) {
+  if (!token || token[0] != '/') {
+    return 0;
+  }
+  for (int i = 0; token[i]; i++) {
+    if (token[i] == ' ' || token[i] == '\t') {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+static void desktop_append_data_source_json(char *out, size_t out_size,
+                                            size_t *used,
+                                            const char *data_source) {
+  char token[160];
+  char line[128];
+  int pos = 0;
+  int first = 1;
+
+  desktop_json_append_raw(out, out_size, used, "[");
+  while (desktop_data_source_token(data_source, &pos, token, sizeof(token))) {
+    size_t bytes = 0;
+    int is_path = desktop_data_source_is_path(token);
+    int present = is_path && vfs_stat(token, &bytes, NULL) == 0;
+
+    if (!first) {
+      desktop_json_append_raw(out, out_size, used, ",");
+    }
+    first = 0;
+    desktop_json_append_raw(out, out_size, used, "{\"source\":");
+    desktop_json_append_string(out, out_size, used, token);
+    desktop_json_append_raw(out, out_size, used, ",\"kind\":");
+    desktop_json_append_string(out, out_size, used,
+                               is_path ? "path" : "hint");
+    snprintf(line, sizeof(line), ",\"present\":%s,\"bytes\":%lu",
+             present ? "true" : "false",
+             (unsigned long)(present ? bytes : 0));
+    desktop_json_append_raw(out, out_size, used, line);
+    desktop_json_append_raw(out, out_size, used, "}");
+  }
+  desktop_json_append_raw(out, out_size, used, "]");
+}
+
+static void desktop_append_data_source_text(char *out, size_t out_size,
+                                            size_t *used,
+                                            const char *data_source) {
+  char token[160];
+  char line[256];
+  int pos = 0;
+  int index = 0;
+
+  while (desktop_data_source_token(data_source, &pos, token, sizeof(token))) {
+    size_t bytes = 0;
+    int is_path = desktop_data_source_is_path(token);
+    int present = is_path && vfs_stat(token, &bytes, NULL) == 0;
+
+    snprintf(line, sizeof(line),
+             "data-source[%d]: %s kind=%s present=%s bytes=%lu\n", index,
+             token, is_path ? "path" : "hint", present ? "yes" : "no",
+             (unsigned long)(present ? bytes : 0));
+    desktop_append(out, out_size, used, line);
+    index++;
+  }
+  if (index == 0) {
+    desktop_append(out, out_size, used,
+                   "data-source[0]: none kind=hint present=no bytes=0\n");
+  }
+}
+
 static void desktop_append_app_entry_json(char *out, size_t out_size,
                                           size_t *used,
                                           const desktop_app_entry_t *app) {
@@ -790,6 +898,8 @@ static void desktop_append_app_entry_json(char *out, size_t out_size,
   desktop_json_append_string(out, out_size, used, app->description);
   desktop_json_append_raw(out, out_size, used, ",\"dataSource\":");
   desktop_json_append_string(out, out_size, used, app->data_source);
+  desktop_json_append_raw(out, out_size, used, ",\"dataSources\":");
+  desktop_append_data_source_json(out, out_size, used, app->data_source);
   desktop_json_append_raw(out, out_size, used, ",\"runbook\":");
   desktop_json_append_string(out, out_size, used, app->runbook);
   desktop_json_append_raw(out, out_size, used, ",\"limits\":");
@@ -7393,6 +7503,7 @@ void orizon_desktop_format_app_detail(const char *app, char *out,
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "data-source: %s\n", entry->data_source);
   desktop_append(out, out_size, &used, line);
+  desktop_append_data_source_text(out, out_size, &used, entry->data_source);
   snprintf(line, sizeof(line), "runbook: %s\n", entry->runbook);
   desktop_append(out, out_size, &used, line);
   snprintf(line, sizeof(line), "limits: %s\n", entry->limits);

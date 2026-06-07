@@ -4517,6 +4517,7 @@ int orizon_pkg_write_desktop_sample(char *report, size_t report_size) {
       "app-launch-command = desktop launch <terminal|settings|logs|packages|update|launcher>\n"
       "app-hyprctl-json-command = desktop hyprctl -j apps|app <id>|launch <app>\n"
       "autostart-hyprctl-json-command = desktop hyprctl -j autostart [terminal on|off|toggle]\n"
+      "app-data-source-diagnostics = dataSources,present,bytes,kind\n"
       "app-settings-source = " ORIZON_DESKTOP_SETTINGS_PATH "," ORIZON_DESKTOP_SESSION_PATH "," ORIZON_DESKTOP_USER_CONFIG_PATH "\n"
       "app-logs-source = " ORIZON_DESKTOP_LOG_PATH "," ORIZON_DESKTOP_SESSION_LOG_PATH ",/logs/security.log\n"
       "app-packages-source = /workspace/packages,/packages," ORIZON_DESKTOP_MODULES_PATH "\n"

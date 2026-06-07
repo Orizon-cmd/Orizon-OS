@@ -286,7 +286,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.101.0` because it includes policy/config files, the persisted session
+`0.102.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -320,7 +320,12 @@ sticky reset diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.101.0` adds structured session-manager log mirroring
+the launcher. Version `0.102.0` adds native-app data-source diagnostics to
+`desktop app`, JSON `apps|app`, and generated package metadata through
+`app-data-source-diagnostics`, so settings/logs/packages/update viewers expose
+`dataSources` with `kind`, `present`, and `bytes` as VM-verifiable backing
+paths while staying compositor-managed tiling clients. Version `0.101.0` adds
+structured session-manager log mirroring
 to `desktop hyprctl -j rollinglog` and generated package metadata through
 `hyprctl-json-rollinglog-session`, so `/logs/desktop.log` and
 `/logs/desktop-session.log` can be inspected in VM automation without scraping
