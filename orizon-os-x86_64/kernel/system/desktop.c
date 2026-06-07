@@ -6,6 +6,7 @@
  */
 
 #include "../include/desktop.h"
+#include "../include/compositor_backend.h"
 #include "../include/desktop_protocol.h"
 #include "../include/gui.h"
 #include "../include/input_layout.h"
@@ -349,13 +350,15 @@ static const char *desktop_runtime_config =
     "source = ~/.config/hypr/orizon-local.conf\n";
 
 static const char *desktop_backend_config =
-    "# Orizon desktop compositor backend map v1\n"
+    "# Orizon desktop compositor backend map v2\n"
     "# Truth file for the current VM-safe Hyprland-style facade.\n"
     "api orizon-compositor-api-v0\n"
     "api-role compositor-orchestrator\n"
     "backend-api compositor-backend-v0\n"
     "backend-api-header kernel/include/compositor_backend.h\n"
     "backend-api-source kernel/gui/compositor_backend.c\n"
+    "backend-api-contract surface=single-framebuffer-surface-v0 render=software-raster-present-v0 client=internal-tiled-client-v0\n"
+    "backend-api-required put_pixel,fill_rect,draw_rect,fill_rect_alpha,fill_gradient_v,present,surface-metrics\n"
     "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "backend-current framebuffer-vm\n"
     "backend-current-file gui/compositor_backend.c\n"
@@ -363,6 +366,10 @@ static const char *desktop_backend_config =
     "font-render-path compositor-backend-api\n"
     "backend-future wayland-wlroots\n"
     "render-path software-backbuffer\n"
+    "surface-contract single-framebuffer-surface-v0\n"
+    "render-contract software-raster-present-v0\n"
+    "client-contract internal-tiled-client-v0\n"
+    "future-backend-contract implement-compositor-backend-v0-without-bypassing-tiling-policy\n"
     "client-model tiled-internal\n"
     "external-wayland-clients no\n"
     "manual-window-drag no\n"
@@ -373,7 +380,7 @@ static const char *desktop_backend_config =
     "truth hyprland-style-facade-not-upstream\n";
 
 static const char *desktop_protocol_config =
-    "# Orizon desktop internal protocol map v1\n"
+    "# Orizon desktop internal protocol map v2\n"
     "# Prepared split between compositor API and the current framebuffer backend.\n"
     "protocol orizon-desktop-ipc-v0\n"
     "protocol-api desktop-protocol-v0\n"
@@ -381,6 +388,10 @@ static const char *desktop_protocol_config =
     "protocol-api-source kernel/system/desktop_protocol.c\n"
     "architecture-path " ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "transport internal-kernel-dispatch\n"
+    "wire-compat none\n"
+    "client-contract internal-tiled-client-v0\n"
+    "client-fields stable-id,address,workspace,class,title,state,fullscreen,pseudo,pinned\n"
+    "dispatcher-contract hyprland-style-dispatcher-v0\n"
     "messages dispatch,spawn-client,close-client,focus-client,workspace,config-keyword,query-state\n"
     "security local-kernel-only\n"
     "wayland no\n"
@@ -392,7 +403,7 @@ static const char *desktop_protocol_config =
     "status prepared\n";
 
 static const char *desktop_architecture_config =
-    "# Orizon desktop architecture map v1\n"
+    "# Orizon desktop architecture map v2\n"
     "# This is a truthful VM/ZimaOS boundary map, not a Wayland runtime.\n"
     "api orizon-compositor-api-v0\n"
     "api-owner Orizon\n"
@@ -401,6 +412,8 @@ static const char *desktop_architecture_config =
     "backend-api-header kernel/include/compositor_backend.h\n"
     "backend-api-source kernel/gui/compositor_backend.c\n"
     "backend-api-primitives put_pixel,fill_rect,draw_rect,fill_rect_alpha,fill_gradient_v,present\n"
+    "backend-api-contract surface=single-framebuffer-surface-v0 render=software-raster-present-v0 client=internal-tiled-client-v0\n"
+    "backend-api-required put_pixel,fill_rect,draw_rect,fill_rect_alpha,fill_gradient_v,present,surface-metrics\n"
     "facade hyprland-style\n"
     "facade-upstream-hyprland no\n"
     "backend-current framebuffer-vm\n"
@@ -409,14 +422,19 @@ static const char *desktop_architecture_config =
     "font-render-path compositor-backend-api\n"
     "backend-current-role vm-software-framebuffer-renderer\n"
     "backend-current-status implemented\n"
+    "backend-current-capabilities put_pixel,fill_rect,draw_rect,fill_rect_alpha,fill_gradient_v,present,surface-metrics\n"
+    "backend-current-limits no-wayland,no-wlroots,no-external-clients,no-gpu-scene,no-free-drag,no-multi-output-routing\n"
     "backend-future wayland-wlroots\n"
     "backend-future-status prepared-not-implemented\n"
+    "backend-future-contract implement-compositor-backend-v0-without-bypassing-tiling-policy\n"
     "protocol-current orizon-desktop-ipc-v0\n"
     "protocol-api desktop-protocol-v0\n"
     "protocol-api-header kernel/include/desktop_protocol.h\n"
     "protocol-api-source kernel/system/desktop_protocol.c\n"
     "protocol-transport internal-kernel-dispatch\n"
     "protocol-client-internal prepared\n"
+    "protocol-client-contract internal-tiled-client-v0 stable-id,workspace,class,title,state\n"
+    "protocol-wire-compat none\n"
     "external-wayland-clients no\n"
     "wayland no\n"
     "wlroots no\n"
@@ -456,7 +474,7 @@ static const char *desktop_modules_config =
     " state=planned kind=bar activation=not-installed-now provides=waybar-style-layer package-later=yes installed=no\n"
     "policy no-windows-taskbar\n"
     "policy no-free-drag-window-moving\n"
-    "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0 api=orizon-compositor-api-v0 map=" ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
+    "architecture current-backend=framebuffer-vm future-backend=wayland-wlroots protocol=orizon-desktop-ipc-v0 api=orizon-compositor-api-v0 backend-contract=compositor-backend-v0/single-framebuffer-surface-v0 client-contract=internal-tiled-client-v0 map=" ORIZON_DESKTOP_ARCHITECTURE_PATH "\n"
     "install-meta package-current=" ORIZON_DESKTOP_PACKAGE "\n"
     "install-meta package-split-prepared=yes\n";
 
@@ -5956,7 +5974,7 @@ void orizon_desktop_format_settings_paths(char *out, size_t out_size) {
 }
 
 void orizon_desktop_format_architecture(char *out, size_t out_size) {
-  char cfg[1536];
+  char cfg[2048];
   size_t used = 0;
   int n;
 
@@ -5971,13 +5989,40 @@ void orizon_desktop_format_architecture(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "backend-api: compositor-backend-v0 header=kernel/include/compositor_backend.h source=kernel/gui/compositor_backend.c\n");
   desktop_append(out, out_size, &used,
+                 "backend-contract: surface=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_surface_contract());
+  desktop_append(out, out_size, &used, " render=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_render_contract());
+  desktop_append(out, out_size, &used, " client=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_client_contract());
+  desktop_append(out, out_size, &used, "\n");
+  desktop_append(out, out_size, &used,
                  "facade: Hyprland-style compatibility, upstream-hyprland=no\n");
   desktop_append(out, out_size, &used,
                  "backend-current: framebuffer-vm implemented in gui/compositor_backend.c, composed by gui/compositor.c\n");
+  desktop_append(out, out_size, &used, "backend-capabilities: ");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_capabilities());
+  desktop_append(out, out_size, &used, "\nbackend-limits: ");
+  desktop_append(out, out_size, &used, orizon_compositor_backend_limits());
+  desktop_append(out, out_size, &used, "\n");
   desktop_append(out, out_size, &used,
                  "backend-future: wayland-wlroots prepared, implemented=no\n");
+  desktop_append(out, out_size, &used, "backend-future-contract: ");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_future_contract());
+  desktop_append(out, out_size, &used, "\n");
   desktop_append(out, out_size, &used,
                  "protocol-current: orizon-desktop-ipc-v0 internal-kernel-dispatch\n");
+  desktop_append(out, out_size, &used, "protocol-contract: ");
+  desktop_append(out, out_size, &used, orizon_desktop_protocol_contract());
+  desktop_append(out, out_size, &used, "\nprotocol-client-contract: ");
+  desktop_append(out, out_size, &used,
+                 orizon_desktop_protocol_client_contract());
+  desktop_append(out, out_size, &used, "\n");
   desktop_append(out, out_size, &used,
                  "client-protocol: internal/prepared only, external-wayland-clients=no\n");
   desktop_append(out, out_size, &used,
@@ -6021,16 +6066,48 @@ void orizon_desktop_format_architecture_json(char *out, size_t out_size) {
       "\"backendApi\":{\"name\":\"compositor-backend-v0\","
       "\"header\":\"kernel/include/compositor_backend.h\","
       "\"source\":\"kernel/gui/compositor_backend.c\","
-      "\"drawPrimitives\":true,\"fontPath\":true,\"active\":\"framebuffer-vm\"},"
+      "\"drawPrimitives\":true,\"fontPath\":true,\"active\":\"framebuffer-vm\","
+      "\"surfaceContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_surface_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"renderContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_render_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"clientContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_client_contract());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},"
       "\"backend\":{\"current\":\"framebuffer-vm\","
       "\"currentFile\":\"gui/compositor_backend.c\","
       "\"compositorEntry\":\"gui/compositor.c\","
       "\"currentImplemented\":true,\"future\":\"wayland-wlroots\","
-      "\"futurePrepared\":true,\"futureImplemented\":false},"
+      "\"futurePrepared\":true,\"futureImplemented\":false,"
+      "\"capabilities\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_capabilities());
+  desktop_json_append_raw(out, out_size, &used, ",\"limits\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_limits());
+  desktop_json_append_raw(out, out_size, &used, ",\"futureContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_future_contract());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      "},"
       "\"protocol\":{\"current\":\"orizon-desktop-ipc-v0\","
       "\"transport\":\"internal-kernel-dispatch\","
       "\"internalClientProtocol\":true,\"externalWaylandClients\":false,"
-      "\"messages\":[\"dispatch\",\"spawn-client\",\"close-client\","
+      "\"contract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_desktop_protocol_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"clientContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_desktop_protocol_client_contract());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"messages\":[\"dispatch\",\"spawn-client\",\"close-client\","
       "\"focus-client\",\"workspace\",\"config-keyword\",\"query-state\"]},"
       "\"boundaries\":{\"wayland\":false,\"wlroots\":false,"
       "\"xdgShell\":false,\"layerShell\":\"prepared-only\","
@@ -6075,7 +6152,7 @@ void orizon_desktop_format_architecture_json(char *out, size_t out_size) {
 }
 
 void orizon_desktop_format_backend(char *out, size_t out_size) {
-  char cfg[1024];
+  char cfg[1536];
   size_t used = 0;
   int n;
 
@@ -6091,12 +6168,32 @@ void orizon_desktop_format_backend(char *out, size_t out_size) {
                  "api: orizon-compositor-api-v0 role=compositor-orchestrator\n");
   desktop_append(out, out_size, &used,
                  "backend-api: compositor-backend-v0 header=kernel/include/compositor_backend.h source=kernel/gui/compositor_backend.c\n");
+  desktop_append(out, out_size, &used, "contracts: surface=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_surface_contract());
+  desktop_append(out, out_size, &used, " render=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_render_contract());
+  desktop_append(out, out_size, &used, " client=");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_client_contract());
+  desktop_append(out, out_size, &used, "\n");
+  desktop_append(out, out_size, &used, "capabilities: ");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_capabilities());
+  desktop_append(out, out_size, &used, "\nlimits: ");
+  desktop_append(out, out_size, &used, orizon_compositor_backend_limits());
+  desktop_append(out, out_size, &used, "\n");
   desktop_append(out, out_size, &used,
                  "renderer: software-backbuffer\n");
   desktop_append(out, out_size, &used,
                  "clients: tiled-internal only; external-wayland-clients=no\n");
   desktop_append(out, out_size, &used,
                  "future-backend: wayland-wlroots prepared, not implemented\n");
+  desktop_append(out, out_size, &used, "future-contract: ");
+  desktop_append(out, out_size, &used,
+                 orizon_compositor_backend_future_contract());
+  desktop_append(out, out_size, &used, "\n");
   desktop_append(out, out_size, &used,
                  "policy: manual-window-drag=no taskbar=no waybar-installed=no\n");
   desktop_append(out, out_size, &used,
@@ -6131,6 +6228,27 @@ void orizon_desktop_format_backend_json(char *out, size_t out_size) {
       "\"backendApiHeader\":\"kernel/include/compositor_backend.h\","
       "\"backendApiSource\":\"kernel/gui/compositor_backend.c\","
       "\"backend\":\"framebuffer-vm\",\"renderer\":\"software-backbuffer\","
+      "\"surfaceContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_surface_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"renderContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_render_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"clientContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_client_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"capabilities\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_capabilities());
+  desktop_json_append_raw(out, out_size, &used, ",\"backendLimits\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_limits());
+  desktop_json_append_raw(out, out_size, &used, ",\"futureContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_compositor_backend_future_contract());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ","
       "\"currentBackend\":\"framebuffer-vm\","
       "\"futureBackend\":\"wayland-wlroots\","
       "\"futureBackendPrepared\":true,\"futureBackendImplemented\":false,"
@@ -6169,8 +6287,8 @@ void orizon_desktop_format_backend_json(char *out, size_t out_size) {
 }
 
 void orizon_desktop_format_protocol(char *out, size_t out_size) {
-  char cfg[1024];
-  char state[512];
+  char cfg[1536];
+  char state[1024];
   size_t used = 0;
   int n;
 
@@ -6184,6 +6302,14 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
                  "protocol: orizon-desktop-ipc-v0\n");
   desktop_append(out, out_size, &used,
                  "protocol-api: desktop-protocol-v0 header=kernel/include/desktop_protocol.h source=kernel/system/desktop_protocol.c\n");
+  desktop_append(out, out_size, &used, "contract: ");
+  desktop_append(out, out_size, &used, orizon_desktop_protocol_contract());
+  desktop_append(out, out_size, &used, "\nclient-contract: ");
+  desktop_append(out, out_size, &used,
+                 orizon_desktop_protocol_client_contract());
+  desktop_append(out, out_size, &used, "\nlimits: ");
+  desktop_append(out, out_size, &used, orizon_desktop_protocol_limits());
+  desktop_append(out, out_size, &used, "\n");
   desktop_append(out, out_size, &used,
                  "transport: internal-kernel-dispatch\n");
   desktop_append(out, out_size, &used,
@@ -6208,7 +6334,7 @@ void orizon_desktop_format_protocol(char *out, size_t out_size) {
 }
 
 void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
-  char state[768];
+  char state[1024];
   size_t used = 0;
 
   if (!out || out_size == 0) {
@@ -6226,6 +6352,18 @@ void orizon_desktop_format_protocol_json(char *out, size_t out_size) {
       "\"protocolApiSource\":\"kernel/system/desktop_protocol.c\","
       "\"transport\":\"internal-kernel-dispatch\","
       "\"security\":\"local-kernel-only\","
+      "\"contract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_desktop_protocol_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"clientContract\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_desktop_protocol_client_contract());
+  desktop_json_append_raw(out, out_size, &used, ",\"protocolLimits\":");
+  desktop_json_append_string(out, out_size, &used,
+                             orizon_desktop_protocol_limits());
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ","
       "\"wayland\":false,\"wlroots\":false,\"xdgShell\":false,"
       "\"layerShell\":\"prepared-only\",\"xwayland\":false,"
       "\"externalClients\":false,\"manualDrag\":false,"

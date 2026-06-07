@@ -65,7 +65,7 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.94.0`: `desktop architecture`,
+- Desktop release boundary for current package `0.95.0`: `desktop architecture`,
   `desktop backend`, and `desktop protocol` expose
   `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
   `/system/desktop-protocol.conf`. The implemented VM-ready pieces are the
@@ -75,6 +75,11 @@ design note.
   prepared-only; there is still no upstream Hyprland, Wayland/wlroots server,
   external Wayland client protocol, XWayland, layer-shell, Waybar, taskbar/start
   menu, free manual window drag, or physical hardware validation.
+- `0.95.0` strengthens the architecture truth maps: backend diagnostics now
+  expose `single-framebuffer-surface-v0`, `software-raster-present-v0`,
+  `internal-tiled-client-v0`, backend capabilities/limits, and the future
+  backend contract required before a real Wayland/wlroots implementation can
+  replace the VM framebuffer backend.
 - `0.94.0` adds VM-ready modular packaging diagnostics: `desktop modules`,
   JSON `modules`, `pkg info <desktop-module>`, and generated module `.opkg`
   samples expose `split-plan`, dependency graph, module boundaries, activation

@@ -235,6 +235,13 @@ Depuis `0.94.0`, `desktop modules`, `desktop hyprctl -j modules`, `pkg info`
 et les `.opkg` de modules exposent aussi `split-plan`, `dependency-graph`,
 frontieres de modules, roles d'activation et `split-version 2`, afin de rendre
 la separation `orizon-desktop-core`/apps plus verifiable en VM.
+Depuis `0.95.0`, `desktop architecture`, `desktop backend`, `desktop protocol`
+et les sorties JSON `desktop hyprctl -j architecture|backend|protocol` exposent
+aussi les contrats `single-framebuffer-surface-v0`,
+`software-raster-present-v0`, `internal-tiled-client-v0`, les capacites/limites
+du backend courant et le contrat du futur backend `wayland-wlroots`. Cela reste
+une preparation d'architecture: aucun serveur Wayland/wlroots, xdg-shell,
+layer-shell reel, XWayland ou client Wayland externe n'est actif.
 `desktop architecture`, `desktop backend` et `desktop protocol` documentent le
 split d'architecture: API `orizon-compositor-api-v0`, API backend interne
 `compositor-backend-v0` (`kernel/include/compositor_backend.h` et

@@ -89,6 +89,22 @@ const char *orizon_desktop_protocol_last_message(void) {
   return protocol_state.message;
 }
 
+const char *orizon_desktop_protocol_contract(void) {
+  return "desktop-protocol-v0 local-kernel-dispatch trace";
+}
+
+const char *orizon_desktop_protocol_message_contract(void) {
+  return "dispatch,spawn-client,close-client,focus-client,workspace,config-keyword,query-state";
+}
+
+const char *orizon_desktop_protocol_client_contract(void) {
+  return "internal-tiled-client-v0 stable-id,workspace,class,title,state";
+}
+
+const char *orizon_desktop_protocol_limits(void) {
+  return "no-wayland-wire,no-hyprland-socket,no-xdg-shell,no-layer-shell-runtime,no-external-clients";
+}
+
 void orizon_desktop_protocol_format_state(char *out, size_t out_size) {
   if (!out || out_size == 0) {
     return;
@@ -98,8 +114,10 @@ void orizon_desktop_protocol_format_state(char *out, size_t out_size) {
            "source=%s target=\"%s\" accepted=%s result=\"%s\"\n"
            "internal-protocol-counts: dispatch=%llu spawn-client=%llu "
            "close-client=%llu focus-client=%llu workspace=%llu query-state=%llu\n"
+           "internal-protocol-contract: %s\n"
+           "internal-client-contract: %s\n"
            "internal-protocol-boundary: local-kernel-only wayland=no wlroots=no "
-           "hyprland-socket=no external-clients=no\n",
+           "hyprland-socket=no external-clients=no limits=%s\n",
            (unsigned long long)protocol_state.serial,
            (unsigned long long)protocol_state.total, protocol_state.message,
            protocol_state.source, protocol_state.target,
@@ -109,7 +127,10 @@ void orizon_desktop_protocol_format_state(char *out, size_t out_size) {
            (unsigned long long)protocol_state.close_count,
            (unsigned long long)protocol_state.focus_count,
            (unsigned long long)protocol_state.workspace_count,
-           (unsigned long long)protocol_state.query_count);
+           (unsigned long long)protocol_state.query_count,
+           orizon_desktop_protocol_message_contract(),
+           orizon_desktop_protocol_client_contract(),
+           orizon_desktop_protocol_limits());
 }
 
 void orizon_desktop_protocol_format_state_json(char *out, size_t out_size) {
@@ -122,6 +143,8 @@ void orizon_desktop_protocol_format_state_json(char *out, size_t out_size) {
            "\"result\":\"%s\",\"counts\":{\"dispatch\":%llu,"
            "\"spawnClient\":%llu,\"closeClient\":%llu,\"focusClient\":%llu,"
            "\"workspace\":%llu,\"queryState\":%llu},"
+           "\"contract\":\"%s\",\"clientContract\":\"%s\","
+           "\"limits\":\"%s\","
            "\"localKernelOnly\":true,\"waylandTraffic\":false,"
            "\"hyprlandSocket\":false}",
            (unsigned long long)protocol_state.serial,
@@ -133,5 +156,8 @@ void orizon_desktop_protocol_format_state_json(char *out, size_t out_size) {
            (unsigned long long)protocol_state.close_count,
            (unsigned long long)protocol_state.focus_count,
            (unsigned long long)protocol_state.workspace_count,
-           (unsigned long long)protocol_state.query_count);
+           (unsigned long long)protocol_state.query_count,
+           orizon_desktop_protocol_message_contract(),
+           orizon_desktop_protocol_client_contract(),
+           orizon_desktop_protocol_limits());
 }

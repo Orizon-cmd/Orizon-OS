@@ -27,6 +27,12 @@ static const orizon_compositor_backend_t framebuffer_backend = {
     0,
     0,
     0,
+    "single-framebuffer-surface-v0",
+    "software-raster-present-v0",
+    "internal-tiled-client-v0",
+    "put_pixel,fill_rect,draw_rect,fill_rect_alpha,fill_gradient_v,present,surface-metrics",
+    "no-wayland,no-wlroots,no-external-clients,no-gpu-scene,no-free-drag,no-multi-output-routing",
+    "future backend must implement compositor-backend-v0 without bypassing Orizon tiling policy",
     framebuffer_backend_width,
     framebuffer_backend_height,
     framebuffer_backend_pitch,
@@ -47,6 +53,30 @@ const char *orizon_compositor_backend_api(void) {
 
 const char *orizon_compositor_backend_name(void) {
   return framebuffer_backend.name;
+}
+
+const char *orizon_compositor_backend_surface_contract(void) {
+  return framebuffer_backend.surface_contract;
+}
+
+const char *orizon_compositor_backend_render_contract(void) {
+  return framebuffer_backend.render_contract;
+}
+
+const char *orizon_compositor_backend_client_contract(void) {
+  return framebuffer_backend.client_contract;
+}
+
+const char *orizon_compositor_backend_capabilities(void) {
+  return framebuffer_backend.capabilities;
+}
+
+const char *orizon_compositor_backend_limits(void) {
+  return framebuffer_backend.limits;
+}
+
+const char *orizon_compositor_backend_future_contract(void) {
+  return framebuffer_backend.future_backend_contract;
 }
 
 uint32_t orizon_compositor_backend_width(void) {

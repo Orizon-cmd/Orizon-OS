@@ -392,6 +392,13 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.95.0` strengthens the future Wayland architecture preparation:
+`desktop architecture`, `desktop backend`, `desktop protocol`, and JSON
+`architecture|backend|protocol` expose the backend surface/render/client
+contracts, capabilities, current limits, the internal tiled-client contract, and
+the future backend contract. The active backend remains `framebuffer-vm`; real
+Wayland/wlroots, xdg-shell, layer-shell runtime, XWayland, and external Wayland
+clients remain non-implemented.
 Package `0.94.0` strengthens modular desktop packaging diagnostics:
 `desktop modules`, JSON `modules`, `pkg info <desktop-module>`, and generated
 module `.opkg` samples expose `split-plan`, dependency graph, module
@@ -541,6 +548,9 @@ architecture seam for the future real compositor path. Today they report
 `api: orizon-compositor-api-v0`, `current-backend: framebuffer-vm`,
 `backend-api: compositor-backend-v0` through
 `kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
+the `single-framebuffer-surface-v0` surface contract,
+`software-raster-present-v0` render contract, `internal-tiled-client-v0` client
+contract, backend capabilities/limits, and the future backend contract,
 `protocol: orizon-desktop-ipc-v0`, and `protocol-api: desktop-protocol-v0`
 through `kernel/include/desktop_protocol.h` and
 `kernel/system/desktop_protocol.c`. The protocol records kernel-local

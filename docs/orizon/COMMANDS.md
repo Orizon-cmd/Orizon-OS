@@ -448,6 +448,13 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.95.0`, `desktop architecture`, `desktop backend`, `desktop
+protocol`, and JSON `architecture|backend|protocol` expose concrete
+architecture contracts: `single-framebuffer-surface-v0`,
+`software-raster-present-v0`, `internal-tiled-client-v0`, backend
+capabilities/limits, protocol limits, and the future backend contract. This is
+still prepared-only for Wayland/wlroots and remains on the VM framebuffer
+backend.
 Since package `0.94.0`, `desktop modules`, JSON `modules`, `pkg info
 <desktop-module>`, and generated module `.opkg` samples expose `split-plan`,
 dependency graph, module boundaries, activation roles, and `split-version 2`.
@@ -520,6 +527,7 @@ a small Hyprland-like facade for version/systeminfo/clients/clientmodel/rulematc
 framebuffer backend map, the `orizon-compositor-api-v0` API seam, the
 `compositor-backend-v0` drawing/present seam in
 `kernel/include/compositor_backend.h` and `kernel/gui/compositor_backend.c`,
+the backend surface/render/client contracts and current backend limits,
 the internal `orizon-desktop-ipc-v0` protocol map plus runtime
 `desktop-protocol-v0` trace in `kernel/include/desktop_protocol.h` and
 `kernel/system/desktop_protocol.c`, and the honest

@@ -115,6 +115,7 @@ $commands = @(
   "desktop systeminfo",
   "desktop backend",
   "desktop protocol",
+  "desktop architecture",
   "desktop layouts",
   "desktop layout-tree",
   "desktop layout-state",
@@ -134,6 +135,7 @@ $commands = @(
   "desktop hyprctl systeminfo",
   "desktop hyprctl backend",
   "desktop hyprctl protocol",
+  "desktop hyprctl architecture",
   "desktop hyprctl -j version",
   "desktop hyprctl -j systeminfo",
   "desktop hyprctl -j backend",
@@ -691,10 +693,13 @@ run_cmd() {
       grep -q "Orizon desktop systeminfo" "`$OUT" && grep -q "not upstream Hyprland" "`$OUT" || { echo "missing desktop systeminfo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop backend"|"desktop hyprctl backend")
-      grep -q "Orizon desktop backend" "`$OUT" && grep -q "current-backend: framebuffer-vm" "`$OUT" || { echo "missing desktop backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop backend" "`$OUT" && grep -q "current-backend: framebuffer-vm" "`$OUT" && grep -q "contracts: surface=single-framebuffer-surface-v0" "`$OUT" && grep -q "future-contract: future backend must implement compositor-backend-v0" "`$OUT" || { echo "missing desktop backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop protocol"|"desktop hyprctl protocol")
-      grep -q "Orizon desktop protocol" "`$OUT" && grep -q "protocol-api: desktop-protocol-v0" "`$OUT" && grep -q "internal-protocol-state:" "`$OUT" && grep -q "wayland: no" "`$OUT" || { echo "missing desktop protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop protocol" "`$OUT" && grep -q "protocol-api: desktop-protocol-v0" "`$OUT" && grep -q "client-contract: internal-tiled-client-v0" "`$OUT" && grep -q "internal-protocol-state:" "`$OUT" && grep -q "internal-client-contract: internal-tiled-client-v0" "`$OUT" && grep -q "wayland: no" "`$OUT" || { echo "missing desktop protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      ;;
+    "desktop architecture"|"desktop hyprctl architecture")
+      grep -q "Orizon desktop architecture" "`$OUT" && grep -q "backend-contract: surface=single-framebuffer-surface-v0" "`$OUT" && grep -q "backend-capabilities: put_pixel" "`$OUT" && grep -q "protocol-client-contract: internal-tiled-client-v0" "`$OUT" && grep -q "backend-future: wayland-wlroots prepared" "`$OUT" || { echo "missing desktop architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop layouts"|"desktop hyprctl layouts")
       grep -q "Orizon desktop layouts" "`$OUT" && grep -q "dwindle" "`$OUT" || { echo "missing desktop layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -757,13 +762,13 @@ run_cmd() {
       grep -q '"command":"systeminfo"' "`$OUT" && grep -q '"protocols":{"wayland":false' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json systeminfo"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j backend")
-      grep -q '"command":"backend"' "`$OUT" && grep -q '"futureBackend":"wayland-wlroots"' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"backend"' "`$OUT" && grep -q '"surfaceContract":"single-framebuffer-surface-v0"' "`$OUT" && grep -q '"backendLimits":"no-wayland' "`$OUT" && grep -q '"futureBackend":"wayland-wlroots"' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json backend"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j protocol")
-      grep -q '"command":"protocol"' "`$OUT" && grep -q '"protocol":"orizon-desktop-ipc-v0"' "`$OUT" && grep -q '"protocolApi":"desktop-protocol-v0"' "`$OUT" && grep -q '"runtime"' "`$OUT" && grep -q '"lastMessage"' "`$OUT" && grep -q '"wayland":false' "`$OUT" || { echo "missing hyprctl json protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"protocol"' "`$OUT" && grep -q '"protocol":"orizon-desktop-ipc-v0"' "`$OUT" && grep -q '"protocolApi":"desktop-protocol-v0"' "`$OUT" && grep -q '"clientContract":"internal-tiled-client-v0' "`$OUT" && grep -q '"protocolLimits":"no-wayland-wire' "`$OUT" && grep -q '"runtime"' "`$OUT" && grep -q '"lastMessage"' "`$OUT" && grep -q '"wayland":false' "`$OUT" || { echo "missing hyprctl json protocol"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j architecture")
-      grep -q '"command":"architecture"' "`$OUT" && grep -q '"backendApi"' "`$OUT" && grep -q '"source":"kernel/gui/compositor_backend.c"' "`$OUT" && grep -q '"api":"orizon-compositor-api-v0"' "`$OUT" && grep -q '"futureImplemented":false' "`$OUT" && grep -q '"wayland":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"architecture"' "`$OUT" && grep -q '"backendApi"' "`$OUT" && grep -q '"surfaceContract":"single-framebuffer-surface-v0"' "`$OUT" && grep -q '"clientContract":"internal-tiled-client-v0' "`$OUT" && grep -q '"source":"kernel/gui/compositor_backend.c"' "`$OUT" && grep -q '"api":"orizon-compositor-api-v0"' "`$OUT" && grep -q '"futureImplemented":false' "`$OUT" && grep -q '"wayland":false' "`$OUT" && grep -q '"hardwareValidation":false' "`$OUT" || { echo "missing hyprctl json architecture"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j clients")
       grep -q '"hyprlandStyleFacade":true' "`$OUT" && grep -q '"address":"0x' "`$OUT" && grep -q '"floating":false' "`$OUT" || { echo "missing hyprctl json clients"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

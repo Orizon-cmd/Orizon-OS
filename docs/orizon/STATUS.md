@@ -76,7 +76,8 @@ work.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.94.0` modular packaging split-plan,
+  diagnostics for `source` files, plus `0.95.0` architecture/backend/protocol
+  contract diagnostics, plus `0.94.0` modular packaging split-plan,
   dependency graph and module-boundary diagnostics, plus `0.93.0` renderer surface/scale/frame-budget
   diagnostics for render/decorations/animations, plus `0.92.0` active submap role/action and
   sticky reset diagnostics, plus `0.91.0` native app runtime diagnostics
@@ -97,7 +98,9 @@ work.
   implemented internal `compositor-backend-v0` drawing/present API seam,
   `orizon-compositor-api-v0` compositor API seam, and implemented
   `desktop-protocol-v0` runtime trace for the internal `orizon-desktop-ipc-v0`
-  protocol while Wayland/wlroots/upstream Hyprland remain prepared-only.
+  protocol. The v2 maps expose the backend surface/render/client contracts,
+  backend capabilities/limits, protocol limits, and future backend contract
+  while Wayland/wlroots/upstream Hyprland remain prepared-only.
 - Installer safety: `install-plan` writes
   `/workspace/.orizon/install-report.txt` without writing to disk. The real
   guided installer still requires explicit destructive confirmations.

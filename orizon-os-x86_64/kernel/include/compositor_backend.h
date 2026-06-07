@@ -24,6 +24,12 @@ typedef struct {
   int wlroots;
   int manual_drag;
   int external_clients;
+  const char *surface_contract;
+  const char *render_contract;
+  const char *client_contract;
+  const char *capabilities;
+  const char *limits;
+  const char *future_backend_contract;
   uint32_t (*width)(void);
   uint32_t (*height)(void);
   uint32_t (*pitch)(void);
@@ -39,6 +45,12 @@ typedef struct {
 const orizon_compositor_backend_t *orizon_compositor_backend_current(void);
 const char *orizon_compositor_backend_api(void);
 const char *orizon_compositor_backend_name(void);
+const char *orizon_compositor_backend_surface_contract(void);
+const char *orizon_compositor_backend_render_contract(void);
+const char *orizon_compositor_backend_client_contract(void);
+const char *orizon_compositor_backend_capabilities(void);
+const char *orizon_compositor_backend_limits(void);
+const char *orizon_compositor_backend_future_contract(void);
 uint32_t orizon_compositor_backend_width(void);
 uint32_t orizon_compositor_backend_height(void);
 uint32_t orizon_compositor_backend_pitch(void);

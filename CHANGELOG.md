@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Added desktop package version `0.95.0` with stronger future Wayland
+  architecture preparation while keeping the active VM backend as framebuffer.
+  `compositor-backend-v0` now exposes surface/render/client contracts,
+  capabilities, backend limits, and a future backend contract; `desktop
+  architecture`, `desktop backend`, `desktop protocol`, and JSON `desktop
+  hyprctl -j architecture|backend|protocol` report those contracts plus the
+  internal `internal-tiled-client-v0` protocol boundary. This is still a
+  Hyprland-style Orizon framebuffer facade only: no Wayland/wlroots server,
+  xdg-shell, layer-shell runtime, XWayland, external Wayland clients, Waybar
+  activation, floating/manual-drag desktop, or physical hardware validation is
+  claimed.
 - Added desktop package version `0.94.0` with stronger modular desktop
   packaging diagnostics. `desktop modules`, `desktop hyprctl -j modules`,
   `pkg info orizon-terminal`, `pkg search desktop`, and generated module

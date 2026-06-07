@@ -74,6 +74,7 @@
   free-drag window moving, package `0.86.0` bind flag diagnostics for
   plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
   package `0.87.0` source resolution diagnostics for included config files,
+  package `0.95.0` architecture/backend/protocol contract diagnostics,
   package `0.94.0` modular packaging split-plan/dependency/module-boundary
   diagnostics,
   package `0.93.0` renderer surface/scale/frame-budget diagnostics for
@@ -94,7 +95,8 @@
   explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
   compact VM-safe `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers` JSON for future tooling,
   software focus ring, persistent shadow range/render profile/animation
-  tick budget controls, architecture/backend/protocol truth maps, active
+  tick budget controls, architecture/backend/protocol truth maps with backend
+  surface/render/client contracts and protocol limits, active
   layout-tree and workspace-stack diagnostics with client roles/rectangles/master/focus/urgent order/manual-drag boundary,
   and ticked focus/workspace/layout transitions,
   pointer diagnostics, native tiling apps for settings/logs/packages/update,
