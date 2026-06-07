@@ -381,7 +381,8 @@ private keys, package payload secrets, and disk data are excluded. `system init`
 reruns the idempotent boot tasks, writes
 `/system/boot-state`, `/system/service-state`, `/logs/init.log`, and
 `/logs/service.log`, performs the VM-safe `desktop-restore` reload for the
-Hyprland-style session state, and persists roots when possible.
+Hyprland-style session state, falls back to `desktop recover` if reload returns
+WARN, and persists roots when possible.
 `system services` shows the small service policy (`persistence`, `bootlog`,
 `network`, `ssh`, `desktop`, `desktop-restore`, `package-db`,
 `update-bootguard`, `firstboot`) without
@@ -409,8 +410,10 @@ compositor desktop session; `desktop enable` remains a compatibility alias.
 desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
 and recovery commands. `desktop rescue` is read-only and prints the safe
 checklist before `desktop recover` repairs/reapplies anything. Since package
-`0.89.0`, `system init`, `system services`, and `system logs` expose
-`desktop-restore` boot/session reload diagnostics for VM/ZimaOS recovery.
+`0.90.0`, `system init` also records `reload-result`, `fallback-action`, and
+`fallback-result`, and attempts `desktop recover` before recommending rescue.
+Since package `0.89.0`, `system init`, `system services`, and `system logs`
+expose `desktop-restore` boot/session reload diagnostics for VM/ZimaOS recovery.
 Since package
 `0.88.0`, `desktop state`, `desktop rescue`, and JSON `hyprctl session` also
 include a VM-ready session audit with file presence/size checks,

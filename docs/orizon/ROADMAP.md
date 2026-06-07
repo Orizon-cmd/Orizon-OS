@@ -74,6 +74,7 @@
   free-drag window moving, package `0.86.0` bind flag diagnostics for
   plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
   package `0.87.0` source resolution diagnostics for included config files,
+  package `0.90.0` reload-to-recover fallback diagnostics for `system init`,
   package `0.89.0` boot/session restore diagnostics through `system init` and
   `desktop-restore`,
   package `0.88.0` session audit diagnostics with `recommendedAction` and

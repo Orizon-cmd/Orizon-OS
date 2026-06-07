@@ -452,7 +452,8 @@ static void system_format_service_state_text(char *out, size_t out_size,
            "  network policy=manual state=configured-on-demand\n"
            "  ssh policy=manual state=configured-on-demand\n"
            "  desktop policy=optional state=%s\n"
-           "  desktop-restore policy=system-init action=reload state=%s "
+           "  desktop-restore policy=system-init action=reload "
+           "fallback=recover-on-warn state=%s "
            "state-path=" ORIZON_DESKTOP_STATE_PATH
            " session-log=" ORIZON_DESKTOP_SESSION_LOG_PATH "\n"
            "  package-db policy=installed state=%s\n"
@@ -546,7 +547,7 @@ void orizon_system_format_services(char *out, size_t out_size) {
            system_ok_missing(ORIZON_DESKTOP_USER_CONFIG_PATH));
   system_append(out, out_size, &used, line);
   system_append(out, out_size, &used,
-                "  desktop-restore policy=system-init action=reload state-path="
+                "  desktop-restore policy=system-init action=reload fallback=recover-on-warn state-path="
                 ORIZON_DESKTOP_STATE_PATH " session-log="
                 ORIZON_DESKTOP_SESSION_LOG_PATH
                 " recommended=system-init-or-desktop-recover\n");
@@ -656,33 +657,54 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
 }
 
 static int system_desktop_restore_for_boot(char *out, size_t out_size) {
-  char session_report[768];
+  char reload_report[768];
+  char recover_report[768];
   const char *policy;
   const char *state;
-  int rc;
+  const char *fallback_action = "skipped";
+  const char *fallback_result = "skipped";
+  const char *recommended_action = "none";
+  int reload_rc;
+  int recover_rc = 0;
+  int final_rc;
 
   if (out && out_size) {
     out[0] = '\0';
   }
   orizon_desktop_ensure_defaults();
+  reload_rc = orizon_desktop_session_manager("reload", reload_report,
+                                             sizeof(reload_report));
+  final_rc = reload_rc;
+  if (reload_rc != 0) {
+    fallback_action = "recover";
+    recover_rc = orizon_desktop_session_manager("recover", recover_report,
+                                                sizeof(recover_report));
+    fallback_result = recover_rc == 0 ? "PASS" : "WARN";
+    final_rc = recover_rc;
+    if (recover_rc != 0) {
+      recommended_action = "desktop rescue";
+    }
+  }
   policy = orizon_desktop_is_enabled() ? "enabled" : "disabled";
   state = orizon_desktop_is_enabled() ? "active-requested" : "standby";
-  rc = orizon_desktop_session_manager("reload", session_report,
-                                      sizeof(session_report));
   if (out && out_size) {
     snprintf(out, out_size,
              "desktop-restore: %s\n"
              "source: system-init\n"
              "action: reload\n"
+             "reload-result: %s\n"
+             "fallback-action: %s\n"
+             "fallback-result: %s\n"
              "policy: %s\n"
              "state: %s\n"
              "state-path: " ORIZON_DESKTOP_STATE_PATH "\n"
              "session-log: " ORIZON_DESKTOP_SESSION_LOG_PATH "\n"
              "recommended-action: %s\n",
-             rc == 0 ? "PASS" : "WARN", policy, state,
-             rc == 0 ? "none" : "desktop recover");
+             final_rc == 0 ? "PASS" : "WARN",
+             reload_rc == 0 ? "PASS" : "WARN", fallback_action,
+             fallback_result, policy, state, recommended_action);
   }
-  return rc;
+  return final_rc;
 }
 
 int orizon_system_run_boot_tasks(char *out, size_t out_size) {
@@ -763,6 +785,8 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
                                           : "skipped-live"),
              save_rc == 0 ? "ok" : "unavailable");
     system_append(out, out_size, &used, line);
+    system_append(out, out_size, &used, "\n");
+    system_append(out, out_size, &used, desktop_restore);
     system_append(out, out_size, &used, "\n");
     system_append(out, out_size, &used, services);
   }

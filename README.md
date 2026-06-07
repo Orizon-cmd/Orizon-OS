@@ -174,6 +174,9 @@ sans validation materiel.
 Depuis `0.89.0`, `system init` recharge aussi la session desktop via une action
 `desktop-restore` idempotente, journalisee dans `/logs/init.log` et
 `/logs/service.log`, puis le compositor reapplique la policy desktop au boot VM.
+Depuis `0.90.0`, cette restauration tente aussi `desktop recover` si le reload
+revient en WARN et expose `fallback-action`/`fallback-result` avant de
+recommander `desktop rescue`.
 `desktop input` centralise le layout clavier, le profil pointeur et
 focus-follows-mouse: `desktop input layout fr|us` synchronise
 `/system/desktop-settings.conf`, `/system/keyboard` et

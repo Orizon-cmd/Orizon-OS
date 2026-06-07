@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.90.0` with an automatic VM-safe
+  `desktop recover` fallback during installed/live init. `system init` still
+  starts with `desktop-restore` reload, but if reload reports WARN it now tries
+  `recover`, records `reload-result`, `fallback-action`, `fallback-result`, and
+  `recommended-action`, and only escalates to `desktop rescue` when both reload
+  and recover fail. This remains tiling-only and Hyprland-style: no Waybar
+  activation, taskbar/start menu, floating desktop, free manual window drag,
+  real Wayland/wlroots/upstream Hyprland, or physical hardware validation is
+  claimed.
 - Added desktop package version `0.89.0` with boot/session restore
   diagnostics for the installed/live init path. `system init`, `system
   services`, and `system logs` now record a VM-safe `desktop-restore` reload

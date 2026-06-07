@@ -446,7 +446,7 @@ run_cmd() {
       grep -q "Orizon system doctor" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing system doctor output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system init")
-      grep -q "system init:" "`$OUT" && grep -q "init-log=" "`$OUT" && grep -q "desktop-restore=" "`$OUT" || { echo "missing system init output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "system init:" "`$OUT" && grep -q "init-log=" "`$OUT" && grep -q "desktop-restore=" "`$OUT" && grep -q "fallback-action:" "`$OUT" || { echo "missing system init output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "system firstboot")
       grep -q "Orizon first boot" "`$OUT" && grep -q "checklist:" "`$OUT" || { echo "missing firstboot checklist"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

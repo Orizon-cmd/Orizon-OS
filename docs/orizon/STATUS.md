@@ -76,7 +76,8 @@ work.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.89.0` boot/session restore
+  diagnostics for `source` files, plus `0.90.0` reload-to-recover fallback
+  diagnostics for `system init`, plus `0.89.0` boot/session restore
   diagnostics through `system init` and `desktop-restore`, plus `0.88.0`
   session audit diagnostics with
   file checks, `recommendedAction`, and `rescueRecommended`,
@@ -142,7 +143,7 @@ work.
   reboot, and shutdown. VirtIO-scsi is still diagnostic-only and reported as
   such in storage diagnostics.
 - Installed VM UX: `system init` now records boot-state, service-state, and
-  `desktop-restore` reload evidence for the Hyprland-style session,
+  `desktop-restore` reload/recover evidence for the Hyprland-style session,
   `system services` exposes the current mini service policy, `system logs`
   gathers boot/service/init/desktop-restore evidence, `system firstboot` guides the first
   installed boot checklist, `system health` gives a concise PASS/WARN operator
