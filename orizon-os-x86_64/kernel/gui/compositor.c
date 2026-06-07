@@ -62,6 +62,8 @@ extern void serial_puts(const char *s);
 #define DESKTOP_DEFAULT_MASTER_RATIO 58
 #define DESKTOP_DEFAULT_MASTER_COUNT 1
 #define DESKTOP_SPECIAL_DEFAULT_NAME "default"
+#define DESKTOP_RENDER_REFRESH_HINT_HZ 60
+#define DESKTOP_RENDER_TICK_HZ 100
 
 #define COLOR_BG_TOP MAKE_COLOR(10, 14, 24)
 #define COLOR_BG_BOTTOM MAKE_COLOR(22, 28, 42)
@@ -3651,6 +3653,33 @@ static int desktop_rendered_client_count_on_workspace(int workspace) {
     }
   }
   return count;
+}
+
+static void desktop_tiling_area(int *rx, int *ry, int *rw, int *rh) {
+  int outer_gap = desktop_settings.gaps_out;
+  int area_x = 44 + outer_gap;
+  int area_y = TOP_BAR_HEIGHT + 92;
+  int area_w = (int)screen_width - 88 - outer_gap * 2;
+  int area_h = (int)screen_height - area_y - FOOTER_HEIGHT - 18 - outer_gap;
+
+  if (area_w < 120) {
+    area_w = 120;
+  }
+  if (area_h < 80) {
+    area_h = 80;
+  }
+  if (rx) {
+    *rx = area_x;
+  }
+  if (ry) {
+    *ry = area_y;
+  }
+  if (rw) {
+    *rw = area_w;
+  }
+  if (rh) {
+    *rh = area_h;
+  }
 }
 
 static const char *desktop_client_role_on_workspace(int workspace, int idx,
@@ -9397,24 +9426,37 @@ void gui_desktop_format_animations(char *out, size_t out_size) {
            "source: %s\n"
            "runtime: focus-ring=%s workspace-transition=yes layout-transition=yes tick-budget=%d curve=%s profile=%s\n"
            "transition: reason=%s from=%d to=%d ticks-remaining=%d progress=%d%% render-serial=%llu\n"
+           "frame-budget: tick-hz=%d refresh-hint=%d active=%s budget-ticks=%d\n"
            "curves:\n"
            "  orizon-pop prepared=yes bezier=0.16,1,0.3,1\n"
            "  orizon-slide prepared=yes bezier=0.2,0.8,0.2,1\n"
            "rules:\n"
-           "  windows enabled=yes style=focus-glow+shadow ticked-software\n"
-           "  workspaces enabled=yes style=slide-indicator ticked-software\n"
-           "  layers enabled=yes style=fade-indicator ticked-software\n"
+           "  windows enabled=%s style=focus-glow+shadow ticked-software\n"
+           "  workspaces enabled=%s style=slide-indicator ticked-software\n"
+           "  layers enabled=%s style=fade-indicator ticked-software\n"
+           "client-animations: focus-ring=%s shadows=%s manual-drag=no\n"
+           "workspace-animations: transition=%s curve=%s source=dispatcher\n"
            "truth: software framebuffer animation hints, not wlroots animation graph\n"
            "set: desktop keyword animations:enabled <true|false> | desktop keyword animations:tick_budget <4-60>\n",
-           desktop_settings.animations_enabled ? "true" : "false",
-           ORIZON_DESKTOP_SETTINGS_PATH,
-           desktop_settings.focus_ring_enabled ? "yes" : "no",
+            desktop_settings.animations_enabled ? "true" : "false",
+            ORIZON_DESKTOP_SETTINGS_PATH,
+            desktop_settings.focus_ring_enabled ? "yes" : "no",
            desktop_animation_tick_budget(), desktop_settings.animation_curve,
-           desktop_settings.render_profile,
-           desktop_transition_reason, desktop_transition_from_workspace,
-           desktop_transition_to_workspace, desktop_animation_ticks_remaining,
-           desktop_transition_progress_percent(),
-           (unsigned long long)desktop_render_serial);
+            desktop_settings.render_profile,
+            desktop_transition_reason, desktop_transition_from_workspace,
+            desktop_transition_to_workspace, desktop_animation_ticks_remaining,
+            desktop_transition_progress_percent(),
+            (unsigned long long)desktop_render_serial,
+            DESKTOP_RENDER_TICK_HZ, DESKTOP_RENDER_REFRESH_HINT_HZ,
+            desktop_animation_ticks_remaining > 0 ? "yes" : "no",
+            desktop_animation_tick_budget(),
+            desktop_settings.animations_enabled ? "yes" : "no",
+            desktop_settings.animations_enabled ? "yes" : "no",
+            desktop_settings.animations_enabled ? "yes" : "no",
+            desktop_settings.focus_ring_enabled ? "yes" : "no",
+            desktop_settings.shadows_enabled ? "yes" : "no",
+            desktop_animation_ticks_remaining > 0 ? "active" : "idle",
+            desktop_settings.animation_curve);
 }
 
 void gui_desktop_format_animations_json(char *out, size_t out_size) {
@@ -9451,51 +9493,90 @@ void gui_desktop_format_animations_json(char *out, size_t out_size) {
   snprintf(line, sizeof(line),
            ",\"from\":%d,\"to\":%d,\"ticksRemaining\":%d,"
            "\"progress\":%d,\"renderSerial\":%llu},"
+           "\"frameBudget\":{\"tickHz\":%d,\"refreshHintHz\":%d,"
+           "\"active\":%s,\"budgetTicks\":%d},"
            "\"curves\":[{\"name\":\"orizon-pop\",\"prepared\":true,"
            "\"bezier\":\"0.16,1,0.3,1\"},"
            "{\"name\":\"orizon-slide\",\"prepared\":true,"
-           "\"bezier\":\"0.2,0.8,0.2,1\"}],"
-           "\"rules\":[{\"target\":\"windows\",\"enabled\":true,"
-           "\"style\":\"focus-glow+shadow\",\"renderer\":\"software\"},"
-           "{\"target\":\"workspaces\",\"enabled\":true,"
-           "\"style\":\"slide-indicator\",\"renderer\":\"software\"},"
-           "{\"target\":\"layers\",\"enabled\":true,"
-           "\"style\":\"fade-indicator\",\"renderer\":\"software\"}],"
-           "\"limits\":[\"software framebuffer animation hints only\","
-           "\"no wlroots animation graph yet\",\"no manual window drag\"]}\n",
+           "\"bezier\":\"0.2,0.8,0.2,1\"}],",
            desktop_transition_from_workspace, desktop_transition_to_workspace,
            desktop_animation_ticks_remaining,
            desktop_transition_progress_percent(),
-           (unsigned long long)desktop_render_serial);
+           (unsigned long long)desktop_render_serial,
+           DESKTOP_RENDER_TICK_HZ, DESKTOP_RENDER_REFRESH_HINT_HZ,
+           desktop_animation_ticks_remaining > 0 ? "true" : "false",
+           desktop_animation_tick_budget());
   desktop_json_append_raw(out, out_size, &used, line);
+  snprintf(line, sizeof(line),
+           "\"rules\":[{\"target\":\"windows\",\"enabled\":%s,"
+           "\"style\":\"focus-glow+shadow\",\"renderer\":\"software\"},"
+           "{\"target\":\"workspaces\",\"enabled\":%s,"
+           "\"style\":\"slide-indicator\",\"renderer\":\"software\"},"
+           "{\"target\":\"layers\",\"enabled\":%s,"
+           "\"style\":\"fade-indicator\",\"renderer\":\"software\"}],"
+           "\"clientAnimations\":{\"focusRing\":%s,\"shadows\":%s,"
+           "\"manualDrag\":false},"
+           "\"workspaceAnimations\":{\"state\":\"%s\",\"curve\":",
+           desktop_settings.animations_enabled ? "true" : "false",
+           desktop_settings.animations_enabled ? "true" : "false",
+           desktop_settings.animations_enabled ? "true" : "false",
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_animation_ticks_remaining > 0 ? "active" : "idle");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.animation_curve);
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"source\":\"dispatcher\"},"
+      "\"limits\":[\"software framebuffer animation hints only\","
+      "\"no wlroots animation graph yet\",\"no manual window drag\"]}\n");
 }
 
 void gui_desktop_format_decorations(char *out, size_t out_size) {
+  int area_x = 0;
+  int area_y = 0;
+  int area_w = 0;
+  int area_h = 0;
+
   if (!out || out_size == 0) {
     return;
   }
+  desktop_tiling_area(&area_x, &area_y, &area_w, &area_h);
   snprintf(out, out_size,
            "Orizon desktop decorations\n"
            "border: size=%d active-color=accent inactive-color=edge\n"
+           "gaps: inner=%d outer=%d tiling-area=%d,%d %dx%d\n"
            "focus-ring: enabled=%s renderer=software-glow follows=activewindow\n"
            "rounding: configured=%d renderer=corner-hints true-rounded=no\n"
            "shadows: enabled=%s range=%d renderer=software\n"
            "blur: enabled=no prepared=no\n"
+           "accessibility: scale=%d focus-ring=%s reduced-motion=%s\n"
            "drop-shadow: %s\n"
            "window-moving: manual-drag=no tiled-dispatch=yes\n"
            "set: desktop keyword decoration:rounding <n> | desktop keyword decoration:shadow:range <0-32>\n",
-           desktop_settings.border_size,
-           desktop_settings.focus_ring_enabled ? "true" : "false",
-           desktop_settings.rounding,
-           desktop_settings.shadows_enabled ? "true" : "false",
-           desktop_settings.shadow_range,
-           desktop_settings.shadows_enabled ? "enabled" : "disabled");
+            desktop_settings.border_size,
+            desktop_settings.gaps_in, desktop_settings.gaps_out, area_x, area_y,
+            area_w, area_h,
+            desktop_settings.focus_ring_enabled ? "true" : "false",
+            desktop_settings.rounding,
+            desktop_settings.shadows_enabled ? "true" : "false",
+            desktop_settings.shadow_range,
+            ui_scale, desktop_settings.focus_ring_enabled ? "yes" : "no",
+            desktop_settings.animations_enabled ? "no" : "yes",
+            desktop_settings.shadows_enabled ? "enabled" : "disabled");
 }
 
 void gui_desktop_format_decorations_json(char *out, size_t out_size) {
+  int area_x = 0;
+  int area_y = 0;
+  int area_w = 0;
+  int area_h = 0;
+
   if (!out || out_size == 0) {
     return;
   }
+  desktop_tiling_area(&area_x, &area_y, &area_w, &area_h);
   snprintf(out, out_size,
            "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
            "\"command\":\"decorations\",\"hyprlandStyleFacade\":true,"
@@ -9503,6 +9584,8 @@ void gui_desktop_format_decorations_json(char *out, size_t out_size) {
            "\"wlroots\":false,\"manualDrag\":false,"
            "\"border\":{\"size\":%d,\"activeColor\":\"accent\","
            "\"inactiveColor\":\"edge\"},"
+           "\"gaps\":{\"inner\":%d,\"outer\":%d},"
+           "\"tilingArea\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d},"
            "\"focusRing\":{\"enabled\":%s,\"renderer\":\"software-glow\","
            "\"follows\":\"activewindow\"},"
            "\"rounding\":{\"configured\":%d,\"renderer\":\"corner-hints\","
@@ -9510,55 +9593,92 @@ void gui_desktop_format_decorations_json(char *out, size_t out_size) {
            "\"shadows\":{\"enabled\":%s,\"range\":%d,"
            "\"renderer\":\"software\"},"
            "\"blur\":{\"enabled\":false,\"prepared\":false},"
+           "\"accessibility\":{\"scale\":%d,\"focusRing\":%s,"
+           "\"reducedMotion\":%s},"
            "\"windowMoving\":{\"manualDrag\":false,\"tiledDispatch\":true},"
            "\"limits\":[\"software framebuffer decorations only\","
            "\"no real blur pass yet\",\"no floating scene graph\"]}\n",
-           desktop_settings.border_size,
-           desktop_settings.focus_ring_enabled ? "true" : "false",
-           desktop_settings.rounding,
-           desktop_settings.shadows_enabled ? "true" : "false",
-           desktop_settings.shadow_range);
+            desktop_settings.border_size,
+            desktop_settings.gaps_in, desktop_settings.gaps_out, area_x, area_y,
+            area_w, area_h,
+            desktop_settings.focus_ring_enabled ? "true" : "false",
+            desktop_settings.rounding,
+            desktop_settings.shadows_enabled ? "true" : "false",
+            desktop_settings.shadow_range, ui_scale,
+            desktop_settings.focus_ring_enabled ? "true" : "false",
+            desktop_settings.animations_enabled ? "false" : "true");
 }
 
 void gui_desktop_format_render(char *out, size_t out_size) {
   color_t accent = desktop_theme_accent();
+  int area_x = 0;
+  int area_y = 0;
+  int area_w = 0;
+  int area_h = 0;
+  int client_count;
+  int rendered_count;
+  uint32_t active_address = 0;
 
   if (!out || out_size == 0) {
     return;
+  }
+  desktop_tiling_area(&area_x, &area_y, &area_w, &area_h);
+  client_count = desktop_client_count_on_workspace(desktop_active_workspace);
+  rendered_count =
+      desktop_rendered_client_count_on_workspace(desktop_active_workspace);
+  if (desktop_focused_client_id > 0) {
+    active_address = DESKTOP_CLIENT_ADDRESS_BASE +
+                     ((uint32_t)desktop_focused_client_id * 0x100u);
   }
   snprintf(out, out_size,
            "Orizon desktop render\n"
            "backend: framebuffer\n"
            "renderer: software\n"
-           "scale: %d\n"
+           "monitor: %lux%lu refresh-hint=%dHz\n"
+           "surface: reserved-top=%d reserved-bottom=%d tiling-area=%d,%d %dx%d\n"
+           "scale-policy: effective=%d requested=%d source=framebuffer-auto xwayland-scale=prepared-only\n"
            "theme: %s wallpaper=%s accent=#%06x\n"
            "render-profile: %s\n"
+           "geometry: gaps=%d/%d border=%d rounding=%d\n"
            "focus-ring: enabled=%s activewindow=0x%x style=hyprland-like-glow\n"
            "shadows: enabled=%s range=%d renderer=software\n"
            "rounding: configured=%d renderer=corner-hints true-rounded=no\n"
            "transitions: enabled=%s curve=%s budget=%d reason=%s from=%d to=%d ticks=%d progress=%d%%\n"
+           "frame-budget: tick-hz=%d refresh-hint=%d active=%s render-serial=%llu\n"
+           "clients: workspace=%d mapped=%d rendered=%d layout=%s fullscreen-aware=yes pseudo-aware=yes pinned-aware=yes\n"
+           "client-animations: focus-ring=%s shadows=%s workspace-transition=%s\n"
            "render-serial: %llu\n"
            "window-moving: manual-drag=no tiled-dispatch=yes\n"
            "backend-map: " ORIZON_DESKTOP_BACKEND_PATH "\n"
            "protocol-map: " ORIZON_DESKTOP_PROTOCOL_PATH "\n"
            "protocols: wayland=no wlroots=no xdg-shell=no layer-shell=prepared-only\n"
            "truth: VM-safe Hyprland-style facade over Orizon framebuffer compositor\n",
-           ui_scale, desktop_session.theme, desktop_session.wallpaper,
-           accent & 0xffffff,
-           desktop_settings.render_profile,
-           desktop_settings.focus_ring_enabled ? "true" : "false",
-           desktop_focused_client_id > 0
-               ? DESKTOP_CLIENT_ADDRESS_BASE +
-                     ((uint32_t)desktop_focused_client_id * 0x100u)
-               : 0,
-           desktop_settings.shadows_enabled ? "true" : "false",
-           desktop_settings.shadow_range, desktop_settings.rounding,
-           desktop_settings.animations_enabled ? "true" : "false",
-           desktop_settings.animation_curve, desktop_animation_tick_budget(),
-           desktop_transition_reason, desktop_transition_from_workspace,
-           desktop_transition_to_workspace, desktop_animation_ticks_remaining,
-           desktop_transition_progress_percent(),
-           (unsigned long long)desktop_render_serial);
+            (unsigned long)screen_width, (unsigned long)screen_height,
+            DESKTOP_RENDER_REFRESH_HINT_HZ, TOP_BAR_HEIGHT, FOOTER_HEIGHT,
+            area_x, area_y, area_w, area_h, ui_scale, desktop_settings.scale,
+            desktop_session.theme, desktop_session.wallpaper,
+            accent & 0xffffff,
+            desktop_settings.render_profile, desktop_settings.gaps_in,
+            desktop_settings.gaps_out, desktop_settings.border_size,
+            desktop_settings.rounding,
+            desktop_settings.focus_ring_enabled ? "true" : "false",
+            active_address,
+            desktop_settings.shadows_enabled ? "true" : "false",
+            desktop_settings.shadow_range, desktop_settings.rounding,
+            desktop_settings.animations_enabled ? "true" : "false",
+            desktop_settings.animation_curve, desktop_animation_tick_budget(),
+            desktop_transition_reason, desktop_transition_from_workspace,
+            desktop_transition_to_workspace, desktop_animation_ticks_remaining,
+            desktop_transition_progress_percent(),
+            DESKTOP_RENDER_TICK_HZ, DESKTOP_RENDER_REFRESH_HINT_HZ,
+            desktop_animation_ticks_remaining > 0 ? "yes" : "no",
+            (unsigned long long)desktop_render_serial,
+            desktop_active_workspace, client_count, rendered_count,
+            desktop_layout_engine(),
+            desktop_settings.focus_ring_enabled ? "yes" : "no",
+            desktop_settings.shadows_enabled ? "yes" : "no",
+            desktop_animation_ticks_remaining > 0 ? "active" : "idle",
+            (unsigned long long)desktop_render_serial);
 }
 
 void gui_desktop_format_render_json(char *out, size_t out_size) {
@@ -9566,10 +9686,20 @@ void gui_desktop_format_render_json(char *out, size_t out_size) {
   size_t used = 0;
   char line[512];
   uint32_t active_address = 0;
+  int area_x = 0;
+  int area_y = 0;
+  int area_w = 0;
+  int area_h = 0;
+  int client_count;
+  int rendered_count;
 
   if (!out || out_size == 0) {
     return;
   }
+  desktop_tiling_area(&area_x, &area_y, &area_w, &area_h);
+  client_count = desktop_client_count_on_workspace(desktop_active_workspace);
+  rendered_count =
+      desktop_rendered_client_count_on_workspace(desktop_active_workspace);
   if (desktop_focused_client_id > 0) {
     active_address = DESKTOP_CLIENT_ADDRESS_BASE +
                      ((uint32_t)desktop_focused_client_id * 0x100u);
@@ -9581,8 +9711,16 @@ void gui_desktop_format_render_json(char *out, size_t out_size) {
            "\"backend\":\"framebuffer-vm\",\"renderer\":\"software\","
            "\"wayland\":false,\"wlroots\":false,\"xdgShell\":false,"
            "\"layerShell\":\"prepared-only\",\"manualDrag\":false,"
-           "\"scale\":%d,\"theme\":",
-           ui_scale);
+           "\"monitor\":{\"width\":%lu,\"height\":%lu,"
+           "\"refreshHintHz\":%d},"
+           "\"surface\":{\"reservedTop\":%d,\"reservedBottom\":%d,"
+           "\"tilingArea\":{\"x\":%d,\"y\":%d,\"width\":%d,\"height\":%d}},"
+           "\"scalePolicy\":{\"effective\":%d,\"requested\":%d,"
+           "\"source\":\"framebuffer-auto\",\"xwaylandScale\":\"prepared-only\"},"
+           "\"theme\":",
+           (unsigned long)screen_width, (unsigned long)screen_height,
+           DESKTOP_RENDER_REFRESH_HINT_HZ, TOP_BAR_HEIGHT, FOOTER_HEIGHT,
+           area_x, area_y, area_w, area_h, ui_scale, desktop_settings.scale);
   desktop_json_append_raw(out, out_size, &used, line);
   desktop_json_append_string(out, out_size, &used, desktop_session.theme);
   desktop_json_append_raw(out, out_size, &used, ",\"wallpaper\":");
@@ -9592,6 +9730,8 @@ void gui_desktop_format_render_json(char *out, size_t out_size) {
                              desktop_settings.render_profile);
   snprintf(line, sizeof(line),
            ",\"accent\":\"#%06x\","
+           "\"geometry\":{\"gapsIn\":%d,\"gapsOut\":%d,"
+           "\"borderSize\":%d,\"rounding\":%d},"
            "\"focusRing\":{\"enabled\":%s,\"activewindow\":\"0x%x\","
            "\"style\":\"hyprland-like-glow\"},"
            "\"shadows\":{\"enabled\":%s,\"range\":%d,"
@@ -9599,7 +9739,9 @@ void gui_desktop_format_render_json(char *out, size_t out_size) {
            "\"rounding\":{\"configured\":%d,\"renderer\":\"corner-hints\","
            "\"trueRounded\":false},"
            "\"transitions\":{\"enabled\":%s,\"curve\":",
-           accent & 0xffffff,
+           accent & 0xffffff, desktop_settings.gaps_in,
+           desktop_settings.gaps_out, desktop_settings.border_size,
+           desktop_settings.rounding,
            desktop_settings.focus_ring_enabled ? "true" : "false",
            active_address,
            desktop_settings.shadows_enabled ? "true" : "false",
@@ -9615,10 +9757,27 @@ void gui_desktop_format_render_json(char *out, size_t out_size) {
   desktop_json_append_string(out, out_size, &used, desktop_transition_reason);
   snprintf(line, sizeof(line),
            ",\"from\":%d,\"to\":%d,\"ticks\":%d,\"progress\":%d},"
+           "\"frameBudget\":{\"tickHz\":%d,\"refreshHintHz\":%d,"
+           "\"active\":%s},"
+           "\"clients\":{\"workspace\":%d,\"mapped\":%d,\"rendered\":%d,"
+           "\"layout\":",
+            desktop_transition_from_workspace, desktop_transition_to_workspace,
+            desktop_animation_ticks_remaining,
+            desktop_transition_progress_percent(), DESKTOP_RENDER_TICK_HZ,
+            DESKTOP_RENDER_REFRESH_HINT_HZ,
+            desktop_animation_ticks_remaining > 0 ? "true" : "false",
+            desktop_active_workspace, client_count, rendered_count);
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used, desktop_layout_engine());
+  snprintf(line, sizeof(line),
+           ",\"fullscreenAware\":true,\"pseudoAware\":true,"
+           "\"pinnedAware\":true},"
+           "\"clientAnimations\":{\"focusRing\":%s,\"shadows\":%s,"
+           "\"workspaceTransition\":\"%s\"},"
            "\"renderSerial\":%llu,\"backendMap\":",
-           desktop_transition_from_workspace, desktop_transition_to_workspace,
-           desktop_animation_ticks_remaining,
-           desktop_transition_progress_percent(),
+           desktop_settings.focus_ring_enabled ? "true" : "false",
+           desktop_settings.shadows_enabled ? "true" : "false",
+           desktop_animation_ticks_remaining > 0 ? "active" : "idle",
            (unsigned long long)desktop_render_serial);
   desktop_json_append_raw(out, out_size, &used, line);
   desktop_json_append_string(out, out_size, &used, ORIZON_DESKTOP_BACKEND_PATH);

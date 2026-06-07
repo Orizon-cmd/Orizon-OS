@@ -389,6 +389,13 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.93.0` strengthens VM renderer diagnostics:
+`desktop render`, `desktop decorations`, `desktop animations`, and JSON
+`render|decorations|animations` expose framebuffer surface/reserved areas,
+tiling area, scale policy, frame budget, rendered client counts,
+gaps/borders/rounding, focus ring, shadows, and client/workspace animation
+state. This is still the framebuffer VM backend and Hyprland-style facade, not
+Wayland/wlroots or upstream Hyprland.
 Package `0.92.0` strengthens VM keyboard/submap diagnostics:
 `desktop submap`, `desktop keymap`, `desktop shortcuts`, and JSON
 `submap|keymap|shortcuts` expose the active submap role/actions,
@@ -493,8 +500,10 @@ input model. `desktop systeminfo`, `desktop architecture`, `desktop backend`, `d
 `desktop descriptions`, `desktop instances`, and `desktop submap` mirror common
 Hyprland inspection habits while staying honest about Orizon's framebuffer backend.
 `desktop render` is the most direct VM-safe renderer diagnostic: it reports the
-software focus ring policy, shadow range, render profile, configured rounding,
-animation curve/tick budget, transition reason and render serial. `desktop
+software framebuffer backend, monitor refresh hint, reserved top/bottom areas,
+tiling area, scale policy, gap/border/rounding geometry, focus ring policy,
+shadow range, render profile, animation curve/tick budget, transition reason,
+frame budget, rendered client counts, and render serial. `desktop
 keyword decoration:shadow:range <0-32>`, `desktop keyword
 animations:tick_budget <4-60>`, `desktop keyword render:focus_ring
 <true|false>`, and `desktop settings set render-profile <name>` persist those

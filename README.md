@@ -214,10 +214,13 @@ Hyprland-style de l'absence de deplacement manuel libre.
 Depuis `0.87.0`, les diagnostics `source` listent aussi chaque fichier resolu
 avec statut `LOADED`/`MISSING`/`SKIP_*`/`*_LIMIT` dans `desktop configerrors`
 et `desktop hyprctl -j configerrors`.
-`desktop render` detaille le focus ring, les shadows, le `render-profile`, la
-courbe/budget d'animation, les transitions workspace/layout/focus et le backend
-framebuffer logiciel sans pretendre fournir Wayland/wlroots. Les reglages
-persistants passent par `desktop settings set focus-ring <yes|no>`,
+Depuis `0.93.0`, `desktop render`, `desktop decorations`, `desktop animations`
+et les sorties JSON equivalentes detaillent aussi la surface framebuffer, les
+zones reservees, la zone tiled, la scale-policy, le frame-budget, les clients
+rendus, les gaps/borders/rounding, le focus ring, les shadows et l'etat des
+animations client/workspace. Cela reste une facade VM Hyprland-style sur
+framebuffer logiciel, sans Wayland/wlroots reel. Les reglages persistants
+passent par `desktop settings set focus-ring <yes|no>`,
 `desktop settings set render-profile <balanced|performance|cozy>`,
 `desktop keyword decoration:shadow:range <0-32>` et
 `desktop keyword animations:tick_budget <4-60>`.

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Added desktop package version `0.93.0` with VM-ready renderer diagnostics for
+  the Hyprland-style framebuffer facade. `desktop render`, `desktop
+  decorations`, `desktop animations`, and JSON `desktop hyprctl -j
+  render|decorations|animations` now expose the framebuffer surface, reserved
+  top/bottom areas, tiling area, scale policy, frame budget, rendered client
+  counts, gaps, borders, rounding, focus ring, shadows, and client/workspace
+  animation state. This remains dispatcher/tiling-only: no Waybar activation,
+  taskbar/start menu, floating scene graph, manual window drag, upstream
+  Hyprland, Wayland/wlroots server, XWayland, layer-shell runtime, or physical
+  hardware validation is claimed.
 - Added desktop package version `0.92.0` with stronger VM-ready keyboard submap
   diagnostics. `desktop submap`, `desktop keymap`, `desktop shortcuts`, and JSON
   `desktop hyprctl -j submap|keymap|shortcuts` now expose the active submap

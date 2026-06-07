@@ -65,7 +65,7 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.92.0`: `desktop architecture`,
+- Desktop release boundary for current package `0.93.0`: `desktop architecture`,
   `desktop backend`, and `desktop protocol` expose
   `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
   `/system/desktop-protocol.conf`. The implemented VM-ready pieces are the
@@ -75,6 +75,12 @@ design note.
   prepared-only; there is still no upstream Hyprland, Wayland/wlroots server,
   external Wayland client protocol, XWayland, layer-shell, Waybar, taskbar/start
   menu, free manual window drag, or physical hardware validation.
+- `0.93.0` adds VM-ready render/decorations/animations diagnostics: `desktop
+  render`, `desktop decorations`, `desktop animations`, and JSON
+  `render|decorations|animations` expose framebuffer surface/reserved areas,
+  tiling area, scale policy, frame budget, rendered client counts,
+  gaps/borders/rounding, focus ring, shadows, and client/workspace animation
+  state while staying dispatcher/tiling-only.
 - `0.92.0` adds VM-ready submap/input runtime diagnostics: `desktop submap`,
   `desktop keymap`, `desktop shortcuts`, and JSON `submap|keymap|shortcuts`
   expose active submap role/actions, sticky reset policy, exit hints, keyboard

@@ -448,6 +448,12 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.93.0`, `desktop render`, `desktop decorations`, `desktop
+animations`, and JSON `render|decorations|animations` expose framebuffer
+surface/reserved areas, tiling area, scale policy, frame budget, rendered
+client counts, gaps/borders/rounding, focus ring, shadows, and
+client/workspace animation state without enabling Waybar, floating windows, or
+manual drag.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,

@@ -698,13 +698,13 @@ run_cmd() {
       grep -q "Orizon desktop layout tree" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop layout tree"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop animations"|"desktop hyprctl animations")
-      grep -q "Orizon desktop animations" "`$OUT" && grep -q "animations:enabled" "`$OUT" || { echo "missing desktop animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop animations" "`$OUT" && grep -q "animations:enabled" "`$OUT" && grep -q "frame-budget:" "`$OUT" && grep -q "client-animations:" "`$OUT" || { echo "missing desktop animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop decorations"|"desktop hyprctl decorations")
-      grep -q "Orizon desktop decorations" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop decorations" "`$OUT" && grep -q "manual-drag=no" "`$OUT" && grep -q "gaps: inner=" "`$OUT" && grep -q "accessibility:" "`$OUT" || { echo "missing desktop decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop render"|"desktop hyprctl render")
-      grep -q "Orizon desktop render" "`$OUT" && grep -q "manual-drag=no" "`$OUT" || { echo "missing desktop render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Orizon desktop render" "`$OUT" && grep -q "manual-drag=no" "`$OUT" && grep -q "surface:" "`$OUT" && grep -q "scale-policy:" "`$OUT" && grep -q "frame-budget:" "`$OUT" || { echo "missing desktop render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop descriptions"|"desktop hyprctl descriptions")
       grep -q "Orizon desktop hyprctl descriptions" "`$OUT" && grep -q "layoutmsg" "`$OUT" || { echo "missing desktop descriptions"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -794,13 +794,13 @@ run_cmd() {
       grep -q '"command":"cursorpos"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" && grep -q '"profile":' "`$OUT" || { echo "missing hyprctl json cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j animations")
-      grep -q '"command":"animations"' "`$OUT" && grep -q '"workspaceTransition":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"animations"' "`$OUT" && grep -q '"workspaceTransition":true' "`$OUT" && grep -q '"frameBudget":{' "`$OUT" && grep -q '"clientAnimations":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json animations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j decorations")
-      grep -q '"command":"decorations"' "`$OUT" && grep -q '"focusRing":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"decorations"' "`$OUT" && grep -q '"focusRing":{' "`$OUT" && grep -q '"gaps":{' "`$OUT" && grep -q '"accessibility":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json decorations"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j render")
-      grep -q '"command":"render"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"render"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"surface":{' "`$OUT" && grep -q '"scalePolicy":{' "`$OUT" && grep -q '"frameBudget":{' "`$OUT" && grep -q '"clientAnimations":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json render"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j layouts")
       grep -q '"command":"layouts"' "`$OUT" && grep -q '"activeLayout":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json layouts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
