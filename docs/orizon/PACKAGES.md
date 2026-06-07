@@ -278,7 +278,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.84.0` because it includes policy/config files, the persisted session
+`0.85.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -311,9 +311,12 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.84.0` adds compositor-side `lastDispatch` diagnostics
-to layout state/tree and JSON dispatch output so failed or successful tiling
-actions remain visible after the command returns. Version `0.83.0` adds the
+the launcher. Version `0.85.0` adds structured `error`/`hint` fields to
+`desktop hyprctl -j dispatch` and `lastDispatch` so failed tiling actions can be
+handled by scripts without parsing prose. Version `0.84.0` adds compositor-side
+`lastDispatch` diagnostics to layout state/tree and JSON dispatch output so
+failed or successful tiling actions remain visible after the command returns.
+Version `0.83.0` adds the
 implemented VM-safe
 `desktop-protocol-v0` runtime trace for internal `orizon-desktop-ipc-v0`
 messages, visible through `desktop protocol` and `desktop hyprctl -j protocol`.

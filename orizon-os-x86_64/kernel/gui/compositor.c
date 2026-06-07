@@ -168,6 +168,8 @@ typedef struct {
   int split_ratio_percent;
   int master_ratio_percent;
   int master_count;
+  char error[48];
+  char hint[128];
   char dispatcher[40];
   char args[128];
   char result[240];
@@ -187,6 +189,8 @@ static desktop_dispatch_diagnostic_t desktop_last_dispatch = {
     DESKTOP_DEFAULT_SPLIT_RATIO,
     DESKTOP_DEFAULT_MASTER_RATIO,
     DESKTOP_DEFAULT_MASTER_COUNT,
+    "not-run",
+    "run desktop dispatch or desktop hyprctl -j dispatch",
     "none",
     "",
     "no dispatcher has run yet",
@@ -4982,6 +4986,67 @@ static void desktop_dispatch_diag_copy(char *dest, size_t dest_size,
   dest[i] = '\0';
 }
 
+static int desktop_dispatch_text_contains(const char *text,
+                                          const char *needle) {
+  return text && needle && needle[0] && strstr(text, needle) != NULL;
+}
+
+static void desktop_classify_dispatch_result(int rc, const char *result,
+                                             char *error, size_t error_size,
+                                             char *hint, size_t hint_size) {
+  const char *code = "failed";
+  const char *advice = "inspect the dispatcher result";
+
+  if (rc == 0) {
+    desktop_dispatch_diag_copy(error, error_size, "");
+    desktop_dispatch_diag_copy(hint, hint_size, "dispatch accepted");
+    return;
+  }
+
+  if (desktop_dispatch_text_contains(result, "no-match")) {
+    code = "no-match";
+    advice = "check the selector against desktop hyprctl clients";
+  } else if (desktop_dispatch_text_contains(result, "no active") ||
+             desktop_dispatch_text_contains(result, "no-client") ||
+             desktop_dispatch_text_contains(result, "no-last-client") ||
+             desktop_dispatch_text_contains(result, "no-urgent-or-last") ||
+             desktop_dispatch_text_contains(result, "expects active client") ||
+             desktop_dispatch_text_contains(result,
+                                            "expects an active client")) {
+    code = "no-client";
+    advice = "spawn or focus a tiled client first";
+  } else if (desktop_dispatch_text_contains(result, "needs-distinct-target")) {
+    code = "needs-distinct-target";
+    advice = "choose a different tiled client target";
+  } else if (desktop_dispatch_text_contains(result, "needs-two-clients")) {
+    code = "needs-two-clients";
+    advice = "open another tiled client on the active workspace";
+  } else if (desktop_dispatch_text_contains(result, "safe name") ||
+             desktop_dispatch_text_contains(result, "safe-name")) {
+    code = "invalid-name";
+    advice = "use a safe ASCII name without spaces";
+  } else if (desktop_dispatch_text_contains(result, "invalid") ||
+             desktop_dispatch_text_contains(result, "failed for workspace") ||
+             desktop_dispatch_text_contains(result, "failed for special")) {
+    code = "invalid-target";
+    advice = "check workspace, monitor, or special workspace target";
+  } else if (desktop_dispatch_text_contains(result, "client limit")) {
+    code = "client-limit";
+    advice = "close a tiled client before spawning another";
+  } else if (desktop_dispatch_text_contains(result, "exec supports")) {
+    code = "unsupported";
+    advice = "use a supported VM desktop app";
+  } else if (desktop_dispatch_text_contains(result, "expects") ||
+             desktop_dispatch_text_contains(result, "usage") ||
+             desktop_dispatch_text_contains(result, "supports")) {
+    code = "usage";
+    advice = "check dispatcher arguments";
+  }
+
+  desktop_dispatch_diag_copy(error, error_size, code);
+  desktop_dispatch_diag_copy(hint, hint_size, advice);
+}
+
 static void desktop_record_dispatch_diagnostic(const char *dispatcher,
                                                const char *args,
                                                const char *result, int rc) {
@@ -5004,6 +5069,10 @@ static void desktop_record_dispatch_diagnostic(const char *dispatcher,
   desktop_dispatch_diag_copy(
       desktop_last_dispatch.result, sizeof(desktop_last_dispatch.result),
       result && result[0] ? result : (rc == 0 ? "ok" : "failed"));
+  desktop_classify_dispatch_result(
+      rc, desktop_last_dispatch.result, desktop_last_dispatch.error,
+      sizeof(desktop_last_dispatch.error), desktop_last_dispatch.hint,
+      sizeof(desktop_last_dispatch.hint));
   desktop_dispatch_diag_copy(desktop_last_dispatch.layout,
                              sizeof(desktop_last_dispatch.layout),
                              desktop_layout_engine());
@@ -6794,11 +6863,19 @@ static void desktop_json_append_last_dispatch(char *out, size_t out_size,
   char line[320];
 
   snprintf(line, sizeof(line),
-           "{\"serial\":%llu,\"ok\":%s,\"status\":%d,\"dispatcher\":",
+           "{\"serial\":%llu,\"ok\":%s,\"status\":%d,\"error\":",
            (unsigned long long)desktop_last_dispatch.serial,
            desktop_last_dispatch.ok ? "true" : "false",
            desktop_last_dispatch.status);
   desktop_json_append_raw(out, out_size, used, line);
+  if (desktop_last_dispatch.error[0]) {
+    desktop_json_append_string(out, out_size, used, desktop_last_dispatch.error);
+  } else {
+    desktop_json_append_raw(out, out_size, used, "null");
+  }
+  desktop_json_append_raw(out, out_size, used, ",\"hint\":");
+  desktop_json_append_string(out, out_size, used, desktop_last_dispatch.hint);
+  desktop_json_append_raw(out, out_size, used, ",\"dispatcher\":");
   desktop_json_append_string(out, out_size, used,
                              desktop_last_dispatch.dispatcher);
   desktop_json_append_raw(out, out_size, used, ",\"args\":");
@@ -6854,10 +6931,20 @@ int gui_desktop_dispatch_json(const char *dispatcher, const char *args,
   desktop_json_append_string(out, out_size, &used, safe_dispatcher);
   desktop_json_append_raw(out, out_size, &used, ",\"args\":");
   desktop_json_append_string(out, out_size, &used, safe_args);
-  snprintf(line, sizeof(line),
-           ",\"ok\":%s,\"status\":%d,\"activeWorkspace\":%d,"
+  snprintf(line, sizeof(line), ",\"ok\":%s,\"status\":%d,\"error\":",
+           rc == 0 ? "true" : "false", rc);
+  desktop_json_append_raw(out, out_size, &used, line);
+  if (desktop_last_dispatch.error[0]) {
+    desktop_json_append_string(out, out_size, &used,
+                               desktop_last_dispatch.error);
+  } else {
+    desktop_json_append_raw(out, out_size, &used, "null");
+  }
+  desktop_json_append_raw(out, out_size, &used, ",\"hint\":");
+  desktop_json_append_string(out, out_size, &used, desktop_last_dispatch.hint);
+  snprintf(line, sizeof(line), ",\"activeWorkspace\":%d,"
            "\"activeWorkspaceName\":",
-           rc == 0 ? "true" : "false", rc, desktop_active_workspace);
+           desktop_active_workspace);
   desktop_json_append_raw(out, out_size, &used, line);
   desktop_json_append_string(out, out_size, &used,
                              desktop_workspace_name(desktop_active_workspace));
@@ -9089,11 +9176,13 @@ void gui_desktop_format_layout_state(char *out, size_t out_size) {
   if (used < out_size) {
     used += snprintf(
         out + used, out_size - used,
-        "last-dispatch: serial=%llu ok=%s status=%d dispatcher=\"%s\" args=\"%s\" result=\"%s\"\n"
+        "last-dispatch: serial=%llu ok=%s status=%d error=%s hint=\"%s\" dispatcher=\"%s\" args=\"%s\" result=\"%s\"\n"
         "last-dispatch-state: workspace=%d layout=%s split=%s ratio=%d master=%d nmaster=%d submap=%s focusedClient=%d manual-drag=no floating=no\n",
         (unsigned long long)desktop_last_dispatch.serial,
         desktop_last_dispatch.ok ? "yes" : "no",
-        desktop_last_dispatch.status, desktop_last_dispatch.dispatcher,
+        desktop_last_dispatch.status,
+        desktop_last_dispatch.error[0] ? desktop_last_dispatch.error : "none",
+        desktop_last_dispatch.hint, desktop_last_dispatch.dispatcher,
         desktop_last_dispatch.args[0] ? desktop_last_dispatch.args : "none",
         desktop_last_dispatch.result, desktop_last_dispatch.workspace,
         desktop_last_dispatch.layout, desktop_last_dispatch.split,
@@ -9182,11 +9271,13 @@ void gui_desktop_format_layout_tree(char *out, size_t out_size) {
   if (used < out_size) {
     used += snprintf(
         out + used, out_size - used,
-        "last-dispatch: serial=%llu ok=%s status=%d dispatcher=\"%s\" args=\"%s\" result=\"%s\"\n"
+        "last-dispatch: serial=%llu ok=%s status=%d error=%s hint=\"%s\" dispatcher=\"%s\" args=\"%s\" result=\"%s\"\n"
         "last-dispatch-state: workspace=%d layout=%s split=%s ratio=%d master=%d nmaster=%d submap=%s focusedClient=%d manual-drag=no floating=no\n",
         (unsigned long long)desktop_last_dispatch.serial,
         desktop_last_dispatch.ok ? "yes" : "no",
-        desktop_last_dispatch.status, desktop_last_dispatch.dispatcher,
+        desktop_last_dispatch.status,
+        desktop_last_dispatch.error[0] ? desktop_last_dispatch.error : "none",
+        desktop_last_dispatch.hint, desktop_last_dispatch.dispatcher,
         desktop_last_dispatch.args[0] ? desktop_last_dispatch.args : "none",
         desktop_last_dispatch.result, desktop_last_dispatch.workspace,
         desktop_last_dispatch.layout, desktop_last_dispatch.split,

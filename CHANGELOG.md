@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added desktop package version `0.85.0` with structured dispatch failure
+  diagnostics for the Hyprland-style compositor facade. `desktop hyprctl -j
+  dispatch` and `lastDispatch` now expose stable `error` and `hint` fields
+  such as `usage`, `no-client`, `no-match`, `needs-two-clients`,
+  `invalid-target`, or `unsupported`, while preserving dispatcher text results
+  and keeping Orizon tiling-only with `manualDrag=false`, `floatingDesktop=false`,
+  Waybar disabled, and Wayland/wlroots/upstream Hyprland not implemented.
 - Added desktop package version `0.84.0` with a compositor-side
   `lastDispatch` diagnostic snapshot for Hyprland-style tiling dispatchers.
   `desktop layout-state`, `desktop layout-tree`, `desktop hyprctl -j

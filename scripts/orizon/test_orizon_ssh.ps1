@@ -891,7 +891,7 @@ run_cmd() {
       grep -q '"command":"reload"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json reload"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j dispatch workspace active")
-      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"workspace"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"lastDispatch":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"workspace"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"error":null' "`$OUT" && grep -q '"hint":"dispatch accepted"' "`$OUT" && grep -q '"lastDispatch":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch workspace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j dispatch layoutmsg splitratio reset")
       grep -q '"command":"dispatch"' "`$OUT" && grep -q '"dispatcher":"layoutmsg"' "`$OUT" && grep -q '"args":"splitratio reset"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json dispatch layoutmsg"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

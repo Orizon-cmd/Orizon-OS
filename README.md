@@ -219,11 +219,12 @@ workspace: roles `dwindle`/`master`/`monocle`, rectangles, focus,
 `focusHistoryID`, et la limite explicite `manual-drag=no`.
 `desktop layout-state` et `desktop hyprctl layoutstate` exposent maintenant
 l'etat tiling par workspace: layout actif, split mode, split ratio et master
-ratio et `nmaster`. Depuis `0.84.0`, `layout-state`, `layout-tree` et
+ratio et `nmaster`. Depuis `0.85.0`, `layout-state`, `layout-tree` et
 `desktop hyprctl -j dispatch` ajoutent aussi `lastDispatch`: dernier
-dispatcher, arguments, statut, resultat lisible, workspace, layout, ratios,
-submap et client focus pour diagnostiquer les erreurs sans activer floating,
-drag manuel ni socket Hyprland reel. `desktop dispatch layoutmsg layout
+dispatcher, arguments, statut, code `error`, `hint`, resultat lisible,
+workspace, layout, ratios, submap et client focus pour diagnostiquer les
+erreurs sans activer floating, drag manuel ni socket Hyprland reel.
+`desktop dispatch layoutmsg layout
 <dwindle|master|monocle>` modifie le workspace courant sans activer de
 fenetres flottantes ni de drag manuel; en monocle, seul le client focus est
 rendu et les autres restent visibles dans les diagnostics comme

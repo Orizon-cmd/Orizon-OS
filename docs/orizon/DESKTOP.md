@@ -540,11 +540,11 @@ dispatchers now include `togglesplit`,
 `workspace -1`, `workspace next`, `workspace empty`, and `workspace previous`
 are understood for VM-safe desktop flow across ten dynamic workspace slots.
 `desktop layout-state`, `desktop layout-tree`, and JSON `dispatch` diagnostics
-also include `lastDispatch` in version `0.84.0`: dispatcher, args, status,
-readable result, workspace, layout, split/master ratios, `nmaster`, submap, and
-focused client. This is a VM framebuffer diagnostic snapshot only; it does not
-enable a Hyprland IPC socket, floating placement, manual window drag, Waybar, or
-Wayland/wlroots client routing.
+also include `lastDispatch` in version `0.85.0`: dispatcher, args, status,
+stable `error` code, `hint`, readable result, workspace, layout, split/master
+ratios, `nmaster`, submap, and focused client. This is a VM framebuffer
+diagnostic snapshot only; it does not enable a Hyprland IPC socket, floating
+placement, manual window drag, Waybar, or Wayland/wlroots client routing.
 `focusworkspaceoncurrentmonitor <target>` is also accepted as the
 single-framebuffer VM equivalent of Hyprland's current-monitor workspace
 focus dispatcher; it does not claim real multi-monitor Wayland routing.
