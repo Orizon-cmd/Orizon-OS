@@ -905,7 +905,7 @@ run_cmd() {
       grep -q '"command":"getoption"' "`$OUT" && grep -q '"key":"general:gaps_in"' "`$OUT" && grep -q '"value":"9"' "`$OUT" || { echo "missing hyprctl json getoption gaps"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j keyword decoration:rounding 11")
-      grep -q '"command":"keyword"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"keyword"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"route":"settings"' "`$OUT" && grep -q '"effect":"applied-setting"' "`$OUT" && grep -q '"targetPath":"/system/desktop-settings.conf"' "`$OUT" && grep -q '"reloadRecommended":false' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json keyword"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl getoption decoration:rounding")
       grep -q "option decoration:rounding" "`$OUT" && grep -q "value: 11" "`$OUT" || { echo "missing hyprctl getoption rounding"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -1181,7 +1181,7 @@ run_cmd() {
       grep -q "orizon-launcher overlay toggled" "`$OUT" || { echo "missing desktop launch launcher output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "pkg info orizon-desktop-hypr")
-      grep -q "orizon-desktop-hypr" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "orizon-desktop-hypr" "`$OUT" && grep -q "version 0.99.0" "`$OUT" && grep -Eq "available optional|state installed" "`$OUT" || { echo "missing desktop package info"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop package")
       grep -q "orizon-desktop-hypr.opkg" "`$OUT" || { echo "missing desktop package output"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

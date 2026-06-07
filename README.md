@@ -241,6 +241,13 @@ Depuis `0.94.0`, `desktop modules`, `desktop hyprctl -j modules`, `pkg info`
 et les `.opkg` de modules exposent aussi `split-plan`, `dependency-graph`,
 frontieres de modules, roles d'activation et `split-version 2`, afin de rendre
 la separation `orizon-desktop-core`/apps plus verifiable en VM.
+Depuis `0.99.0`, `desktop hyprctl keyword <key> <value>` et
+`desktop hyprctl -j keyword <key> <value>` exposent `route`, `effect`,
+`target-path`/`targetPath` et `reload-recommended`/`reloadRecommended` pour
+distinguer reglages immediats, etat session, hints runtime prepares et cles non
+implementees. Cela reste une facade Orizon framebuffer VM/ZimaOS, pas un IPC
+Hyprland upstream, Wayland/wlroots, Waybar actif, drag manuel ni validation
+materielle.
 Depuis `0.98.0`, `desktop hyprctl getoption <hint>` et
 `desktop hyprctl -j getoption <hint>` exposent aussi `entry-count`/`entries`
 pour les hints repetables (`env`, `workspace`, `monitor`, `bind`,

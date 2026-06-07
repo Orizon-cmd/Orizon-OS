@@ -91,8 +91,9 @@ claiming upstream Hyprland, Wayland/wlroots, or real hardware validation.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.98.0` `getoption`
-  `entry-count`/`entries` diagnostics for repeated runtime hints, plus `0.97.0` focus-state
+  diagnostics for `source` files, plus `0.99.0` `keyword` route/effect
+  diagnostics, plus `0.98.0` `getoption` `entry-count`/`entries`
+  diagnostics for repeated runtime hints, plus `0.97.0` focus-state
   active/master/stack diagnostics, plus `0.96.0` runtime truth taxonomy
   diagnostics, plus `0.95.0` architecture/backend/protocol
   contract diagnostics, plus `0.94.0` modular packaging split-plan,

@@ -1684,6 +1684,69 @@ static const char *desktop_hypr_runtime_path_for_key(const char *key) {
   return NULL;
 }
 
+static int desktop_hypr_keyword_writes_session(const char *key) {
+  return key && (strcmp(key, "general:layout") == 0 ||
+                 strcmp(key, "input:follow_mouse") == 0);
+}
+
+static const char *desktop_hypr_keyword_target_path(
+    const char *key, const char *runtime_path) {
+  if (runtime_path) {
+    return runtime_path;
+  }
+  if (desktop_hypr_keyword_writes_session(key)) {
+    return ORIZON_DESKTOP_SESSION_PATH;
+  }
+  if (desktop_hypr_is_supported_setting_key(key)) {
+    return ORIZON_DESKTOP_SETTINGS_PATH;
+  }
+  return "none";
+}
+
+static const char *desktop_hypr_keyword_route(
+    const char *key, const desktop_hypr_summary_t *summary,
+    const char *runtime_path) {
+  if (runtime_path && summary && summary->applied_settings > 0) {
+    return "session+runtime-hint";
+  }
+  if (runtime_path) {
+    return "runtime-hint";
+  }
+  if (desktop_hypr_keyword_writes_session(key)) {
+    return "session";
+  }
+  if (desktop_hypr_is_supported_setting_key(key)) {
+    return "settings";
+  }
+  return "unsupported";
+}
+
+static const char *desktop_hypr_keyword_effect(
+    const desktop_hypr_summary_t *summary, const char *runtime_path) {
+  if (runtime_path && summary && summary->applied_settings > 0) {
+    return "applied-and-prepared-runtime-hint";
+  }
+  if (summary && summary->applied_settings > 0) {
+    return "applied-setting";
+  }
+  if (summary && summary->supported_settings > 0) {
+    return "supported-setting";
+  }
+  if (runtime_path) {
+    return "prepared-runtime-hint";
+  }
+  return "not-implemented";
+}
+
+static int desktop_hypr_keyword_reload_recommended(
+    const desktop_hypr_summary_t *summary, const char *runtime_path) {
+  if (runtime_path) {
+    return 1;
+  }
+  return summary && summary->supported_settings > 0 &&
+         summary->applied_settings == 0;
+}
+
 static int desktop_append_hypr_runtime_keyword(const char *key,
                                                const char *value) {
   const char *path = desktop_hypr_runtime_path_for_key(key);
@@ -4518,6 +4581,10 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
   int runtime_rc = 0;
   int user_config_rc = 0;
   const char *runtime_path;
+  const char *route;
+  const char *effect;
+  const char *target_path;
+  int reload_recommended;
 
   if (status && status_size) {
     status[0] = '\0';
@@ -4547,6 +4614,11 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
   if (runtime_path) {
     runtime_rc = desktop_append_hypr_runtime_keyword(key, value);
   }
+  route = desktop_hypr_keyword_route(key, &summary, runtime_path);
+  effect = desktop_hypr_keyword_effect(&summary, runtime_path);
+  target_path = desktop_hypr_keyword_target_path(key, runtime_path);
+  reload_recommended =
+      desktop_hypr_keyword_reload_recommended(&summary, runtime_path);
   desktop_log_event("hypr keyword applied");
   vfs_persist_save();
 
@@ -4555,6 +4627,10 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
              "desktop keyword: %s\n"
              "key: %s\n"
              "value: %s\n"
+             "route: %s\n"
+             "effect: %s\n"
+             "target-path: %s\n"
+             "reload-recommended: %s\n"
              "supported-settings: %d applied: %d runtime-hint: %s\n"
              "user-config: %s\n"
              "session: layout=%s autostart-terminal=%s focus-follows-mouse=%s\n"
@@ -4565,7 +4641,9 @@ int orizon_desktop_apply_hypr_keyword(const char *key, const char *value,
               (summary.supported_settings > 0 || runtime_path))
                  ? "applied"
                  : "warn",
-             key, value, summary.supported_settings, summary.applied_settings,
+             key, value, route, effect, target_path,
+             reload_recommended ? "yes" : "no",
+             summary.supported_settings, summary.applied_settings,
              runtime_path ? runtime_path : "none",
              summary.applied_settings > 0 ? ORIZON_DESKTOP_USER_CONFIG_PATH
                                           : "unchanged",
@@ -4598,6 +4676,11 @@ int orizon_desktop_apply_hypr_keyword_json(const char *key, const char *value,
   size_t used = 0;
   int rc;
   const char *runtime_path;
+  const char *route;
+  const char *effect;
+  const char *target_path;
+  int reload_recommended;
+  desktop_hypr_summary_t summary_probe;
 
   if (!status || status_size == 0) {
     return -1;
@@ -4606,6 +4689,19 @@ int orizon_desktop_apply_hypr_keyword_json(const char *key, const char *value,
   text[0] = '\0';
   runtime_path = key ? desktop_hypr_runtime_path_for_key(key) : NULL;
   rc = orizon_desktop_apply_hypr_keyword(key, value, text, sizeof(text));
+  memset(&summary_probe, 0, sizeof(summary_probe));
+  if (key && value && key[0] && value[0] && desktop_hypr_key_safe(key) &&
+      desktop_hypr_value_safe(value)) {
+    desktop_hypr_apply_pair(key, value, NULL, NULL, &summary_probe, 0, NULL);
+  }
+  if (strstr(text, "applied: ") && !strstr(text, "applied: 0")) {
+    summary_probe.applied_settings = 1;
+  }
+  route = desktop_hypr_keyword_route(key, &summary_probe, runtime_path);
+  effect = desktop_hypr_keyword_effect(&summary_probe, runtime_path);
+  target_path = desktop_hypr_keyword_target_path(key, runtime_path);
+  reload_recommended =
+      desktop_hypr_keyword_reload_recommended(&summary_probe, runtime_path);
   desktop_json_append_raw(
       status, status_size, &used,
       "{\"version\":\"" ORIZON_DESKTOP_PACKAGE_VERSION "\","
@@ -4632,6 +4728,16 @@ int orizon_desktop_apply_hypr_keyword_json(const char *key, const char *value,
   desktop_json_append_raw(status, status_size, &used, ",\"runtimeFile\":");
   desktop_json_append_string(status, status_size, &used,
                              runtime_path ? runtime_path : "none");
+  desktop_json_append_raw(status, status_size, &used, ",\"route\":");
+  desktop_json_append_string(status, status_size, &used, route);
+  desktop_json_append_raw(status, status_size, &used, ",\"effect\":");
+  desktop_json_append_string(status, status_size, &used, effect);
+  desktop_json_append_raw(status, status_size, &used, ",\"targetPath\":");
+  desktop_json_append_string(status, status_size, &used, target_path);
+  desktop_json_append_raw(status, status_size, &used,
+                          ",\"reloadRecommended\":");
+  desktop_json_append_raw(status, status_size, &used,
+                          reload_recommended ? "true" : "false");
   desktop_json_append_raw(
       status, status_size, &used,
       ",\"manualDrag\":false,\"floatingSceneGraph\":false,"

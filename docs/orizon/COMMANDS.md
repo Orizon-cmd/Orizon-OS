@@ -456,6 +456,11 @@ submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
 pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
 input over dispatcher/tiling actions; mouse `bindm` still does not enable free
 manual window drag.
+Since package `0.99.0`, `desktop hyprctl keyword <key> <value>` reports
+`route`, `effect`, `target-path`, and `reload-recommended`; JSON keyword adds
+`route`, `effect`, `targetPath`, and `reloadRecommended`. These labels separate
+immediate settings, session state, prepared runtime hints, and unsupported
+keys while staying inside the Orizon VM framebuffer facade.
 Since package `0.98.0`, `desktop hyprctl getoption <hint>` keeps the mapped
 `value:` and adds `entry-count`, while JSON getoption adds `entryCount`,
 `entries`, `entriesStored`, and `entriesTruncated` for repeated Hyprland-style

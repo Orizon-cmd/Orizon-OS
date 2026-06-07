@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.99.0` with VM-ready `keyword` route
+  diagnostics. `desktop hyprctl keyword` text output now reports `route`,
+  `effect`, `target-path`, and `reload-recommended`; JSON
+  `desktop hyprctl -j keyword` adds `route`, `effect`, `targetPath`, and
+  `reloadRecommended` so automation can distinguish immediate settings,
+  session state, prepared runtime hints, and unsupported keys. This remains
+  the Orizon framebuffer/ZimaOS VM facade only: no upstream Hyprland IPC,
+  Wayland/wlroots server, Waybar activation, floating desktop, manual window
+  drag, or physical hardware validation is claimed.
 - Added desktop package version `0.98.0` with richer VM-ready
   `desktop hyprctl getoption` diagnostics. Text output now keeps the mapped
   `value:` and adds `entry-count` plus stored runtime entries for repeated
