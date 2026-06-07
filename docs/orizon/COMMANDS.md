@@ -442,6 +442,12 @@ compatibility without enabling free-drag window moving by default.
 Since package `0.87.0`, source resolution diagnostics also include per-source
 file entries with `LOADED`, `MISSING`, `SKIP_DUP`, `SKIP_UNSAFE`,
 `DEPTH_LIMIT`, or `FILE_LIMIT` status in text and JSON `configerrors` output.
+Since package `0.92.0`, `desktop submap`, `desktop keymap`,
+`desktop shortcuts`, and JSON `submap|keymap|shortcuts` expose the active
+submap role/actions, sticky-until-reset policy, exit hints, keyboard layout,
+pointer profile, and focus-follows-mouse counters. This remains VM framebuffer
+input over dispatcher/tiling actions; mouse `bindm` still does not enable free
+manual window drag.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,
@@ -458,7 +464,7 @@ symbolic session, `desktop input` is the keyboard/pointer/focus hub for
 `desktop pointer` shows cursor and HID mouse/tablet diagnostics,
 `desktop layout <dwindle|master|monocle>` updates the
 prepared layout profile, `desktop keymap` shows active F-key/submap keyboard
-runtime and focus-follows-mouse counters, `desktop binds`, `desktop rules`, `desktop monitors`,
+runtime, active submap role/actions, sticky reset policy, and focus-follows-mouse counters, `desktop binds`, `desktop rules`, `desktop monitors`,
 and `desktop runtime` show the generated Hyprland-style runtime files,
 `desktop layers` shows the compositor layer model, `desktop version` identifies
 the honest Orizon compatibility facade, `desktop devices` summarizes keyboard

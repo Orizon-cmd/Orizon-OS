@@ -74,6 +74,7 @@
   free-drag window moving, package `0.86.0` bind flag diagnostics for
   plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
   package `0.87.0` source resolution diagnostics for included config files,
+  package `0.92.0` active submap role/action/sticky reset diagnostics,
   package `0.91.0` native app runtime diagnostics for client/focus/workspace
   state and launcher overlay visibility,
   package `0.90.0` reload-to-recover fallback diagnostics for `system init`,
@@ -85,7 +86,7 @@
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, read-only config trace
   diagnostics, split/master ratio controls plus layout reset/preselect recovery,
-  `lastDispatch` layout/action result snapshots with stable error/hint codes, active F9/F10/F11 keyboard submaps,
+  `lastDispatch` layout/action result snapshots with stable error/hint codes, active F9/F10/F11 keyboard submaps with exit hints,
   explicit orientation hints, version/devices/keymap/systeminfo/layouts/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/configerrors/configtrace/rollinglog/focushistory/workspacestack/cursorpos diagnostics,
   compact VM-safe `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers` JSON for future tooling,
   software focus ring, persistent shadow range/render profile/animation

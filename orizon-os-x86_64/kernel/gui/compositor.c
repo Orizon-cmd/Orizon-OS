@@ -9754,22 +9754,86 @@ void gui_desktop_format_instances_json(char *out, size_t out_size) {
       "\"no upstream Hyprland IPC socket yet\"]}\n");
 }
 
+static int desktop_submap_is_known_name(const char *name) {
+  if (!name || !*name) {
+    return 0;
+  }
+  return strcmp(name, "default") == 0 || strcmp(name, "resize") == 0 ||
+         strcmp(name, "move") == 0 || strcmp(name, "launch") == 0;
+}
+
+static const char *desktop_submap_role(const char *name) {
+  if (!name || strcmp(name, "default") == 0) {
+    return "root/default dispatcher map";
+  }
+  if (strcmp(name, "resize") == 0) {
+    return "tiling resize mode";
+  }
+  if (strcmp(name, "move") == 0) {
+    return "tiling focus and move mode";
+  }
+  if (strcmp(name, "launch") == 0) {
+    return "native app launch mode";
+  }
+  return "unknown custom submap";
+}
+
+static const char *desktop_submap_actions(const char *name) {
+  if (!name || strcmp(name, "default") == 0) {
+    return "global F-key dispatchers and workspace navigation";
+  }
+  if (strcmp(name, "resize") == 0) {
+    return "arrows/HJKL resize split/master ratios; R reset; S togglesplit";
+  }
+  if (strcmp(name, "move") == 0) {
+    return "arrows/HJKL focus; N/B reorder; M master; F/S master focus/swap; 1/2/3 move; P pin";
+  }
+  if (strcmp(name, "launch") == 0) {
+    return "T terminal; S settings; L logs; P packages; U update; D launcher; Q killactive";
+  }
+  return "recorded by config, no VM runtime keymap actions registered";
+}
+
+static const char *desktop_submap_exit_hint(const char *name) {
+  if (!name || strcmp(name, "default") == 0) {
+    return "enter F9/F10/F11 or desktop dispatch submap <name>";
+  }
+  return "Esc/F12 or desktop dispatch submap reset";
+}
+
 void gui_desktop_format_submap(char *out, size_t out_size) {
+  int active_known;
+
   if (!out || out_size == 0) {
     return;
   }
+  active_known = desktop_submap_is_known_name(desktop_submap);
   snprintf(out, out_size,
            "submap: %s\n"
-           "available: default, resize, move, launch\n"
-           "set: desktop dispatch submap <name|reset>\n"
-           "keys: F9 resize, F10 move, F11 launch, F12/Esc default\n"
-           "resize: arrows/HJKL adjust tiling ratios; move: arrows/HJKL focus and 1/2/3 move clients\n"
-           "bind-note: config parser records submap-style binds; runtime submaps are active in VM keyboard input\n",
-           desktop_submap);
+            "active-known: %s\n"
+            "active-role: %s\n"
+            "active-actions: %s\n"
+            "available: default, resize, move, launch\n"
+            "set: desktop dispatch submap <name|reset>\n"
+            "exit: %s\n"
+            "sticky-until-reset: yes\n"
+            "keys: F9 resize, F10 move, F11 launch, F12/Esc default\n"
+            "keyboard-layout: %s pointer-profile: %s focus-follows-mouse=%s pointer-focus-changes=%llu\n"
+            "manual-window-drag: no\n"
+            "resize: arrows/HJKL adjust tiling ratios; move: arrows/HJKL focus and 1/2/3 move clients\n"
+            "bind-note: config parser records submap-style binds; runtime submaps are active in VM keyboard input\n",
+            desktop_submap, active_known ? "yes" : "no",
+            desktop_submap_role(desktop_submap),
+            desktop_submap_actions(desktop_submap),
+            desktop_submap_exit_hint(desktop_submap),
+            desktop_settings.keyboard_layout, desktop_settings.pointer_profile,
+            desktop_session.focus_follows_mouse ? "yes" : "no",
+            (unsigned long long)desktop_pointer_focus_changes);
 }
 
 void gui_desktop_format_submap_json(char *out, size_t out_size) {
   size_t used = 0;
+  char line[256];
 
   if (!out || out_size == 0) {
     return;
@@ -9782,18 +9846,50 @@ void gui_desktop_format_submap_json(char *out, size_t out_size) {
       "\"backend\":\"framebuffer-vm\",\"wayland\":false,"
       "\"wlroots\":false,\"manualDrag\":false,\"activeSubmap\":");
   desktop_json_append_string(out, out_size, &used, desktop_submap);
+  snprintf(line, sizeof(line), ",\"activeKnown\":%s,\"activeRole\":",
+           desktop_submap_is_known_name(desktop_submap) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_submap_role(desktop_submap));
+  desktop_json_append_raw(out, out_size, &used, ",\"activeActions\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_submap_actions(desktop_submap));
+  desktop_json_append_raw(out, out_size, &used, ",\"exitHint\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_submap_exit_hint(desktop_submap));
+  desktop_json_append_raw(out, out_size, &used,
+                          ",\"stickyUntilReset\":true,\"keyboardLayout\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.keyboard_layout);
+  desktop_json_append_raw(out, out_size, &used, ",\"pointerProfile\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_settings.pointer_profile);
+  snprintf(line, sizeof(line),
+           ",\"focusFollowsMouse\":%s,\"pointerFocusChanges\":%llu",
+           desktop_session.focus_follows_mouse ? "true" : "false",
+           (unsigned long long)desktop_pointer_focus_changes);
+  desktop_json_append_raw(out, out_size, &used, line);
   desktop_json_append_raw(
       out, out_size, &used,
       ",\"available\":[\"default\",\"resize\",\"move\",\"launch\"],"
       "\"keys\":{\"F9\":\"resize\",\"F10\":\"move\","
       "\"F11\":\"launch\",\"F12\":\"default\",\"Esc\":\"default\"},"
       "\"modes\":[{\"name\":\"resize\","
-      "\"actions\":[\"adjust tiling ratios with arrows/HJKL\"]},"
+      "\"role\":\"tiling resize mode\","
+      "\"exit\":\"Esc/F12 or desktop dispatch submap reset\","
+      "\"actions\":[\"adjust tiling ratios with arrows/HJKL\","
+      "\"reset split ratios\",\"toggle split orientation\"]},"
       "{\"name\":\"move\","
+      "\"role\":\"tiling focus and move mode\","
+      "\"exit\":\"Esc/F12 or desktop dispatch submap reset\","
       "\"actions\":[\"focus with arrows/HJKL\","
-      "\"move tiled clients with 1/2/3\"]},"
+      "\"move tiled clients with 1/2/3\",\"pin focused client\","
+      "\"focus/swap master\"]},"
       "{\"name\":\"launch\","
-      "\"actions\":[\"open tiled desktop apps\"]}],"
+      "\"role\":\"native app launch mode\","
+      "\"exit\":\"Esc/F12 or desktop dispatch submap reset\","
+      "\"actions\":[\"open tiled desktop apps\","
+      "\"toggle launcher overlay\",\"killactive\"]}],"
       "\"bindSource\":\"" ORIZON_DESKTOP_BINDS_PATH "\","
       "\"limits\":[\"submap runtime is VM keyboard input\","
       "\"bindm remains prepared-only\","
@@ -10037,16 +10133,21 @@ void gui_desktop_format_devices_json(char *out, size_t out_size) {
 
 void gui_desktop_format_keymap(char *out, size_t out_size) {
   char key_name[24];
+  int active_known;
 
   if (!out || out_size == 0) {
     return;
   }
   desktop_key_name(desktop_last_key, key_name, sizeof(key_name));
+  active_known = desktop_submap_is_known_name(desktop_submap);
   snprintf(out, out_size,
            "Orizon desktop keymap\n"
            "model: Hyprland-style dispatcher/submap facade over VM framebuffer input\n"
            "keyboard-layout: %s\n"
            "active-submap: %s\n"
+           "active-submap-known: %s\n"
+           "active-submap-role: %s\n"
+           "active-submap-actions: %s\n"
            "last-key: %s serial=%llu\n"
            "focus-follows-mouse: %s pointer-focus-changes=%llu\n"
            "direct-keys:\n"
@@ -10057,9 +10158,13 @@ void gui_desktop_format_keymap(char *out, size_t out_size) {
            "  F10 move: arrows/HJKL focus, N/B movewindow, M master, 1/2/3 movetoworkspace, P pin, Esc/F12 default\n"
            "  F11 launch: T/Enter terminal, D/Space launcher, Q killactive, Esc/F12 default\n"
            "config-binds: %s\n"
+           "submap-policy: sticky-until-reset=yes exit=Esc/F12-or-dispatch-reset\n"
            "mouse-policy: focus follows mouse is optional; manual-window-drag=no\n"
            "dispatch: desktop dispatch submap <default|resize|move|launch> | desktop dispatch resizeactive <x> <y>\n",
-           desktop_settings.keyboard_layout, desktop_submap, key_name,
+           desktop_settings.keyboard_layout, desktop_submap,
+           active_known ? "yes" : "no",
+           desktop_submap_role(desktop_submap),
+           desktop_submap_actions(desktop_submap), key_name,
            (unsigned long long)desktop_key_serial,
            desktop_session.focus_follows_mouse ? "yes" : "no",
            (unsigned long long)desktop_pointer_focus_changes,
@@ -10087,6 +10192,17 @@ void gui_desktop_format_keymap_json(char *out, size_t out_size) {
                              desktop_settings.keyboard_layout);
   desktop_json_append_raw(out, out_size, &used, ",\"activeSubmap\":");
   desktop_json_append_string(out, out_size, &used, desktop_submap);
+  snprintf(line, sizeof(line), ",\"activeSubmapKnown\":%s,\"activeSubmapRole\":",
+           desktop_submap_is_known_name(desktop_submap) ? "true" : "false");
+  desktop_json_append_raw(out, out_size, &used, line);
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_submap_role(desktop_submap));
+  desktop_json_append_raw(out, out_size, &used, ",\"activeSubmapActions\":");
+  desktop_json_append_string(out, out_size, &used,
+                             desktop_submap_actions(desktop_submap));
+  desktop_json_append_raw(
+      out, out_size, &used,
+      ",\"stickySubmaps\":true,\"submapExit\":\"Esc/F12 or desktop dispatch submap reset\"");
   desktop_json_append_raw(out, out_size, &used, ",\"lastKey\":");
   desktop_json_append_string(out, out_size, &used, key_name);
   snprintf(line, sizeof(line),

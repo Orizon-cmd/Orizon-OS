@@ -389,6 +389,12 @@ Package `0.90.0` strengthens the init restore path: if the `desktop-restore`
 reload returns WARN, `system init` attempts `desktop recover`, records
 `fallback-action` and `fallback-result`, and only recommends `desktop rescue`
 when both stages fail.
+Package `0.92.0` strengthens VM keyboard/submap diagnostics:
+`desktop submap`, `desktop keymap`, `desktop shortcuts`, and JSON
+`submap|keymap|shortcuts` expose the active submap role/actions,
+known-vs-custom state, sticky reset policy, exit hints, keyboard layout,
+pointer profile, focus-follows-mouse state, and pointer focus-change counters.
+This remains dispatcher/tiling-only input control, not free manual window drag.
 Package `0.91.0` adds read-only native app runtime diagnostics for VM/ZimaOS:
 `desktop apps`, `desktop app <id>`, and `desktop hyprctl -j apps|app` show
 client counts, mapped/hidden state, focus/workspace state, focused client
@@ -442,9 +448,11 @@ desktop compositor. This is pointer support for focus/cursor diagnostics, not
 manual window dragging.
 
 `desktop keymap` shows the active VM keyboard/runtime map: direct F-key
-shortcuts, the last key seen by the compositor, the active submap, and the
-focus-follows-mouse transition counter. F9 enters the `resize` submap, F10
-enters `move`, F11 enters `launch`, and F12/Esc returns to `default`. In
+shortcuts, the last key seen by the compositor, the active submap, active
+submap role/actions, sticky reset policy, and the focus-follows-mouse transition
+counter. F9 enters the `resize` submap, F10
+enters `move`, F11 enters `launch`, and F12/Esc or `desktop dispatch submap reset`
+returns to `default`. In
 `resize`, arrows/HJKL adjust split/master tiling ratios and `R` resets them.
 In `move`, arrows/HJKL move focus, `N/B` reorder the active tiled client,
 `M` moves it to the master slot, `1/2/3` move the active tiled client to a
@@ -748,7 +756,7 @@ desktop hyprctl reload reapplies /home/orizon/.config/hypr/orizon-hypr.conf
 desktop hyprctl -j reload reapplies the config and emits VM-safe JSON status
 desktop hyprctl -j monitors emits the single framebuffer monitor map
 desktop hyprctl -j devices emits VM-safe input backend summaries
-desktop hyprctl -j keymap emits keyboard layout/submap state
+desktop hyprctl -j keymap emits keyboard layout/submap role/action/sticky state
 desktop hyprctl -j cursorpos emits pointer position/buttons
 desktop hyprctl -j animations emits software transition/curve state
 desktop hyprctl -j decorations emits focus ring/border/shadow state
@@ -758,7 +766,7 @@ desktop hyprctl -j descriptions emits command/dispatcher surfaces
 desktop hyprctl -j instances emits the framebuffer compositor instance
 desktop hyprctl -j modules emits modular package split and Waybar future policy
 desktop hyprctl -j shortcuts emits keyboard-only shortcuts/submap policy
-desktop hyprctl -j submap emits active keyboard submap state
+desktop hyprctl -j submap emits active keyboard submap role/action/exit state
 desktop hyprctl -j splash emits VM-safe splash/render boundary metadata
 desktop hyprctl -j session emits health, desired/runtime, counters, paths, and log tail
 desktop hyprctl -j rollinglog emits sampled desktop log paths/status

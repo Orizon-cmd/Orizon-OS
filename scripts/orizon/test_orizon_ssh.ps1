@@ -713,7 +713,7 @@ run_cmd() {
       grep -q "Orizon desktop instances" "`$OUT" && grep -q "orizon-framebuffer-main" "`$OUT" || { echo "missing desktop instances"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop submap")
-      grep -q "submap:" "`$OUT" || { echo "missing desktop submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "submap:" "`$OUT" && grep -q "active-role:" "`$OUT" && grep -q "sticky-until-reset: yes" "`$OUT" && grep -q "manual-window-drag: no" "`$OUT" || { echo "missing desktop submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop configerrors"|"desktop hyprctl configerrors")
       grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" && grep -q "plain=" "`$OUT" && grep -q "composite=" "`$OUT" && grep -q "source-detail:" "`$OUT" && grep -q "source-file:" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -788,7 +788,7 @@ run_cmd() {
       grep -q '"command":"devices"' "`$OUT" && grep -q '"libinput":false' "`$OUT" && grep -q '"manualWindowDrag":false' "`$OUT" || { echo "missing hyprctl json devices"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j keymap")
-      grep -q '"command":"keymap"' "`$OUT" && grep -q '"activeSubmap":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json keymap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"keymap"' "`$OUT" && grep -q '"activeSubmap":' "`$OUT" && grep -q '"activeSubmapRole":' "`$OUT" && grep -q '"stickySubmaps":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json keymap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j cursorpos")
       grep -q '"command":"cursorpos"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" && grep -q '"profile":' "`$OUT" || { echo "missing hyprctl json cursorpos"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -815,7 +815,7 @@ run_cmd() {
       grep -q '"command":"modules"' "`$OUT" && grep -q '"modularPackaging":true' "`$OUT" && grep -q '"name":"orizon-waybar"' "`$OUT" && grep -q '"plannedOnly":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json modules"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j shortcuts")
-      grep -q '"command":"shortcuts"' "`$OUT" && grep -q '"keyboardOnly":true' "`$OUT" && grep -q '"bindmPreparedOnly":true' "`$OUT" && grep -q '"manualDragFromBindm":false' "`$OUT" && grep -q '"bindFlags":{' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"shortcuts"' "`$OUT" && grep -q '"keyboardOnly":true' "`$OUT" && grep -q '"bindmPreparedOnly":true' "`$OUT" && grep -q '"manualDragFromBindm":false' "`$OUT" && grep -q '"bindFlags":{' "`$OUT" && grep -q '"submapPolicy":{' "`$OUT" && grep -q '"stickySubmaps":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j autostart")
       grep -q '"command":"autostart"' "`$OUT" && grep -q '"terminal":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json autostart"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -839,7 +839,7 @@ run_cmd() {
       grep -q '"command":"launch"' "`$OUT" && grep -q '"ok":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json launch settings"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j submap")
-      grep -q '"command":"submap"' "`$OUT" && grep -q '"activeSubmap":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"command":"submap"' "`$OUT" && grep -q '"activeSubmap":' "`$OUT" && grep -q '"activeRole":' "`$OUT" && grep -q '"stickyUntilReset":true' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j splash")
       grep -q '"command":"splash"' "`$OUT" && grep -q '"renderer":"software"' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json splash"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -1118,7 +1118,7 @@ run_cmd() {
       grep -q "desktop dispatch: movefocus" "`$OUT" || { echo "missing desktop dispatch movefocus"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop shortcuts")
-      grep -q "F1" "`$OUT" && grep -q "F2" "`$OUT" || { echo "missing desktop shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "F1" "`$OUT" && grep -q "F2" "`$OUT" && grep -q "submap policy:" "`$OUT" || { echo "missing desktop shortcuts"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop doctor")
       grep -q "desktop doctor:" "`$OUT" && grep -q "summary:" "`$OUT" || { echo "missing desktop doctor"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

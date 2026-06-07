@@ -7090,6 +7090,10 @@ void orizon_desktop_format_shortcuts(char *out, size_t out_size) {
   desktop_append(out, out_size, &used,
                  "launch submap: T terminal; S settings; L logs; P packages; U update; D launcher; Q killactive; Esc/F12 default\n");
   desktop_append(out, out_size, &used,
+                 "submap policy: sticky until Esc/F12 or desktop dispatch submap reset; diagnostics show active role/actions\n");
+  desktop_append(out, out_size, &used,
+                 "mouse policy: focus follows mouse optional; drag moves disabled; windows stay dispatcher/tiling managed\n");
+  desktop_append(out, out_size, &used,
                  "Hypr-style template: SUPER+Return exec terminal, SUPER+Q killactive, SUPER+D launcher\n");
   desktop_append(out, out_size, &used,
                  "SUPER+A: autostart settings; SUPER+B: bar toggle placeholder; SUPER+R: session/settings placeholder\n");
@@ -7138,7 +7142,11 @@ void orizon_desktop_format_shortcuts_json(char *out, size_t out_size) {
       settings.pointer_profile[0] ? settings.pointer_profile : "flat");
   desktop_json_append_raw(
       out, out_size, &used,
-      ",\"submaps\":[\"default\",\"resize\",\"move\",\"launch\"],"
+      ",\"submapPolicy\":{\"stickyUntilReset\":true,"
+      "\"exit\":[\"Esc\",\"F12\",\"desktop dispatch submap reset\"],"
+      "\"diagnostics\":[\"desktop submap\",\"desktop keymap\","
+      "\"desktop hyprctl -j submap\"],\"manualDrag\":false},"
+      "\"submaps\":[\"default\",\"resize\",\"move\",\"launch\"],"
       "\"bindFlags\":{\"bind\":\"keyboard dispatcher\","
       "\"bindl\":\"locked bind hint\",\"bindr\":\"release trigger hint\","
       "\"binde\":\"repeat trigger hint\","
@@ -7173,9 +7181,10 @@ void orizon_desktop_format_shortcuts_json(char *out, size_t out_size) {
       "\"focusmwindow\",\"swapmwindow\",\"movewindow\","
       "\"focusmaster\",\"swapwithmaster\",\"fullscreen\",\"pseudo\","
       "\"pin\",\"resizeactive\",\"layoutmsg\",\"submap\"],"
-      "\"diagnostics\":{\"keyboardNavigation\":true,"
-      "\"mouseDiagnostics\":true,\"focusFollowsMouseOptional\":true,"
-      "\"workspaceRelative\":true,\"pinnedAware\":true,"
+       "\"diagnostics\":{\"keyboardNavigation\":true,"
+       "\"mouseDiagnostics\":true,\"focusFollowsMouseOptional\":true,"
+       "\"stickySubmaps\":true,"
+       "\"workspaceRelative\":true,\"pinnedAware\":true,"
       "\"fullscreenAware\":true,\"pseudoAware\":true,"
       "\"nativeAppsTiled\":true,\"manualWindowDrag\":false},"
       "\"limits\":[\"VM/ZimaOS keyboard dispatcher map only\","

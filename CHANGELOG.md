@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.92.0` with stronger VM-ready keyboard submap
+  diagnostics. `desktop submap`, `desktop keymap`, `desktop shortcuts`, and JSON
+  `desktop hyprctl -j submap|keymap|shortcuts` now expose the active submap
+  role/actions, known-vs-custom state, sticky-until-reset policy, exit hints,
+  keyboard layout, pointer profile, focus-follows-mouse status, and pointer
+  focus-change counters. This remains an Orizon framebuffer VM facade: submaps
+  drive dispatcher/tiling actions only, `bindm` still does not enable manual
+  window dragging, Waybar stays future/separate, and no real Wayland/wlroots,
+  upstream Hyprland, or physical hardware validation is claimed.
 - Added desktop package version `0.91.0` with runtime diagnostics for the
   native app catalog. `desktop apps`, `desktop app <id>`, and
   `desktop hyprctl -j apps|app <id>|launch <app>` now expose read-only

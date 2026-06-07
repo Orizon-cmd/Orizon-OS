@@ -77,6 +77,8 @@ le developpement noyau:
   variantes `bind`/`bindl`/`bindr`/`binde`/`bindm`, `unbind`, `binds:*`,
   `bezier/animation` et hints input/misc/layout/dwindle/master/gestures/xwayland, diagnostics
   (les binds souris `bindm` sont parses pour compatibilite seulement, sans free-drag),
+  submaps clavier F9/F10/F11 avec diagnostics role/actions, sortie sticky reset
+  et focus-follows-mouse VM,
   `desktop version/devices/keymap/systeminfo/backend/protocol/architecture/layouts/layout-state/layout-tree/animations/configerrors/config-trace/rollinglog/focus-history/workspace-stack/client-model/rule-matches`, facade
   `desktop hyprctl [-j] version/systeminfo/backend/protocol/architecture/clients/clientmodel/rulematches/workspaces/activeworkspace/activewindow/focushistory/workspacestack/monitors/layouts/layoutstate/layouttree/animations/decorations/render/descriptions/instances/modules/shortcuts/autostart/apps/app/launch/submap/devices/keymap/cursorpos/splash/session/configerrors/configtrace/rollinglog/getoption/keyword/dispatch/reload/binds/layers`, diagnostics JSON compacts
   `desktop hyprctl -j version|systeminfo|backend|protocol|architecture|clients|workspaces|activeworkspace|activewindow|focushistory|workspacestack|clientmodel|rulematches|layoutstate|layouttree|monitors|devices|keymap|cursorpos|animations|decorations|render|layouts|descriptions|instances|modules|shortcuts|autostart|apps|app|launch|submap|splash|session|rollinglog|configerrors|configtrace|getoption|keyword|dispatch|reload|binds|layers`, mutation
@@ -289,6 +291,9 @@ framebuffer settings/logs/packages/update affichent maintenant leurs sources et
 commandes utiles dans le tile actif. Depuis `0.91.0`, ces apps exposent aussi
 des diagnostics runtime read-only par app: clients ouverts/mappes/caches,
 workspace, focus, adresse du client focalise et visibilite overlay du launcher.
+Depuis `0.92.0`, `desktop submap`, `desktop keymap`, `desktop shortcuts` et les
+sorties JSON liees exposent aussi role/actions de submap active, sticky reset,
+sortie Esc/F12, layout clavier, profil pointeur et compteurs focus-follows-mouse.
 Le launcher est seulement un overlay de dispatch: il n'ajoute ni barre type
 Windows, ni menu demarrer permanent, ni fenetres flottantes.
 `desktop hyprctl -j apps|app <id>|launch <app>` expose les memes apps en JSON
