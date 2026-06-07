@@ -73,6 +73,7 @@
   preserved `layerrule`/`bindm`/`bindl`/animation/input/device/decoration/cursor/render/debug hints without default
   free-drag window moving, package `0.86.0` bind flag diagnostics for
   plain/keyboard/mouse/composite variants and `manualDragFromBindm=false`,
+  package `0.87.0` source resolution diagnostics for included config files,
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`,
   v2 session health/counters,
   keyword/getoption/reload runtime inspection, read-only config trace

@@ -65,7 +65,7 @@ design note.
   `desktop windows/clients/activewindow/workspace-stack/client-model/rule-matches`, focus-last/urgent/tag diagnostics, active tiling-tree diagnostics,
   read-only config tracing, and runtime tiled workspace/client-state commands rather
   than real upstream Hyprland.
-- Desktop release boundary for current package `0.86.0`: `desktop architecture`,
+- Desktop release boundary for current package `0.87.0`: `desktop architecture`,
   `desktop backend`, and `desktop protocol` expose
   `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
   `/system/desktop-protocol.conf`. The implemented VM-ready pieces are the
@@ -75,6 +75,9 @@ design note.
   prepared-only; there is still no upstream Hyprland, Wayland/wlroots server,
   external Wayland client protocol, XWayland, layer-shell, Waybar, taskbar/start
   menu, free manual window drag, or physical hardware validation.
+- `0.87.0` also adds structured `source` resolution diagnostics to
+  `desktop configerrors` and `desktop hyprctl -j configerrors`, with per-file
+  `LOADED`/`MISSING`/`SKIP_*`/`*_LIMIT` status entries.
 - `0.86.0` also adds explicit bind flag diagnostics to `desktop configerrors`,
   `desktop hyprctl -j configerrors`, `desktop hyprctl -j binds`, and
   `desktop hyprctl -j shortcuts`, including plain/keyboard/mouse/composite

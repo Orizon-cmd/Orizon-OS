@@ -425,6 +425,9 @@ are counted in diagnostics. Since package `0.86.0`, `desktop configerrors`,
 `desktop hyprctl -j shortcuts` expose plain/keyboard/mouse/composite bind flag
 counts plus `manualDragFromBindm=false`; mouse binds are parsed for
 compatibility without enabling free-drag window moving by default.
+Since package `0.87.0`, source resolution diagnostics also include per-source
+file entries with `LOADED`, `MISSING`, `SKIP_DUP`, `SKIP_UNSAFE`,
+`DEPTH_LIMIT`, or `FILE_LIMIT` status in text and JSON `configerrors` output.
 `desktop settings` manages the system-wide
 `/system/desktop-settings.conf` layer created by the installer/package and
 stores compositor defaults such as gaps, border size, rounding, animations,

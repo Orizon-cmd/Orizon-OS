@@ -984,6 +984,9 @@ static int desktop_session_get_value(const char *text, const char *key,
   return -1;
 }
 
+#define DESKTOP_HYPR_SOURCE_MAX_DEPTH 3
+#define DESKTOP_HYPR_SOURCE_MAX_FILES 8
+
 typedef struct {
   int parsed_lines;
   int variables;
@@ -1024,6 +1027,10 @@ typedef struct {
   int applied_settings;
   int generated_user_config;
   int runtime_lines;
+  int source_report_count;
+  char source_report_paths[DESKTOP_HYPR_SOURCE_MAX_FILES][128];
+  char source_report_status[DESKTOP_HYPR_SOURCE_MAX_FILES][16];
+  int source_report_depths[DESKTOP_HYPR_SOURCE_MAX_FILES];
 } desktop_hypr_summary_t;
 
 typedef struct {
@@ -1040,9 +1047,6 @@ typedef struct {
   size_t layers_used;
   size_t runtime_used;
 } desktop_hypr_runtime_t;
-
-#define DESKTOP_HYPR_SOURCE_MAX_DEPTH 3
-#define DESKTOP_HYPR_SOURCE_MAX_FILES 8
 
 typedef struct {
   char paths[DESKTOP_HYPR_SOURCE_MAX_FILES][128];
@@ -1414,6 +1418,76 @@ static int desktop_hypr_source_remember(desktop_hypr_source_context_t *ctx,
            path);
   ctx->count++;
   return 0;
+}
+
+static void desktop_hypr_source_report(desktop_hypr_summary_t *summary,
+                                       const char *path, const char *status,
+                                       int depth) {
+  int slot;
+
+  if (!summary || summary->source_report_count >=
+                      DESKTOP_HYPR_SOURCE_MAX_FILES) {
+    return;
+  }
+  slot = summary->source_report_count++;
+  snprintf(summary->source_report_paths[slot],
+           sizeof(summary->source_report_paths[slot]), "%s",
+           path && path[0] ? path : "(unknown)");
+  snprintf(summary->source_report_status[slot],
+           sizeof(summary->source_report_status[slot]), "%s",
+           status && status[0] ? status : "UNKNOWN");
+  summary->source_report_depths[slot] = depth;
+}
+
+static void desktop_hypr_append_source_reports_text(
+    char *out, size_t out_size, size_t *used,
+    const desktop_hypr_summary_t *summary) {
+  char line[256];
+
+  if (!out || !used || !summary) {
+    return;
+  }
+  snprintf(line, sizeof(line),
+           "source-detail: files=%d max-files=%d max-depth=%d\n",
+           summary->source_report_count, DESKTOP_HYPR_SOURCE_MAX_FILES,
+           DESKTOP_HYPR_SOURCE_MAX_DEPTH);
+  desktop_append(out, out_size, used, line);
+  if (summary->source_report_count == 0) {
+    desktop_append(out, out_size, used,
+                   "source-file: depth=0 status=NONE path=(no-source-directives)\n");
+    return;
+  }
+  for (int i = 0; i < summary->source_report_count; i++) {
+    snprintf(line, sizeof(line), "source-file: depth=%d status=%s path=%s\n",
+             summary->source_report_depths[i],
+             summary->source_report_status[i],
+             summary->source_report_paths[i]);
+    desktop_append(out, out_size, used, line);
+  }
+}
+
+static void desktop_hypr_append_source_reports_json(
+    char *out, size_t out_size, size_t *used,
+    const desktop_hypr_summary_t *summary) {
+  char line[64];
+
+  if (!out || !used || !summary) {
+    return;
+  }
+  for (int i = 0; i < summary->source_report_count; i++) {
+    if (i > 0) {
+      desktop_json_append_raw(out, out_size, used, ",");
+    }
+    snprintf(line, sizeof(line), "{\"depth\":%d,\"status\":",
+             summary->source_report_depths[i]);
+    desktop_json_append_raw(out, out_size, used, line);
+    desktop_json_append_string(out, out_size, used,
+                               summary->source_report_status[i]);
+    desktop_json_append_raw(out, out_size, used, ",\"path\":");
+    desktop_json_append_string(out, out_size, used,
+                               summary->source_report_paths[i]);
+    desktop_json_append_raw(out, out_size, used, "}");
+  }
 }
 
 static int desktop_hypr_copy_token_value(char *out, size_t out_size,
@@ -1994,28 +2068,35 @@ static void desktop_hypr_scan_source_config(
   if (!value || !summary || !sources) {
     return;
   }
-  if (source_depth >= DESKTOP_HYPR_SOURCE_MAX_DEPTH) {
-    summary->source_depth_limited++;
-    return;
-  }
   if (desktop_hypr_source_path_from_value(value, path, sizeof(path)) < 0) {
     summary->source_files_skipped++;
+    desktop_hypr_source_report(summary, "(unsafe-or-glob)", "SKIP_UNSAFE",
+                               source_depth);
+    return;
+  }
+  if (source_depth >= DESKTOP_HYPR_SOURCE_MAX_DEPTH) {
+    summary->source_depth_limited++;
+    desktop_hypr_source_report(summary, path, "DEPTH_LIMIT", source_depth);
     return;
   }
   if (desktop_hypr_source_seen(sources, path)) {
     summary->source_files_skipped++;
+    desktop_hypr_source_report(summary, path, "SKIP_DUP", source_depth);
     return;
   }
   if (desktop_hypr_source_remember(sources, path) < 0) {
     summary->source_depth_limited++;
+    desktop_hypr_source_report(summary, path, "FILE_LIMIT", source_depth);
     return;
   }
   n = desktop_read_text_file(path, cfg, sizeof(cfg));
   if (!desktop_text_config_usable(cfg, n)) {
     summary->source_files_missing++;
+    desktop_hypr_source_report(summary, path, "MISSING", source_depth);
     return;
   }
   summary->source_files_loaded++;
+  desktop_hypr_source_report(summary, path, "LOADED", source_depth);
   desktop_hypr_scan_config_inner(cfg, apply, summary, session, settings,
                                  runtime, sources, source_depth + 1);
 }
@@ -3997,7 +4078,7 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
     snprintf(status, status_size,
              "desktop config apply: %s\n"
              "source: %s%s\n"
-             "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d\n"
+             "source-resolve: loaded=%d missing=%d skipped=%d depth-limited=%d files=%d max-files=%d max-depth=%d\n"
              "parsed-lines: %d malformed: %d\n"
              "supported-settings: %d applied: %d prepared-keywords: %d ignored: %d runtime-lines: %d\n"
              "binds: total=%d supported-dispatchers=%d plain=%d keyboard=%d mouse=%d locked=%d release=%d repeat=%d composite=%d monitors=%d exec-once=%d env=%d windowrules=%d layerrules=%d workspaces=%d sources=%d variables=%d\n"
@@ -4015,6 +4096,8 @@ int orizon_desktop_apply_hypr_config(char *status, size_t status_size) {
              summary.generated_user_config ? " generated-from-template" : "",
              summary.source_files_loaded, summary.source_files_missing,
              summary.source_files_skipped, summary.source_depth_limited,
+             summary.source_report_count, DESKTOP_HYPR_SOURCE_MAX_FILES,
+             DESKTOP_HYPR_SOURCE_MAX_DEPTH,
              summary.parsed_lines, summary.malformed_lines,
              summary.supported_settings, summary.applied_settings,
              summary.prepared_keywords, summary.ignored_keywords,
@@ -4850,6 +4933,7 @@ void orizon_desktop_format_config_doctor(char *out, size_t out_size) {
            summary.source_files_skipped, summary.source_depth_limited,
            ORIZON_DESKTOP_LOCAL_CONFIG_PATH);
   desktop_append(out, out_size, &used, line);
+  desktop_hypr_append_source_reports_text(out, out_size, &used, &summary);
   snprintf(line, sizeof(line),
            "apply-support: settings=%d prepared=%d ignored=%d\n",
            summary.supported_settings, summary.prepared_keywords,
@@ -4926,6 +5010,7 @@ void orizon_desktop_format_config_errors(char *out, size_t out_size) {
            summary.source_files_loaded, summary.source_files_missing,
            summary.source_files_skipped, summary.source_depth_limited);
   desktop_append(out, out_size, &used, line);
+  desktop_hypr_append_source_reports_text(out, out_size, &used, &summary);
   desktop_append(out, out_size, &used,
                  "notes: unsupported but safe Hyprland keywords are reported as ignored/prepared, not hard errors\n");
 }
@@ -4982,8 +5067,8 @@ void orizon_desktop_format_config_errors_json(char *out, size_t out_size) {
            "\"release\":%d,\"repeat\":%d,\"compositeFlags\":%d,"
            "\"mousePreparedOnly\":%d,\"manualDrag\":false},"
            "\"sourceResolve\":{\"loaded\":%d,\"missing\":%d,"
-           "\"skipped\":%d,\"depthLimited\":%d},"
-           "\"errors\":",
+           "\"skipped\":%d,\"depthLimited\":%d,"
+           "\"maxDepth\":%d,\"maxFiles\":%d,\"files\":[",
            summary.malformed_lines ? "false" : "true",
            summary.malformed_lines ? "WARN" : "PASS",
            summary.parsed_lines, summary.malformed_lines,
@@ -5000,8 +5085,11 @@ void orizon_desktop_format_config_errors_json(char *out, size_t out_size) {
            summary.release_binds, summary.repeat_binds,
            summary.composite_binds, summary.mouse_binds,
            summary.source_files_loaded, summary.source_files_missing,
-           summary.source_files_skipped, summary.source_depth_limited);
+           summary.source_files_skipped, summary.source_depth_limited,
+           DESKTOP_HYPR_SOURCE_MAX_DEPTH, DESKTOP_HYPR_SOURCE_MAX_FILES);
   desktop_json_append_raw(out, out_size, &used, line);
+  desktop_hypr_append_source_reports_json(out, out_size, &used, &summary);
+  desktop_json_append_raw(out, out_size, &used, "]},\"errors\":");
   if (summary.malformed_lines) {
     desktop_json_append_raw(
         out, out_size, &used,

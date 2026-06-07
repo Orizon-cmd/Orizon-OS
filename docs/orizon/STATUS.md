@@ -75,7 +75,8 @@ work.
   preserved `layerrule`/`bind`/`bindl`/`bindr`/`binde`/`bindm`/`unbind`/`binds:*`/animation/input/device/decoration/cursor/render/debug/dwindle/master/gestures/xwayland hints
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
-  `manualDragFromBindm=false`,
+  `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
+  diagnostics for `source` files,
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`
   with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
   runtime keyword/getoption/reload inspection, persistent render controls for

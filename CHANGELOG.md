@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.87.0` with structured `source`
+  resolution diagnostics for the Hyprland-style config parser. `desktop config
+  apply`, `desktop config doctor`, `desktop configerrors`, and
+  `desktop hyprctl -j configerrors` now report loaded/missing/skipped,
+  depth/file limits, and per-source file entries with status values such as
+  `LOADED`, `MISSING`, `SKIP_DUP`, `SKIP_UNSAFE`, `DEPTH_LIMIT`, or
+  `FILE_LIMIT`. This remains a VM/ZimaOS-safe Orizon config facade: no real
+  Wayland/wlroots/upstream Hyprland, Waybar activation, floating desktop,
+  free manual window drag, or physical hardware validation is claimed.
 - Added desktop package version `0.86.0` with stronger Hyprland-style bind
   config diagnostics. `desktop config apply`, `desktop config doctor`,
   `desktop configerrors`, `desktop hyprctl -j configerrors`,

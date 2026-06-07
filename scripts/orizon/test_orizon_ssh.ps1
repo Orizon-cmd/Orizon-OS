@@ -708,7 +708,7 @@ run_cmd() {
       grep -q "submap:" "`$OUT" || { echo "missing desktop submap"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop configerrors"|"desktop hyprctl configerrors")
-      grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" && grep -q "plain=" "`$OUT" && grep -q "composite=" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q "Hyprland config errors" "`$OUT" && grep -q "summary:" "`$OUT" && grep -q "plain=" "`$OUT" && grep -q "composite=" "`$OUT" && grep -q "source-detail:" "`$OUT" && grep -q "source-file:" "`$OUT" || { echo "missing desktop configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop rollinglog"|"desktop hyprctl rollinglog")
       grep -q "Hyprland rolling log" "`$OUT" && grep -q "/logs/desktop.log" "`$OUT" || { echo "missing desktop rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
@@ -846,7 +846,7 @@ run_cmd() {
       grep -q '"command":"rollinglog"' "`$OUT" && grep -q '"paths":{"events":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json rollinglog"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configerrors")
-      grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"plain":' "`$OUT" && grep -q '"compositeFlags":' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
+      grep -q '"model":"Hyprland-style config parser diagnostics"' "`$OUT" && grep -q '"summary":{' "`$OUT" && grep -q '"plain":' "`$OUT" && grep -q '"compositeFlags":' "`$OUT" && grep -q '"sourceResolve":{' "`$OUT" && grep -q '"maxDepth":3' "`$OUT" && grep -Fq '"files":[' "`$OUT" && grep -q '"manualDrag":false' "`$OUT" || { echo "missing hyprctl json configerrors"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }
       ;;
     "desktop hyprctl -j configtrace")
       grep -q '"model":"Hyprland-style config trace"' "`$OUT" && grep -q '"parserSummary":{' "`$OUT" && grep -Fq '"trace":[' "`$OUT" || { echo "missing hyprctl json configtrace"; rm -f "`$ASKPASS" "`$PASSFILE" "`$OUT"; exit 1; }

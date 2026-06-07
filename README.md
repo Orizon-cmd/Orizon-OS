@@ -197,6 +197,9 @@ Depuis `0.86.0`, `desktop configerrors`, `desktop hyprctl -j configerrors`,
 compteurs `plain`/`keyboard`/`mouse`/`compositeFlags` et
 `manualDragFromBindm=false` pour distinguer clairement la compatibilite
 Hyprland-style de l'absence de deplacement manuel libre.
+Depuis `0.87.0`, les diagnostics `source` listent aussi chaque fichier resolu
+avec statut `LOADED`/`MISSING`/`SKIP_*`/`*_LIMIT` dans `desktop configerrors`
+et `desktop hyprctl -j configerrors`.
 `desktop render` detaille le focus ring, les shadows, le `render-profile`, la
 courbe/budget d'animation, les transitions workspace/layout/focus et le backend
 framebuffer logiciel sans pretendre fournir Wayland/wlroots. Les reglages

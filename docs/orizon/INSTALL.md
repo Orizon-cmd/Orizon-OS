@@ -139,8 +139,8 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.86.0` installs explicit bind flag diagnostics and
-architecture truth maps:
+The desktop package version `0.87.0` installs explicit source/bind diagnostics
+and architecture truth maps:
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
 `desktop backend`, `desktop protocol`, or the matching `desktop hyprctl -j`
@@ -150,7 +150,9 @@ for `orizon-desktop-ipc-v0`. The bind diagnostics report
 plain/keyboard/mouse/composite flags and `manualDragFromBindm=false`; they do
 not make Orizon upstream Hyprland, Wayland, wlroots, XWayland, layer-shell, an
 external Wayland client protocol, Waybar, a taskbar/start menu,
-floating/free-drag windows, or physical hardware validation.
+floating/free-drag windows, or physical hardware validation. Source diagnostics
+report per-file `LOADED`/`MISSING`/`SKIP_*`/`*_LIMIT` statuses for VM config
+debugging.
 Render tuning stays VM-safe and tiling-only: use `desktop settings set
 focus-ring <yes|no>`, `desktop settings set render-profile
 <balanced|performance|cozy>`, `desktop keyword decoration:shadow:range <0-32>`,

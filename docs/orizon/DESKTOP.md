@@ -332,6 +332,9 @@ Package `0.86.0` adds explicit bind flag diagnostics in
 `desktop hyprctl -j binds`, and `desktop hyprctl -j shortcuts`: plain keyboard
 binds, keyboard-only variants, prepared-only mouse binds, composite flag
 variants, and `manualDragFromBindm=false` are all reported separately.
+Package `0.87.0` extends `source` diagnostics with per-file status rows and a
+JSON `sourceResolve.files[]` array so VM operators can see which included
+Hyprland-style config files were loaded, missing, skipped, or limit-blocked.
 Supported `desktop keyword` settings such as `general:gaps_in` and
 `decoration:rounding` are synced back into
 `/home/orizon/.config/hypr/orizon-hypr.conf`, so `desktop hyprctl reload`
