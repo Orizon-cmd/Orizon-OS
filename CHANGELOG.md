@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Added desktop package version `0.89.0` with boot/session restore
+  diagnostics for the installed/live init path. `system init`, `system
+  services`, and `system logs` now record a VM-safe `desktop-restore` reload
+  pass against `/system/desktop-state.conf` and `/logs/desktop-session.log`,
+  and the compositor reapplies the desktop policy after init tasks complete.
+  This remains a Hyprland-style framebuffer VM facade only: no real
+  Wayland/wlroots/upstream Hyprland, Waybar activation, taskbar/start menu,
+  floating desktop, free manual window drag, or physical hardware validation is
+  claimed.
 - Added desktop package version `0.88.0` with session audit diagnostics for
   the installed/live desktop manager. `desktop state`, `desktop rescue`, and
   `desktop hyprctl -j session [status|start|stop|restart|reload|recover|rescue]`

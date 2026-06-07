@@ -2013,6 +2013,7 @@ static void term_print_system_state(terminal_t *term, const char *cmd) {
   }
   if (term_command_is(args, "init") || term_command_is(args, "boot")) {
     orizon_system_run_boot_tasks(report, sizeof(report));
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     term_puts_t(term, report);
     return;
   }
@@ -7749,8 +7750,9 @@ static void term_execute_single(terminal_t *term, const char *cmd) {
     orizon_system_format_doctor(report, sizeof(report));
     term_puts_t(term, report);
   } else if (term_command_is(cmd, "init")) {
-    static char report[3072];
+    static char report[4096];
     orizon_system_run_boot_tasks(report, sizeof(report));
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     term_puts_t(term, report);
   } else if (term_command_is(cmd, "rescue")) {
     static char report[1024];

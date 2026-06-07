@@ -380,9 +380,11 @@ rescue policy, admin guide, notes, and shell profile. SSH private keys, update
 private keys, package payload secrets, and disk data are excluded. `system init`
 reruns the idempotent boot tasks, writes
 `/system/boot-state`, `/system/service-state`, `/logs/init.log`, and
-`/logs/service.log`, and persists roots when possible.
+`/logs/service.log`, performs the VM-safe `desktop-restore` reload for the
+Hyprland-style session state, and persists roots when possible.
 `system services` shows the small service policy (`persistence`, `bootlog`,
-`network`, `ssh`, `desktop`, `package-db`, `update-bootguard`, `firstboot`) without
+`network`, `ssh`, `desktop`, `desktop-restore`, `package-db`,
+`update-bootguard`, `firstboot`) without
 pretending to be a full service manager. `system logs` prints the boot-state,
 service-state, init log, and service log in one place. `system firstboot`
 prints the first installed boot checklist before `firstboot done` marks it as
@@ -407,6 +409,9 @@ compositor desktop session; `desktop enable` remains a compatibility alias.
 desired/runtime/policy coherence, live/install boot mode, lifecycle counters,
 and recovery commands. `desktop rescue` is read-only and prints the safe
 checklist before `desktop recover` repairs/reapplies anything. Since package
+`0.89.0`, `system init`, `system services`, and `system logs` expose
+`desktop-restore` boot/session reload diagnostics for VM/ZimaOS recovery.
+Since package
 `0.88.0`, `desktop state`, `desktop rescue`, and JSON `hyprctl session` also
 include a VM-ready session audit with file presence/size checks,
 `recommendedAction`, and `rescueRecommended`. `desktop config doctor` validates the Hyprland-style

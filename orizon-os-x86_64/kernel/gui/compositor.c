@@ -10411,9 +10411,10 @@ static void gui_run_deferred_core_services(void) {
       gui_show_boot_stage("Loading persistent workspace from disk...");
       vfs_persist_load();
     }
-    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     gui_show_boot_stage("Running installed/live init tasks...");
     orizon_system_run_boot_tasks(NULL, 0);
+    gui_show_boot_stage("Restoring desktop session policy...");
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
     gui_show_boot_stage("Preparing package and keyboard state...");
     orizon_pkg_init();
     input_load_keyboard_layout_from_vfs();

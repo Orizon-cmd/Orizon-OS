@@ -452,6 +452,9 @@ static void system_format_service_state_text(char *out, size_t out_size,
            "  network policy=manual state=configured-on-demand\n"
            "  ssh policy=manual state=configured-on-demand\n"
            "  desktop policy=optional state=%s\n"
+           "  desktop-restore policy=system-init action=reload state=%s "
+           "state-path=" ORIZON_DESKTOP_STATE_PATH
+           " session-log=" ORIZON_DESKTOP_SESSION_LOG_PATH "\n"
            "  package-db policy=installed state=%s\n"
            "  update-bootguard policy=installed state=%s\n"
            "  firstboot policy=installed state=%s\n",
@@ -462,6 +465,7 @@ static void system_format_service_state_text(char *out, size_t out_size,
            installed ? (klog_boot_persisted() ? "saved" : "pending")
                      : "live-skip",
            orizon_desktop_is_enabled() ? "enabled" : "disabled",
+           orizon_desktop_is_enabled() ? "active-requested" : "standby",
            vfs_exists("/system/installed") ? "present" : "live-or-pending",
            installed ? "available" : "installed-only",
            installed ? (vfs_exists(ORIZON_FIRSTBOOT_DONE_PATH) ? "done"
@@ -541,6 +545,11 @@ void orizon_system_format_services(char *out, size_t out_size) {
            system_ok_missing(ORIZON_DESKTOP_BINDS_PATH),
            system_ok_missing(ORIZON_DESKTOP_USER_CONFIG_PATH));
   system_append(out, out_size, &used, line);
+  system_append(out, out_size, &used,
+                "  desktop-restore policy=system-init action=reload state-path="
+                ORIZON_DESKTOP_STATE_PATH " session-log="
+                ORIZON_DESKTOP_SESSION_LOG_PATH
+                " recommended=system-init-or-desktop-recover\n");
   snprintf(line, sizeof(line), "  package-db policy=installed state=%s\n",
            vfs_exists("/system/installed") ? "present" : "live-or-pending");
   system_append(out, out_size, &used, line);
@@ -646,14 +655,46 @@ void orizon_system_format_doctor(char *out, size_t out_size) {
                 "next: system repair is safe for missing defaults; use rescue for recovery order.\n");
 }
 
+static int system_desktop_restore_for_boot(char *out, size_t out_size) {
+  char session_report[768];
+  const char *policy;
+  const char *state;
+  int rc;
+
+  if (out && out_size) {
+    out[0] = '\0';
+  }
+  orizon_desktop_ensure_defaults();
+  policy = orizon_desktop_is_enabled() ? "enabled" : "disabled";
+  state = orizon_desktop_is_enabled() ? "active-requested" : "standby";
+  rc = orizon_desktop_session_manager("reload", session_report,
+                                      sizeof(session_report));
+  if (out && out_size) {
+    snprintf(out, out_size,
+             "desktop-restore: %s\n"
+             "source: system-init\n"
+             "action: reload\n"
+             "policy: %s\n"
+             "state: %s\n"
+             "state-path: " ORIZON_DESKTOP_STATE_PATH "\n"
+             "session-log: " ORIZON_DESKTOP_SESSION_LOG_PATH "\n"
+             "recommended-action: %s\n",
+             rc == 0 ? "PASS" : "WARN", policy, state,
+             rc == 0 ? "none" : "desktop recover");
+  }
+  return rc;
+}
+
 int orizon_system_run_boot_tasks(char *out, size_t out_size) {
   char boot_state[1024];
-  char service_state[1024];
-  char services[1536];
+  char service_state[1536];
+  char desktop_restore[1024];
+  char services[2048];
   char line[256];
   size_t used = 0;
   int created = 0;
   int defaults_rc;
+  int desktop_restore_rc;
   int boot_rc;
   int service_state_rc;
   int initlog_rc;
@@ -664,6 +705,8 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
 
   defaults_rc = system_ensure_defaults(&created);
   installed = orizon_system_is_installed();
+  desktop_restore_rc =
+      system_desktop_restore_for_boot(desktop_restore, sizeof(desktop_restore));
   system_format_boot_state_text(boot_state, sizeof(boot_state), "system-init");
   system_format_service_state_text(service_state, sizeof(service_state),
                                    "system-init");
@@ -678,11 +721,21 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
       vfs_write(f, "\n", 1);
       vfs_write(f, service_state, strlen(service_state));
       vfs_write(f, "\n", 1);
+      vfs_write(f, desktop_restore, strlen(desktop_restore));
+      vfs_write(f, "\n", 1);
       vfs_write(f, services, strlen(services));
       vfs_close(f);
     }
   }
   servicelog_rc = system_write_text_file(ORIZON_SERVICE_LOG_PATH, service_state);
+  if (servicelog_rc == 0) {
+    file_t *f = vfs_open(ORIZON_SERVICE_LOG_PATH, O_WRONLY | O_APPEND);
+    if (f) {
+      vfs_write(f, "\n", 1);
+      vfs_write(f, desktop_restore, strlen(desktop_restore));
+      vfs_close(f);
+    }
+  }
   bootlog_rc = klog_persist_boot_if_installed();
   save_rc = vfs_persist_save();
 
@@ -691,18 +744,20 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
     snprintf(line, sizeof(line),
              "system init: %s\nmode=%s created-defaults=%d\n",
              defaults_rc == 0 && boot_rc == 0 && service_state_rc == 0 &&
-                     initlog_rc == 0 && servicelog_rc == 0
+                     initlog_rc == 0 && servicelog_rc == 0 &&
+                     desktop_restore_rc == 0
                  ? "PASS"
                  : "WARN",
              installed ? "installed" : "live", created);
     system_append(out, out_size, &used, line);
     snprintf(line, sizeof(line),
              "boot-state=%s service-state=%s init-log=%s service-log=%s "
-             "boot-log=%s persistence-save=%s\n",
+             "desktop-restore=%s boot-log=%s persistence-save=%s\n",
              boot_rc == 0 ? ORIZON_BOOT_STATE_PATH : "failed",
              service_state_rc == 0 ? ORIZON_SERVICE_STATE_PATH : "failed",
              initlog_rc == 0 ? ORIZON_INIT_LOG_PATH : "failed",
              servicelog_rc == 0 ? ORIZON_SERVICE_LOG_PATH : "failed",
+             desktop_restore_rc == 0 ? "ok" : "warn",
              bootlog_rc == 0 ? KLOG_BOOT_PATH
                              : (installed ? "pending-or-unavailable"
                                           : "skipped-live"),
@@ -712,7 +767,8 @@ int orizon_system_run_boot_tasks(char *out, size_t out_size) {
     system_append(out, out_size, &used, services);
   }
   return defaults_rc == 0 && boot_rc == 0 && service_state_rc == 0 &&
-                 initlog_rc == 0 && servicelog_rc == 0
+                 initlog_rc == 0 && servicelog_rc == 0 &&
+                 desktop_restore_rc == 0
              ? 0
              : -EIO;
 }
@@ -1188,9 +1244,9 @@ int orizon_system_mark_firstboot_done(char *out, size_t out_size) {
 
 int orizon_system_repair(char *out, size_t out_size) {
   char status[2048];
-  char service_state[1024];
+  char service_state[1536];
   char rescue[1024];
-  char services[1536];
+  char services[2048];
   char doctor[1536];
   char line[192];
   size_t used = 0;

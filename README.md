@@ -25,7 +25,8 @@ le developpement noyau:
   `persist restore previous` et reparation simple `persist repair`
 - etat systeme installe/live lisible avec `system status`, checklist
   non-destructive `rescue`, reparation des fichiers initiaux via
-  `system repair`, mini-init via `system init`, audit `system doctor`,
+  `system repair`, mini-init via `system init` avec restauration desktop
+  VM-safe, audit `system doctor`,
   politique services via `system services`, journal admin via `system logs`,
   sante synthetique `system health`, snapshot administrateur
   `system snapshot`, export de configuration non sensible `system backup`,
@@ -170,6 +171,9 @@ Depuis `0.88.0`, `desktop state`, `desktop rescue` et
 exposent aussi un audit de session VM-ready: fichiers presents/taille,
 `recommendedAction`, `rescueRecommended`, policy, runtime et limites explicites
 sans validation materiel.
+Depuis `0.89.0`, `system init` recharge aussi la session desktop via une action
+`desktop-restore` idempotente, journalisee dans `/logs/init.log` et
+`/logs/service.log`, puis le compositor reapplique la policy desktop au boot VM.
 `desktop input` centralise le layout clavier, le profil pointeur et
 focus-follows-mouse: `desktop input layout fr|us` synchronise
 `/system/desktop-settings.conf`, `/system/keyboard` et

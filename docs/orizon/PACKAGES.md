@@ -278,7 +278,7 @@ The named install path generates the local `.opkg`, installs it, then enables
 the profile with a package hook. Removing the package disables the desktop
 policy, and `pkg rollback orizon-desktop-hypr` restores the last removed
 desktop package snapshot. The generated desktop package is currently version
-`0.88.0` because it includes policy/config files, the persisted session
+`0.89.0` because it includes policy/config files, the persisted session
 settings, the system-wide desktop settings layer, settings hub paths/export/sync
 commands, `/system/desktop-modules.conf`, `/system/desktop-architecture.conf`,
 `/system/desktop-backend.conf`, `/system/desktop-protocol.conf`,
@@ -311,7 +311,10 @@ runbook, VM-ready, and limit diagnostics, launcher-as-overlay dispatch,
 the `desktop input` layout/pointer/focus hub with `/system/keyboard` sync,
 `desktop keymap`, and commands used by `desktop theme`,
 `desktop wallpaper`, `desktop layout`, `desktop autostart`, `desktop bar`, and
-the launcher. Version `0.88.0` adds session audit diagnostics to
+the launcher. Version `0.89.0` adds boot/session `desktop-restore` diagnostics
+to `system init`, `system services`, and `system logs`, and reapplies the
+desktop policy after init during VM boot. Version `0.88.0` adds session audit
+diagnostics to
 `desktop state`, `desktop rescue`, and `desktop hyprctl -j session`, including
 file presence/size checks, `recommendedAction`, and `rescueRecommended`.
 Version `0.87.0` adds structured per-source resolution

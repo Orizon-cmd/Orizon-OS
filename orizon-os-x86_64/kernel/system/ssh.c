@@ -3068,6 +3068,7 @@ static void ssh_shell_print_system(const char *args) {
   } else if (ssh_shell_command_is(sub, "init") ||
              ssh_shell_command_is(sub, "boot")) {
     orizon_system_run_boot_tasks(out, sizeof(out));
+    gui_desktop_set_enabled(orizon_desktop_is_enabled());
   } else if (ssh_shell_command_is(sub, "services")) {
     orizon_system_format_services(out, sizeof(out));
   } else if (ssh_shell_command_is(sub, "health")) {

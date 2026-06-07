@@ -385,6 +385,10 @@ SSH, and `desktop hyprctl -j session
 [status|start|stop|restart|reload|recover|rescue]` exposes the same manager as
 VM-safe JSON diagnostics/actions. `desktop rescue` is read-only: it prints a recovery checklist, file
 health, and the safe next commands before `desktop recover` rewrites anything.
+Package `0.89.0` also connects the installed/live init path to the session
+manager: `system init` performs an idempotent `desktop-restore` reload, records
+it in `/logs/init.log` and `/logs/service.log`, and the framebuffer compositor
+reapplies the desktop policy after init during VM boot.
 Package `0.88.0` adds a structured session audit to those outputs with
 policy/session/settings/state/log/runtime file checks, byte counts,
 `recommendedAction`, and `rescueRecommended` so VM operators can decide between

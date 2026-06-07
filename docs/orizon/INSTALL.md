@@ -139,8 +139,8 @@ remain ignored without changing the desktop session.
 autostart, rules, monitors, layer rules, env/workspace/source intent,
 animation/bezier hints and input/device/decoration/cursor/render/debug/misc/layout
 hints under `/system`.
-The desktop package version `0.88.0` installs explicit source/bind diagnostics,
-session audit diagnostics,
+The desktop package version `0.89.0` installs explicit source/bind diagnostics,
+session audit diagnostics, boot/session `desktop-restore` init diagnostics,
 and architecture truth maps:
 `/system/desktop-architecture.conf`, `/system/desktop-backend.conf`, and
 `/system/desktop-protocol.conf`. Inspect them with `desktop architecture`,
@@ -414,7 +414,8 @@ policy, and `system logs` shows `/system/boot-state`,
 `/system/service-state`, `/logs/init.log`, and `/logs/service.log`.
 `system doctor` audits roots/config/init state without changing disk layout.
 `system init` can be rerun safely to refresh `/system/boot-state`,
-`/system/service-state`, `/logs/init.log`, and `/logs/service.log`.
+`/system/service-state`, `/logs/init.log`, and `/logs/service.log`; it also
+records the VM-safe `desktop-restore` reload for the Hyprland-style session.
 `system firstboot` shows the installed first-boot checklist; `firstboot done`
 marks it reviewed after you confirm the VM state. `hostname set <name>`
 updates `/system/hostname`. If a default file is missing, `system repair`

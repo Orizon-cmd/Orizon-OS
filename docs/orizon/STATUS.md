@@ -76,7 +76,9 @@ work.
   without default free-drag window moving, explicit `0.86.0`
   plain/keyboard/mouse/composite bind flag diagnostics and
   `manualDragFromBindm=false`, plus `0.87.0` per-source resolution
-  diagnostics for `source` files, plus `0.88.0` session audit diagnostics with
+  diagnostics for `source` files, plus `0.89.0` boot/session restore
+  diagnostics through `system init` and `desktop-restore`, plus `0.88.0`
+  session audit diagnostics with
   file checks, `recommendedAction`, and `rescueRecommended`,
   session-manager commands `desktop start/stop/restart/reload/recover/rescue/state`
   with `/system/desktop-state.conf` v2 health/counters and `/logs/desktop-session.log`,
@@ -139,9 +141,10 @@ work.
   save/restore, `gpt scan`, first/last sector read tests, install preflight,
   reboot, and shutdown. VirtIO-scsi is still diagnostic-only and reported as
   such in storage diagnostics.
-- Installed VM UX: `system init` now records both boot-state and service-state,
+- Installed VM UX: `system init` now records boot-state, service-state, and
+  `desktop-restore` reload evidence for the Hyprland-style session,
   `system services` exposes the current mini service policy, `system logs`
-  gathers boot/service/init evidence, `system firstboot` guides the first
+  gathers boot/service/init/desktop-restore evidence, `system firstboot` guides the first
   installed boot checklist, `system health` gives a concise PASS/WARN operator
   summary, `system snapshot` writes
   `/workspace/.orizon/system-snapshot.txt`, `system backup` exports non-secret
